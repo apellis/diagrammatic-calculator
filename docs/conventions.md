@@ -1,0 +1,115 @@
+# Conventions
+
+Each convention below changes answers silently if it is read differently, so each is stated here,
+used by both the parser and the printer, and pinned by the golden corpus (`tests/golden/`).
+References of the form `Library: Declaration` point to the Lean libraries
+[categorification-lean](https://github.com/apellis/categorification-lean),
+[string-diagrams-lean](https://github.com/apellis/string-diagrams-lean) and
+[odd-lean](https://github.com/apellis/odd-lean), which the calculator matches.
+
+## Reading terms
+
+- **Composition.** `a b` (also `a * b`) means `a ∘ b`: `b` is drawn first, at the bottom, and `a`
+  above it. A term read from left to right goes from top to bottom. This is the order of the
+  product in categorification-lean (`KLR.KLRAlgebra`: in `ψ j * e i` the idempotent is at the
+  bottom) and in odd-lean (`f * g = g ≫ f`). string-diagrams-lean's `≫` is the opposite,
+  diagrammatic order.
+- **Positions, not strands.** In `x_k` and `psi_k` the subscript is a position counted from the
+  left, starting at 1, at the height where the generator sits; a generator whose source has `s`
+  strands occupies positions `k, …, k+s-1`. It does not name a strand: after `psi_1`, position 1
+  holds the strand that started in position 2. The Lean libraries count from 0, so `x_k` here is
+  `x ⟨k-1⟩` there and `psi_k` is `ψ (k-1)`.
+- **Idempotents.** `e(i_1 … i_n)` lists colours from left to right and sits at the bottom of what
+  is written to its left: `psi_1 e(ij)` starts from the sequence `ij` and ends at `ji`. Colour
+  names that are single characters may be run together (`e(iij)`); longer names are separated by
+  commas or spaces. A word written without an idempotent stands for the sum over every object of
+  the context it applies to (in `R(ν)`, every sequence of `ν`), which is the usual meaning of
+  `x_1 ∈ R(ν)`.
+- **Tensor product.** `f ⊗ g` (ASCII `f (x) g`) places `f` to the left of `g` and means
+  `(f ⊗ 1)(1 ⊗ g)`: `g` at the bottom, `f` above it. With this convention the super interchange law
+  reads `(f ⊗ g)(h ⊗ k) = (-1)^{|g||h|} (fh) ⊗ (gk)`.
+- **Scalars.** Numbers, `I` (a square root of −1 in ℤ[√−1]), parameters (`q`, `t_ij`, `pi` or `π`)
+  and declared unknowns (`c1`) are scalars; a scalar written alone is that multiple of the
+  identity. `^` takes integer exponents, negative only for invertible scalars.
+
+## Signs
+
+- **Koszul signs.** Exchanging the heights of two generators on disjoint strands costs
+  `(-1)^{|f||g|}`, whichever is on the left (string-diagrams-lean: `InterchangeData.sign`,
+  `diag_interchange_diagrams`). Coefficients are even. The parity of a word is the number of odd
+  generators in it, mod 2.
+- **Canonical layering.** Words equal up to interchange are stored in one canonical layering:
+  every generator as low as it can go, generators at the same height ordered left to right. The
+  Koszul sign of the moves is absorbed into the coefficient.
+
+## KLR algebras
+
+Data: a Cartan datum given by the symmetric form `(α_i, α_j)` (equivalently a symmetrizable Cartan
+matrix `a_ij` with `(α_i, α_j) = d_i a_ij`), a weight `ν`, and polynomials `Q_ij(u, v)` for `i ≠ j`
+with `Q_ij(u, v) = Q_ji(v, u)` (categorification-lean: `KLR.KLRAlgebra`, `KLRSymm`). All formulas
+below are multiplied on the right by `e(i)`, and colours `i_k` are read from the bottom sequence
+`i`.
+
+| Relation | Formula | categorification-lean |
+|---|---|---|
+| dot slide | `(x_k ψ_k − ψ_k x_{k+1}) e(i) = δ_{i_k i_{k+1}} e(i)` | `Rel.dot_cross_left` |
+| dot slide | `(ψ_k x_k − x_{k+1} ψ_k) e(i) = δ_{i_k i_{k+1}} e(i)` | `Rel.dot_cross_right` |
+| square | `ψ_k² e(i) = 0` if `i_k = i_{k+1}`, else `Q_{i_k i_{k+1}}(x_k, x_{k+1}) e(i)` | `Rel.cross_sq` |
+| braid | `(ψ_k ψ_{k+1} ψ_k − ψ_{k+1} ψ_k ψ_{k+1}) e(i) = Q̄(x_k, x_{k+1}, x_{k+2}) e(i)` if `i_k = i_{k+2} ≠ i_{k+1}`, else 0 | `Rel.braid` |
+
+Here `Q̄(a, b, c) = (Q(a, b) − Q(c, b)) / (a − c)` with `Q = Q_{i_k i_{k+1}}` (`qbar_spec`). In
+`Q_ij(u, v)` the first variable `u` is the dot on the left strand.
+
+The same-colour sign is opposite to Kang–Kashiwara and Brundan–Kleshchev, whose crossing is
+`τ = −ψ` on equal colours (categorification-lean: `sameCross`). The calculator follows the
+library.
+
+**Degrees.** `deg x_k e(i) = (α_{i_k}, α_{i_k})` and `deg ψ_k e(i) = −(α_{i_k}, α_{i_{k+1}})`
+(`klGradingDatum2`). All KLR generators are even.
+
+**Default `Q`.** Unless the context says otherwise,
+`Q_ij(u, v) = u^{d_ij} + v^{d_ji}` when `(α_i, α_j) ≠ 0` and `Q_ij = 1` otherwise, with
+`d_ij = −a_ij` (`klQ2`). The context may instead give Cautis–Lauda scalars:
+`Q_ij = t_ij u^{d_ij} + t_ji v^{d_ji} + Σ s_ij^{pq} u^p v^q` (degree-filtered), and `Q_ij = t_ij`
+when `(α_i, α_j) = 0` (`qCL`).
+
+**Cartan types.** Bourbaki numbering, colours named `i, j, k, l, …` in order. In `B2` the first
+root is long and the second short; in `G2` the first is short. (The Lean libraries contain no
+fixed `B2` or `G2` datum; their test datum `cB2` has vertex 0 short.)
+
+**Polynomial representation.** `R(ν)` acts on `⊕_i k[x_1, …, x_n] e(i)`
+(categorification-lean: `PolyRep.crossComp`):
+
+- `x_k` multiplies by `x_k`;
+- `ψ_k e(i)` with `i_k = i_{k+1}` acts by `∂_k f = (f − s_k f)/(x_k − x_{k+1})`;
+- `ψ_k e(i)` with `i_k ≠ i_{k+1}` acts by `f ↦ P_{i_k i_{k+1}}(x_k, x_{k+1}) · s_k f`, landing in
+  `e(s_k i)`,
+
+where `Q_ij(u, v) = P_ji(u, v) P_ij(v, u)`. The calculator uses `P_ij = 1` and `P_ji = Q_ij` for
+`i < j` in the order of colours. Over an integral domain this representation is faithful when
+every `Q_ij` (`i ≠ j`) is nonzero; for the default `Q` this is proved in categorification-lean
+(`KL2.polyRepKL2_injective`), and for general `Q` it is Rouquier, arXiv:1112.3619v1, §3.2. Over a
+ring with zero divisors it can fail (categorification-lean README, on Rouquier,
+arXiv:0812.5023v1, Prop. 3.12).
+
+## nilHecke and odd nilHecke algebras
+
+- The nilHecke algebra `NH_n` is the one-colour KLR algebra: `ψ_k² = 0`,
+  `x_k ψ_k − ψ_k x_{k+1} = 1`, `ψ_k x_k − x_{k+1} ψ_k = 1`, the plain braid relation; degrees
+  `deg x = 2`, `deg ψ = −2`.
+- The odd nilHecke algebra `ONH_n` (odd-lean: `Diagrams.OddNilHecke`) has both generators odd,
+  with `deg x = 2`, `deg ψ = −2`, and relations `ψ_k² = 0`, `ψ_k ψ_{k+1} ψ_k = ψ_{k+1} ψ_k ψ_{k+1}`,
+  `x_k ψ_k + ψ_k x_{k+1} = 1`, `ψ_k x_k + x_{k+1} ψ_k = 1`. Distant generators anticommute by the
+  Koszul rule, and `x_k²` is not zero.
+- **Skew-polynomial representation** (odd-lean: `AllRankDivided`, `freeAction`): `ONH_n` acts on
+  skew polynomials (`x_i x_j = −x_j x_i` for `i ≠ j`), monomials written in increasing index order.
+  `x_k` multiplies on the left. `s_k` is the algebra automorphism with `s_k(x_j) = −x_{s_k(j)}` for
+  every `j`. `ψ_k` acts by the odd divided difference `∂_k`, determined by `∂_k(1) = 0`,
+  `∂_k(x_j) = 1` for `j ∈ {k, k+1}` and 0 otherwise, and `∂_k(fg) = ∂_k(f) g + s_k(f) ∂_k(g)`.
+  The action is faithful (`QuiverHecke.oddNilHeckeAction_injective`).
+
+## Drawing
+
+TikZ export matches the drawing style of Brundan–Ellis, *Super Kac–Moody 2-categories*
+(arXiv:1701.04133v2), using core TikZ and no nonstandard packages. SVG uses the same proportions.
+Details are fixed with the drawing code.
