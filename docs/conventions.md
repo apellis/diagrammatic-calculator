@@ -114,8 +114,10 @@ arXiv:0812.5023v1, Prop. 3.12).
 - **Normal forms.** `simplify` writes an element in the basis of the representation strategy. For
   KLR algebras (and `NH_n`) the basis is `ψ_ŵ x^a e(i)`: a fixed reduced word `ŵ` for each
   permutation, dots at the bottom, the idempotent below them. For `ONH_n` it is `x^a ψ_ŵ`: dots on
-  top in increasing index order, as in the skew-polynomial representation. Terms are ordered by
-  permutation length (longest first), then by monomial.
+  top in increasing index order, as in the skew-polynomial representation. Because words are
+  stored in canonical layering, a dot on a strand untouched by the crossings below it is printed
+  lower than the basis order suggests (`psi_1 x_1 psi_2 x_1 x_3` in `NH_3` is `ψ_1 ψ_2 x_1² x_3`).
+  Terms are printed shorter permutations first.
 - **Printing.** A word is printed from its canonical layering, top to bottom. Generators at the same
   height are written left to right; when some of them are odd, the coefficient carries the Koszul
   sign of that order, so that every printed term parses back to exactly the same element.
