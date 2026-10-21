@@ -43,6 +43,20 @@ pub trait Ring: Clone + Debug + PartialEq {
     /// The characteristic: 0 or a prime.
     fn characteristic(&self) -> u64;
 
+    /// A square root of −1, written `I`, if the ring has a designated one.
+    fn sqrt_minus_one(&self) -> Option<Self::Elem> {
+        None
+    }
+
+    /// The image of a rational number `n/d`, if `d` is invertible.
+    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<Self::Elem>;
+
+    /// True for integral domains (every ring offered here is one, but parameter rings with
+    /// relations need not be).
+    fn is_domain(&self) -> bool {
+        true
+    }
+
     fn is_one(&self, a: &Self::Elem) -> bool {
         *a == self.one()
     }
@@ -120,6 +134,9 @@ impl Ring for Integers {
     fn characteristic(&self) -> u64 {
         0
     }
+    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<BigInt> {
+        self.div_exact(n, d)
+    }
     fn is_negative(&self, a: &BigInt) -> bool {
         a.is_negative()
     }
@@ -167,6 +184,9 @@ impl Ring for Rationals {
     }
     fn characteristic(&self) -> u64 {
         0
+    }
+    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<BigRational> {
+        (!d.is_zero()).then(|| BigRational::new(n.clone(), d.clone()))
     }
     fn is_negative(&self, a: &BigRational) -> bool {
         a.is_negative()
@@ -245,6 +265,9 @@ impl Ring for PrimeField {
     }
     fn characteristic(&self) -> u64 {
         self.p
+    }
+    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<u64> {
+        self.div_exact(&self.from_bigint(n), &self.from_bigint(d))
     }
 }
 
@@ -347,6 +370,12 @@ impl Ring for GaussianIntegers {
     }
     fn characteristic(&self) -> u64 {
         0
+    }
+    fn sqrt_minus_one(&self) -> Option<Gaussian> {
+        Some(Gaussian::new(0, 1))
+    }
+    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<Gaussian> {
+        self.div_exact(&Gaussian::new(n.clone(), 0), &Gaussian::new(d.clone(), 0))
     }
     fn is_negative(&self, a: &Gaussian) -> bool {
         (a.im.is_zero() && a.re.is_negative()) || (a.re.is_zero() && a.im.is_negative())

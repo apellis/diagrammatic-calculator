@@ -1,0 +1,530 @@
+//! Small expression languages used in presentation files: integer expressions for degrees and
+//! parities of generator schemas, and side conditions of relation schemas.
+//!
+//! Integer expressions: integers, `+ - *`, parentheses, the symmetric form `(a,b)` of the Cartan
+//! datum, the Cartan entry `a_ab`, the symmetrizer `d_a` and the parity `p(a)` of a colour
+//! variable. Conditions: `a = b`, `a != b`, comparisons of integer expressions
+//! (`(a,b) = 0`, `a_ab <= -2`), `and`, `or`, `not` and parentheses.
+
+use crate::error::{Error, Result};
+
+/// What an expression needs to know about colours bound to its variables.
+pub trait ColourEnv {
+    fn form(&self, a: usize, b: usize) -> Result<i64>;
+    fn cartan_entry(&self, a: usize, b: usize) -> Result<i64>;
+    fn symmetrizer(&self, a: usize) -> Result<i64>;
+    fn parity(&self, a: usize) -> i64;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IntExpr {
+    Const(i64),
+    Form(usize, usize),
+    Entry(usize, usize),
+    Sym(usize),
+    Par(usize),
+    Neg(Box<IntExpr>),
+    Add(Box<IntExpr>, Box<IntExpr>),
+    Sub(Box<IntExpr>, Box<IntExpr>),
+    Mul(Box<IntExpr>, Box<IntExpr>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Cmp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Cond {
+    True,
+    SameColour(usize, usize, bool),
+    Compare(IntExpr, Cmp, IntExpr),
+    And(Box<Cond>, Box<Cond>),
+    Or(Box<Cond>, Box<Cond>),
+    Not(Box<Cond>),
+}
+
+impl IntExpr {
+    pub fn eval(&self, b: &[usize], env: &dyn ColourEnv) -> Result<i64> {
+        Ok(match self {
+            IntExpr::Const(n) => *n,
+            IntExpr::Form(x, y) => env.form(b[*x], b[*y])?,
+            IntExpr::Entry(x, y) => env.cartan_entry(b[*x], b[*y])?,
+            IntExpr::Sym(x) => env.symmetrizer(b[*x])?,
+            IntExpr::Par(x) => env.parity(b[*x]),
+            IntExpr::Neg(e) => -e.eval(b, env)?,
+            IntExpr::Add(x, y) => x.eval(b, env)? + y.eval(b, env)?,
+            IntExpr::Sub(x, y) => x.eval(b, env)? - y.eval(b, env)?,
+            IntExpr::Mul(x, y) => x.eval(b, env)? * y.eval(b, env)?,
+        })
+    }
+
+    /// Canonical text, with variables named by `vars`.
+    pub fn print(&self, vars: &[String]) -> String {
+        self.print_prec(vars, 0)
+    }
+
+    fn print_prec(&self, v: &[String], prec: u8) -> String {
+        let s = match self {
+            IntExpr::Const(n) => return n.to_string(),
+            IntExpr::Form(x, y) => return format!("({},{})", v[*x], v[*y]),
+            IntExpr::Entry(x, y) => return format!("a_{}{}", v[*x], v[*y]),
+            IntExpr::Sym(x) => return format!("d_{}", v[*x]),
+            IntExpr::Par(x) => return format!("p({})", v[*x]),
+            IntExpr::Neg(e) => return format!("-{}", e.print_prec(v, 3)),
+            IntExpr::Add(x, y) => (
+                format!("{} + {}", x.print_prec(v, 1), y.print_prec(v, 2)),
+                1,
+            ),
+            IntExpr::Sub(x, y) => (
+                format!("{} - {}", x.print_prec(v, 1), y.print_prec(v, 2)),
+                1,
+            ),
+            IntExpr::Mul(x, y) => (format!("{} {}", x.print_prec(v, 2), y.print_prec(v, 3)), 2),
+        };
+        if s.1 < prec {
+            format!("({})", s.0)
+        } else {
+            s.0
+        }
+    }
+}
+
+impl Cond {
+    pub fn eval(&self, b: &[usize], env: &dyn ColourEnv) -> Result<bool> {
+        Ok(match self {
+            Cond::True => true,
+            Cond::SameColour(x, y, eq) => (b[*x] == b[*y]) == *eq,
+            Cond::Compare(l, c, r) => {
+                let (l, r) = (l.eval(b, env)?, r.eval(b, env)?);
+                match c {
+                    Cmp::Eq => l == r,
+                    Cmp::Ne => l != r,
+                    Cmp::Lt => l < r,
+                    Cmp::Le => l <= r,
+                    Cmp::Gt => l > r,
+                    Cmp::Ge => l >= r,
+                }
+            }
+            Cond::And(x, y) => x.eval(b, env)? && y.eval(b, env)?,
+            Cond::Or(x, y) => x.eval(b, env)? || y.eval(b, env)?,
+            Cond::Not(x) => !x.eval(b, env)?,
+        })
+    }
+
+    pub fn print(&self, v: &[String]) -> String {
+        self.print_prec(v, 0)
+    }
+
+    fn print_prec(&self, v: &[String], prec: u8) -> String {
+        let (s, p) = match self {
+            Cond::True => ("true".to_string(), 3),
+            Cond::SameColour(x, y, eq) => (
+                format!("{} {} {}", v[*x], if *eq { "=" } else { "!=" }, v[*y]),
+                3,
+            ),
+            Cond::Compare(l, c, r) => {
+                let op = match c {
+                    Cmp::Eq => "=",
+                    Cmp::Ne => "!=",
+                    Cmp::Lt => "<",
+                    Cmp::Le => "<=",
+                    Cmp::Gt => ">",
+                    Cmp::Ge => ">=",
+                };
+                (format!("{} {} {}", l.print(v), op, r.print(v)), 3)
+            }
+            Cond::Or(x, y) => (
+                format!("{} or {}", x.print_prec(v, 0), y.print_prec(v, 1)),
+                0,
+            ),
+            Cond::And(x, y) => (
+                format!("{} and {}", x.print_prec(v, 1), y.print_prec(v, 2)),
+                1,
+            ),
+            Cond::Not(x) => (format!("not {}", x.print_prec(v, 3)), 2),
+        };
+        if p < prec { format!("({s})") } else { s }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Tok {
+    Int(i64),
+    Ident(String),
+    Sym(&'static str),
+}
+
+fn lex(s: &str) -> Result<Vec<(Tok, usize)>> {
+    let mut out = Vec::new();
+    let cs: Vec<(usize, char)> = s.char_indices().collect();
+    let mut i = 0;
+    while i < cs.len() {
+        let (off, c) = cs[i];
+        if c.is_whitespace() {
+            i += 1;
+        } else if c.is_ascii_digit() {
+            let mut n = 0i64;
+            while i < cs.len() && cs[i].1.is_ascii_digit() {
+                n = n * 10 + cs[i].1.to_digit(10).unwrap() as i64;
+                i += 1;
+            }
+            out.push((Tok::Int(n), off));
+        } else if c.is_alphabetic() || c == '_' {
+            let mut t = String::new();
+            while i < cs.len() && (cs[i].1.is_alphanumeric() || cs[i].1 == '_') {
+                t.push(cs[i].1);
+                i += 1;
+            }
+            out.push((Tok::Ident(t), off));
+        } else {
+            let two: String = cs[i..(i + 2).min(cs.len())].iter().map(|x| x.1).collect();
+            let sym = match two.as_str() {
+                "!=" => Some("!="),
+                "<=" => Some("<="),
+                ">=" => Some(">="),
+                "==" => Some("="),
+                _ => None,
+            };
+            if let Some(s) = sym {
+                out.push((Tok::Sym(s), off));
+                i += 2;
+                continue;
+            }
+            let s = match c {
+                '+' => "+",
+                '-' | '−' => "-",
+                '*' => "*",
+                '(' => "(",
+                ')' => ")",
+                ',' => ",",
+                '=' => "=",
+                '<' => "<",
+                '>' => ">",
+                _ => return Err(Error::syntax(format!("unexpected character '{c}'"), off)),
+            };
+            out.push((Tok::Sym(s), off));
+            i += 1;
+        }
+    }
+    Ok(out)
+}
+
+struct P<'a> {
+    toks: Vec<(Tok, usize)>,
+    pos: usize,
+    vars: &'a [String],
+    len: usize,
+}
+
+impl P<'_> {
+    fn peek(&self) -> Option<&Tok> {
+        self.toks.get(self.pos).map(|t| &t.0)
+    }
+    fn off(&self) -> usize {
+        self.toks.get(self.pos).map(|t| t.1).unwrap_or(self.len)
+    }
+    fn eat(&mut self, s: &str) -> bool {
+        if matches!(self.peek(), Some(Tok::Sym(x)) if *x == s) {
+            self.pos += 1;
+            true
+        } else {
+            false
+        }
+    }
+    fn eat_word(&mut self, w: &str) -> bool {
+        if matches!(self.peek(), Some(Tok::Ident(x)) if x == w) {
+            self.pos += 1;
+            true
+        } else {
+            false
+        }
+    }
+    fn expect(&mut self, s: &str) -> Result<()> {
+        if self.eat(s) {
+            Ok(())
+        } else {
+            Err(Error::syntax(format!("expected '{s}'"), self.off()))
+        }
+    }
+    fn var(&mut self) -> Result<usize> {
+        match self.peek().cloned() {
+            Some(Tok::Ident(n)) => {
+                let i = self.var_index(&n)?;
+                self.pos += 1;
+                Ok(i)
+            }
+            _ => Err(Error::syntax("expected a colour variable", self.off())),
+        }
+    }
+    fn var_index(&self, n: &str) -> Result<usize> {
+        self.vars
+            .iter()
+            .position(|v| v == n)
+            .ok_or_else(|| Error::syntax(format!("unknown colour variable '{n}'"), self.off()))
+    }
+    /// Splits `ab` (after `a_` or `d_`) into variable names.
+    fn split_vars(&self, s: &str, count: usize) -> Result<Vec<usize>> {
+        let mut out = Vec::new();
+        let mut rest = s;
+        while !rest.is_empty() {
+            let v = self
+                .vars
+                .iter()
+                .filter(|v| rest.starts_with(v.as_str()))
+                .max_by_key(|v| v.len())
+                .ok_or_else(|| {
+                    Error::syntax(format!("cannot read '{s}' as colour variables"), self.off())
+                })?;
+            out.push(self.var_index(v)?);
+            rest = &rest[v.len()..];
+        }
+        if out.len() != count {
+            return Err(Error::syntax(
+                format!("'{s}' should name {count} colour variables"),
+                self.off(),
+            ));
+        }
+        Ok(out)
+    }
+
+    fn int_expr(&mut self) -> Result<IntExpr> {
+        let mut e = if self.eat("-") {
+            IntExpr::Neg(Box::new(self.int_term()?))
+        } else {
+            self.int_term()?
+        };
+        loop {
+            if self.eat("+") {
+                e = IntExpr::Add(Box::new(e), Box::new(self.int_term()?));
+            } else if self.eat("-") {
+                e = IntExpr::Sub(Box::new(e), Box::new(self.int_term()?));
+            } else {
+                return Ok(e);
+            }
+        }
+    }
+    fn int_term(&mut self) -> Result<IntExpr> {
+        let mut e = self.int_atom()?;
+        loop {
+            self.eat("*");
+            match self.peek() {
+                Some(Tok::Int(_)) | Some(Tok::Ident(_)) => {}
+                Some(Tok::Sym("(")) => {}
+                _ => return Ok(e),
+            }
+            if matches!(self.peek(), Some(Tok::Ident(w)) if w == "and" || w == "or") {
+                return Ok(e);
+            }
+            e = IntExpr::Mul(Box::new(e), Box::new(self.int_atom()?));
+        }
+    }
+    fn int_atom(&mut self) -> Result<IntExpr> {
+        let off = self.off();
+        match self.peek().cloned() {
+            Some(Tok::Int(n)) => {
+                self.pos += 1;
+                Ok(IntExpr::Const(n))
+            }
+            Some(Tok::Sym("(")) => {
+                self.pos += 1;
+                // (a,b) or a parenthesized expression
+                let save = self.pos;
+                if let Some(Tok::Ident(n)) = self.peek().cloned()
+                    && self.vars.contains(&n)
+                    && matches!(
+                        self.toks.get(self.pos + 1).map(|t| &t.0),
+                        Some(Tok::Sym(","))
+                    )
+                {
+                    let a = self.var()?;
+                    self.expect(",")?;
+                    let b = self.var()?;
+                    self.expect(")")?;
+                    return Ok(IntExpr::Form(a, b));
+                }
+                self.pos = save;
+                let e = self.int_expr()?;
+                self.expect(")")?;
+                Ok(e)
+            }
+            Some(Tok::Ident(w)) => {
+                self.pos += 1;
+                if w == "p" {
+                    self.expect("(")?;
+                    let a = self.var()?;
+                    self.expect(")")?;
+                    return Ok(IntExpr::Par(a));
+                }
+                if let Some(r) = w.strip_prefix("a_") {
+                    let v = self.split_vars(r, 2)?;
+                    return Ok(IntExpr::Entry(v[0], v[1]));
+                }
+                if let Some(r) = w.strip_prefix("d_") {
+                    let v = self.split_vars(r, 1)?;
+                    return Ok(IntExpr::Sym(v[0]));
+                }
+                Err(Error::syntax(format!("unexpected '{w}'"), off))
+            }
+            _ => Err(Error::syntax("expected an integer expression", off)),
+        }
+    }
+
+    fn cond(&mut self) -> Result<Cond> {
+        let mut c = self.cond_and()?;
+        while self.eat_word("or") {
+            c = Cond::Or(Box::new(c), Box::new(self.cond_and()?));
+        }
+        Ok(c)
+    }
+    fn cond_and(&mut self) -> Result<Cond> {
+        let mut c = self.cond_not()?;
+        while self.eat_word("and") {
+            c = Cond::And(Box::new(c), Box::new(self.cond_not()?));
+        }
+        Ok(c)
+    }
+    fn cond_not(&mut self) -> Result<Cond> {
+        if self.eat_word("not") {
+            return Ok(Cond::Not(Box::new(self.cond_not()?)));
+        }
+        if self.eat_word("true") {
+            return Ok(Cond::True);
+        }
+        // colour equality: var (=|!=) var
+        if let (Some(Tok::Ident(x)), Some(Tok::Sym(op)), Some(Tok::Ident(y))) = (
+            self.toks.get(self.pos).map(|t| &t.0),
+            self.toks.get(self.pos + 1).map(|t| &t.0),
+            self.toks.get(self.pos + 2).map(|t| &t.0),
+        ) && (*op == "=" || *op == "!=")
+            && self.vars.contains(x)
+            && self.vars.contains(y)
+        {
+            let eq = *op == "=";
+            let (a, b) = (self.var_index(x)?, self.var_index(y)?);
+            self.pos += 3;
+            return Ok(Cond::SameColour(a, b, eq));
+        }
+        // parenthesized condition or comparison starting with '('
+        if matches!(self.peek(), Some(Tok::Sym("("))) {
+            let save = self.pos;
+            self.pos += 1;
+            if let Ok(c) = self.cond()
+                && self.eat(")")
+                && !matches!(self.peek(), Some(Tok::Sym(_)))
+            {
+                return Ok(c);
+            }
+            self.pos = save;
+        }
+        let l = self.int_expr()?;
+        let op = match self.peek() {
+            Some(Tok::Sym("=")) => Cmp::Eq,
+            Some(Tok::Sym("!=")) => Cmp::Ne,
+            Some(Tok::Sym("<")) => Cmp::Lt,
+            Some(Tok::Sym("<=")) => Cmp::Le,
+            Some(Tok::Sym(">")) => Cmp::Gt,
+            Some(Tok::Sym(">=")) => Cmp::Ge,
+            _ => return Err(Error::syntax("expected a comparison", self.off())),
+        };
+        self.pos += 1;
+        let r = self.int_expr()?;
+        Ok(Cond::Compare(l, op, r))
+    }
+}
+
+fn parser<'a>(s: &str, vars: &'a [String]) -> Result<P<'a>> {
+    Ok(P {
+        toks: lex(s)?,
+        pos: 0,
+        vars,
+        len: s.len(),
+    })
+}
+
+pub fn parse_int_expr(s: &str, vars: &[String]) -> Result<IntExpr> {
+    let mut p = parser(s, vars)?;
+    let e = p.int_expr()?;
+    if p.pos != p.toks.len() {
+        return Err(Error::syntax(
+            "unexpected text after the expression",
+            p.off(),
+        ));
+    }
+    Ok(e)
+}
+
+pub fn parse_cond(s: &str, vars: &[String]) -> Result<Cond> {
+    let mut p = parser(s, vars)?;
+    let c = p.cond()?;
+    if p.pos != p.toks.len() {
+        return Err(Error::syntax(
+            "unexpected text after the condition",
+            p.off(),
+        ));
+    }
+    Ok(c)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Env;
+    impl ColourEnv for Env {
+        fn form(&self, a: usize, b: usize) -> Result<i64> {
+            Ok([[2, -1], [-1, 2]][a][b])
+        }
+        fn cartan_entry(&self, a: usize, b: usize) -> Result<i64> {
+            self.form(a, b)
+        }
+        fn symmetrizer(&self, _: usize) -> Result<i64> {
+            Ok(1)
+        }
+        fn parity(&self, a: usize) -> i64 {
+            a as i64
+        }
+    }
+
+    fn vars() -> Vec<String> {
+        vec!["a".into(), "b".into()]
+    }
+
+    #[test]
+    fn int_exprs() {
+        let v = vars();
+        for (s, val) in [
+            ("-(a,b)", 1),
+            ("(a,a)", 2),
+            ("2 - (a,b) * 3", 5),
+            ("p(a) p(b)", 0),
+            ("d_a + a_ab", 0),
+        ] {
+            let e = parse_int_expr(s, &v).unwrap();
+            assert_eq!(e.eval(&[0, 1], &Env).unwrap(), val, "{s}");
+            let back = parse_int_expr(&e.print(&v), &v).unwrap();
+            assert_eq!(back, e, "{s} printed as {}", e.print(&v));
+        }
+    }
+
+    #[test]
+    fn conditions() {
+        let v = vars();
+        for (s, val) in [
+            ("a != b", true),
+            ("a = b", false),
+            ("(a,b) = 0", false),
+            ("not (a = b) and (a,b) < 0", true),
+            ("a = b or a_ab = -1", true),
+        ] {
+            let c = parse_cond(s, &v).unwrap();
+            assert_eq!(c.eval(&[0, 1], &Env).unwrap(), val, "{s}");
+            assert_eq!(parse_cond(&c.print(&v), &v).unwrap(), c, "{s}");
+        }
+    }
+}

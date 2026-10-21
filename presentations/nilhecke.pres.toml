@@ -1,0 +1,59 @@
+format = "diagcalc-presentation/1"
+name = "nilhecke"
+title = "nilHecke algebra NH_n"
+colours = [
+  { name = "i", parity = "even", oriented = false },
+]
+objects = "weight"
+generator_order = ["x", "psi"]
+
+[generators.x]
+source = "i"
+target = "i"
+degree = 2
+parity = 0
+draw = "dot"
+
+[generators.psi]
+source = "i i"
+target = "i i"
+degree = -2
+parity = 0
+draw = "crossing"
+aliases = ["ψ"]
+
+[[relations]]
+name = "psi-squared"
+lhs = "psi_1 psi_1 e(i i)"
+rhs = "0"
+
+[[relations]]
+name = "braid"
+lhs = "psi_1 psi_2 psi_1 e(i i i)"
+rhs = "psi_2 psi_1 psi_2 e(i i i)"
+
+[[relations]]
+name = "dot-slide-left"
+lhs = "x_1 psi_1 e(i i)"
+rhs = "psi_1 x_2 e(i i) + e(i i)"
+
+[[relations]]
+name = "dot-slide-right"
+lhs = "psi_1 x_1 e(i i)"
+rhs = "x_2 psi_1 e(i i) + e(i i)"
+
+[[representations]]
+name = "polynomial"
+kind = "klr-polynomial"
+roles = { crossing = "psi", dot = "x" }
+certificate.status = "lean"
+certificate.reference = "categorification-lean: NilHecke.nilHecke (the algebra of operators), KLRAlgebra.nilHeckeEquiv"
+certificate.hypotheses = "coefficients in an integral domain"
+
+[[representations]]
+name = "nil-coxeter-basis"
+kind = "nil-coxeter"
+roles = { crossing = "psi", dot = "x" }
+certificate.status = "lean"
+certificate.reference = "categorification-lean: NilHecke.basis"
+certificate.hypotheses = "coefficients in an integral domain"

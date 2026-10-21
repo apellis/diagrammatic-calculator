@@ -1,0 +1,93 @@
+format = "diagcalc-presentation/1"
+name = "klr"
+title = "KLR algebra R(nu)"
+colours = "cartan"
+objects = "weight"
+generator_order = ["x", "psi"]
+
+[parameters.Q]
+vars = ["u", "v"]
+default = "klq2"
+hypotheses = ["Q_ab(u, v) = Q_ba(v, u)", "Q_ab != 0"]
+
+[parameters.Qbar]
+vars = ["u", "v", "w"]
+derived = "qbar(Q)"
+
+[generators.x]
+colours = "a"
+source = "a"
+target = "a"
+degree = "(a,a)"
+parity = "p(a)"
+draw = "dot"
+
+[generators.psi]
+colours = "a b"
+source = "a b"
+target = "b a"
+degree = "-(a,b)"
+parity = "p(a) p(b)"
+draw = "crossing"
+aliases = ["ψ"]
+
+[[relations]]
+name = "dot-slide-left-same"
+colours = "a"
+lhs = "x_1 psi_1 e(a a)"
+rhs = "psi_1 x_2 e(a a) + e(a a)"
+
+[[relations]]
+name = "dot-slide-left-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "x_1 psi_1 e(a b)"
+rhs = "psi_1 x_2 e(a b)"
+
+[[relations]]
+name = "dot-slide-right-same"
+colours = "a"
+lhs = "psi_1 x_1 e(a a)"
+rhs = "x_2 psi_1 e(a a) + e(a a)"
+
+[[relations]]
+name = "dot-slide-right-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 x_1 e(a b)"
+rhs = "x_2 psi_1 e(a b)"
+
+[[relations]]
+name = "square-same"
+colours = "a"
+lhs = "psi_1 psi_1 e(a a)"
+rhs = "0"
+
+[[relations]]
+name = "square-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 psi_1 e(a b)"
+rhs = "Q_ab(x_1, x_2) e(a b)"
+
+[[relations]]
+name = "braid-corrected"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 psi_2 psi_1 e(a b a)"
+rhs = "psi_2 psi_1 psi_2 e(a b a) + Qbar_ab(x_1, x_2, x_3) e(a b a)"
+
+[[relations]]
+name = "braid"
+colours = "a b c"
+when = "a != c or a = b"
+lhs = "psi_1 psi_2 psi_1 e(a b c)"
+rhs = "psi_2 psi_1 psi_2 e(a b c)"
+
+[[representations]]
+name = "polynomial"
+kind = "klr-polynomial"
+roles = { crossing = "psi", dot = "x" }
+certificate.status = "literature"
+certificate.reference = "Rouquier, arXiv:1112.3619v1, Section 3.2; for the default Q also categorification-lean: KL2.polyRepKL2_injective"
+certificate.hypotheses = "coefficients in an integral domain; Q_ab != 0 for a != b"

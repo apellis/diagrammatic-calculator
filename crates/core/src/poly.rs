@@ -452,6 +452,15 @@ impl<R: Ring> Ring for PolyRing<R> {
     fn characteristic(&self) -> u64 {
         self.base.characteristic()
     }
+    fn sqrt_minus_one(&self) -> Option<Self::Elem> {
+        self.base.sqrt_minus_one().map(|c| self.constant(c))
+    }
+    fn rational(&self, n: &num_bigint::BigInt, d: &num_bigint::BigInt) -> Option<Self::Elem> {
+        self.base.rational(n, d).map(|c| self.constant(c))
+    }
+    fn is_domain(&self) -> bool {
+        self.base.is_domain() && self.is_commutative()
+    }
     fn is_negative(&self, a: &Self::Elem) -> bool {
         a.terms.len() == 1 && self.base.is_negative(&a.terms[0].1)
     }

@@ -1,0 +1,51 @@
+format = "diagcalc-presentation/1"
+name = "odd-nilhecke"
+title = "odd nilHecke algebra ONH_n"
+colours = [
+  { name = "i", parity = "odd", oriented = false },
+]
+objects = "weight"
+generator_order = ["x", "psi"]
+
+[generators.x]
+source = "i"
+target = "i"
+degree = 2
+parity = 1
+draw = "dot"
+
+[generators.psi]
+source = "i i"
+target = "i i"
+degree = -2
+parity = 1
+draw = "crossing"
+aliases = ["ψ"]
+
+[[relations]]
+name = "psi-squared"
+lhs = "psi_1 psi_1 e(i i)"
+rhs = "0"
+
+[[relations]]
+name = "braid"
+lhs = "psi_1 psi_2 psi_1 e(i i i)"
+rhs = "psi_2 psi_1 psi_2 e(i i i)"
+
+[[relations]]
+name = "dot-slide-left"
+lhs = "x_1 psi_1 e(i i)"
+rhs = "-psi_1 x_2 e(i i) + e(i i)"
+
+[[relations]]
+name = "dot-slide-right"
+lhs = "psi_1 x_1 e(i i)"
+rhs = "-x_2 psi_1 e(i i) + e(i i)"
+
+[[representations]]
+name = "odd-nil-coxeter-basis"
+kind = "odd-nil-coxeter"
+roles = { crossing = "psi", dot = "x" }
+certificate.status = "lean"
+certificate.reference = "odd-lean: QuiverHecke.oddNilHeckeAction_injective, Frontier.NilHeckeBasis"
+certificate.hypotheses = "any commutative ground ring"
