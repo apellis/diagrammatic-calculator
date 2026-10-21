@@ -1,0 +1,15 @@
+{
+  "op": "check",
+  "request": {
+    "context": "klr type=A2 nu=2i+j",
+    "name": "idempotent",
+    "terms": [
+      "psi_1 psi_2 psi_1 e(iji)"
+    ]
+  },
+  "expect": {
+    "status": "ok",
+    "holds": true,
+    "witness": null
+  }
+}

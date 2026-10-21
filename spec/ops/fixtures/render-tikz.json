@@ -1,0 +1,12 @@
+{
+  "op": "term.render",
+  "request": {
+    "context": "klr type=A2 nu=i+j",
+    "term": "x_2 psi_1 e(ij)",
+    "format": "tikz"
+  },
+  "expect": {
+    "status": "ok",
+    "format": "tikz"
+  }
+}

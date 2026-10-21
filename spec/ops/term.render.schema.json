@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/term.render.schema.json",
+  "title": "term.render: a term as text, TikZ or SVG",
+  "$defs": {
+    "request": {
+      "allOf": [{ "$ref": "common.schema.json#/$defs/termRequest" }],
+      "required": ["term"],
+      "properties": {
+        "term": { "type": "string" },
+        "format": { "enum": ["text", "tikz", "svg"], "default": "text" }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "format", "output"],
+          "properties": {
+            "status": { "const": "ok" },
+            "format": { "enum": ["text", "tikz", "svg"] },
+            "output": { "type": "string" }
+          }
+        },
+        { "$ref": "common.schema.json#/$defs/error" }
+      ]
+    }
+  }
+}

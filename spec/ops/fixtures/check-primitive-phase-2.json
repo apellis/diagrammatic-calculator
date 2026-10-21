@@ -1,0 +1,14 @@
+{
+  "op": "check",
+  "request": {
+    "context": "nilhecke nu=2",
+    "name": "primitive",
+    "terms": [
+      "psi_1 x_1"
+    ]
+  },
+  "expect": {
+    "status": "error",
+    "kind": "precondition"
+  }
+}

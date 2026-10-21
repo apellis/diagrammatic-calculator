@@ -1,0 +1,9 @@
+{
+  "op": "workspace.run",
+  "request": {
+    "workspace": "diagcalc-workspace/1\ncontext nilhecke nu=2\ndef a := psi_1 x_1  # id=d1\nwatch a a - a  # id=w2\nsolve a = 0 for c  # id=s3\n"
+  },
+  "expect": {
+    "status": "ok"
+  }
+}

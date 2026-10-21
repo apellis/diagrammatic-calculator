@@ -424,10 +424,17 @@ impl RingVisitor for RunWorkspace<'_> {
                 ),
                 CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => continue,
             };
+            let mut value = with_status(r);
+            // the cell's kind takes the key; an error's kind moves to error_kind
+            if let Some(o) = value.as_object_mut()
+                && let Some(k) = o.remove("kind")
+            {
+                o.insert("error_kind".into(), k);
+            }
             out.push(CellResult {
                 id: cell.id.clone(),
                 kind,
-                value: with_status(r),
+                value,
             });
             if strategy.is_some() {
                 s.eval = Session::new(&ctx, None)?.eval;

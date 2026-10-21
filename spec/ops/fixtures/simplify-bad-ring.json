@@ -1,0 +1,11 @@
+{
+  "op": "simplify",
+  "request": {
+    "context": "nilhecke nu=2 ring=GF(4)",
+    "term": "x_1"
+  },
+  "expect": {
+    "status": "error",
+    "kind": "invalid"
+  }
+}

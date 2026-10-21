@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/common.schema.json",
+  "title": "Shared parts of operation messages",
+  "$defs": {
+    "context": {
+      "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md).",
+      "type": "string"
+    },
+    "termRequest": {
+      "type": "object",
+      "required": ["context"],
+      "properties": {
+        "context": { "$ref": "#/$defs/context" },
+        "presentation": { "description": "The text of a presentation file, when the context names one that is not shipped.", "type": "string" },
+        "strategy": { "description": "The name of a representation the presentation declares; the first one by default.", "type": "string" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["strategy", "method", "certificate"],
+      "properties": {
+        "strategy": { "enum": ["basis normal form", "faithful representation", "confluent rewriting", "finite-dimensional linear algebra", "bounded search"] },
+        "method": { "type": "string" },
+        "certificate": {
+          "type": "object",
+          "required": ["status", "reference", "hypotheses"],
+          "properties": {
+            "status": { "enum": ["lean", "literature", "assumed", "unknown"] },
+            "reference": { "type": "string" },
+            "hypotheses": { "type": "string" }
+          }
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": ["status", "kind", "message"],
+      "properties": {
+        "status": { "const": "error" },
+        "kind": { "enum": ["syntax", "invalid", "precondition", "limit"] },
+        "message": { "type": "string" }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["status", "holds", "witness", "provenance"],
+      "properties": {
+        "status": { "const": "ok" },
+        "holds": { "type": "boolean" },
+        "witness": { "description": "When the check fails: the normal form of what should vanish.", "type": ["string", "null"] },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    }
+  }
+}

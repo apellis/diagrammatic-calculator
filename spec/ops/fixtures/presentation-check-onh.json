@@ -1,0 +1,10 @@
+{
+  "op": "presentation.check",
+  "request": {
+    "presentation": "odd-nilhecke"
+  },
+  "expect": {
+    "status": "ok",
+    "ok": true
+  }
+}

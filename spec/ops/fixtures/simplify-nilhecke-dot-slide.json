@@ -1,0 +1,11 @@
+{
+  "op": "simplify",
+  "request": {
+    "context": "nilhecke nu=2 ring=ZZ",
+    "term": "x_1 psi_1"
+  },
+  "expect": {
+    "status": "ok",
+    "normal_form": "1 + psi_1 x_2"
+  }
+}

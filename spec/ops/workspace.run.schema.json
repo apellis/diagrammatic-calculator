@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/workspace.run.schema.json",
+  "title": "workspace.run: evaluate every cell of a workspace in order",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["workspace"],
+      "properties": {
+        "workspace": { "description": "The text of a .dcw file.", "type": "string" },
+        "presentation": { "description": "The text of a presentation file the context names, when it is not shipped.", "type": "string" }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "required": ["id", "kind", "status"],
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "kind": { "enum": ["def", "watch", "solve", "check"] },
+        "status": { "enum": ["ok", "error"] },
+        "name": { "description": "def: the name defined.", "type": "string" },
+        "term": { "description": "def: the elaborated term.", "type": "string" },
+        "normal_form": { "description": "watch: as in simplify.", "type": "string" },
+        "holds": { "description": "check: as in check.", "type": "boolean" },
+        "witness": { "type": ["string", "null"] },
+        "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "error_kind": { "enum": ["syntax", "invalid", "precondition", "limit"] },
+        "message": { "type": "string" }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "context", "cells"],
+          "properties": {
+            "status": { "const": "ok" },
+            "context": { "type": "string" },
+            "cells": { "type": "array", "items": { "$ref": "#/$defs/cell" } }
+          }
+        },
+        { "$ref": "common.schema.json#/$defs/error" }
+      ]
+    }
+  }
+}

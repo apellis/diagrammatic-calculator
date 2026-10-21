@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/presentation.schema.json",
+  "title": "Presentation file (.pres.toml), as the JSON value of its TOML",
+  "description": "A presentation of a strict monoidal supercategory: colours, generators (possibly schemas over colour variables), parameters, relation schemas and representations. Terms inside are in the text term format (spec/text-term.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "name", "colours", "generators"],
+  "properties": {
+    "format": { "const": "diagcalc-presentation/1" },
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "title": { "type": "string" },
+    "colours": {
+      "description": "Fixed colours, or \"cartan\": one colour per simple root of the context's Cartan datum.",
+      "oneOf": [
+        { "const": "cartan" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/colour" } }
+      ]
+    },
+    "objects": {
+      "description": "\"weight\": a term without an idempotent ranges over all sequences of the context's weight; \"explicit\": only objects written in the term.",
+      "enum": ["weight", "explicit"],
+      "default": "explicit"
+    },
+    "generator_order": {
+      "description": "The order of the generators (TOML tables are unordered).",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "parameters": { "type": "object", "additionalProperties": { "$ref": "#/$defs/parameter" } },
+    "generators": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/generator" } },
+    "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
+    "representations": { "type": "array", "items": { "$ref": "#/$defs/representation" } }
+  },
+  "$defs": {
+    "colour": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "parity": { "enum": ["even", "odd"], "default": "even" },
+        "oriented": { "type": "boolean", "default": false }
+      }
+    },
+    "intExpr": {
+      "description": "An integer, or an expression in the colour variables: (a,b) the symmetric form, a_ab a Cartan entry, d_a a symmetrizer, p(a) a parity, with + - and juxtaposed products.",
+      "oneOf": [{ "type": "integer" }, { "type": "string" }]
+    },
+    "pattern": {
+      "description": "Space-separated colours or colour variables, a trailing * for a downward strand.",
+      "type": "string"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "target", "degree"],
+      "properties": {
+        "colours": { "description": "Space-separated colour variables of the schema.", "type": "string", "default": "" },
+        "source": { "$ref": "#/$defs/pattern" },
+        "target": { "$ref": "#/$defs/pattern" },
+        "degree": { "$ref": "#/$defs/intExpr" },
+        "parity": { "$ref": "#/$defs/intExpr", "default": 0 },
+        "draw": { "enum": ["dot", "crossing", "cup", "cap", "box"], "default": "box" },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vars"],
+      "properties": {
+        "vars": { "type": "array", "items": { "enum": ["u", "v", "w"] } },
+        "default": { "description": "A built-in default (klq2) or a polynomial in vars.", "type": "string" },
+        "hypotheses": { "type": "array", "items": { "type": "string" } },
+        "derived": { "description": "qbar(P): (P(u,v) - P(w,v)) / (u - w).", "type": "string", "pattern": "^qbar\\([A-Za-z]+\\)$" }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "lhs", "rhs"],
+      "properties": {
+        "name": { "type": "string" },
+        "colours": { "type": "string", "default": "" },
+        "when": { "description": "A side condition: a = b, a != b, and, or, not, comparisons of integer expressions.", "type": "string" },
+        "lhs": { "type": "string" },
+        "rhs": { "type": "string" }
+      }
+    },
+    "representation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "roles", "certificate"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "enum": ["klr-polynomial", "nil-coxeter", "odd-nil-coxeter"] },
+        "roles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dot", "crossing"],
+          "properties": { "dot": { "type": "string" }, "crossing": { "type": "string" } }
+        },
+        "certificate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["lean", "literature", "assumed", "unknown"] },
+            "reference": { "type": "string" },
+            "hypotheses": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

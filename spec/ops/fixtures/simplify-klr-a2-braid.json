@@ -1,0 +1,11 @@
+{
+  "op": "simplify",
+  "request": {
+    "context": "klr type=A2 nu=2i+j",
+    "term": "psi_1 psi_2 psi_1 e(iji) - psi_2 psi_1 psi_2 e(iji)"
+  },
+  "expect": {
+    "status": "ok",
+    "normal_form": "e(iji)"
+  }
+}

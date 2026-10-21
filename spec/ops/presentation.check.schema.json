@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/presentation.check.schema.json",
+  "title": "presentation.check: the conformance checker",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["presentation"],
+      "properties": {
+        "presentation": { "description": "A shipped presentation's name, or a presentation file's text.", "type": "string" },
+        "context": { "description": "Check in this context only; otherwise in the standard contexts (Cartan types A1-A3, B2, B3, C3, G2 for Cartan presentations).", "$ref": "common.schema.json#/$defs/context" }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "ok", "reports"],
+          "properties": {
+            "status": { "const": "ok" },
+            "ok": { "type": "boolean" },
+            "reports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["presentation", "context", "ok", "passed", "failed", "unchecked", "findings"],
+                "properties": {
+                  "presentation": { "type": "string" },
+                  "context": { "type": "string" },
+                  "ok": { "type": "boolean" },
+                  "passed": { "type": "integer" },
+                  "failed": { "type": "integer" },
+                  "unchecked": { "type": "integer" },
+                  "findings": {
+                    "description": "Failed and unchecked findings; passing ones are only counted.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["check", "status", "detail"],
+                      "properties": {
+                        "check": { "type": "string" },
+                        "status": { "enum": ["fail", "unchecked"] },
+                        "detail": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        { "$ref": "common.schema.json#/$defs/error" }
+      ]
+    }
+  }
+}

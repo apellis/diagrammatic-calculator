@@ -1,0 +1,11 @@
+{
+  "op": "simplify",
+  "request": {
+    "context": "odd-nilhecke nu=4",
+    "term": "psi_1 psi_3 + psi_3 psi_1"
+  },
+  "expect": {
+    "status": "ok",
+    "normal_form": "0"
+  }
+}

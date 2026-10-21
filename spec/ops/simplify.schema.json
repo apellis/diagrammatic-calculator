@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/simplify.schema.json",
+  "title": "simplify: the normal form of a term",
+  "$defs": {
+    "request": {
+      "allOf": [{ "$ref": "common.schema.json#/$defs/termRequest" }],
+      "required": ["term"],
+      "properties": { "term": { "type": "string" } }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "normal_form", "terms", "provenance"],
+          "properties": {
+            "status": { "const": "ok" },
+            "normal_form": { "description": "Canonical text of the normal form.", "type": "string" },
+            "terms": { "type": "integer", "minimum": 0 },
+            "provenance": { "$ref": "common.schema.json#/$defs/provenance" }
+          }
+        },
+        { "$ref": "common.schema.json#/$defs/error" }
+      ]
+    }
+  }
+}
