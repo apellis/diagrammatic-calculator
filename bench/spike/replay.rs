@@ -7,9 +7,9 @@
 //! spike-replay TRACE [current|packed|both]
 //! ```
 
+use diagcalc_core::num::Int;
 use diagcalc_core::poly::{Monomial, Poly, PolyRing};
 use diagcalc_core::ring::{Integers, Ring};
-use num_bigint::BigInt;
 use std::hint::black_box;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
@@ -87,14 +87,14 @@ impl Current {
 }
 
 impl Backend for Current {
-    type P = Poly<BigInt>;
+    type P = Poly<Int>;
     fn name(&self) -> &'static str {
         "current"
     }
     fn convert(&mut self, n: usize, p: &Raw) -> Self::P {
         let terms = p
             .iter()
-            .map(|(c, e)| (Monomial(e.clone()), BigInt::from(*c)))
+            .map(|(c, e)| (Monomial::from(e.as_slice()), Int::from(*c)))
             .collect();
         self.rings[n].normalize(terms)
     }
@@ -109,7 +109,7 @@ impl Backend for Current {
     }
     fn checksum(&self, _n: usize, p: &Self::P) -> u64 {
         p.terms.iter().fold(0u64, |s, (m, c)| {
-            let c: i64 = c.try_into().expect("coefficient fits i64");
+            let c = c.to_i64().expect("coefficient fits i64");
             s.wrapping_add(term_hash(c, m.0.iter().map(|&x| x as i64)))
         })
     }

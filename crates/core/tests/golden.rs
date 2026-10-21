@@ -122,14 +122,17 @@ fn golden_corpus_is_reproduced() {
             for (k, e) in act["input"].as_array().unwrap().iter().enumerate() {
                 m[k] = e.as_i64().unwrap() as i32;
             }
-            let f = ring.monomial(Monomial(m), ring.base.one());
+            let f = ring.monomial(Monomial::from(m), ring.base.one());
             let want = lean_output(&act["output"]);
             for (what, t) in [("term", &term), ("normal form", &nf)] {
                 let mut got = Action::new();
                 for (o, p) in ev.act(t, obj, &f).unwrap() {
                     let poly = got.entry(ctx.fmt_object(&o)).or_default();
                     for (mono, c) in &p.terms {
-                        poly.insert(mono.0[..n].iter().map(|&e| e as i64).collect(), c.clone());
+                        poly.insert(
+                            mono.0[..n].iter().map(|&e| e as i64).collect(),
+                            c.to_bigint(),
+                        );
                     }
                 }
                 assert_eq!(

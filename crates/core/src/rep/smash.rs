@@ -64,33 +64,49 @@ impl<R: Ring> Alg<R> {
         }
     }
 
-    fn canon(&self, mut f: Frac<R::Elem>) -> Frac<R::Elem> {
+    /// Cancels factors `x_a − x_b` of the denominator that divide the numerator, trying only
+    /// the factors whose index `a·n + b` is in `ks`.
+    fn canon_at(&self, mut f: Frac<R::Elem>, ks: impl Iterator<Item = usize>) -> Frac<R::Elem> {
         if self.ring.is_zero(&f.num) {
             f.den.iter_mut().for_each(|e| *e = 0);
             return f;
         }
-        for a in 0..self.n {
-            for b in a + 1..self.n {
-                while f.den[a * self.n + b] > 0 {
-                    match self.ring.div_by_difference(&f.num, a, b) {
-                        Some(q) => {
-                            f.num = q;
-                            f.den[a * self.n + b] -= 1;
-                        }
-                        None => break,
+        let n = self.n;
+        for k in ks {
+            while f.den[k] > 0 {
+                match self.ring.div_by_difference(&f.num, k / n, k % n) {
+                    Some(q) => {
+                        f.num = q;
+                        f.den[k] -= 1;
                     }
+                    None => break,
                 }
             }
         }
         f
     }
 
-    fn mul(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
-        let num = self.ring.mul(&x.num, &y.num);
-        let den = x.den.iter().zip(&y.den).map(|(a, b)| a + b).collect();
-        self.canon(Frac { num, den })
+    fn canon(&self, f: Frac<R::Elem>) -> Frac<R::Elem> {
+        let ks: Vec<usize> = (0..f.den.len()).filter(|&k| f.den[k] > 0).collect();
+        self.canon_at(f, ks.into_iter())
     }
 
+    /// Both factors are in lowest terms. Over a domain `x_a − x_b` is prime, and a factor of one
+    /// denominator cannot divide that numerator, so only the factors in exactly one of the
+    /// denominators can cancel.
+    fn mul(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
+        let num = self.ring.mul(&x.num, &y.num);
+        let den: Vec<u32> = x.den.iter().zip(&y.den).map(|(a, b)| a + b).collect();
+        if !self.ring.is_domain() {
+            return self.canon(Frac { num, den });
+        }
+        let ks = (0..den.len()).filter(|&k| (x.den[k] > 0) != (y.den[k] > 0));
+        self.canon_at(Frac { num, den }, ks)
+    }
+
+    /// Both summands are in lowest terms. Over a domain, on the common denominator, a factor
+    /// with a higher power in one denominator divides the other lifted numerator but not this
+    /// one, so only factors with equal positive powers can cancel.
     fn add(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
         let den: Vec<u32> = x.den.iter().zip(&y.den).map(|(a, b)| *a.max(b)).collect();
         let lift = |f: &Frac<R::Elem>| {
@@ -103,7 +119,11 @@ impl<R: Ring> Alg<R> {
             num
         };
         let num = self.ring.add(&lift(x), &lift(y));
-        self.canon(Frac { num, den })
+        if !self.ring.is_domain() {
+            return self.canon(Frac { num, den });
+        }
+        let ks = (0..den.len()).filter(|&k| x.den[k] > 0 && x.den[k] == y.den[k]);
+        self.canon_at(Frac { num, den }, ks)
     }
 
     fn neg(&self, x: &Frac<R::Elem>) -> Frac<R::Elem> {
@@ -247,7 +267,7 @@ impl<'a, R: Ring> Smash<'a, R> {
             if m.0[2] != 0 {
                 return Err(Error::invalid("Q may only use the variables u and v"));
             }
-            let mut e = vec![0; alg.ring.nvars()];
+            let mut e: crate::poly::Exps = smallvec::smallvec![0; alg.ring.nvars()];
             e[k] = m.0[0];
             e[k + 1] = m.0[1];
             e[alg.n..].copy_from_slice(&m.0[np..]);

@@ -188,7 +188,7 @@ fn agrees(s: &Setup, ev: &dyn Evaluator<R>, t: &CTerm<R>, sources: &[usize]) -> 
                 m[k - 1] = 1;
                 m[0] += 1;
             }
-            let f = ring.monomial(Monomial(m), ring.base.one());
+            let f = ring.monomial(Monomial::from(m), ring.base.one());
             if ev.act(t, obj, &f).unwrap() != ev.act(&nf, obj, &f).unwrap() {
                 return false;
             }

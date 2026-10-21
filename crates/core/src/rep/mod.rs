@@ -145,7 +145,7 @@ pub fn lift_coeff<E: Clone>(c: &Poly<E>, n: usize) -> Poly<E> {
             .terms
             .iter()
             .map(|(m, x)| {
-                let mut e = vec![0; n];
+                let mut e: crate::poly::Exps = smallvec::smallvec![0; n];
                 e.extend_from_slice(&m.0);
                 (Monomial(e), x.clone())
             })
@@ -155,7 +155,7 @@ pub fn lift_coeff<E: Clone>(c: &Poly<E>, n: usize) -> Poly<E> {
 
 /// Splits a strand-ring monomial into its dot exponents and its scalar part.
 pub fn split_monomial(m: &Monomial, n: usize) -> (Vec<i32>, Monomial) {
-    (m.0[..n].to_vec(), Monomial(m.0[n..].to_vec()))
+    (m.0[..n].to_vec(), Monomial::from(&m.0[n..]))
 }
 
 /// The word `ψ_ŵ ∘ x^a e(obj)` (dots at the bottom) when `dots_on_top` is false, or

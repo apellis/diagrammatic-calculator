@@ -10,6 +10,7 @@
 //! context are normal-ordered words `x_1^{a_1} ⋯ x_n^{a_n}`.
 
 use crate::ring::Ring;
+use smallvec::{SmallVec, smallvec};
 use std::cmp::Ordering;
 
 /// A log of polynomial operations with their operands, for replaying them on other arithmetic
@@ -46,16 +47,31 @@ pub mod trace {
     }
 }
 
+/// Exponents of a monomial, stored inline for up to 8 variables.
+pub type Exps = SmallVec<[i32; 8]>;
+
 /// Exponent vector of a monomial; its length is the number of variables of the ring.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Monomial(pub Vec<i32>);
+pub struct Monomial(pub Exps);
+
+impl From<Vec<i32>> for Monomial {
+    fn from(v: Vec<i32>) -> Self {
+        Monomial(Exps::from_vec(v))
+    }
+}
+
+impl From<&[i32]> for Monomial {
+    fn from(v: &[i32]) -> Self {
+        Monomial(Exps::from_slice(v))
+    }
+}
 
 impl Monomial {
     pub fn one(n: usize) -> Self {
-        Monomial(vec![0; n])
+        Monomial(smallvec![0; n])
     }
     pub fn var(n: usize, i: usize, e: i32) -> Self {
-        let mut v = vec![0; n];
+        let mut v: Exps = smallvec![0; n];
         v[i] = e;
         Monomial(v)
     }
@@ -221,7 +237,7 @@ impl<R: Ring> PolyRing<R> {
         );
         let n = self.nvars();
         self.map_monomials(a, |m| {
-            let mut v = vec![0; n];
+            let mut v: Exps = smallvec![0; n];
             for (i, &e) in m.0.iter().enumerate() {
                 v[perm[i]] += e;
             }
@@ -265,9 +281,28 @@ impl<R: Ring> PolyRing<R> {
         #[cfg(feature = "trace")]
         trace::record(|| format!("div {} {i} {j} {}", self.nvars(), self.trace_poly(a)));
         // Write a = Σ_k c_k(rest) x_i^k. Then a = (x_i - x_j) q + a(x_i := x_j), and
-        // q = Σ_k c_k Σ_{l=0}^{k-1} x_i^l x_j^{k-1-l}.
+        // q = Σ_k c_k Σ_{l=0}^{k-1} x_i^l x_j^{k-1-l}. Test the remainder first: most divisions
+        // the polynomial representation attempts are not exact, and a single term never is.
+        match a.terms.len() {
+            0 => return Some(Poly { terms: vec![] }),
+            1 => return None,
+            _ => {}
+        }
+        let rem = self.normalize(
+            a.terms
+                .iter()
+                .map(|(m, c)| {
+                    let mut r = m.clone();
+                    r.0[j] += r.0[i];
+                    r.0[i] = 0;
+                    (r, c.clone())
+                })
+                .collect(),
+        );
+        if !rem.terms.is_empty() {
+            return None;
+        }
         let mut q_terms = Vec::new();
-        let mut rem_terms = Vec::new();
         for (m, c) in &a.terms {
             let k = m.0[i];
             let mut base = m.clone();
@@ -278,12 +313,8 @@ impl<R: Ring> PolyRing<R> {
                 t.0[j] += k - 1 - l;
                 q_terms.push((t, c.clone()));
             }
-            let mut r = base.clone();
-            r.0[j] += k;
-            rem_terms.push((r, c.clone()));
         }
-        let rem = self.normalize(rem_terms);
-        rem.terms.is_empty().then(|| self.normalize(q_terms))
+        Some(self.normalize(q_terms))
     }
 
     /// Substitutes `x_i := x_j` (commutative case).

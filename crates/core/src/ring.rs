@@ -4,9 +4,9 @@
 //! on elements, so that rings needing run-time data (the prime of ℤ/p, the variables of a
 //! polynomial ring) share one interface. See `docs/design.md`.
 
+use crate::num::{Int, Rat};
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_rational::BigRational;
 use num_traits::{One, Signed, ToPrimitive, Zero};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -92,52 +92,48 @@ pub trait Ring: Clone + Debug + PartialEq {
 pub struct Integers;
 
 impl Ring for Integers {
-    type Elem = BigInt;
-    fn zero(&self) -> BigInt {
-        BigInt::zero()
+    type Elem = Int;
+    fn zero(&self) -> Int {
+        Int::ZERO
     }
-    fn one(&self) -> BigInt {
-        BigInt::one()
+    fn one(&self) -> Int {
+        Int::ONE
     }
-    fn int(&self, n: i64) -> BigInt {
-        BigInt::from(n)
+    fn int(&self, n: i64) -> Int {
+        Int::from(n)
     }
-    fn is_zero(&self, a: &BigInt) -> bool {
+    fn is_zero(&self, a: &Int) -> bool {
         a.is_zero()
     }
-    fn add(&self, a: &BigInt, b: &BigInt) -> BigInt {
-        a + b
+    fn add(&self, a: &Int, b: &Int) -> Int {
+        a.add(b)
     }
-    fn neg(&self, a: &BigInt) -> BigInt {
-        -a
+    fn neg(&self, a: &Int) -> Int {
+        a.neg()
     }
-    fn mul(&self, a: &BigInt, b: &BigInt) -> BigInt {
-        a * b
+    fn mul(&self, a: &Int, b: &Int) -> Int {
+        a.mul(b)
     }
-    fn inv(&self, b: &BigInt) -> Option<BigInt> {
-        if b.abs().is_one() {
-            Some(b.clone())
-        } else {
-            None
-        }
+    fn inv(&self, b: &Int) -> Option<Int> {
+        b.abs().is_one().then(|| b.clone())
     }
-    fn div_exact(&self, a: &BigInt, b: &BigInt) -> Option<BigInt> {
+    fn div_exact(&self, a: &Int, b: &Int) -> Option<Int> {
         if b.is_zero() {
             return None;
         }
         let (q, r) = a.div_rem(b);
         r.is_zero().then_some(q)
     }
-    fn fmt_elem(&self, a: &BigInt) -> String {
+    fn fmt_elem(&self, a: &Int) -> String {
         a.to_string()
     }
     fn characteristic(&self) -> u64 {
         0
     }
-    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<BigInt> {
-        self.div_exact(n, d)
+    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<Int> {
+        self.div_exact(&Int::from(n), &Int::from(d))
     }
-    fn is_negative(&self, a: &BigInt) -> bool {
+    fn is_negative(&self, a: &Int) -> bool {
         a.is_negative()
     }
 }
@@ -147,48 +143,44 @@ impl Ring for Integers {
 pub struct Rationals;
 
 impl Ring for Rationals {
-    type Elem = BigRational;
-    fn zero(&self) -> BigRational {
-        BigRational::zero()
+    type Elem = Rat;
+    fn zero(&self) -> Rat {
+        Rat::ZERO
     }
-    fn one(&self) -> BigRational {
-        BigRational::one()
+    fn one(&self) -> Rat {
+        Rat::ONE
     }
-    fn int(&self, n: i64) -> BigRational {
-        BigRational::from_integer(BigInt::from(n))
+    fn int(&self, n: i64) -> Rat {
+        Rat::from_int(Int::from(n))
     }
-    fn is_zero(&self, a: &BigRational) -> bool {
+    fn is_zero(&self, a: &Rat) -> bool {
         a.is_zero()
     }
-    fn add(&self, a: &BigRational, b: &BigRational) -> BigRational {
-        a + b
+    fn add(&self, a: &Rat, b: &Rat) -> Rat {
+        a.add(b)
     }
-    fn neg(&self, a: &BigRational) -> BigRational {
-        -a
+    fn neg(&self, a: &Rat) -> Rat {
+        a.neg()
     }
-    fn mul(&self, a: &BigRational, b: &BigRational) -> BigRational {
-        a * b
+    fn mul(&self, a: &Rat, b: &Rat) -> Rat {
+        a.mul(b)
     }
-    fn inv(&self, b: &BigRational) -> Option<BigRational> {
-        (!b.is_zero()).then(|| b.recip())
+    fn inv(&self, b: &Rat) -> Option<Rat> {
+        b.recip()
     }
-    fn div_exact(&self, a: &BigRational, b: &BigRational) -> Option<BigRational> {
-        (!b.is_zero()).then(|| a / b)
+    fn div_exact(&self, a: &Rat, b: &Rat) -> Option<Rat> {
+        b.recip().map(|r| a.mul(&r))
     }
-    fn fmt_elem(&self, a: &BigRational) -> String {
-        if a.denom().is_one() {
-            a.numer().to_string()
-        } else {
-            format!("{}/{}", a.numer(), a.denom())
-        }
+    fn fmt_elem(&self, a: &Rat) -> String {
+        a.to_string()
     }
     fn characteristic(&self) -> u64 {
         0
     }
-    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<BigRational> {
-        (!d.is_zero()).then(|| BigRational::new(n.clone(), d.clone()))
+    fn rational(&self, n: &BigInt, d: &BigInt) -> Option<Rat> {
+        (!d.is_zero()).then(|| Rat::new(Int::from(n), Int::from(d)))
     }
-    fn is_negative(&self, a: &BigRational) -> bool {
+    fn is_negative(&self, a: &Rat) -> bool {
         a.is_negative()
     }
 }

@@ -168,7 +168,6 @@ name = "diagcalc-bench"
 version = "0.1.0"
 dependencies = [
  "diagcalc-core",
- "num-bigint",
  "serde_json",
 ]
 
@@ -192,6 +191,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "smallvec",
  "thiserror",
  "toml",
 ]

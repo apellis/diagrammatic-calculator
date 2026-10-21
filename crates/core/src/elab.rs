@@ -360,7 +360,7 @@ impl<R: Ring> Context<R> {
         let mut acc = Term::zero();
         for (m, c) in &poly.terms {
             // coefficient: the scalar part of the monomial
-            let scal = crate::poly::Monomial(m.0[nparam..].to_vec());
+            let scal = crate::poly::Monomial::from(&m.0[nparam..]);
             let coef = self.coeff.monomial(scal, c.clone());
             let mut t = self.scalar_term(coef, src);
             for (k, a) in argt.iter().enumerate() {

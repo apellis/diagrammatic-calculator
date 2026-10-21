@@ -110,7 +110,7 @@ fn monomials<R: Ring>(
         if e.iter().sum::<i32>() <= d {
             let mut m = vec![0; nv];
             m[..n].copy_from_slice(&e);
-            out.push(ring.monomial(Monomial(m), ring.base.one()));
+            out.push(ring.monomial(Monomial::from(m), ring.base.one()));
         }
         let mut k = 0;
         loop {
@@ -196,7 +196,7 @@ fn odd_divided_differences() {
     let ring = ev.poly_ring(2);
     let psi = c.parse_term("psi_1").unwrap();
     let obj = &c.objects[0];
-    let x = |a: i32, b: i32| ring.monomial(Monomial(vec![a, b]), ring.base.one());
+    let x = |a: i32, b: i32| ring.monomial(Monomial::from(vec![a, b]), ring.base.one());
     let act = |f: Poly<_>| {
         ev.act(&psi, obj, &f)
             .unwrap()

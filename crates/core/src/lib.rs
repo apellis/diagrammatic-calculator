@@ -15,6 +15,7 @@ pub mod context;
 pub mod elab;
 pub mod error;
 pub mod expr;
+pub mod num;
 pub mod ops;
 pub mod perm;
 pub mod poly;
