@@ -1,0 +1,16 @@
+[package]
+name = "diagcalc-cli"
+description = "Command-line interface to the diagrammatic calculator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "diagcalc"
+path = "src/main.rs"
+
+[dependencies]
+diagcalc-core.workspace = true
+serde_json.workspace = true

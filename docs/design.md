@@ -1,0 +1,61 @@
+# Design notes
+
+These notes record how the core is built and why. The specification (`docs/spec.md`) says what to
+build; the conventions (`docs/conventions.md`) fix how notation is read.
+
+## Generality
+
+The calculator is for diagrammatic algebras in general, not for KLR algebras alone. The core types
+describe a presentation of a strict monoidal supercategory:
+
+- **colours**, each with a parity and an orientation mode; objects are words in signed colours;
+- **generators**, each with a source word, a target word, a degree and a parity, possibly given as
+  schemas over colour variables (a KLR crossing `psi` of colours `a, b` has source `a b`, target
+  `b a`, degree `-(a,b)`);
+- **relations** as schemas with side conditions and parameters.
+
+Nothing in `crates/core` may assume that a presentation is KLR, nilHecke or of any other family.
+What a family needs beyond its presentation file plugs in through one trait per strategy:
+
+| Strategy | Trait | First implementations |
+|---|---|---|
+| Faithful representation | `Representation` | polynomial representation of KLR algebras (nilHecke is the one-colour case); skew-polynomial representation of the odd nilHecke algebra |
+| Basis normal form | `NormalForm` | phase 3 |
+| Confluent rewriting | `RewriteSystem` | phase 3 |
+| Finite-dimensional linear algebra | `FiniteQuotient` | phase 2 |
+| Bounded search | (generic) | phase 3 |
+
+A representation is attached to a presentation in its file (`[representation]` section) by naming a
+built-in action kind and mapping each generator to an operator of that kind; the file also states
+the representation's faithfulness certificate. A new family (webs, Temperley–Lieb, Soergel
+diagrammatics, Heisenberg categories) needs a new presentation file and, only if no existing action
+kind fits, a new representation module. The term model, the formats, the operation API and the user
+interface do not change.
+
+## Rings as contexts
+
+Ring arithmetic goes through a context object rather than through operator overloading on element
+types: `ring.add(&a, &b)`, `ring.mul(&a, &b)`. This lets one element type serve rings that need
+run-time data (the prime of ℤ/p, the relations among parameters such as π² = 1, the variables of a
+polynomial ring) and keeps every ring behind one trait, `Ring`. The phase 1 rings are ℤ, ℚ, ℤ/p and
+ℤ[√−1]; polynomial rings over any of them (commutative or skew) are rings in the same sense.
+
+## Terms
+
+A word is a source object and a list of layers from bottom to top; a layer is one generator at a
+strand position, with identities elsewhere. A term is a finite sum of coefficient × word, kept
+sorted with no zero coefficients. Words equal up to the interchange law are identified by a
+canonical layering (each generator as low as possible, ties broken left to right) together with
+the Koszul sign accumulated on the way, so equality up to interchange is a direct comparison.
+
+Parsing is in two steps. The text format parses to a syntax tree that keeps what was written
+(positional generators, idempotents, powers, sums). Elaboration in a context (a presentation and,
+for KLR, a weight ν) turns the tree into an explicit term: every word gets its source object, and a
+word written without an idempotent stands for the sum over all objects it applies to.
+
+## Equality strategies and results
+
+Layered words modulo interchange represent morphisms but do not decide equality. Every computed
+value carries the strategy that produced it, the faithfulness certificate of any representation it
+relied on, and any caps. A representation whose certificate is "assumed" or "unknown" can confirm a
+difference only with a witness checked another way.

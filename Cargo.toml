@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/cli", "crates/wasm", "crates/py"]
+default-members = ["crates/core", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/apellis/apellis-diagrammatic-calculator"
+rust-version = "1.85"
+
+[workspace.dependencies]
+diagcalc-core = { path = "crates/core" }
+num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+thiserror = "2"
+proptest = "1"
+
+[profile.release]
+debug = 1
+
+[profile.bench]
+debug = 1

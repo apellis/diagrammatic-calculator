@@ -1,0 +1,20 @@
+[package]
+name = "diagcalc-core"
+description = "Exact calculator core for diagrammatic algebra: presentations, terms, representations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+num-bigint.workspace = true
+num-integer.workspace = true
+num-traits.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
