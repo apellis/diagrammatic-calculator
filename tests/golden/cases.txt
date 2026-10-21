@@ -1,0 +1,108 @@
+# The golden corpus: terms, their normal forms, and (in actions.json) their polynomial action.
+#
+# The Lean program lean/golden/Golden.lean reads this file, computes the action of each term
+# and of its normal form on every monomial x^a (each a_k < n) at every source idempotent, by
+# composing the generators' defining operators, checks that the two agree, and writes
+# actions.json. The engine must reproduce both the normal form text and the action exactly.
+#
+# One case per block: case ID, context, term, nf (normal form). Terms are written expanded.
+
+case nh2-dot-slide
+context nilhecke nu=2
+term x_1 psi_1
+nf 1 + psi_1 x_2
+
+case nh2-crossing-dots
+context nilhecke nu=2
+term psi_1 x_1^3
+nf psi_1 x_1^3
+
+case nh3-braid
+context nilhecke nu=3
+term psi_1 psi_2 psi_1 - psi_2 psi_1 psi_2
+nf 0
+
+case nh3-mixed
+context nilhecke nu=3
+term x_3 psi_2 psi_1 x_1
+nf -psi_1 x_1 - x_1 psi_2 + psi_2 psi_1 x_1^2
+
+case nh3-idempotent
+context nilhecke nu=3
+term psi_1 psi_2 psi_1 x_1^2 x_2 psi_1 psi_2 psi_1
+nf psi_1 psi_2 psi_1
+
+case onh2-dot
+context odd-nilhecke nu=2
+term x_1 psi_1
+nf x_1 psi_1
+
+case onh2-dots-through
+context odd-nilhecke nu=2
+term psi_1 x_2 x_1
+nf x_1 x_2 psi_1
+
+case onh3-longest
+context odd-nilhecke nu=3
+term psi_1 psi_2 psi_1 x_1^2 x_2
+nf -1 + x_2 psi_1 + psi_1 x_3 + x_3 psi_2 + x_3^2 psi_2 psi_1 - x_2 psi_1 x_3 psi_2 + x_2 x_3 psi_1 x_3 psi_2 psi_1
+
+case onh3-mixed
+context odd-nilhecke nu=3
+term psi_2 x_1 psi_1 x_3 psi_2
+nf x_1 psi_1 psi_2 - x_1 x_2 psi_1 psi_2 psi_1
+
+case onh4-anticommute
+context odd-nilhecke nu=4
+term psi_1 psi_3 + psi_3 psi_1
+nf 0
+
+case onh4-distant
+context odd-nilhecke nu=4
+term psi_3 x_1 psi_1 x_4
+nf x_1 psi_1 + x_1 x_3 psi_1 psi_3
+
+case a2-square
+context klr type=A2 nu=i+j
+term psi_1 psi_1 e(ij)
+nf x_1 e(ij) + x_2 e(ij)
+
+case a2-braid
+context klr type=A2 nu=2i+j
+term psi_1 psi_2 psi_1 e(iji) - psi_2 psi_1 psi_2 e(iji)
+nf e(iji)
+
+case a2-iij
+context klr type=A2 nu=2i+j
+term psi_2 psi_1 x_1 psi_2 e(iij)
+nf psi_1 psi_2 psi_1 x_1 e(iij)
+
+case a2-jii
+context klr type=A2 nu=2i+j
+term x_3 psi_1 psi_2 psi_1 e(jii)
+nf psi_1 psi_2 psi_1 x_1 e(jii)
+
+case b2-square-ij
+context klr type=B2 nu=i+j
+term psi_1 psi_1 e(ij)
+nf x_1 e(ij) + x_2^2 e(ij)
+
+case b2-square-ji
+context klr type=B2 nu=i+j
+term psi_1 psi_1 e(ji)
+nf x_2 e(ji) + x_1^2 e(ji)
+
+case b2-braid-iji
+context klr type=B2 nu=2i+j
+term psi_1 psi_2 psi_1 e(iji) - psi_2 psi_1 psi_2 e(iji)
+nf e(iji)
+
+case b2-braid-jij
+context klr type=B2 nu=i+2j
+term psi_1 psi_2 psi_1 e(jij) - psi_2 psi_1 psi_2 e(jij)
+nf x_1 e(jij) + x_3 e(jij)
+
+case b2-iij
+context klr type=B2 nu=2i+j
+term x_2 psi_1 psi_2 x_3 e(iij)
+nf psi_1 psi_2 x_1 x_3 e(iij)
