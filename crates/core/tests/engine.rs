@@ -281,3 +281,56 @@ fn context_lines_round_trip() {
         assert_eq!(spec.print(), s);
     }
 }
+
+#[test]
+fn printed_terms_parse_back() {
+    let cases = [
+        (
+            "odd-nilhecke nu=3 ring=ZZ",
+            "(psi_1 + x_2)^3 + x_3 x_1 - psi_2 x_1 psi_1 x_3",
+        ),
+        ("nilhecke nu=3 ring=QQ", "1/2 (psi_1 + x_2)^3 psi_2"),
+        (
+            "klr type=G2 nu=i+2j ring=ZZ",
+            "psi_1 psi_2 psi_1 e(jij) + x_3^2 e(ijj)",
+        ),
+        (
+            "klr type=A2 nu=i+j ring=ZZ[I]",
+            "(1+I) psi_1 e(ij) - I x_2 e(ji)",
+        ),
+    ];
+    for (spec, src) in cases {
+        let check = |text: &str| {
+            let spec = ContextSpec::parse(spec).unwrap();
+            let r = diagcalc_core::ops::simplify(
+                &diagcalc_core::ops::Request {
+                    context: spec.print(),
+                    ..Default::default()
+                },
+                text,
+            );
+            assert_eq!(r["status"], "ok", "{r}");
+            r["normal_form"].as_str().unwrap().to_string()
+        };
+        let nf = check(src);
+        assert_eq!(check(&nf), nf, "{spec}: {src}");
+    }
+}
+
+#[test]
+fn term_text_round_trips() {
+    let c = ctx("odd-nilhecke nu=4", Integers);
+    for src in [
+        "x_3 x_1 psi_2 x_4 - 2 psi_1 psi_3 x_2",
+        "(x_1 + psi_3)^2 x_2 x_4 psi_1",
+        "psi_3 psi_1 psi_2 psi_3 psi_1",
+    ] {
+        let t = c.parse_term(src).unwrap();
+        let printed = c.fmt_term(&t);
+        assert_eq!(
+            c.parse_term(&printed).unwrap(),
+            t,
+            "{src} printed as {printed}"
+        );
+    }
+}

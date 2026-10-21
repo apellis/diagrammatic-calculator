@@ -465,7 +465,7 @@ impl<R: Ring> Context<R> {
     // Canonical layering.
 
     /// Heights in the canonical layering: one more than the highest layer whose outputs it uses.
-    fn levels(&self, w: &Word) -> Vec<u32> {
+    pub fn levels(&self, w: &Word) -> Vec<u32> {
         let mut floor: Vec<u32> = vec![0; w.source.len()];
         let mut out = Vec::with_capacity(w.layers.len());
         for l in &w.layers {
@@ -697,17 +697,55 @@ impl<R: Ring> Context<R> {
         self.objects.len() == 1 && self.objects[0] == obj
     }
 
-    /// A word without its coefficient: layers from the top, then the idempotent.
-    pub fn fmt_word(&self, w: &Word) -> String {
-        let mut parts: Vec<String> = Vec::new();
-        let mut i = w.layers.len();
-        while i > 0 {
-            let l = &w.layers[i - 1];
-            let mut j = i - 1;
-            while j > 0 && w.layers[j - 1] == *l {
-                j -= 1;
+    /// The layers in printed order, top first: levels from the top down, and within a level
+    /// left to right (so the leftmost piece is written first, as if it sat highest). Positions
+    /// are adjusted to that reading. The flag is the Koszul sign between this reading and the
+    /// canonical word.
+    pub fn print_order(&self, w: &Word) -> (Vec<Layer>, bool) {
+        let levels = self.levels(w);
+        let mut groups: Vec<Vec<Layer>> = Vec::new();
+        let mut sign = false;
+        let mut i = 0;
+        while i < w.layers.len() {
+            let mut j = i;
+            let mut shift: i64 = 0;
+            let mut group = Vec::new();
+            let mut odd_before = 0usize;
+            while j < w.layers.len() && levels[j] == levels[i] {
+                let l = &w.layers[j];
+                let g = l.generator as usize;
+                group.push(Layer {
+                    pos: (l.pos as i64 - shift) as u16,
+                    ..l.clone()
+                });
+                shift += self.target_len(g) as i64 - self.source_len(g) as i64;
+                if self.layer_odd(l) {
+                    if odd_before % 2 == 1 {
+                        sign = !sign;
+                    }
+                    odd_before += 1;
+                }
+                j += 1;
             }
-            let count = i - j;
+            groups.push(group);
+            i = j;
+        }
+        (groups.into_iter().rev().flatten().collect(), sign)
+    }
+
+    /// A word without its coefficient: layers from the top, then the idempotent. Printing a
+    /// coefficient with it needs the sign from [`Context::print_order`]; `fmt_term` does that.
+    pub fn fmt_word(&self, w: &Word) -> String {
+        let (layers, _) = self.print_order(w);
+        let mut parts: Vec<String> = Vec::new();
+        let mut i = 0;
+        while i < layers.len() {
+            let l = &layers[i];
+            let mut j = i + 1;
+            while j < layers.len() && layers[j] == *l {
+                j += 1;
+            }
+            let count = j - i;
             let g = &self.pres.generators[l.generator as usize];
             let s = format!("{}_{}", g.name, l.pos + 1);
             parts.push(if count > 1 { format!("{s}^{count}") } else { s });
@@ -730,6 +768,11 @@ impl<R: Ring> Context<R> {
         }
         let mut s = String::new();
         for (k, (w, c)) in t.terms.iter().enumerate() {
+            let c = &if self.print_order(w).1 {
+                self.coeff.neg(c)
+            } else {
+                c.clone()
+            };
             let neg = self.coeff.is_negative(c);
             let abs = if neg { self.coeff.neg(c) } else { c.clone() };
             if k == 0 {

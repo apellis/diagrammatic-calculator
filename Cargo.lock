@@ -136,6 +136,7 @@ version = "0.1.0"
 dependencies = [
  "diagcalc-core",
  "pyo3",
+ "serde_json",
 ]
 
 [[package]]
@@ -143,6 +144,7 @@ name = "diagcalc-wasm"
 version = "0.1.0"
 dependencies = [
  "diagcalc-core",
+ "serde_json",
  "wasm-bindgen",
 ]
 
