@@ -164,6 +164,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "diagcalc-bench"
+version = "0.1.0"
+dependencies = [
+ "diagcalc-core",
+ "num-bigint",
+ "serde_json",
+]
+
+[[package]]
 name = "diagcalc-cli"
 version = "0.1.0"
 dependencies = [

@@ -12,6 +12,40 @@
 use crate::ring::Ring;
 use std::cmp::Ordering;
 
+/// A log of polynomial operations with their operands, for replaying them on other arithmetic
+/// backends (the arithmetic spike, `bench/spike/`). Compiled only with the `trace` feature.
+///
+/// One line per operation: `mul n A B`, `add n A B` or `div n i j A` (division by
+/// `x_i − x_j`, 0-based), where `n` is the number of variables and a polynomial is its number
+/// of terms followed by, for each term, the coefficient and the `n` exponents.
+#[cfg(feature = "trace")]
+pub mod trace {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static LOG: RefCell<Option<String>> = const { RefCell::new(None) };
+    }
+
+    /// Starts recording on this thread, discarding anything recorded before.
+    pub fn start() {
+        LOG.with(|l| *l.borrow_mut() = Some(String::new()));
+    }
+
+    /// Stops recording and returns the log.
+    pub fn take() -> Option<String> {
+        LOG.with(|l| l.borrow_mut().take())
+    }
+
+    pub(crate) fn record(line: impl FnOnce() -> String) {
+        LOG.with(|l| {
+            if let Some(s) = l.borrow_mut().as_mut() {
+                s.push_str(&line());
+                s.push('\n');
+            }
+        });
+    }
+}
+
 /// Exponent vector of a monomial; its length is the number of variables of the ring.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Monomial(pub Vec<i32>);
@@ -202,6 +236,20 @@ impl<R: Ring> PolyRing<R> {
         self.permute_vars(a, &perm)
     }
 
+    #[cfg(feature = "trace")]
+    fn trace_poly(&self, a: &Poly<R::Elem>) -> String {
+        let mut s = a.terms.len().to_string();
+        for (m, c) in &a.terms {
+            s.push(' ');
+            s.push_str(&self.base.fmt_elem(c));
+            for e in &m.0 {
+                s.push(' ');
+                s.push_str(&e.to_string());
+            }
+        }
+        s
+    }
+
     /// Commutative case: `a` divided by `x_i - x_j` if the division is exact.
     ///
     /// Division by `x_i - x_j` is monic in `x_i`, so it is exact over any coefficient ring
@@ -214,6 +262,8 @@ impl<R: Ring> PolyRing<R> {
     ) -> Option<Poly<R::Elem>> {
         assert!(self.is_commutative() && i != j);
         assert!(!self.laurent[i] || a.terms.iter().all(|(m, _)| m.0[i] >= 0));
+        #[cfg(feature = "trace")]
+        trace::record(|| format!("div {} {i} {j} {}", self.nvars(), self.trace_poly(a)));
         // Write a = Σ_k c_k(rest) x_i^k. Then a = (x_i - x_j) q + a(x_i := x_j), and
         // q = Σ_k c_k Σ_{l=0}^{k-1} x_i^l x_j^{k-1-l}.
         let mut q_terms = Vec::new();
@@ -336,6 +386,13 @@ impl<R: Ring> Ring for PolyRing<R> {
         a.terms.is_empty()
     }
     fn add(&self, a: &Self::Elem, b: &Self::Elem) -> Self::Elem {
+        #[cfg(feature = "trace")]
+        if self.nvars() > 0 && self.is_commutative() {
+            trace::record(|| {
+                let (pa, pb) = (self.trace_poly(a), self.trace_poly(b));
+                format!("add {} {pa} {pb}", self.nvars())
+            });
+        }
         let (mut i, mut j) = (0, 0);
         let mut out = Vec::with_capacity(a.terms.len() + b.terms.len());
         while i < a.terms.len() && j < b.terms.len() {
@@ -372,6 +429,13 @@ impl<R: Ring> Ring for PolyRing<R> {
         }
     }
     fn mul(&self, a: &Self::Elem, b: &Self::Elem) -> Self::Elem {
+        #[cfg(feature = "trace")]
+        if self.nvars() > 0 && self.is_commutative() {
+            trace::record(|| {
+                let (pa, pb) = (self.trace_poly(a), self.trace_poly(b));
+                format!("mul {} {pa} {pb}", self.nvars())
+            });
+        }
         let skew = !self.is_commutative();
         let mut terms = Vec::with_capacity(a.terms.len() * b.terms.len());
         for (ma, ca) in &a.terms {

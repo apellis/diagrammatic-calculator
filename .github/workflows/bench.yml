@@ -1,0 +1,55 @@
+name: Benchmarks
+
+# Nightly and on request: the full native evaluation suite, compared with the last result in
+# bench/history/ (a benchmark more than 10% slower fails the run), then appended to the history.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run the suite
+        run: |
+          label="$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}"
+          echo "LABEL=$label" >> "$GITHUB_ENV"
+          cargo run --release -q -p diagcalc-bench -- --label "$label" --out "/tmp/$label.json"
+      - name: Compare with the previous run
+        run: |
+          prev="$(ls bench/history/*.json 2>/dev/null | sort | tail -n 1)"
+          if [ -n "$prev" ]; then
+            python3 bench/report.py compare "$prev" "/tmp/$LABEL.json" >> "$GITHUB_STEP_SUMMARY"
+          else
+            python3 bench/report.py summary "/tmp/$LABEL.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Append to the history
+        if: always() && github.ref == 'refs/heads/master'
+        run: |
+          [ -f "/tmp/$LABEL.json" ] || exit 0
+          cp "/tmp/$LABEL.json" bench/history/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bench/history
+          git commit -m "Benchmark history: $LABEL"
+          git pull --rebase -q origin master
+          git push
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-${{ env.LABEL }}
+          path: /tmp/${{ env.LABEL }}.json
+          if-no-files-found: ignore

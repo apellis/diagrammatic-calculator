@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: [master]
-    paths-ignore: ["**.md", "docs/**", "LICENSE"]
+    paths-ignore: ["**.md", "docs/**", "LICENSE", "bench/history/**"]
   pull_request:
-    paths-ignore: ["**.md", "docs/**", "LICENSE"]
+    paths-ignore: ["**.md", "docs/**", "LICENSE", "bench/history/**"]
   workflow_dispatch:
 
 concurrency:
@@ -30,8 +30,20 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: |
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo clippy -p diagcalc-bench --features trace -- -D warnings
       - name: Test
         run: cargo test --workspace
       - name: WebAssembly build
         run: cargo build -p diagcalc-wasm --target wasm32-unknown-unknown --release
+      - name: Benchmarks (quick)
+        run: |
+          cargo run --release -q -p diagcalc-bench -- --quick --label "${GITHUB_SHA::7}" --out bench-results.json
+          python3 bench/report.py summary bench-results.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-results
+          path: bench-results.json
+          if-no-files-found: ignore
