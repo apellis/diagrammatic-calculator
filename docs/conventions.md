@@ -86,7 +86,8 @@ fixed `B2` or `G2` datum; their test datum `cB2` has vertex 0 short.)
   `e(s_k i)`,
 
 where `Q_ij(u, v) = P_ji(u, v) P_ij(v, u)`. The calculator uses `P_ij = 1` and `P_ji = Q_ij` for
-`i < j` in the order of colours. Over an integral domain this representation is faithful when
+`i < j` in the order of colours. For the default `Q` this is categorification-lean's `KL2.klP2`
+with the orientation `a → b` exactly when `a > b`. Over an integral domain this representation is faithful when
 every `Q_ij` (`i ≠ j`) is nonzero; for the default `Q` this is proved in categorification-lean
 (`KL2.polyRepKL2_injective`), and for general `Q` it is Rouquier, arXiv:1112.3619v1, §3.2. Over a
 ring with zero divisors it can fail (categorification-lean README, on Rouquier,
@@ -107,6 +108,22 @@ arXiv:0812.5023v1, Prop. 3.12).
   every `j`. `ψ_k` acts by the odd divided difference `∂_k`, determined by `∂_k(1) = 0`,
   `∂_k(x_j) = 1` for `j ∈ {k, k+1}` and 0 otherwise, and `∂_k(fg) = ∂_k(f) g + s_k(f) ∂_k(g)`.
   The action is faithful (`QuiverHecke.oddNilHeckeAction_injective`).
+
+## Normal forms and printing
+
+- **Normal forms.** `simplify` writes an element in the basis of the representation strategy. For
+  KLR algebras (and `NH_n`) the basis is `ψ_ŵ x^a e(i)`: a fixed reduced word `ŵ` for each
+  permutation, dots at the bottom, the idempotent below them. For `ONH_n` it is `x^a ψ_ŵ`: dots on
+  top in increasing index order, as in the skew-polynomial representation. Terms are ordered by
+  permutation length (longest first), then by monomial.
+- **Printing.** A word is printed from its canonical layering, top to bottom. Generators at the same
+  height are written left to right; when some of them are odd, the coefficient carries the Koszul
+  sign of that order, so that every printed term parses back to exactly the same element.
+- **Golden corpus.** `tests/golden/cases.txt` states terms and their normal forms.
+  `lean/golden/Golden.lean` implements the representations above in Lean independently of the
+  engine, checks that each term and its stated normal form act identically on every monomial of
+  bounded degree at every source, and records the action tables in `tests/golden/actions.json`.
+  The engine's test suite must reproduce both the normal forms and the tables.
 
 ## Drawing
 
