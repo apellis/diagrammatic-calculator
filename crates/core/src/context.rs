@@ -24,7 +24,7 @@ pub struct ContextSpec {
     pub odd: Vec<String>,
     /// The weight `ν`: `2i+j`, or a number of strands for one-colour presentations.
     pub weight: Option<String>,
-    /// `ZZ`, `QQ`, `GF(p)` or `ZZ[I]`.
+    /// `ZZ`, `QQ`, `GF(p)`, `ZZ[I]`, `QQ[q]`, `QQ[q,q^-1]`, `QQ(q)`, …: see `ops::with_ring`.
     pub ring: String,
     /// Scalar names available in terms: parameters such as `t_ij` and unknowns such as `c1`.
     pub scalars: Vec<String>,
@@ -208,6 +208,13 @@ impl<R: Ring> Context<R> {
             }
             if c.name == "e" || c.name == "I" {
                 return Err(Error::invalid("colours may not be named 'e' or 'I'"));
+            }
+        }
+        for s in &spec.scalars {
+            if base.named(s).is_some() {
+                return Err(Error::invalid(format!(
+                    "the scalar '{s}' is also the ground ring's variable"
+                )));
             }
         }
         let coeff = PolyRing::new(
@@ -870,7 +877,7 @@ pub fn poly_of_ast<R: Ring>(a: &Ast, ring: &PolyRing<R>) -> Result<Poly<R::Elem>
                 Some(s) => format!("{name}_{s}"),
                 None => name.clone(),
             };
-            ring.var_named(&full)
+            ring.named(&full)
                 .ok_or_else(|| Error::invalid(format!("unknown scalar '{full}'")))?
         }
         Ast::Pow(b, e) => {

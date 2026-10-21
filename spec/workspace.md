@@ -6,7 +6,7 @@ Version line `diagcalc-workspace/1`. Round-trip and canonical-form tests are in
 ```text
 file     := "diagcalc-workspace/1" NL "context " context NL (line NL)*
 context  := presentation (" " key "=" value)*
-            keys: type, colours, odd, nu (or n), ring (ZZ | QQ | GF(p) | ZZ[I]), scalars, and
+            keys: type, colours, odd, nu (or n), ring, scalars, and
             parameter values such as Q_ij="u^2 + v" (quoted when they contain spaces)
 line     := cell [options] ["# id=" id] | "#" comment | ""
 cell     := "def " name " := " term
@@ -17,6 +17,10 @@ cell     := "def " name " := " term
 options  := ("  " key "=" value)*                    e.g. view=diagrams, strategy=nil-coxeter-basis
 id       := letter digits                            d def, w watch, s solve, k check, n note
 ```
+
+Rings: `ZZ`, `QQ`, `GF(p)`, `ZZ[I]`; polynomials `ZZ[q]`, `QQ[q]`; Laurent polynomials
+`ZZ[q,q^-1]`, `QQ[q,q^-1]`; rational functions `QQ(q)`. The variable is a word of lowercase
+letters other than `u`, `v`, `w`, `x` and `e`, and no scalar may share its name.
 
 Terms are in the text term format (`text-term.md`). Only inputs are stored, never results.
 Printing writes canonical terms, two spaces before each option and before `# id=`, and keeps

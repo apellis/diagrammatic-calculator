@@ -51,6 +51,17 @@ pub trait Ring: Clone + Debug + PartialEq {
     /// The image of a rational number `n/d`, if `d` is invertible.
     fn rational(&self, n: &BigInt, d: &BigInt) -> Option<Self::Elem>;
 
+    /// A named element of the ring, such as the variable `q` of ℚ(q).
+    fn named(&self, name: &str) -> Option<Self::Elem> {
+        let _ = name;
+        None
+    }
+
+    /// True for fields.
+    fn is_field(&self) -> bool {
+        false
+    }
+
     /// True for integral domains (every ring offered here is one, but parameter rings with
     /// relations need not be).
     fn is_domain(&self) -> bool {
@@ -177,6 +188,9 @@ impl Ring for Rationals {
     fn characteristic(&self) -> u64 {
         0
     }
+    fn is_field(&self) -> bool {
+        true
+    }
     fn rational(&self, n: &BigInt, d: &BigInt) -> Option<Rat> {
         (!d.is_zero()).then(|| Rat::new(Int::from(n), Int::from(d)))
     }
@@ -257,6 +271,9 @@ impl Ring for PrimeField {
     }
     fn characteristic(&self) -> u64 {
         self.p
+    }
+    fn is_field(&self) -> bool {
+        true
     }
     fn rational(&self, n: &BigInt, d: &BigInt) -> Option<u64> {
         self.div_exact(&self.from_bigint(n), &self.from_bigint(d))

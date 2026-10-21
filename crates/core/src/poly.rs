@@ -553,6 +553,13 @@ impl<R: Ring> Ring for PolyRing<R> {
     fn rational(&self, n: &num_bigint::BigInt, d: &num_bigint::BigInt) -> Option<Self::Elem> {
         self.base.rational(n, d).map(|c| self.constant(c))
     }
+    fn named(&self, name: &str) -> Option<Self::Elem> {
+        self.var_named(name)
+            .or_else(|| self.base.named(name).map(|c| self.constant(c)))
+    }
+    fn is_field(&self) -> bool {
+        self.nvars() == 0 && self.base.is_field()
+    }
     fn is_domain(&self) -> bool {
         self.base.is_domain() && self.is_commutative()
     }

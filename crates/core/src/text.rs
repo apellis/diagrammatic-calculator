@@ -265,7 +265,9 @@ impl Parser {
     fn comp(&mut self) -> Result<Ast> {
         let mut items = vec![self.factor()?];
         loop {
-            if self.eat('*') || self.starts_atom() {
+            if self.eat('/') {
+                items.push(Ast::Pow(Box::new(self.factor()?), -1));
+            } else if self.eat('*') || self.starts_atom() {
                 items.push(self.factor()?);
             } else {
                 break;
@@ -548,6 +550,8 @@ mod tests {
         assert_eq!(round("-(a - b)"), "-(a - b)");
         assert_eq!(round("3/2 ψ_1 ⊗ x_1"), "3/2 ψ_1 (x) x_1");
         assert_eq!(round("1_{ij*}"), "1_ij*");
+        assert_eq!(round("(q + 1)/q^2 psi_1"), "(q + 1) (q^2)^-1 psi_1");
+        assert_eq!(round("1/2/(q + 1)"), "1/2 (q + 1)^-1");
         assert!(parse("x_1 +").is_err());
         assert!(parse("2_i").is_err());
     }

@@ -11,7 +11,8 @@ Loosest binding first.
 ```text
 sum     := [+|-] tensor ((+|-) tensor)*
 tensor  := comp (("(x)" | "⊗") comp)*
-comp    := factor (["*" | "·" | "∘"] factor)*     juxtaposition is composition
+comp    := factor (["*" | "·" | "∘" | "/"] factor)*
+                                                  juxtaposition is composition; "/ f" is f^-1
 factor  := atom ["^" ["-"] int]
 atom    := int ["/" int]
          | "I"                                    √−1, in ZZ[I]
@@ -27,7 +28,10 @@ comment := "#" to the end of the line
 
 `−` is accepted for `-`, `ψ` and `π` are names. A name is, in order of lookup: a generator of the
 presentation (the subscript is its position, counted from 1), a definition of the workspace, a
-scalar of the context (`c1`, `t_ij`).
+scalar of the context (`c1`, `t_ij`), the variable of the ground ring (`q` in `QQ(q)`).
+
+`/` divides by a unit of the ground ring: `(q + 1)/q^2 psi_1` in `QQ(q)` or `QQ[q,q^-1]`. Only
+coefficients take negative powers.
 
 ## Reading
 

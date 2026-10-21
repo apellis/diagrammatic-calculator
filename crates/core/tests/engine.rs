@@ -334,3 +334,43 @@ fn term_text_round_trips() {
         );
     }
 }
+
+#[test]
+fn rings_with_a_variable() {
+    use diagcalc_core::poly::PolyRing;
+    use diagcalc_core::ratfun::RationalFunctions;
+
+    fn round_trip<R: Ring>(c: &Context<R>, s: &str) -> String {
+        let ev = rep::evaluators(c).unwrap().pop().unwrap();
+        let out = nf(c, ev.as_ref(), s);
+        assert_eq!(nf(c, ev.as_ref(), &out), out, "{s}");
+        let diff = format!("{s} - ({out})");
+        assert!(ev.is_zero(&c.parse_term(&diff).unwrap()).unwrap());
+        out
+    }
+
+    let c = ctx(
+        "klr type=A2 nu=i+j Q_ij=\"q u + q^-1 v\"",
+        RationalFunctions::new(Rationals, "q"),
+    );
+    assert!(conformance::check(&c).ok());
+    assert_eq!(
+        round_trip(&c, "(q^2 - 1)/(q - 1) psi_1 psi_1 e(ji)"),
+        "(q + 1)/q x_1 e(ji) + (q^2 + q) x_2 e(ji)"
+    );
+    assert_eq!(
+        round_trip(&c, "1/(q + 1) psi_1 e(ij)"),
+        "1/(q + 1) psi_1 e(ij)"
+    );
+
+    let mut laurent = PolyRing::new(Integers, &["t"]);
+    laurent.laurent[0] = true;
+    let c = ctx("klr type=A2 nu=2i scalars=c", laurent);
+    assert_eq!(
+        round_trip(&c, "t^-1 c psi_1 x_1 + t x_2 psi_1"),
+        "-t + (t^-1 c + t) psi_1 x_1"
+    );
+    let spec = ContextSpec::parse("klr type=A2 nu=2i scalars=q").unwrap();
+    let pres = builtin::presentation("klr").unwrap();
+    assert!(Context::new(pres, spec, PolyRing::new(Rationals, &["q"])).is_err());
+}

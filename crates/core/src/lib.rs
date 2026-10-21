@@ -20,6 +20,7 @@ pub mod ops;
 pub mod perm;
 pub mod poly;
 pub mod pres;
+pub mod ratfun;
 pub mod render;
 pub mod rep;
 pub mod ring;

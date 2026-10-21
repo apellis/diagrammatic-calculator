@@ -6,7 +6,9 @@ use crate::conformance::{self, Report, Status};
 use crate::context::{Context, ContextSpec};
 use crate::elab::{CTerm, Scope};
 use crate::error::{Error, Result};
+use crate::poly::PolyRing;
 use crate::pres::Presentation;
+use crate::ratfun::RationalFunctions;
 use crate::render;
 use crate::rep::{self, Evaluator, Provenance};
 use crate::ring::{GaussianIntegers, Integers, PrimeField, Rationals, Ring};
@@ -22,24 +24,63 @@ pub trait RingVisitor {
     fn visit<R: Ring>(self, base: R) -> Result<Self::Out>;
 }
 
-/// Runs a visitor over the ring named `ZZ`, `QQ`, `GF(p)` or `ZZ[I]`.
+/// Runs a visitor over the ring named `ZZ`, `QQ`, `GF(p)`, `ZZ[I]`, a polynomial ring `ZZ[q]` or
+/// `QQ[q]`, a Laurent polynomial ring `ZZ[q,q^-1]` or `QQ[q,q^-1]`, or a rational function field
+/// `QQ(q)`, for a variable name `q` of lowercase letters other than `u`, `v`, `w`, `x` and `e`.
 pub fn with_ring<V: RingVisitor>(name: &str, v: V) -> Result<V::Out> {
-    match name {
-        "ZZ" => v.visit(Integers),
-        "QQ" => v.visit(Rationals),
-        "ZZ[I]" => v.visit(GaussianIntegers),
-        s => {
-            let p = s
-                .strip_prefix("GF(")
-                .and_then(|r| r.strip_suffix(')'))
-                .and_then(|p| p.parse::<u64>().ok())
-                .ok_or_else(|| {
-                    Error::invalid(format!("unknown ring '{s}': use ZZ, QQ, GF(p) or ZZ[I]"))
-                })?;
-            let f =
-                PrimeField::new(p).ok_or_else(|| Error::invalid(format!("{p} is not a prime")))?;
-            v.visit(f)
+    let name: String = name.chars().filter(|c| !c.is_whitespace()).collect();
+    let unknown = || {
+        Error::invalid(format!(
+            "unknown ring '{name}': use ZZ, QQ, GF(p), ZZ[I], ZZ[q], QQ[q], ZZ[q,q^-1], \
+             QQ[q,q^-1] or QQ(q)"
+        ))
+    };
+    let var_ok = |s: &str| {
+        !s.is_empty()
+            && s.chars().all(|c| c.is_ascii_lowercase())
+            && !["u", "v", "w", "x", "e"].contains(&s)
+    };
+    match name.as_str() {
+        "ZZ" => return v.visit(Integers),
+        "QQ" => return v.visit(Rationals),
+        "ZZ[I]" => return v.visit(GaussianIntegers),
+        _ => {}
+    }
+    if let Some(p) = name.strip_prefix("GF(").and_then(|r| r.strip_suffix(')')) {
+        let p = p.parse::<u64>().map_err(|_| unknown())?;
+        let f = PrimeField::new(p).ok_or_else(|| Error::invalid(format!("{p} is not a prime")))?;
+        return v.visit(f);
+    }
+    if let Some(var) = name.strip_prefix("QQ(").and_then(|r| r.strip_suffix(')')) {
+        if !var_ok(var) {
+            return Err(unknown());
         }
+        return v.visit(RationalFunctions::new(Rationals, var));
+    }
+    let (base, inside) = name
+        .split_once('[')
+        .and_then(|(b, r)| r.strip_suffix(']').map(|r| (b, r)))
+        .ok_or_else(unknown)?;
+    let (var, laurent) = match inside.split_once(',') {
+        Some((a, b)) if b == format!("{a}^-1") => (a, true),
+        Some(_) => return Err(unknown()),
+        None => (inside, false),
+    };
+    if !var_ok(var) {
+        return Err(unknown());
+    }
+    match base {
+        "ZZ" => {
+            let mut r = PolyRing::new(Integers, &[var]);
+            r.laurent[0] = laurent;
+            v.visit(r)
+        }
+        "QQ" => {
+            let mut r = PolyRing::new(Rationals, &[var]);
+            r.laurent[0] = laurent;
+            v.visit(r)
+        }
+        _ => Err(unknown()),
     }
 }
 

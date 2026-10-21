@@ -317,7 +317,7 @@ impl<R: Ring> Context<R> {
             Some(s) => format!("{name}_{s}"),
             None => name.to_string(),
         };
-        if let Some(v) = self.coeff.var_named(&full) {
+        if let Some(v) = self.coeff.named(&full) {
             return Ok(self.scalar_term(v, src));
         }
         Err(Error::invalid(format!("unknown name '{full}'")))
