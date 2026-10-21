@@ -7,13 +7,14 @@ default-members = ["crates/core", "crates/cli"]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-repository = "https://github.com/apellis/apellis-diagrammatic-calculator"
+repository = "https://github.com/apellis/diagrammatic-calculator"
 rust-version = "1.85"
 
 [workspace.dependencies]
 diagcalc-core = { path = "crates/core" }
 num-bigint = "0.4"
 num-integer = "0.1"
+num-rational = "0.4"
 num-traits = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

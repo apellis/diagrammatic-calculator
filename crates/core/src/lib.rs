@@ -7,3 +7,6 @@
 
 /// The crate version, reported by every surface.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub mod poly;
+pub mod ring;
