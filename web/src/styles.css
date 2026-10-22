@@ -229,6 +229,12 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
 .ai-settings label:not(.row) { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 12px; }
 .ai-settings select, .ai-settings input:not([type=checkbox]) { font: inherit; font-size: 13px; color: var(--text); }
 .ai-settings select { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+.ai-settings .model-pick { gap: 4px; align-items: center; }
+.ai-settings .model-pick select, .ai-settings .model-pick input { flex: 1; min-width: 0; }
+.ai-settings .refresh { padding: 1px 6px; font-size: 14px; line-height: 1; color: var(--muted); }
+.ai-settings .refresh.spinning { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-settings .refresh.spinning { animation: none; opacity: 0.5; } }
 .ai-noai { padding: 6px 10px; }
 .ai-log { flex: 1; overflow: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .msg { font-size: 13.5px; line-height: 1.45; }

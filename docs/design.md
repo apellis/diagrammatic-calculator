@@ -288,9 +288,13 @@ person accepts or rejects. Every request, step, note, milestone and proposal is 
 document's activity timeline (`Doc.timeline`). Pinned watches show at the top of the outline with
 their term counts over the session.
 
-Other providers speak the chat-completions protocol (OpenAI, or a local OpenAI-compatible
-server); the settings' "Check the connection" calls the provider's model list from the page and
-says whether the browser can reach it. Keys stay in session storage unless "Remember on this
+OpenAI is called through its Responses API (`store: false`), which, unlike chat completions,
+accepts function tools from reasoning models; a local OpenAI-compatible server speaks the
+chat-completions protocol. The settings' "Check the connection" calls the provider's model list
+from the page and says whether the browser can reach it. The model is chosen from that list
+(Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
+server's as given), kept per provider in local storage and fetched again with ↻; "Other…" takes a
+typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay in session storage unless "Remember on this
 device" is ticked, and go only to the chosen provider. The first time the panel opens it says what
 leaves the browser; a document's "No AI" switch turns the panel off for it.
 
@@ -305,6 +309,7 @@ including the request's headers, caching and thinking settings.
 a linked file across reloads, importing `.dch` files, and size diagnostics when a job is stopped at
 its time limit (it reports the time and points to the command-line tool). In the AI panel: the
 chat itself is kept only while the page is open (the timeline is kept with the document), pinned
-watches' trends cover the session only, chat-completions providers are not streamed, and whether
+watches' trends cover the session only, OpenAI and compatible servers are not streamed, OpenAI
+reasoning is not carried between turns, and whether
 OpenAI accepts calls from a browser page is decided by the in-app check in a real browser (the
 development container cannot reach OpenAI).

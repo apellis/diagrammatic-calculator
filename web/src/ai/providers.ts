@@ -1,10 +1,10 @@
 // Model providers, called straight from the browser with the person's own key.
 //
-// Anthropic goes through the official SDK, which opts in to browser calls. Other providers
-// speak the OpenAI chat-completions protocol (OpenAI itself, or a local OpenAI-compatible
-// server); they are offered only after `checkProvider` shows the browser can reach them, since
-// not every provider accepts browser calls. The conversation is kept in the Anthropic message
-// format and translated for the others.
+// Anthropic goes through the official SDK, which opts in to browser calls. OpenAI goes through
+// its Responses API, and a local OpenAI-compatible server through the chat-completions protocol;
+// those two are offered only after `checkProvider` shows the browser can reach them, since not
+// every provider accepts browser calls. The conversation is kept in the Anthropic message format
+// and translated for the others.
 import Anthropic from '@anthropic-ai/sdk';
 import type { ToolDef } from './tools';
 
@@ -129,6 +129,65 @@ export async function checkProvider(key: string, s: AISettings): Promise<{ ok: b
   return { ok: true, message: `${name} accepts calls from this page.` };
 }
 
+export interface ModelOption {
+  id: string;
+  name: string;
+}
+
+/** Model ids that are not chat models, in OpenAI's list (embeddings, speech, images, moderation and the like). */
+const NOT_CHAT = /embed|tts|whisper|dall-e|image|audio|realtime|moderation|transcribe|search|babbage|davinci|computer-use|sora/i;
+
+/**
+ * The models this key may use, newest first, from the provider's own list. Anthropic's comes with
+ * display names; OpenAI's is filtered to chat models; an OpenAI-compatible server's is taken as it is.
+ */
+export async function listModels(key: string, s: AISettings): Promise<ModelOption[]> {
+  const name = providerName(s);
+  if (s.provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true, maxRetries: 1 });
+    const out: ModelOption[] = [];
+    try {
+      for await (const m of client.models.list({ limit: 100 })) out.push({ id: m.id, name: m.display_name || m.id });
+    } catch (e) {
+      throw new Error(explain(e, name));
+    }
+    return out;
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${base(s)}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
+  } catch {
+    throw new Error(blockedMessage(name));
+  }
+  if (res.status === 401) throw new Error(`${name} refused the key.`);
+  if (!res.ok) throw new Error(`${name} answered ${res.status} ${res.statusText}.`);
+  const body = (await res.json()) as { data?: { id: string; created?: number }[] };
+  return (body.data ?? [])
+    .filter((m) => s.provider !== 'openai' || !NOT_CHAT.test(m.id))
+    .sort((a, b) => (b.created ?? 0) - (a.created ?? 0) || a.id.localeCompare(b.id))
+    .map((m) => ({ id: m.id, name: m.id }));
+}
+
+/** Where a provider's model list is kept between visits: per provider, and per server for a compatible one. */
+const modelsName = (s: AISettings) => `diagcalc.ai.models.${s.provider}${s.provider === 'compatible' ? `.${base(s)}` : ''}`;
+
+export function loadModels(s: AISettings): { models: ModelOption[]; fetched: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(modelsName(s)) ?? 'null');
+    return v && Array.isArray(v.models) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveModels(s: AISettings, models: ModelOption[]) {
+  try {
+    localStorage.setItem(modelsName(s), JSON.stringify({ models, fetched: Date.now() }));
+  } catch {
+    /* storage unavailable: the list lives in memory for this page only */
+  }
+}
+
 const blockedMessage = (name: string) =>
   `This page cannot reach ${name}: it refuses calls made from a browser (or is not running). Use the command-line tool or the MCP server (diagcalc mcp) with that provider instead.`;
 
@@ -212,8 +271,102 @@ export function chatCompletions(key: string, s: AISettings): Provider {
   };
 }
 
+type ResponseItem =
+  | { role: 'user' | 'assistant'; content: string }
+  | { type: 'function_call'; call_id: string; name: string; arguments: string }
+  | { type: 'function_call_output'; call_id: string; output: string };
+
+/** The conversation as input items of OpenAI's Responses API. */
+export function toResponses(messages: Anthropic.MessageParam[]): ResponseItem[] {
+  const out: ResponseItem[] = [];
+  for (const m of messages) {
+    const blocks = typeof m.content === 'string' ? [{ type: 'text' as const, text: m.content }] : m.content;
+    for (const b of blocks) {
+      if (b.type === 'text' && b.text) out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: b.text });
+      else if (b.type === 'tool_use') out.push({ type: 'function_call', call_id: b.id, name: b.name, arguments: JSON.stringify(b.input) });
+      else if (b.type === 'tool_result') {
+        const c = typeof b.content === 'string' ? b.content : (b.content ?? []).map((x) => ('text' in x ? x.text : '')).join('');
+        out.push({ type: 'function_call_output', call_id: b.tool_use_id, output: c });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * OpenAI through its Responses API, which (unlike chat completions) lets reasoning models call
+ * tools. Nothing is stored at OpenAI (`store: false`); the model's own reasoning default applies.
+ */
+export function openaiResponses(key: string, s: AISettings): Provider {
+  const name = providerName(s);
+  return {
+    label: name,
+    async turn(r) {
+      let res: Response;
+      try {
+        res = await fetch(`${base(s)}/responses`, {
+          method: 'POST',
+          signal: r.signal,
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model: s.model,
+            instructions: r.system,
+            input: toResponses(r.messages),
+            tools: r.tools.map((t) => ({ type: 'function', name: t.name, description: t.description, parameters: t.input_schema, strict: false })),
+            store: false,
+          }),
+        });
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') throw e;
+        throw new BrowserBlocked(blockedMessage(name));
+      }
+      if (!res.ok) throw new Error(`${name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      const j = (await res.json()) as {
+        status?: string;
+        incomplete_details?: { reason?: string } | null;
+        output?: (
+          | { type: 'message'; content?: { type: string; text?: string; refusal?: string }[] }
+          | { type: 'function_call'; call_id: string; name: string; arguments: string }
+          | { type: string }
+        )[];
+        usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
+      };
+      const content: Anthropic.ContentBlock[] = [];
+      let refused = false;
+      for (const item of j.output ?? []) {
+        if (item.type === 'message' && 'content' in item) {
+          for (const c of item.content ?? []) {
+            if (c.type === 'refusal') refused = true;
+            const text = c.type === 'output_text' ? c.text : c.type === 'refusal' ? c.refusal : undefined;
+            if (!text) continue;
+            r.onText(text);
+            content.push({ type: 'text', text, citations: null } as Anthropic.TextBlock);
+          }
+        } else if (item.type === 'function_call' && 'call_id' in item) {
+          let input: unknown;
+          try {
+            input = JSON.parse(item.arguments || '{}');
+          } catch {
+            input = { INVALID_JSON: item.arguments };
+          }
+          content.push({ type: 'tool_use', id: item.call_id, name: item.name, input } as Anthropic.ToolUseBlock);
+        }
+      }
+      const reason = j.status === 'incomplete' ? j.incomplete_details?.reason : undefined;
+      const stop: Anthropic.StopReason =
+        refused || reason === 'content_filter' ? 'refusal'
+        : reason === 'max_output_tokens' ? 'max_tokens'
+        : content.some((b) => b.type === 'tool_use') ? 'tool_use'
+        : 'end_turn';
+      const u = j.usage;
+      return { content, stop, usage: { input: u?.input_tokens ?? 0, output: u?.output_tokens ?? 0, cacheRead: u?.input_tokens_details?.cached_tokens ?? 0, cacheWrite: 0 } };
+    },
+  };
+}
+
 export function provider(key: string, s: AISettings): Provider {
-  return s.provider === 'anthropic' ? anthropic(key, s) : chatCompletions(key, s);
+  if (s.provider === 'anthropic') return anthropic(key, s);
+  return s.provider === 'openai' ? openaiResponses(key, s) : chatCompletions(key, s);
 }
 
 // keys: for the session by default, in this browser's storage only when asked

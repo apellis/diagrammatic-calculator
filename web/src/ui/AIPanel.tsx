@@ -5,7 +5,7 @@ import { createStore, produce } from 'solid-js/store';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Doc, TimelineEntry } from '../doc/model';
 import { run, userMessage, type AgentEvent } from '../ai/agent';
-import { ANTHROPIC_MODELS, checkProvider, loadKey, loadSettings, provider, saveKey, saveSettings, type AISettings, type ProviderId } from '../ai/providers';
+import { ANTHROPIC_MODELS, checkProvider, listModels, loadKey, loadModels, loadSettings, provider, saveKey, saveModels, saveSettings, type AISettings, type ModelOption, type ProviderId } from '../ai/providers';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { isMac } from '../app';
 
@@ -18,6 +18,8 @@ type Entry = { role: 'user'; text: string; selection?: string } | { role: 'assis
 
 const K = isMac ? '⌘' : 'Ctrl+';
 const NOTICE = 'diagcalc.ai.noticeSeen';
+/** The model list's last entry, which lets one type a model name the list does not have. */
+const OTHER = '__other__';
 
 export interface AIPanelProps {
   host: ToolHost;
@@ -39,6 +41,11 @@ export function AIPanel(props: AIPanelProps) {
   const [remember, setRemember] = createSignal(stored.remembered);
   const [showSettings, setShowSettings] = createSignal(!stored.key);
   const [check, setCheck] = createSignal<{ ok: boolean; message: string } | null>(null);
+  /** The provider's model list (as last fetched), whether it is being fetched, and why it could not be. */
+  const [models, setModels] = createSignal<ModelOption[]>(loadModels(settings())?.models ?? []);
+  const [listing, setListing] = createSignal(false);
+  const [listError, setListError] = createSignal('');
+  const [other, setOther] = createSignal(false);
   const [noticeSeen, setNoticeSeen] = createSignal(seen());
   const [noAI, setNoAI] = createSignal(props.main.noAI);
   const [entries, setEntries] = createStore<Entry[]>([]);
@@ -148,7 +155,42 @@ export function AIPanel(props: AIPanelProps) {
     setKey(k.key);
     setRemember(k.remembered);
     setCheck(null);
+    showModels();
   };
+
+  /** The models offered: the fetched list, else the built-in one for Anthropic; the chosen one is always there. */
+  const options = () => {
+    const list = models().length ? models() : settings().provider === 'anthropic' ? ANTHROPIC_MODELS : [];
+    const m = settings().model;
+    return m && !list.some((x) => x.id === m) ? [{ id: m, name: m }, ...list] : list;
+  };
+  /** Fetches the provider's model list with the key entered, keeps it, and picks one if none is chosen. */
+  const refreshModels = async () => {
+    const s = settings();
+    if (!key() && s.provider !== 'compatible') return setListError('Enter the key first: the list comes from the provider.');
+    setListing(true);
+    setListError('');
+    try {
+      const list = await listModels(key(), s);
+      if (settings().provider !== s.provider) return;
+      saveModels(s, list);
+      setModels(list);
+      if (list.length && !list.some((x) => x.id === settings().model)) setSettings({ ...settings(), model: list[0].id });
+      if (!list.length) setListError('The provider listed no models; type a model name.');
+    } catch (e) {
+      setListError((e as Error).message);
+    } finally {
+      setListing(false);
+    }
+  };
+  /** Shows the kept list for the current provider, fetching it when there is none yet. */
+  const showModels = () => {
+    setModels(loadModels(settings())?.models ?? []);
+    setListError('');
+    setOther(false);
+    if (!models().length && (key() || settings().provider === 'compatible')) void refreshModels();
+  };
+  if (showSettings() && key() && !models().length) void refreshModels();
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -191,15 +233,28 @@ export function AIPanel(props: AIPanelProps) {
             </select>
           </label>
           <Show when={settings().provider === 'compatible'}>
-            <label>Server URL <input value={settings().baseUrl} onInput={(e) => setSettings({ ...settings(), baseUrl: e.currentTarget.value })} /></label>
+            <label>Server URL <input value={settings().baseUrl} onInput={(e) => setSettings({ ...settings(), baseUrl: e.currentTarget.value })} onChange={showModels} /></label>
           </Show>
           <label>Model
-            <Show when={settings().provider === 'anthropic'} fallback={<input value={settings().model} placeholder="model name" onInput={(e) => setSettings({ ...settings(), model: e.currentTarget.value })} aria-label="Model" />}>
-              <select value={settings().model} onChange={(e) => setSettings({ ...settings(), model: e.currentTarget.value })} aria-label="Model">
-                <For each={ANTHROPIC_MODELS}>{(m) => <option value={m.id}>{m.name}</option>}</For>
-              </select>
-            </Show>
+            <span class="row model-pick">
+              <Show when={options().length && !other()} fallback={
+                <input value={settings().model} placeholder="model name" onInput={(e) => setSettings({ ...settings(), model: e.currentTarget.value })} aria-label="Model" />
+              }>
+                <select aria-label="Model" onChange={(e) => {
+                  if (e.currentTarget.value === OTHER) return setOther(true);
+                  setSettings({ ...settings(), model: e.currentTarget.value });
+                }}>
+                  {/* each option says whether it is chosen, so the choice survives the list changing */}
+                  <Show when={!settings().model}><option value="" selected>Choose a model</option></Show>
+                  <For each={options()}>{(m) => <option value={m.id} selected={m.id === settings().model}>{m.name}</option>}</For>
+                  <option value={OTHER}>Other…</option>
+                </select>
+              </Show>
+              <button class="ghost refresh" classList={{ spinning: listing() }} disabled={listing()} onClick={(e) => { e.preventDefault(); setOther(false); void refreshModels(); }}
+                title="Fetch the list of models again from the provider" aria-label="Refresh the model list" data-testid="models-refresh">↻</button>
+            </span>
           </label>
+          <Show when={listError()}><div class="error small" data-testid="models-error">{listError()}</div></Show>
           <Show when={settings().provider === 'anthropic'}>
             <label title="Higher effort thinks longer and costs more">Effort
               <select value={settings().effort} onChange={(e) => setSettings({ ...settings(), effort: e.currentTarget.value as AISettings['effort'] })} aria-label="Effort">
@@ -207,7 +262,7 @@ export function AIPanel(props: AIPanelProps) {
               </select>
             </label>
           </Show>
-          <label>Key <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} placeholder={settings().provider === 'compatible' ? 'none needed for a local server' : 'your API key'} aria-label="API key" autocomplete="off" /></label>
+          <label>Key <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} onChange={() => key() && void refreshModels()} placeholder={settings().provider === 'compatible' ? 'none needed for a local server' : 'your API key'} aria-label="API key" autocomplete="off" /></label>
           <label class="row hint"><input type="checkbox" checked={remember()} onChange={(e) => setRemember(e.currentTarget.checked)} /> Remember on this device (otherwise for this session only)</label>
           <div class="row">
             <button class="primary" onClick={saveAll} data-testid="ai-save">Save</button>

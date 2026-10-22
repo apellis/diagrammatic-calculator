@@ -27,11 +27,29 @@ function sse(blocks: Block[], stop: string): string {
 
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, GET, OPTIONS' };
 
+/** Anthropic's model list as the API returns it, newest first. */
+const ANTHROPIC_LIST = {
+  data: [
+    { type: 'model', id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5', created_at: '2026-09-01T00:00:00Z' },
+    { type: 'model', id: 'claude-sonnet-5-5', display_name: 'Claude Sonnet 5.5', created_at: '2026-09-01T00:00:00Z' },
+    { type: 'model', id: 'claude-haiku-5-5', display_name: 'Claude Haiku 5.5', created_at: '2026-08-01T00:00:00Z' },
+  ],
+  has_more: false, first_id: 'claude-opus-5-5', last_id: 'claude-haiku-5-5',
+};
+/** Answers a GET of the model list; true when it did. */
+async function modelList(route: Route, body: unknown = ANTHROPIC_LIST) {
+  const r = route.request();
+  if (r.method() !== 'GET' || !new URL(r.url()).pathname.endsWith('/models')) return false;
+  await route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  return true;
+}
+
 async function recordedModel(page: Page, turns: (() => string)[]) {
   const requests: { headers: Record<string, string>; body: Record<string, unknown> }[] = [];
   await page.route('https://api.anthropic.com/**', async (route: Route) => {
     const r = route.request();
     if (r.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (await modelList(route)) return;
     requests.push({ headers: await r.allHeaders(), body: r.postDataJSON() });
     const next = turns.shift();
     if (!next) return route.fulfill({ status: 500, headers: cors, body: 'no more recorded turns' });
@@ -121,6 +139,7 @@ test('a refused key and a refusal are shown as plain messages', async ({ page })
   let n = 0;
   await page.route('https://api.anthropic.com/**', async (route) => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (await modelList(route)) return;
     if (n++ === 0) {
       return route.fulfill({ status: 401, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) });
     }
@@ -206,4 +225,88 @@ test('the browser check for an OpenAI-compatible server says whether this page c
   await page.route('http://localhost:11434/**', (route) => route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{"data":[]}' }));
   await page.getByRole('button', { name: 'Check the connection' }).click();
   await expect(page.getByTestId('ai-check')).toContainText('accepts calls from this page');
+});
+
+test('the model list comes from the provider, and the refresh button fetches it again', async ({ page }) => {
+  await newDoc(page);
+  let anthropicLists = 0;
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    anthropicLists++;
+    const body = anthropicLists === 1 ? ANTHROPIC_LIST : { ...ANTHROPIC_LIST, data: [{ type: 'model', id: 'claude-opus-6', display_name: 'Claude Opus 6', created_at: '2026-10-20T00:00:00Z' }, ...ANTHROPIC_LIST.data] };
+    if (!(await modelList(route, body))) await route.fulfill({ status: 500, headers: cors });
+  });
+  await page.route('https://api.openai.com/**', async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    await modelList(route, {
+      object: 'list',
+      data: [
+        { id: 'gpt-old', created: 100, object: 'model' },
+        { id: 'text-embedding-3-large', created: 300, object: 'model' },
+        { id: 'gpt-new', created: 200, object: 'model' },
+      ],
+    });
+  });
+  await page.getByTestId('ai-toggle').click();
+  await page.getByRole('button', { name: 'I understand' }).click();
+  const model = page.getByLabel('Model', { exact: true });
+  // before a key, the built-in Anthropic list
+  await expect(model.locator('option')).toContainText(['Claude Opus 5.5', 'Claude Sonnet 5.5']);
+  await page.getByLabel('API key').fill('sk-ant-test');
+  await page.getByLabel('API key').blur();
+  await expect.poll(() => anthropicLists).toBe(1);
+  await expect(model.locator('option')).toHaveText(['Claude Opus 5.5', 'Claude Sonnet 5.5', 'Claude Haiku 5.5', 'Other…']);
+  await expect(model).toHaveValue('claude-opus-5-5');
+  await page.getByTestId('models-refresh').click();
+  await expect(model.locator('option').first()).toHaveText('Claude Opus 6');
+  expect(anthropicLists).toBe(2);
+  // OpenAI: chat models only, newest first, and the newest is chosen
+  await page.getByLabel('Provider').selectOption('openai');
+  // no OpenAI key yet: a name is typed
+  await expect(page.locator('input[aria-label="Model"]')).toBeVisible();
+  await page.getByLabel('API key').fill('sk-test');
+  await page.getByLabel('API key').blur();
+  await expect(page.getByLabel('Model', { exact: true }).locator('option')).toHaveText(['gpt-new', 'gpt-old', 'Other…']);
+  await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-new');
+  // Other… lets one type a name the list does not have
+  await page.getByLabel('Model', { exact: true }).selectOption({ label: 'Other…' });
+  await page.locator('input[aria-label="Model"]').fill('gpt-custom');
+  await page.getByTestId('ai-save').click();
+  await page.getByLabel('AI settings').click();
+  await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-custom');
+});
+
+test('OpenAI goes through the Responses API: a tool call, its result sent back, then the answer', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 e(iij)');
+  const bodies: Record<string, unknown>[] = [];
+  await page.route('https://api.openai.com/**', async (route) => {
+    const r = route.request();
+    if (r.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (await modelList(route, { object: 'list', data: [{ id: 'gpt-test', created: 1, object: 'model' }] })) return;
+    expect(new URL(r.url()).pathname).toBe('/v1/responses');
+    const body = r.postDataJSON();
+    bodies.push(body);
+    const output = bodies.length === 1
+      ? [{ type: 'reasoning', id: 'rs_1', summary: [] }, { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'workspace_read', arguments: '{}' }]
+      : [{ type: 'message', id: 'msg_1', role: 'assistant', content: [{ type: 'output_text', text: 'The workspace has one definition.', annotations: [] }] }];
+    await route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ id: 'resp', status: 'completed', output, usage: { input_tokens: 10, output_tokens: 5 } }) });
+  });
+  await page.getByTestId('ai-toggle').click();
+  await page.getByRole('button', { name: 'I understand' }).click();
+  await page.getByLabel('Provider').selectOption('openai');
+  await page.getByLabel('API key').fill('sk-test');
+  await page.getByLabel('API key').blur();
+  await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-test');
+  await page.getByTestId('ai-save').click();
+  await page.getByLabel('Message to the AI').fill('what is here?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('chat')).toContainText('The workspace has one definition.');
+  expect(bodies).toHaveLength(2);
+  expect(bodies[0]).toMatchObject({ model: 'gpt-test', store: false });
+  expect(bodies[0]).not.toHaveProperty('reasoning_effort');
+  expect((bodies[0].tools as { type: string; name: string }[])[0]).toMatchObject({ type: 'function', name: 'workspace_read' });
+  const input = bodies[1].input as Record<string, unknown>[];
+  expect(input.some((x) => x.type === 'function_call' && x.call_id === 'call_1')).toBe(true);
+  expect(input.some((x) => x.type === 'function_call_output' && x.call_id === 'call_1')).toBe(true);
 });
