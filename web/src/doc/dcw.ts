@@ -41,7 +41,8 @@ export function exportDch(doc: Doc): string {
     return { n: v.n, author: v.author, note: v.note, time: new Date(v.time).toISOString(), workspace: at ? doc.toDcw(at) : null };
   });
   const snapshots = doc.snapshots.toArray().map((s) => ({ ...s, time: new Date(s.time).toISOString() }));
-  return JSON.stringify({ format: 'diagcalc-history/1', name: doc.name, versions, snapshots }, null, 2) + '\n';
+  const timeline = doc.timeline.toArray().map((t) => ({ ...t, time: new Date(t.time).toISOString() }));
+  return JSON.stringify({ format: 'diagcalc-history/1', name: doc.name, versions, snapshots, timeline }, null, 2) + '\n';
 }
 
 export const fileName = (name: string, ext: string) => `${name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'workspace'}.${ext}`;

@@ -68,6 +68,20 @@ export interface BranchRecord {
   state: Uint8Array;
 }
 
+/** One line of the AI activity timeline. */
+export interface TimelineEntry {
+  time: number;
+  author: string;
+  kind: 'request' | 'tool' | 'note' | 'milestone' | 'proposal' | 'error';
+  text: string;
+  /** More detail: a tool's input, a milestone's summary. */
+  detail?: string;
+  /** The version the step made, when it changed the workspace. */
+  version?: number;
+  /** The branch it happened on, if not the document itself. */
+  branch?: string;
+}
+
 /** What a branch changes relative to the document, cell by cell. */
 export interface Comparison {
   context?: { from: string; to: string };
@@ -96,6 +110,8 @@ export class Doc {
   readonly snapshots: Y.Array<Snapshot>;
   /** Layout hints, keyed by cell ID and summand word. */
   readonly hints: Y.Map<Hint>;
+  /** The AI activity timeline. */
+  readonly timeline: Y.Array<TimelineEntry>;
   /** Scratch branches of this document (only the main document has any). */
   readonly branches: Y.Map<BranchRecord>;
   /** Counters that undo leaves alone, so a cell ID is never reused. */
@@ -110,6 +126,7 @@ export class Doc {
     this.history = ydoc.getArray('history');
     this.snapshots = ydoc.getArray('snapshots');
     this.hints = ydoc.getMap('hints');
+    this.timeline = ydoc.getArray('timeline');
     this.branches = ydoc.getMap('branches');
     this.counters = ydoc.getMap('counters');
     this.undoManager = new Y.UndoManager([this.cells, this.meta, this.hints], {
@@ -160,17 +177,50 @@ export class Doc {
    * AI action undoes as one.
    */
   async asAI<T>(fn: () => Promise<T>): Promise<T> {
-    const um = this.undoManager;
-    um.stopCapturing();
-    this.author = AI;
-    um.captureTimeout = Number.MAX_SAFE_INTEGER;
+    this.beginAI();
     try {
       return await fn();
     } finally {
-      this.author = LOCAL;
-      um.captureTimeout = 0;
-      um.stopCapturing();
+      this.endAI();
     }
+  }
+
+  /** From now until `endAI`, steps are the AI's and undo as one. */
+  beginAI() {
+    if (this.author === AI) return;
+    this.undoManager.stopCapturing();
+    this.author = AI;
+    this.undoManager.captureTimeout = Number.MAX_SAFE_INTEGER;
+  }
+
+  endAI() {
+    if (this.author !== AI) return;
+    this.author = LOCAL;
+    this.undoManager.captureTimeout = 0;
+    this.undoManager.stopCapturing();
+  }
+
+  /** Adds a line to the activity timeline (a record, not an undoable step). */
+  log(entry: Omit<TimelineEntry, 'time' | 'author'> & { author?: string }) {
+    this.ydoc.transact(() => this.timeline.push([{ time: Date.now(), author: AI.author, ...entry }]), HISTORY);
+  }
+
+  /** Watches the AI pinned as measures of its progress. */
+  get pinned(): string[] {
+    return (this.meta.get('pinned') as string[]) ?? [];
+  }
+  pinWatch(id: string, pinned = true) {
+    const now = this.pinned.filter((x) => x !== id);
+    this.step(`${pinned ? 'pin' : 'unpin'} ${id}`, () => this.meta.set('pinned', pinned ? [...now, id] : now));
+  }
+
+  /** The document's "No AI" switch, for unpublished work. */
+  get noAI(): boolean {
+    return this.meta.get('noAI') === true;
+  }
+  setNoAI(on: boolean) {
+    // a setting, not a step of the work: undo leaves it alone
+    this.ydoc.transact(() => this.meta.set('noAI', on), HISTORY);
   }
 
   rename(name: string) {
@@ -178,8 +228,8 @@ export class Doc {
   }
 
   /** `context.set` */
-  setContext(context: string) {
-    this.step(`context ${context}`, () => this.meta.set('context', context));
+  setContext(context: string, note = `context ${context}`) {
+    this.step(note, () => this.meta.set('context', context));
   }
 
   freshId(kind: CellKind | null): string {
@@ -189,9 +239,9 @@ export class Doc {
   }
 
   /** `cell.add`: inserts a cell at `index` (the end by default) and returns its ID. */
-  addCell(text: string, index = this.cells.length): string {
+  addCell(text: string, index = this.cells.length, note = `add ${text.split('\n')[0].slice(0, 60)}`): string {
     let id = '';
-    this.step(`add ${text.split('\n')[0].slice(0, 60)}`, () => {
+    this.step(note, () => {
       id = this.freshId(kindOf(text));
       const m = new Y.Map<string>();
       m.set('id', id);
@@ -219,16 +269,16 @@ export class Doc {
   }
 
   /** `cell.remove` */
-  removeCell(id: string) {
+  removeCell(id: string, note = `remove ${id}`) {
     const i = this.index(id);
-    if (i >= 0) this.step(`remove ${id}`, () => this.cells.delete(i, 1));
+    if (i >= 0) this.step(note, () => this.cells.delete(i, 1));
   }
 
   /** `cell.move`: moves a cell to position `to` among the others. */
-  moveCell(id: string, to: number) {
+  moveCell(id: string, to: number, note = `move ${id}`) {
     const i = this.index(id);
     if (i < 0 || i === to) return;
-    this.step(`move ${id}`, () => {
+    this.step(note, () => {
       const text = this.cells.get(i).get('text')!;
       this.cells.delete(i, 1);
       const m = new Y.Map<string>();

@@ -1,0 +1,257 @@
+// Model providers, called straight from the browser with the person's own key.
+//
+// Anthropic goes through the official SDK, which opts in to browser calls. Other providers
+// speak the OpenAI chat-completions protocol (OpenAI itself, or a local OpenAI-compatible
+// server); they are offered only after `checkProvider` shows the browser can reach them, since
+// not every provider accepts browser calls. The conversation is kept in the Anthropic message
+// format and translated for the others.
+import Anthropic from '@anthropic-ai/sdk';
+import type { ToolDef } from './tools';
+
+export type ProviderId = 'anthropic' | 'openai' | 'compatible';
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export interface AISettings {
+  provider: ProviderId;
+  model: string;
+  effort: Effort;
+  /** For an OpenAI-compatible server, its base URL (ending in /v1). */
+  baseUrl: string;
+}
+
+export const ANTHROPIC_MODELS: { id: string; name: string }[] = [
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' },
+  { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
+];
+
+export const DEFAULT_SETTINGS: AISettings = { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', baseUrl: 'http://localhost:11434/v1' };
+
+export interface TurnRequest {
+  system: string;
+  tools: ToolDef[];
+  messages: Anthropic.MessageParam[];
+  signal: AbortSignal;
+  onText: (delta: string) => void;
+  onThinking: (delta: string) => void;
+}
+
+/** One model turn: the assistant's content and why it stopped. */
+export interface Turn {
+  content: Anthropic.ContentBlock[];
+  stop: Anthropic.StopReason | null;
+  usage?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+}
+
+export interface Provider {
+  label: string;
+  turn(r: TurnRequest): Promise<Turn>;
+}
+
+/** Why a call failed, in words for the person. */
+export function explain(e: unknown, provider: string): string {
+  if (e instanceof Anthropic.APIUserAbortError) return 'Stopped.';
+  if (e instanceof Anthropic.AuthenticationError) return `${provider} refused the key. Check it in the AI settings.`;
+  if (e instanceof Anthropic.PermissionDeniedError) return `${provider} says this key may not use this model or feature.`;
+  if (e instanceof Anthropic.RateLimitError) return `${provider} is rate-limiting this key; wait a moment and send again.`;
+  if (e instanceof Anthropic.APIConnectionError) return `Could not reach ${provider}: ${e.message}`;
+  if (e instanceof Anthropic.APIError) return `${provider} answered with an error (${e.status ?? 'no status'}): ${e.message}`;
+  if (e instanceof BrowserBlocked) return e.message;
+  if (e instanceof DOMException && e.name === 'AbortError') return 'Stopped.';
+  return `Something went wrong: ${(e as Error)?.message ?? String(e)}`;
+}
+
+export function anthropic(key: string, s: AISettings): Provider {
+  const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true, maxRetries: 2 });
+  return {
+    label: 'Anthropic',
+    async turn(r) {
+      // the system prompt and the tool list are the stable prefix: cache them
+      const tools = r.tools.map((t, i) => ({
+        ...t,
+        input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+        eager_input_streaming: true,
+        ...(i === r.tools.length - 1 ? { cache_control: { type: 'ephemeral' as const } } : {}),
+      }));
+      const stream = client.messages.stream(
+        {
+          model: s.model,
+          max_tokens: 32_000,
+          system: [{ type: 'text', text: r.system, cache_control: { type: 'ephemeral' } }],
+          tools,
+          thinking: { type: 'adaptive', display: 'summarized' },
+          ...(s.model.includes('haiku') ? {} : { output_config: { effort: s.effort } }),
+          cache_control: { type: 'ephemeral' },
+          messages: r.messages,
+        },
+        { signal: r.signal },
+      );
+      stream.on('text', (d) => r.onText(d));
+      stream.on('thinking', (d) => r.onThinking(d));
+      const m = await stream.finalMessage();
+      const u = m.usage;
+      return {
+        content: m.content,
+        stop: m.stop_reason,
+        usage: { input: u.input_tokens, output: u.output_tokens, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0 },
+      };
+    },
+  };
+}
+
+/** A provider that refuses calls made from a browser page. */
+export class BrowserBlocked extends Error {}
+
+const base = (s: AISettings) => (s.provider === 'openai' ? 'https://api.openai.com/v1' : s.baseUrl.replace(/\/+$/, ''));
+const providerName = (s: AISettings) => (s.provider === 'anthropic' ? 'Anthropic' : s.provider === 'openai' ? 'OpenAI' : `the server at ${base(s)}`);
+
+/** The browser check: can this page call the provider with this key? */
+export async function checkProvider(key: string, s: AISettings): Promise<{ ok: boolean; message: string }> {
+  const name = providerName(s);
+  if (s.provider === 'anthropic') {
+    try {
+      const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true, maxRetries: 0 });
+      await client.models.list({ limit: 1 });
+      return { ok: true, message: `${name} accepts calls from this page.` };
+    } catch (e) {
+      return { ok: false, message: explain(e, name) };
+    }
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${base(s)}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
+  } catch {
+    return { ok: false, message: blockedMessage(name) };
+  }
+  if (res.status === 401) return { ok: false, message: `${name} refused the key.` };
+  if (!res.ok) return { ok: false, message: `${name} answered ${res.status} ${res.statusText}.` };
+  return { ok: true, message: `${name} accepts calls from this page.` };
+}
+
+const blockedMessage = (name: string) =>
+  `This page cannot reach ${name}: it refuses calls made from a browser (or is not running). Use the command-line tool or the MCP server (diagcalc mcp) with that provider instead.`;
+
+type ChatMessage =
+  | { role: 'system' | 'user'; content: string }
+  | { role: 'assistant'; content: string | null; tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[] }
+  | { role: 'tool'; tool_call_id: string; content: string };
+
+/** The conversation in the chat-completions format. */
+export function toChat(system: string, messages: Anthropic.MessageParam[]): ChatMessage[] {
+  const out: ChatMessage[] = [{ role: 'system', content: system }];
+  for (const m of messages) {
+    const blocks = typeof m.content === 'string' ? [{ type: 'text' as const, text: m.content }] : m.content;
+    if (m.role === 'user') {
+      for (const b of blocks) {
+        if (b.type === 'tool_result') {
+          const c = typeof b.content === 'string' ? b.content : (b.content ?? []).map((x) => ('text' in x ? x.text : '')).join('');
+          out.push({ role: 'tool', tool_call_id: b.tool_use_id, content: c });
+        }
+      }
+      const text = blocks.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
+      if (text) out.push({ role: 'user', content: text });
+    } else {
+      const text = blocks.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
+      const calls = blocks.filter((b) => b.type === 'tool_use') as Anthropic.ToolUseBlockParam[];
+      out.push({
+        role: 'assistant',
+        content: text || null,
+        ...(calls.length ? { tool_calls: calls.map((c) => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: JSON.stringify(c.input) } })) } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+export function chatCompletions(key: string, s: AISettings): Provider {
+  const name = providerName(s);
+  return {
+    label: name,
+    async turn(r) {
+      let res: Response;
+      try {
+        res = await fetch(`${base(s)}/chat/completions`, {
+          method: 'POST',
+          signal: r.signal,
+          headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+          body: JSON.stringify({
+            model: s.model,
+            messages: toChat(r.system, r.messages),
+            tools: r.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } })),
+          }),
+        });
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') throw e;
+        throw new BrowserBlocked(blockedMessage(name));
+      }
+      if (!res.ok) throw new Error(`${name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      const j = (await res.json()) as {
+        choices: { finish_reason: string; message: { content?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      const choice = j.choices[0];
+      const content: Anthropic.ContentBlock[] = [];
+      if (choice.message.content) {
+        r.onText(choice.message.content);
+        content.push({ type: 'text', text: choice.message.content, citations: null } as Anthropic.TextBlock);
+      }
+      for (const c of choice.message.tool_calls ?? []) {
+        let input: unknown;
+        try {
+          input = JSON.parse(c.function.arguments || '{}');
+        } catch {
+          input = { INVALID_JSON: c.function.arguments };
+        }
+        content.push({ type: 'tool_use', id: c.id, name: c.function.name, input } as Anthropic.ToolUseBlock);
+      }
+      const stop: Anthropic.StopReason =
+        choice.finish_reason === 'tool_calls' ? 'tool_use' : choice.finish_reason === 'length' ? 'max_tokens' : choice.finish_reason === 'content_filter' ? 'refusal' : 'end_turn';
+      return { content, stop, usage: { input: j.usage?.prompt_tokens ?? 0, output: j.usage?.completion_tokens ?? 0, cacheRead: 0, cacheWrite: 0 } };
+    },
+  };
+}
+
+export function provider(key: string, s: AISettings): Provider {
+  return s.provider === 'anthropic' ? anthropic(key, s) : chatCompletions(key, s);
+}
+
+// keys: for the session by default, in this browser's storage only when asked
+
+const keyName = (p: ProviderId) => `diagcalc.ai.key.${p}`;
+
+export function loadKey(p: ProviderId): { key: string; remembered: boolean } {
+  try {
+    const remembered = localStorage.getItem(keyName(p));
+    if (remembered) return { key: remembered, remembered: true };
+    return { key: sessionStorage.getItem(keyName(p)) ?? '', remembered: false };
+  } catch {
+    return { key: '', remembered: false };
+  }
+}
+
+export function saveKey(p: ProviderId, key: string, remember: boolean) {
+  try {
+    localStorage.removeItem(keyName(p));
+    sessionStorage.removeItem(keyName(p));
+    if (key) (remember ? localStorage : sessionStorage).setItem(keyName(p), key);
+  } catch {
+    /* storage unavailable: the key lives in memory for this page only */
+  }
+}
+
+export function loadSettings(): AISettings {
+  try {
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('diagcalc.ai.settings') ?? '{}') };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export function saveSettings(s: AISettings) {
+  try {
+    localStorage.setItem('diagcalc.ai.settings', JSON.stringify(s));
+  } catch {
+    /* storage unavailable */
+  }
+}

@@ -12,6 +12,9 @@ import { ContextChip } from './ContextChip';
 import { Palette, type Command } from './Palette';
 import { importText } from './DocList';
 import { Canvas, type Generator, type Selection } from './Canvas';
+import { AIPanel } from './AIPanel';
+import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
+import { loadKey, loadSettings } from '../ai/providers';
 
 export function WorkspacePage(props: { id: string }) {
   const [od] = createResource(() => props.id, openDoc);
@@ -35,10 +38,24 @@ export interface Branching {
   discard: () => void;
 }
 
-/** The document, or one of its branches, shown in the workspace view. */
+/** What the workspace view offers the AI and the page around it. */
+export interface ViewApi {
+  /** Cell states once every cell is computed (or after a time limit). */
+  settled: () => Promise<Map<string, CellState>>;
+  termContext: () => string;
+}
+
+/** The document, or one of its branches, shown in the workspace view, with the AI panel beside it. */
 function Workspace(props: { o: OpenDoc }) {
   const main = props.o.doc;
   const linked = createSignal<FileSystemFileHandle | null>(null);
+  // the AI panel shows by default once a key is entered
+  const [aiOpen, setAiOpen] = createSignal(!main.noAI && (!!loadKey(loadSettings().provider).key || loadSettings().provider === 'compatible'));
+  const [selection, setSelection] = createSignal<Selection | null>(null);
+  const [proposals, setProposals] = createSignal<Proposal[]>([]);
+  let view: ViewApi | null = null;
+  let focusAI: (() => void) | undefined;
+  let aiBusy = false;
   const [current, setCurrent] = createSignal<{ id: string; name: string; doc: Doc } | null>(null);
   const [list, setList] = createSignal([...main.branches.values()].map(({ id, name }) => ({ id, name })));
   const onBranches = () => setList([...main.branches.values()].map(({ id, name }) => ({ id, name })));
@@ -64,6 +81,9 @@ function Workspace(props: { o: OpenDoc }) {
       b.doc.ydoc.on('update', onUpdate);
       unwatch = () => b.doc.ydoc.off('update', onUpdate);
     }
+    // a branch opened during an AI request takes part in its single undo step
+    if (aiBusy) b?.doc.beginAI();
+    else current()?.doc.endAI();
     setCurrent(b);
   };
   const branching: Branching = {
@@ -114,16 +134,88 @@ function Workspace(props: { o: OpenDoc }) {
     main.branches.unobserve(onBranches);
     props.o.close();
   });
+
+  let nextProposal = 1;
+  const host: ToolHost = {
+    engine,
+    main,
+    doc: () => current()?.doc ?? main,
+    branch: () => branching.current,
+    createBranch: (name) => branching.create(name),
+    openBranch: (id) => branching.open(id),
+    compareBranch: () => branching.compare(),
+    discardBranch: () => branching.discard(),
+    settled: async () => (view ? view.settled() : new Map()),
+    termContext: () => view?.termContext() ?? (current()?.doc ?? main).context,
+    selection: (): SelectionRef | null => {
+      const s = selection();
+      const d = current()?.doc ?? main;
+      return s && { version: d.versions().length, cell: s.cellId, summand: s.summand, word: s.word, text: s.text, layers: s.layers, rectangle: s.rectangle };
+    },
+    propose: (p) => {
+      const full: Proposal = { ...p, id: nextProposal++, state: 'open' };
+      setProposals([...proposals(), full]);
+      return full;
+    },
+  };
+  const decide = (p: Proposal, accept: boolean) => {
+    setProposals(proposals().map((x) => (x.id === p.id ? { ...x, state: accept ? 'accepted' : 'rejected' } : x)));
+    main.log({ kind: 'proposal', author: 'you', text: `${accept ? 'accepted' : 'rejected'}: ${p.note}` });
+    if (!accept) return;
+    if (p.kind === 'remove') host.doc().removeCell(p.target, `remove ${p.target} (proposed by the AI: ${p.note})`);
+    else {
+      if (branching.current?.id !== p.target) branching.open(p.target);
+      branching.accept();
+    }
+  };
+  const onBusy = (busy: boolean) => {
+    aiBusy = busy;
+    const d = current()?.doc;
+    if (busy) {
+      main.beginAI();
+      d?.beginAI();
+    } else {
+      main.endAI();
+      d?.endAI();
+    }
+  };
+  const toggleAI = () => setAiOpen(!aiOpen());
+  const ask = () => {
+    setAiOpen(true);
+    queueMicrotask(() => focusAI?.());
+  };
+
   return (
-    <Show when={current()?.doc ?? main} keyed>
-      {(doc) => <DocView o={props.o} doc={doc} branching={branching} linked={linked} />}
-    </Show>
+    <div class="shell" classList={{ 'ai-open': aiOpen() }}>
+      <div class="docpane">
+        <Show when={current()?.doc ?? main} keyed>
+          {(doc) => (
+            <DocView o={props.o} doc={doc} branching={branching} linked={linked} aiOpen={aiOpen()} onToggleAI={toggleAI} onAsk={ask}
+              onSelection={setSelection} api={(a) => (view = a)} />
+          )}
+        </Show>
+      </div>
+      <Show when={aiOpen()}>
+        <AIPanel host={host} main={main} proposals={proposals()} onDecide={decide} onBusy={onBusy} onClose={() => setAiOpen(false)}
+          focusRef={(f) => (focusAI = f)} />
+      </Show>
+    </div>
   );
 }
 
 const K = isMac ? '⌘' : 'Ctrl+';
 
-function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Signal<FileSystemFileHandle | null> }) {
+function DocView(props: {
+  o: OpenDoc;
+  doc: Doc;
+  branching: Branching;
+  linked: Signal<FileSystemFileHandle | null>;
+  aiOpen: boolean;
+  onToggleAI: () => void;
+  onAsk: () => void;
+  onSelection: (s: Selection | null) => void;
+  api: (a: ViewApi) => void;
+}) {
   const doc = props.doc;
   const main = props.o.doc;
   const onBranch = () => props.branching.current !== null;
@@ -144,7 +236,6 @@ function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Si
   const [message, setMessage] = createSignal('');
   const [canvas, setCanvas] = createSignal<{ id: string; word?: string } | null>(null);
   const [hintsVersion, setHintsVersion] = createSignal(0);
-  const [, setSelection] = createSignal<Selection | null>(null);
 
   // cell states, one signal per cell so only changed cells re-render
   const states = new Map<string, Signal<CellState | undefined>>();
@@ -160,6 +251,23 @@ function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Si
     const sc = scalars();
     return sc.length && !/\bscalars=/.test(context()) ? `${context()} scalars=${sc.join(',')}` : context();
   };
+  props.api({
+    termContext,
+    settled: async () => {
+      // give the evaluator a moment to see the latest step, then wait for every cell
+      await new Promise((r) => setTimeout(r, 30));
+      const deadline = Date.now() + 60_000;
+      for (;;) {
+        const list = doc.list();
+        const done = list.every((c) => {
+          const st = stateOf(c.id);
+          return st && st.text === c.text && st.status !== 'running' && st.status !== 'stale';
+        });
+        if (done || Date.now() > deadline) return new Map(list.map((c) => [c.id, stateOf(c.id)!]));
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+  });
   const [described] = createResource(context, async (c) => {
     const o = await engine.call('context.describe', { context: c }, { lane: 'interactive' });
     if (o.status !== 'done' || o.response.status !== 'ok') return { generators: [] as Generator[], colours: [] as string[] };
@@ -181,6 +289,20 @@ function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Si
   const onHistory = () => setVersions(doc.versions());
   const onSnapshots = () => setSnapshots(main.snapshots.toArray());
   const onHints = () => setHintsVersion(hintsVersion() + 1);
+  // pinned watches (kept in the document itself) and the term counts each has had this session
+  const [pinnedIds, setPinnedIds] = createSignal(main.pinned);
+  const onPinned = () => setPinnedIds(main.pinned);
+  main.meta.observe(onPinned);
+  onCleanup(() => main.meta.unobserve(onPinned));
+  const trends = new Map<string, number[]>();
+  const pinned = () =>
+    pinnedIds().map((id) => {
+      const v = stateOf(id)?.value as { status?: string; terms?: number } | undefined;
+      const t = trends.get(id) ?? [];
+      if (v?.status === 'ok' && typeof v.terms === 'number' && t.at(-1) !== v.terms) t.push(v.terms);
+      trends.set(id, t);
+      return { id, trend: [...t] };
+    });
   doc.cells.observeDeep(refresh);
   doc.meta.observe(refresh);
   doc.history.observe(onHistory);
@@ -350,6 +472,8 @@ function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Si
     { name: 'Clear the result cache', run: () => void cache.clear() },
     { name: 'Show or hide the outline', run: () => setOutline(!outline()) },
     { name: 'Open the active cell in the canvas', keys: 'F', run: () => active() && openCanvas(active()!) },
+    { name: 'Show or hide the AI panel', keys: `${K}J`, run: props.onToggleAI },
+    { name: 'Ask the AI about the selection', keys: `${K}L`, run: props.onAsk },
     { name: 'Keyboard shortcuts', keys: '?', run: () => setModal('keys') },
     { name: 'All documents', run: () => (location.hash = '#/') },
   ];
@@ -360,6 +484,8 @@ function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Si
     if (mod(e) && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); void exportFile(); return; }
     if (mod(e) && e.key.toLowerCase() === 'o') { e.preventDefault(); void importFile(); return; }
     if (mod(e) && e.key.toLowerCase() === 'b') { e.preventDefault(); newBranch(); return; }
+    if (mod(e) && e.key.toLowerCase() === 'j') { e.preventDefault(); props.onToggleAI(); return; }
+    if (mod(e) && e.key.toLowerCase() === 'l') { e.preventDefault(); props.onAsk(); return; }
     if (inEditor) return;
     if (mod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doc.redo() : doc.undo(); return; }
     if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); doc.redo(); return; }
@@ -427,11 +553,12 @@ function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Si
         <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo">↷</button>
         <span class={`light ${jobs() ? 'busy' : ''}`} title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'} data-testid="light"
           onClick={() => jobs() && ev?.cancelAll()} />
+        <button class="ghost" classList={{ on: props.aiOpen }} onClick={props.onToggleAI} title={`AI panel (${K}J)`} data-testid="ai-toggle">AI</button>
         <button class="ghost" onClick={() => setModal('palette')} title={`Commands (${K}K)`}>⋯</button>
       </header>
       <div class="layout" classList={{ 'no-outline': !outline() }}>
         <Show when={outline()} fallback={<div />}>
-          <Outline cells={cells()} state={stateOf} active={active()} versions={versions()} snapshots={snapshots()}
+          <Outline cells={cells()} state={stateOf} active={active()} versions={versions()} snapshots={snapshots()} pinned={pinned()}
             onSelect={focusCell} onVersion={(n) => setModal({ version: n })} onSnapshot={(i) => setModal({ snapshot: i })} />
         </Show>
         <div class="stage">
@@ -472,7 +599,7 @@ function DocView(props: { o: OpenDoc; doc: Doc; branching: Branching; linked: Si
             <Canvas doc={doc} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
               term={canvasTerm(id)} expanded={usesDefinitions(id)} generators={described()?.generators ?? []}
               colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word}
-              onWrite={(t, note) => writeCanvas(id, t, note)} onSelection={setSelection}
+              onWrite={(t, note) => writeCanvas(id, t, note)} onSelection={props.onSelection} onAsk={props.onAsk}
               onClose={() => { setCanvas(null); focusCell(id); }} />
           )}
         </Show>
@@ -598,6 +725,7 @@ function Keys(props: { onClose: () => void }) {
     ['Esc', 'Stop editing, close a dialog'],
     [`${K}O, ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, 'Import a workspace, export this one'],
     [`${K}B`, 'Start a scratch branch: try something, then accept or discard it'],
+    [`${K}J, ${K}L`, 'Show or hide the AI panel; ask the AI about the selection'],
     ['/', 'At the start of a new cell: choose its kind'],
     ['F', 'Open the active definition or watch in the focus canvas (? there lists its gestures)'],
     ['?', 'This sheet'],

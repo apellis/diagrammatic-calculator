@@ -1,0 +1,100 @@
+// The AI loop: send the conversation with the skill as system prompt and the operations as
+// tools, run each tool call in the page, send the results back, and repeat until the model
+// answers. Each tool call that changes the workspace is a step by the AI; the page groups a
+// whole request into one undo step.
+import type Anthropic from '@anthropic-ai/sdk';
+import skill from '../../../skill/SKILL.md?raw';
+import { explain, type Provider } from './providers';
+import { runTool, TOOLS, type SelectionRef, type ToolHost } from './tools';
+
+export const SYSTEM = `${skill.replace(/^---[\s\S]*?---\s*/, '')}
+
+You are working inside the person's browser, in the calculator's web workspace. The person sees
+the workspace, the canvas and this chat; your workspace edits appear there as you make them, and
+every step can be undone. Keep replies short: what you did, what the results are (from the
+operations), and what you propose next.`;
+
+/** Cap on model turns per request, so a loop cannot run away with the person's credit. */
+export const MAX_TURNS = 40;
+
+export type AgentEvent =
+  | { type: 'text'; delta: string }
+  | { type: 'thinking'; delta: string }
+  | { type: 'tool'; id: string; name: string; input: unknown }
+  | { type: 'result'; id: string; summary: string; isError: boolean }
+  | { type: 'usage'; input: number; output: number; cacheRead: number; cacheWrite: number }
+  | { type: 'stopped'; reason: string };
+
+/** The user message for a request: the text, then where things stand and the selection. */
+export function userMessage(text: string, where: { context: string; branch: string | null; version: number }, selection: SelectionRef | null): string {
+  const lines = [text, '', `[workspace: context ${where.context}; version ${where.version}${where.branch ? `; on the branch “${where.branch}”` : ''}]`];
+  if (selection) lines.push(`[selection: ${JSON.stringify(selection)}]`);
+  return lines.join('\n');
+}
+
+/**
+ * Runs one request to completion. `messages` is the conversation so far and is extended in
+ * place with the model's turns and the tool results, so the next request continues it.
+ */
+export async function run(p: {
+  provider: Provider;
+  host: ToolHost;
+  messages: Anthropic.MessageParam[];
+  signal: AbortSignal;
+  emit: (e: AgentEvent) => void;
+}): Promise<void> {
+  const { provider, host, messages, signal, emit } = p;
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    let t;
+    try {
+      t = await provider.turn({
+        system: SYSTEM,
+        tools: TOOLS,
+        messages,
+        signal,
+        onText: (delta) => emit({ type: 'text', delta }),
+        onThinking: (delta) => emit({ type: 'thinking', delta }),
+      });
+    } catch (e) {
+      emit({ type: 'stopped', reason: explain(e, provider.label) });
+      return;
+    }
+    if (t.usage) emit({ type: 'usage', ...t.usage });
+    const calls = t.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+    if (t.stop === 'refusal') {
+      emit({ type: 'stopped', reason: 'The model declined to continue with this request.' });
+      return;
+    }
+    if (t.stop === 'max_tokens' && calls.length) {
+      emit({ type: 'stopped', reason: 'The answer was cut off at the length limit in the middle of a tool call; nothing was run. Ask for a smaller step.' });
+      return;
+    }
+    if (t.stop === 'model_context_window_exceeded') {
+      emit({ type: 'stopped', reason: 'The conversation is too long for the model. Start a new conversation (the workspace keeps everything).' });
+      return;
+    }
+    messages.push({ role: 'assistant', content: t.content as Anthropic.ContentBlockParam[] });
+    if (t.stop === 'pause_turn') continue;
+    if (!calls.length) {
+      if (t.stop === 'max_tokens') emit({ type: 'stopped', reason: 'The answer was cut off at the length limit.' });
+      return;
+    }
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const c of calls) {
+      if (signal.aborted) {
+        results.push({ type: 'tool_result', tool_use_id: c.id, content: 'Stopped by the person before this ran.', is_error: true });
+        continue;
+      }
+      emit({ type: 'tool', id: c.id, name: c.name, input: c.input });
+      const r = await runTool(host, c.name, c.input);
+      emit({ type: 'result', id: c.id, summary: r.summary, isError: !!r.isError });
+      results.push({ type: 'tool_result', tool_use_id: c.id, content: r.content, ...(r.isError ? { is_error: true } : {}) });
+    }
+    messages.push({ role: 'user', content: results });
+    if (signal.aborted) {
+      emit({ type: 'stopped', reason: 'Stopped.' });
+      return;
+    }
+  }
+  emit({ type: 'stopped', reason: `Stopped after ${MAX_TURNS} model turns; send another message to continue.` });
+}

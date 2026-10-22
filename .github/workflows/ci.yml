@@ -77,7 +77,7 @@ jobs:
       - name: Operation types are current
         run: |
           npm run gen-ops
-          git diff --exit-code src/engine/ops.gen.ts
+          git diff --exit-code src/engine/ops.gen.ts src/ai/optools.gen.ts
       - name: Type check
         run: npm run typecheck
       - name: Unit tests

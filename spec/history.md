@@ -1,7 +1,7 @@
 # History file (`.dch`)
 
-An optional companion of a `.dcw` file: the version history and pinned snapshots of a document, as
-JSON. The web app exports it (Export history); reading it back is not built yet.
+An optional companion of a `.dcw` file: the version history, pinned snapshots and AI activity
+timeline of a document, as JSON. The web app exports it (Export history); reading it back is not built yet.
 
 ```json
 {
@@ -15,6 +15,10 @@ JSON. The web app exports it (Export history); reading it back is not built yet.
     { "name": "first", "cellId": "w1", "cellText": "watch x_1 e(ij)", "context": "…", "version": 1,
       "key": "…", "value": { "kind": "watch", "normal_form": "…", "provenance": { … } },
       "time": "2026-10-22T07:00:00.000Z" }
+  ],
+  "timeline": [
+    { "time": "2026-10-22T07:01:00.000Z", "author": "AI", "kind": "tool",
+      "text": "cell_add: watch x_1 psi_1 e(ii)", "detail": "{…}", "version": 2, "branch": "slide" }
   ]
 }
 ```
@@ -23,3 +27,9 @@ Each version is a step: one change by one author with a one-line note, and the w
 after the step, as a `.dcw` file with cells as entered (not canonicalized). A snapshot freezes a
 result: the cell and context it came from, the version, the hash of its inputs (`key`) and the
 value as `workspace.run` returned it, provenance included.
+
+The timeline records the AI's activity: each request (`kind` `request`), tool call (`tool`), note
+(`note`), milestone summary (`milestone`), proposal for the person (`proposal`) and failure
+(`error`). `detail` holds more (a tool's input, a milestone's text), `version` the step a workspace
+change made, and `branch` the what-if branch it happened on, when not the document itself. Older
+files without `timeline` read as an empty timeline.

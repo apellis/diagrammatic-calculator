@@ -210,6 +210,63 @@ and restore, persistence across reloads, the document list, export and import, s
 example, and latency. On the development container a computed edit shows its new value in about
 60 ms and cached undo and redo in at most about 70 ms, against the 150 ms target.
 
-**Not yet in 4a.** Clicking a summand to see which terms of the definitions produced it, persisting
+**Focus canvas (4b).** `src/ui/Canvas.tsx` with the geometry in `src/canvas/geometry.ts`. It
+edits a definition's or watch's term as written; a term that uses definitions is drawn written
+out, and a gesture writes it out in full. The drawing comes from `term.layout`: one frame per
+summand, with pieces (layer, generator, box, strand positions), strands with colours and
+directions, lines to draw and the heights between rows. Layers are drawn at the lowest height
+their dependencies allow, two consecutive layers sharing a height only when the earlier is left of
+the later and their canonical order agrees, so a canonical word is drawn at its canonical levels
+and any other order is reached by adjacent interchanges whose Koszul signs `term.layout`
+reports. Gestures become operations: a dot drag counts the crossings it passes on its strand and
+calls `slide` with that many steps; a piece drag computes a new drawn order (a layout hint, the
+term unchanged); a box selection snaps to a rectangle for `relations.match`; a palette drop finds
+the nearest height and strand position for `term.edit`. Every gesture writes the cell's text as
+one step with a note, or stores a hint. Hints (`Doc.hints`, keyed by cell and summand word, an
+order and look-only offsets) are part of the undo scope but never of the term. Each gesture has a
+key: Tab between pieces, arrows slide a dot, ⌥-arrows interchange, R lists relations and 1–9 applies
+one, I then a digit inserts, Delete removes, F fits; `?` lists them.
+
+**Branches (4b).** A branch is its own Yjs document, kept as an update in the main document's
+`branches` map with the inputs it started from; the page shows either the document or a branch,
+each with its own evaluator over the shared cache. `branch.accept` is a three-way merge of the
+branch's changes since it started into the document as it is now (cells changed, added, removed,
+hints), applied as one step that changes as little as possible; a cell both sides changed takes
+the branch's text and is reported. Any version opens as a branch.
+
+**AI panel (4b).** `src/ai/` and `src/ui/AIPanel.tsx`. The system prompt is `skill/SKILL.md`
+(bundled with `?raw`; `diagcalc skill` prints the same file). The tools are the workspace
+operations in `src/ai/tools.ts` and the term operations generated from `spec/ops/` into
+`src/ai/optools.gen.ts` (`npm run gen-ops`: references inlined, `context` optional and filled from
+the document). The loop (`src/ai/agent.ts`) streams each turn, runs the tool calls in the page and
+sends the results back, up to 40 turns a request. With Anthropic it uses the official SDK with its
+browser opt-in, Claude Opus 5.5 by default, adaptive thinking with summaries, an effort level, and
+cache breakpoints on the system prompt, the tool list and the conversation. Tool inputs stream
+eagerly, so each input is checked against its schema in the page before it runs, and turns cut
+off at the length limit or refused never run their tools. Workspace edits are steps with the AI as
+author and the model's note; a whole request undoes as one (the undo manager's capture window is
+held open for the request). Removing a cell and accepting a branch are only proposed, as cards the
+person accepts or rejects. Every request, step, note, milestone and proposal is logged in the
+document's activity timeline (`Doc.timeline`). Pinned watches show at the top of the outline with
+their term counts over the session.
+
+Other providers speak the chat-completions protocol (OpenAI, or a local OpenAI-compatible
+server); the settings' "Check the connection" calls the provider's model list from the page and
+says whether the browser can reach it. Keys stay in session storage unless "Remember on this
+device" is ticked, and go only to the chosen provider. The first time the panel opens it says what
+leaves the browser; a document's "No AI" switch turns the panel off for it.
+
+**Tests (4b).** Unit tests for the canvas geometry, branches and merging, AI tool schemas,
+validation and the chat-completions translation. Playwright drives the gestures (drag-slide,
+keyboard paths, insert and remove, odd interchange signs, look-only moves), branches (leave,
+reopen, accept, undo, discard) and the AI panel against a recorded model: requests to the
+Messages API are answered with scripted streamed turns, so a what-if on a branch runs end to end,
+including the request's headers, caching and thinking settings.
+
+**Not yet.** Clicking a summand to see which terms of the definitions produced it, persisting
 a linked file across reloads, importing `.dch` files, and size diagnostics when a job is stopped at
-its time limit (it reports the time and points to the command-line tool).
+its time limit (it reports the time and points to the command-line tool). In the AI panel: the
+chat itself is kept only while the page is open (the timeline is kept with the document), pinned
+watches' trends cover the session only, chat-completions providers are not streamed, and whether
+OpenAI accepts calls from a browser page is decided by the in-app check in a real browser (the
+development container cannot reach OpenAI).

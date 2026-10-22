@@ -22,6 +22,8 @@ export function Outline(props: {
   onSelect: (id: string) => void;
   onVersion: (n: number) => void;
   onSnapshot: (i: number) => void;
+  /** Watches pinned as measures of progress, and the term counts each has had. */
+  pinned?: { id: string; trend: number[] }[];
 }) {
   const [tab, setTab] = createSignal<'cells' | 'snapshots' | 'history'>('cells');
   const [q, setQ] = createSignal('');
@@ -34,6 +36,25 @@ export function Outline(props: {
         <button classList={{ on: tab() === 'history' }} onClick={() => setTab('history')}>History</button>
       </div>
       <Show when={tab() === 'cells'}>
+        <Show when={props.pinned?.length}>
+          <div class="pinned" data-testid="pinned">
+            <For each={props.pinned}>
+              {(p) => {
+                const c = () => props.cells.find((x) => x.id === p.id);
+                return (
+                  <Show when={c()}>
+                    <div class="oitem" onClick={() => props.onSelect(p.id)} title={`${c()!.text}\nterm counts: ${p.trend.join(', ')}`}>
+                      <span class={`dot ${props.state(p.id)?.status ?? ''}`} />
+                      <span class="t grow">{label(c()!, props.state(p.id))}</span>
+                      <Trend values={p.trend} />
+                      <span class="muted" style={{ 'font-size': '11.5px' }}>{props.state(p.id) ? summary(props.state(p.id)!) : ''}</span>
+                    </div>
+                  </Show>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
         <input placeholder="Search cells" value={q()} onInput={(e) => setQ(e.currentTarget.value)} aria-label="Search cells" />
         <For each={shown()}>
           {(c) => (
@@ -60,12 +81,26 @@ export function Outline(props: {
           {(v) => (
             <div class="oitem" onClick={() => props.onVersion(v.n)} title={new Date(v.time).toLocaleString()}>
               <span class="muted" style={{ width: '3ch' }}>{v.n}</span>
-              <span class="t grow">{v.note}</span>
+              <span class="t grow">{v.author === 'AI' ? <span class="badge">AI</span> : null} {v.note}</span>
               <span class="muted" style={{ 'font-size': '11px' }}>{ago(v.time)}</span>
             </div>
           )}
         </For>
       </Show>
     </nav>
+  );
+}
+
+/** A small line of a watch's term counts over time. */
+function Trend(props: { values: number[] }) {
+  const pts = () => {
+    const v = props.values.slice(-20);
+    const max = Math.max(1, ...v);
+    return v.map((x, i) => `${(i / Math.max(1, v.length - 1)) * 40},${12 - (x / max) * 11}`).join(' ');
+  };
+  return (
+    <Show when={props.values.length > 1}>
+      <svg width="40" height="13" viewBox="-1 0 42 13" aria-hidden="true"><polyline points={pts()} fill="none" stroke="var(--accent)" stroke-width="1.2" /></svg>
+    </Show>
   );
 }

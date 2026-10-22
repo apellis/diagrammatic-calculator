@@ -79,7 +79,8 @@ fn handle(msg: &Value) -> Option<Value> {
             "instructions": "Exact calculations in diagrammatic algebra (KLR algebras and \
                 relatives). Every tool takes a context line such as \
                 \"klr type=A2 nu=2i+j ring=QQ\" and terms in the calculator's text format, \
-                read top to bottom: `x_1 psi_1 e(ij)` is a crossing with a dot above it.",
+                read top to bottom: `x_1 psi_1 e(ij)` is a crossing with a dot above it. \
+                `diagcalc skill` prints the full guide: term format, relation names, signs.",
         })),
         "ping" => Ok(json!({})),
         "tools/list" => Ok(tools()),

@@ -28,6 +28,7 @@ commands:
   lean-chains FILE.toml [--check]   write (or check) the Lean files for a list of chains
   call OPERATION                    run an operation on a JSON request read from stdin
   mcp                               serve the operations over MCP (stdio)
+  skill                             print the guide for AI agents (skill/SKILL.md)
   version
 
 options:
@@ -45,6 +46,9 @@ rewriting options:
   --rect L1-L2,S1-S2      only matches inside these layers and strands
   --layer N --dir up|down the layer to interchange or slide, and the direction
   --max-steps N           a cap on the number of steps";
+
+/// The guide for AI agents, shared with the web app's AI panel.
+const SKILL: &str = include_str!("../../../skill/SKILL.md");
 
 #[derive(Default)]
 struct Args {
@@ -418,6 +422,10 @@ fn run(raw: Vec<String>) -> Result<bool, String> {
         }
         "help" | "-h" => {
             println!("{USAGE}");
+            return Ok(true);
+        }
+        "skill" => {
+            print!("{}", SKILL);
             return Ok(true);
         }
         "presentations" => {
