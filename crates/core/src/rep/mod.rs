@@ -171,7 +171,7 @@ impl<R: Ring> BasisShape<'_, R> {
                     .ctx
                     .match_layer(self.dot as usize, &at, k)
                     .ok_or_else(|| Error::invalid("a dot does not fit its strand"))?;
-                let d = self.ctx.layer_degree(&l);
+                let d = self.ctx.layer_degree(&l, &at);
                 if d <= 0 {
                     return Err(Error::precondition(
                         "graded pieces are infinite-dimensional: a dot has degree ≤ 0",

@@ -167,7 +167,7 @@
       }
     },
     "intExpr": {
-      "description": "An integer, or an expression in the colour variables: (a,b) the symmetric form, a_ab a Cartan entry, d_a a symmetrizer, p(a) a parity, with + - and juxtaposed products.",
+      "description": "An integer, or an expression in the colour variables: (a,b) the symmetric form, a_ab a Cartan entry, d_a a symmetrizer, p(a) a parity, h(a) the pairing of h_a with the weight of the region right of the generator (in a 2-category), with + - and juxtaposed products.",
       "oneOf": [
         {
           "type": "integer"

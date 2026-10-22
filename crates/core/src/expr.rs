@@ -2,8 +2,10 @@
 //! parities of generator schemas, and side conditions of relation schemas.
 //!
 //! Integer expressions: integers, `+ - *`, parentheses, the symmetric form `(a,b)` of the Cartan
-//! datum, the Cartan entry `a_ab`, the symmetrizer `d_a` and the parity `p(a)` of a colour
-//! variable. Conditions: `a = b`, `a != b`, comparisons of integer expressions
+//! datum, the Cartan entry `a_ab`, the symmetrizer `d_a`, the parity `p(a)` of a colour variable,
+//! and, in a 2-category, the pairing `h(a)` = ⟨h_a, λ⟩ with a region's weight λ: for a generator's
+//! degree the region just right of the generator, for a relation the region right of the whole
+//! relation. Conditions: `a = b`, `a != b`, comparisons of integer expressions
 //! (`(a,b) = 0`, `a_ab <= -2`), `and`, `or`, `not` and parentheses.
 
 use crate::error::{Error, Result};
@@ -14,6 +16,39 @@ pub trait ColourEnv {
     fn cartan_entry(&self, a: usize, b: usize) -> Result<i64>;
     fn symmetrizer(&self, a: usize) -> Result<i64>;
     fn parity(&self, a: usize) -> i64;
+    /// ⟨h_a, λ⟩ for the weight λ of the region in question; an error where there are no weights.
+    fn pairing(&self, _a: usize) -> Result<i64> {
+        Err(Error::invalid(
+            "h(...) needs region weights: give the context a weight mu=...",
+        ))
+    }
+}
+
+/// An environment whose region is given: the pairings are read from `region` (indexed by colour).
+pub struct AtRegion<'a> {
+    pub env: &'a dyn ColourEnv,
+    pub region: &'a [i64],
+}
+
+impl ColourEnv for AtRegion<'_> {
+    fn form(&self, a: usize, b: usize) -> Result<i64> {
+        self.env.form(a, b)
+    }
+    fn cartan_entry(&self, a: usize, b: usize) -> Result<i64> {
+        self.env.cartan_entry(a, b)
+    }
+    fn symmetrizer(&self, a: usize) -> Result<i64> {
+        self.env.symmetrizer(a)
+    }
+    fn parity(&self, a: usize) -> i64 {
+        self.env.parity(a)
+    }
+    fn pairing(&self, a: usize) -> Result<i64> {
+        self.region
+            .get(a)
+            .copied()
+            .ok_or_else(|| Error::invalid("no region weight for this colour"))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +58,8 @@ pub enum IntExpr {
     Entry(usize, usize),
     Sym(usize),
     Par(usize),
+    /// ⟨h_a, λ⟩ for the region λ of the expression's environment.
+    Pair(usize),
     Neg(Box<IntExpr>),
     Add(Box<IntExpr>, Box<IntExpr>),
     Sub(Box<IntExpr>, Box<IntExpr>),
@@ -57,6 +94,7 @@ impl IntExpr {
             IntExpr::Entry(x, y) => env.cartan_entry(b[*x], b[*y])?,
             IntExpr::Sym(x) => env.symmetrizer(b[*x])?,
             IntExpr::Par(x) => env.parity(b[*x]),
+            IntExpr::Pair(x) => env.pairing(b[*x])?,
             IntExpr::Neg(e) => -e.eval(b, env)?,
             IntExpr::Add(x, y) => x.eval(b, env)? + y.eval(b, env)?,
             IntExpr::Sub(x, y) => x.eval(b, env)? - y.eval(b, env)?,
@@ -76,6 +114,7 @@ impl IntExpr {
             IntExpr::Entry(x, y) => return format!("a_{}{}", v[*x], v[*y]),
             IntExpr::Sym(x) => return format!("d_{}", v[*x]),
             IntExpr::Par(x) => return format!("p({})", v[*x]),
+            IntExpr::Pair(x) => return format!("h({})", v[*x]),
             IntExpr::Neg(e) => return format!("-{}", e.print_prec(v, 3)),
             IntExpr::Add(x, y) => (
                 format!("{} + {}", x.print_prec(v, 1), y.print_prec(v, 2)),
@@ -355,11 +394,15 @@ impl P<'_> {
             }
             Some(Tok::Ident(w)) => {
                 self.pos += 1;
-                if w == "p" {
+                if w == "p" || w == "h" {
                     self.expect("(")?;
                     let a = self.var()?;
                     self.expect(")")?;
-                    return Ok(IntExpr::Par(a));
+                    return Ok(if w == "p" {
+                        IntExpr::Par(a)
+                    } else {
+                        IntExpr::Pair(a)
+                    });
                 }
                 if let Some(r) = w.strip_prefix("a_") {
                     let v = self.split_vars(r, 2)?;

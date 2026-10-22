@@ -37,6 +37,10 @@ pub struct ContextSpec {
     pub dot_cap: Option<u32>,
     /// A truncation: only degrees up to this one are computed.
     pub degree_cap: Option<i64>,
+    /// In a 2-category, the weight `μ` of the rightmost region, in fundamental-weight
+    /// coordinates (`2i-j` is ⟨h_i, μ⟩ = 2, ⟨h_j, μ⟩ = −1; a bare integer for one colour). Every
+    /// other region's weight follows from it and the strands to its right.
+    pub region: Option<String>,
 }
 
 fn split_words(line: &str) -> Result<Vec<String>> {
@@ -93,6 +97,7 @@ impl ContextSpec {
                 "ring" => spec.ring = v.into(),
                 "scalars" => spec.scalars = list(v),
                 "Lambda" | "lambda" => spec.lambda = Some(v.into()),
+                "mu" => spec.region = Some(v.into()),
                 "dotcap" => {
                     spec.dot_cap = Some(v.parse().map_err(|_| {
                         Error::invalid(format!("dotcap={v} should be a positive integer"))
@@ -142,6 +147,9 @@ impl ContextSpec {
         if let Some(l) = &self.lambda {
             s.push_str(&format!(" Lambda={l}"));
         }
+        if let Some(m) = &self.region {
+            s.push_str(&format!(" mu={m}"));
+        }
         if let Some(n) = self.dot_cap {
             s.push_str(&format!(" dotcap={n}"));
         }
@@ -167,6 +175,9 @@ pub struct Context<R: Ring> {
     pub cartan: Option<Cartan>,
     /// Multiplicity of each colour in `ν`.
     pub weight: Option<Vec<u32>>,
+    /// In a 2-category, ⟨h_c, μ⟩ for each colour `c`, where `μ` is the weight of the rightmost
+    /// region; `None` where regions carry no weights.
+    pub mu: Option<Vec<i64>>,
     /// The objects a word without an idempotent ranges over.
     pub objects: Vec<Object>,
     pub base: R,
@@ -270,6 +281,7 @@ impl<R: Ring> Context<R> {
             colours,
             cartan,
             weight: None,
+            mu: None,
             objects: vec![],
             base,
             coeff,
@@ -283,8 +295,105 @@ impl<R: Ring> Context<R> {
             }
             ctx.weight = Some(m);
         }
+        if let Some(m) = ctx.spec.region.clone() {
+            ctx.mu = Some(ctx.parse_region(&m)?);
+        }
         ctx.init_params()?;
         Ok(ctx)
+    }
+
+    /// Reads a weight in fundamental-weight coordinates, `2i-j` or `-3` (one colour), as the
+    /// pairings ⟨h_c, μ⟩ for each colour.
+    pub fn parse_region(&self, w: &str) -> Result<Vec<i64>> {
+        if self.cartan.is_none() {
+            return Err(Error::invalid(
+                "mu=... needs a Cartan datum, since strands shift region weights by roots",
+            ));
+        }
+        let mut m = vec![0i64; self.colours.len()];
+        let t: String = w.chars().filter(|c| !c.is_whitespace()).collect();
+        if let Ok(n) = t.parse::<i64>() {
+            if self.colours.len() != 1 && n != 0 {
+                return Err(Error::invalid(format!(
+                    "mu={w}: a bare number needs a one-colour context; write e.g. 2i-j"
+                )));
+            }
+            if n != 0 {
+                m[0] = n;
+            }
+            return Ok(m);
+        }
+        let mut rest = t.as_str();
+        while !rest.is_empty() {
+            let neg = rest.starts_with('-');
+            rest = rest.strip_prefix(['+', '-']).unwrap_or(rest);
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            rest = &rest[digits.len()..];
+            let name: String = rest
+                .chars()
+                .take_while(|c| *c != '+' && *c != '-')
+                .collect();
+            rest = &rest[name.len()..];
+            let k: i64 = if digits.is_empty() {
+                1
+            } else {
+                digits.parse().unwrap()
+            };
+            let c = self
+                .colour_index(&name)
+                .ok_or_else(|| Error::invalid(format!("'{name}' in mu={w} is not a colour")))?;
+            m[c] += if neg { -k } else { k };
+        }
+        Ok(m)
+    }
+
+    /// ⟨h_c, α_j⟩ for every colour `c`: how a strand of colour `j` shifts the weights, an upward
+    /// strand by `+α_j`, a downward one by `−α_j`.
+    fn shift(&self, l: Letter) -> Vec<i64> {
+        let a = &self.cartan.as_ref().expect("weights need a Cartan datum").a;
+        let s = if l.up { 1 } else { -1 };
+        (0..self.colours.len())
+            .map(|c| s * a[c][l.colour as usize])
+            .collect()
+    }
+
+    /// The weight of the region just left of position `p` of `obj` (between `obj[p-1]` and
+    /// `obj[p]`), as pairings: `μ` plus the shifts of the strands `obj[p..]` to its right.
+    pub fn region(&self, obj: &[Letter], p: usize) -> Option<Vec<i64>> {
+        let mut r = self.mu.clone()?;
+        for l in &obj[p..] {
+            for (x, d) in r.iter_mut().zip(self.shift(*l)) {
+                *x += d;
+            }
+        }
+        Some(r)
+    }
+
+    /// Formats region pairings in fundamental-weight coordinates, as `mu=` reads them.
+    pub fn fmt_region(&self, r: &[i64]) -> String {
+        if self.colours.len() == 1 {
+            return r[0].to_string();
+        }
+        let mut s = String::new();
+        for (c, &k) in r.iter().enumerate() {
+            if k == 0 {
+                continue;
+            }
+            let name = &self.colours[c].name;
+            let abs = k.abs();
+            let coef = if abs == 1 {
+                String::new()
+            } else {
+                abs.to_string()
+            };
+            if k < 0 {
+                s.push('-');
+            } else if !s.is_empty() {
+                s.push('+');
+            }
+            s.push_str(&format!("{coef}{name}"));
+        }
+        if s.is_empty() { "0".into() } else { s }
     }
 
     /// Reads `2i+j` (or a bare number for a one-colour presentation).
@@ -482,12 +591,23 @@ impl<R: Ring> Context<R> {
         obj
     }
 
-    pub fn layer_degree(&self, l: &Layer) -> i64 {
+    /// The degree of a layer applied to the object `below`. In a 2-category the degree may
+    /// depend on the weight of the region just right of the generator (`h(a)` in the file).
+    pub fn layer_degree(&self, l: &Layer, below: &[Letter]) -> i64 {
         let b: Vec<usize> = l.binding.iter().map(|&c| c as usize).collect();
-        self.pres.generators[l.generator as usize]
-            .degree
-            .eval(&b, self)
-            .unwrap_or(0)
+        let deg = &self.pres.generators[l.generator as usize].degree;
+        let p = l.pos as usize + self.source_len(l.generator as usize);
+        match self.region(below, p.min(below.len())) {
+            Some(r) => deg.eval(
+                &b,
+                &crate::expr::AtRegion {
+                    env: self,
+                    region: &r,
+                },
+            ),
+            None => deg.eval(&b, self),
+        }
+        .unwrap_or(0)
     }
 
     pub fn layer_odd(&self, l: &Layer) -> bool {
@@ -500,8 +620,19 @@ impl<R: Ring> Context<R> {
             == 1
     }
 
+    /// The degree of each layer of `w`, bottom first.
+    pub fn layer_degrees(&self, w: &Word) -> Vec<i64> {
+        let mut obj = w.source.clone();
+        let mut out = Vec::with_capacity(w.layers.len());
+        for l in &w.layers {
+            out.push(self.layer_degree(l, &obj));
+            obj = self.apply(l, &obj);
+        }
+        out
+    }
+
     pub fn word_degree(&self, w: &Word) -> i64 {
-        w.layers.iter().map(|l| self.layer_degree(l)).sum()
+        self.layer_degrees(w).iter().sum()
     }
 
     pub fn word_odd(&self, w: &Word) -> bool {
@@ -951,6 +1082,13 @@ impl<R: Ring> ColourEnv for Context<R> {
     }
     fn parity(&self, a: usize) -> i64 {
         self.colours[a].odd as i64
+    }
+    /// For a relation or a whole term, the region is the rightmost one, `μ`.
+    fn pairing(&self, a: usize) -> Result<i64> {
+        self.mu
+            .as_ref()
+            .map(|m| m[a])
+            .ok_or_else(|| Error::invalid("h(...) needs region weights: give the context mu=..."))
     }
 }
 

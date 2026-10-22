@@ -475,6 +475,7 @@ fn layout_json<R: Ring>(
             v
         })
         .collect();
+    let degrees = ctx.layer_degrees(&drawn);
     let pieces: Vec<Value> = pic
         .pieces
         .iter()
@@ -487,7 +488,7 @@ fn layout_json<R: Ring>(
                 "generator": g.name,
                 "draw": g.draw,
                 "odd": ctx.layer_odd(l),
-                "degree": ctx.layer_degree(l),
+                "degree": degrees[pc.layer],
                 "box": [pc.x0, pc.y0, pc.x1, pc.y1],
                 "bottom": pc.bottom,
                 "top": pc.top,

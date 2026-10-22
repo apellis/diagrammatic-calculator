@@ -235,7 +235,7 @@ fn balanced_layers(
             }
         }
         let within: Vec<usize> = (0..cands.len())
-            .filter(|&c| (-6..=6).contains(&(deg + ctx.layer_degree(&cands[c].0))))
+            .filter(|&c| (-6..=6).contains(&(deg + ctx.layer_degree(&cands[c].0, obj))))
             .collect();
         let pick = if within.is_empty() {
             rng.below(cands.len())
@@ -243,7 +243,7 @@ fn balanced_layers(
             within[rng.below(within.len())]
         };
         let (l, crossing) = cands.swap_remove(pick);
-        deg += ctx.layer_degree(&l);
+        deg += ctx.layer_degree(&l, obj);
         let k = l.pos as usize;
         if crossing {
             // psi_k x psi_k on strands of one colour keeps the leading permutation

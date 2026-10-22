@@ -12,7 +12,10 @@ describe a presentation of a strict monoidal supercategory:
 - **generators**, each with a source word, a target word, a degree and a parity, possibly given as
   schemas over colour variables (a KLR crossing `psi` of colours `a, b` has source `a b`, target
   `b a`, degree `-(a,b)`);
-- **relations** as schemas with side conditions and parameters.
+- **relations** as schemas with side conditions and parameters;
+- in a 2-category, **region weights**: the context gives the weight of the rightmost region and
+  every other region's weight follows from the strands to its right, so degrees (`h(a)`) and side
+  conditions can depend on the region without words storing weights.
 
 Nothing in `crates/core` may assume that a presentation is KLR, nilHecke or of any other family.
 What a family needs beyond its presentation file plugs in through one trait per strategy:
@@ -59,6 +62,12 @@ Layered words modulo interchange represent morphisms but do not decide equality.
 value carries the strategy that produced it, the faithfulness certificate of any representation it
 relied on, and any caps. A representation whose certificate is "assumed" or "unknown" can confirm a
 difference only with a witness checked another way.
+
+For the 2-categories of phase 5 (KL, BE2), equality is decided by reduction to a basis normal form,
+and that is what simplify shows. Future option, only if reduction proves too slow for interactive
+use: show a quick result first from a faster method that may not be correct, mark the cell as a
+pending reduction (a shimmer), and replace it with the normal form when that finishes. The quick
+result is never reported as decided. Not planned unless timings force it.
 
 ## Finite-dimensional quotients
 

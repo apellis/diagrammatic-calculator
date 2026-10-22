@@ -42,6 +42,18 @@ References of the form `Library: Declaration` point to the Lean libraries
   every generator as low as it can go, generators at the same height ordered left to right. The
   Koszul sign of the moves is absorbed into the coefficient.
 
+## Weights and regions
+
+In a 2-category (KL, BE2) the regions between strands carry weights. A context fixes the weight
+`μ` of the rightmost region with `mu=`, in fundamental-weight coordinates: `mu=2i-j` means
+`⟨h_i, μ⟩ = 2`, `⟨h_j, μ⟩ = −1`; a bare integer serves a one-colour datum, and `mu=0` any datum.
+Moving left across a strand of colour `j` adds `α_j` if the strand points up and subtracts it if it
+points down, so the region left of position `p` of an object `s` has weight
+`μ + Σ_{k ≥ p} ±α_{s_k}`. This is the libraries' convention: only the rightmost weight is stored,
+and the region right of a generator is `wt μ v` (categorification-lean KL3 `wt`, odd-lean SKM `wt`).
+In a degree, `h(a)` is `⟨h_a, ν⟩` for the region `ν` just right of the generator; in a relation or
+a term it refers to `μ`.
+
 ## KLR algebras
 
 Data: a Cartan datum given by the symmetric form `(α_i, α_j)` (equivalently a symmetrizable Cartan

@@ -8,7 +8,8 @@ file     := "diagcalc-workspace/1" NL "context " context NL (line NL)*
 context  := presentation (" " key "=" value)*
             keys: type, colours, odd, nu (or n), ring, scalars, and
             parameter values such as Q_ij="u^2 + v" (quoted when they contain spaces);
-            Lambda, dotcap, degcap name a finite quotient or truncation
+            Lambda, dotcap, degcap name a finite quotient or truncation;
+            mu (e.g. mu=2i-j) is the weight of the rightmost region in a 2-category
 line     := cell [options] ["# id=" id] | "#" comment | ""
 cell     := "def " name " := " term
           | "watch " term
