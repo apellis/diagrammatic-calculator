@@ -1,0 +1,12 @@
+{
+  "op": "slide",
+  "request": {
+    "context": "nilhecke nu=3 ring=ZZ",
+    "term": "x_1 psi_1 psi_2 psi_1",
+    "layer": 4,
+    "direction": "down"
+  },
+  "expect": {
+    "status": "ok"
+  }
+}

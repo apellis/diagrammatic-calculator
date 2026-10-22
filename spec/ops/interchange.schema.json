@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/interchange.schema.json",
+  "title": "interchange: exchange two adjacent layers on separate strands",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/location"
+        }
+      ],
+      "required": [
+        "term",
+        "layer"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "layer": {
+          "description": "The lower of the two layers.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "sign",
+            "same_diagram",
+            "term"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "sign": {
+              "enum": [
+                1,
+                -1
+              ]
+            },
+            "same_diagram": {
+              "type": "boolean"
+            },
+            "term": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

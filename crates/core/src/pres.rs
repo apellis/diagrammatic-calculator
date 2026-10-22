@@ -120,6 +120,39 @@ pub struct Presentation {
     pub parameters: Vec<Parameter>,
     pub relations: Vec<Relation>,
     pub representations: Vec<RepresentationDecl>,
+    /// How the presentation is written in a Lean library, for exporting rewrite chains.
+    pub lean: Option<LeanDecl>,
+}
+
+/// The Lean counterpart of a presentation: where its diagrams live and which lemma proves each
+/// relation. Templates write `{a}` for a colour variable and `{a!=b}` for a proof that two
+/// colours differ.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LeanDecl {
+    /// The encoding of diagrams the exporter writes (`kl3-dg`).
+    pub encoding: String,
+    /// The modules the exported file imports, separated by spaces.
+    pub module: String,
+    /// The namespace the exported theorems are stated in, and the namespaces it opens.
+    pub namespace: String,
+    pub open: String,
+    /// Each generator's Lean shape.
+    pub generators: BTreeMap<String, String>,
+    /// For each relation that has one, the Lean lemma proving it.
+    pub relations: BTreeMap<String, LeanRelation>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LeanRelation {
+    /// The lemma, applied at the weight `ν`.
+    pub lemma: String,
+    /// Cartan data the lemma's statement depends on, such as `dot {a} {b}` or `dij {a} {b}`:
+    /// the exported theorem takes their values as hypotheses. `dot≠0 {a} {b}` is a hypothesis
+    /// of the lemma: the relation exports only where the pairing is nonzero.
+    pub facts: Vec<String>,
+    /// How the lemma lays out the words of its right-hand side: `canonical` (as the calculator
+    /// does) or `left-first` (generators on the left strands lower).
+    pub layering: String,
 }
 
 impl Presentation {
@@ -156,6 +189,35 @@ struct RawPres {
     /// Order of generators in the file (TOML tables are unordered).
     #[serde(default)]
     generator_order: Vec<String>,
+    #[serde(default)]
+    lean: Option<RawLean>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawLean {
+    encoding: String,
+    module: String,
+    namespace: String,
+    #[serde(default)]
+    open: String,
+    generators: BTreeMap<String, String>,
+    #[serde(default)]
+    relations: BTreeMap<String, RawLeanRel>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawLeanRel {
+    lemma: String,
+    #[serde(default)]
+    facts: Vec<String>,
+    #[serde(default = "canonical_layering")]
+    layering: String,
+}
+
+fn canonical_layering() -> String {
+    "canonical".into()
 }
 
 fn default_objects() -> String {
@@ -393,6 +455,48 @@ impl Presentation {
                 },
             })
             .collect();
+        let lean = match raw.lean {
+            None => None,
+            Some(l) => {
+                for g in l.generators.keys() {
+                    if !generators.iter().any(|x| &x.name == g) {
+                        return Err(Error::invalid(format!("lean: no generator '{g}'")));
+                    }
+                }
+                for (r, x) in &l.relations {
+                    if !relations.iter().any(|y| &y.name == r) {
+                        return Err(Error::invalid(format!("lean: no relation '{r}'")));
+                    }
+                    if !["canonical", "left-first"].contains(&x.layering.as_str()) {
+                        return Err(Error::invalid(format!(
+                            "lean: relation {r} has unknown layering '{}'",
+                            x.layering
+                        )));
+                    }
+                }
+                Some(LeanDecl {
+                    encoding: l.encoding,
+                    module: l.module,
+                    namespace: l.namespace,
+                    open: l.open,
+                    generators: l.generators,
+                    relations: l
+                        .relations
+                        .into_iter()
+                        .map(|(k, r)| {
+                            (
+                                k,
+                                LeanRelation {
+                                    lemma: r.lemma,
+                                    facts: r.facts,
+                                    layering: r.layering,
+                                },
+                            )
+                        })
+                        .collect(),
+                })
+            }
+        };
         Ok(Presentation {
             name: raw.name,
             title: raw.title,
@@ -402,6 +506,7 @@ impl Presentation {
             parameters,
             relations,
             representations,
+            lean,
         })
     }
 
@@ -509,6 +614,32 @@ impl Presentation {
             }
             if !c.hypotheses.is_empty() {
                 o.push_str(&format!("certificate.hypotheses = {}\n", q(&c.hypotheses)));
+            }
+        }
+        if let Some(l) = &self.lean {
+            o.push_str("\n[lean]\n");
+            o.push_str(&format!("encoding = {}\n", q(&l.encoding)));
+            o.push_str(&format!("module = {}\n", q(&l.module)));
+            o.push_str(&format!("namespace = {}\n", q(&l.namespace)));
+            if !l.open.is_empty() {
+                o.push_str(&format!("open = {}\n", q(&l.open)));
+            }
+            let gs: Vec<String> = l
+                .generators
+                .iter()
+                .map(|(k, v)| format!("{k} = {}", q(v)))
+                .collect();
+            o.push_str(&format!("generators = {{ {} }}\n", gs.join(", ")));
+            for (name, r) in &l.relations {
+                o.push_str(&format!("\n[lean.relations.{name}]\n"));
+                o.push_str(&format!("lemma = {}\n", q(&r.lemma)));
+                if !r.facts.is_empty() {
+                    let fs: Vec<String> = r.facts.iter().map(|f| q(f)).collect();
+                    o.push_str(&format!("facts = [{}]\n", fs.join(", ")));
+                }
+                if r.layering != "canonical" {
+                    o.push_str(&format!("layering = {}\n", q(&r.layering)));
+                }
             }
         }
         o

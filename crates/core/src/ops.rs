@@ -343,7 +343,7 @@ impl RingVisitor for TermOp<'_> {
     }
 }
 
-fn with_status(r: Result<Value>) -> Value {
+pub(crate) fn with_status(r: Result<Value>) -> Value {
     match r {
         Ok(mut v) => {
             v.as_object_mut()
@@ -354,7 +354,7 @@ fn with_status(r: Result<Value>) -> Value {
     }
 }
 
-fn ring_of(context: &str) -> Result<String> {
+pub(crate) fn ring_of(context: &str) -> Result<String> {
     Ok(ContextSpec::parse(context)?.ring)
 }
 
@@ -570,13 +570,67 @@ pub fn run_workspace(src: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 5] = [
+pub const OPERATIONS: [&str; 12] = [
     "simplify",
     "check",
     "term.render",
     "presentation.check",
     "workspace.run",
+    "relations.match",
+    "relation.apply",
+    "interchange",
+    "slide",
+    "straighten",
+    "chain.find",
+    "export.lean",
 ];
+
+/// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
+pub const SCHEMAS: [(&str, &str); 12] = [
+    (
+        "simplify",
+        include_str!("../../../spec/ops/simplify.schema.json"),
+    ),
+    ("check", include_str!("../../../spec/ops/check.schema.json")),
+    (
+        "term.render",
+        include_str!("../../../spec/ops/term.render.schema.json"),
+    ),
+    (
+        "presentation.check",
+        include_str!("../../../spec/ops/presentation.check.schema.json"),
+    ),
+    (
+        "workspace.run",
+        include_str!("../../../spec/ops/workspace.run.schema.json"),
+    ),
+    (
+        "relations.match",
+        include_str!("../../../spec/ops/relations.match.schema.json"),
+    ),
+    (
+        "relation.apply",
+        include_str!("../../../spec/ops/relation.apply.schema.json"),
+    ),
+    (
+        "interchange",
+        include_str!("../../../spec/ops/interchange.schema.json"),
+    ),
+    ("slide", include_str!("../../../spec/ops/slide.schema.json")),
+    (
+        "straighten",
+        include_str!("../../../spec/ops/straighten.schema.json"),
+    ),
+    (
+        "chain.find",
+        include_str!("../../../spec/ops/chain.find.schema.json"),
+    ),
+    (
+        "export.lean",
+        include_str!("../../../spec/ops/export.lean.schema.json"),
+    ),
+];
+pub const COMMON_SCHEMA: &str = include_str!("../../../spec/ops/common.schema.json");
 
 /// Runs an operation from its JSON request (see `spec/ops/`), returning its JSON response.
 pub fn call(op: &str, input: &Value) -> Value {
@@ -618,6 +672,48 @@ pub fn call(op: &str, input: &Value) -> Value {
             }
             "workspace.run" => {
                 run_workspace(&need("workspace")?, str_field("presentation").as_deref())
+            }
+            "relations.match" | "relation.apply" | "interchange" | "slide" | "straighten"
+            | "chain.find" | "export.lean" => {
+                let uint = |k: &str, d: usize| -> Result<usize> {
+                    match input.get(k) {
+                        None => Ok(d),
+                        Some(v) => v.as_u64().map(|n| n as usize).ok_or_else(|| {
+                            Error::invalid(format!("'{k}' must be a nonnegative integer"))
+                        }),
+                    }
+                };
+                let pair = |v: &Value, k: &str| -> Result<(usize, usize)> {
+                    let a = v.get(k).and_then(Value::as_array);
+                    match a.map(|a| a.iter().map(Value::as_u64).collect::<Vec<_>>()) {
+                        Some(x) if x.len() == 2 && x.iter().all(Option::is_some) => {
+                            Ok((x[0].unwrap() as usize, x[1].unwrap() as usize))
+                        }
+                        _ => Err(Error::invalid(format!(
+                            "rectangle.{k} must be two numbers, first and last"
+                        ))),
+                    }
+                };
+                let rectangle = match input.get("rectangle") {
+                    None => None,
+                    Some(r) => Some((pair(r, "layers")?, pair(r, "strands")?)),
+                };
+                let r = crate::ops_rewrite::RewriteRequest {
+                    req: req()?,
+                    term: need("term")?,
+                    rhs: str_field("rhs"),
+                    summand: uint("summand", 1)?,
+                    rectangle,
+                    relation: str_field("relation"),
+                    index: uint("match", 0)?,
+                    everywhere: input.get("everywhere").and_then(Value::as_bool) == Some(true),
+                    layer: uint("layer", 0)?,
+                    direction: str_field("direction").unwrap_or_default(),
+                    max_steps: uint("max_steps", 0)?,
+                    name: str_field("name").unwrap_or_default(),
+                    doc: str_field("doc").unwrap_or_default(),
+                };
+                crate::ops_rewrite::run(op, &r)
             }
             _ => return Err(Error::invalid(format!("unknown operation '{op}'"))),
         })

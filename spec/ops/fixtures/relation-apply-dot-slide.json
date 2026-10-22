@@ -1,0 +1,12 @@
+{
+  "op": "relation.apply",
+  "request": {
+    "context": "klr type=A2 nu=i+j ring=ZZ",
+    "term": "psi_1 x_2 psi_1 e(ij)",
+    "relation": "dot-slide-right-distinct"
+  },
+  "expect": {
+    "status": "ok",
+    "term": "psi_1 psi_1 x_1 e(ij)"
+  }
+}

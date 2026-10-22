@@ -178,6 +178,18 @@ pub struct Context<R: Ring> {
     pub params: BTreeMap<String, ParamTable<R::Elem>>,
 }
 
+/// A word reached from another by interchange moves.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reordered {
+    pub word: Word,
+    /// Whether the Koszul signs of the moves multiply to −1: the original word is `±word`.
+    pub sign: bool,
+    /// The moves in order, each the index of the lower of the two exchanged layers.
+    pub swaps: Vec<usize>,
+    /// For each layer of `word`, its index in the original word.
+    pub origin: Vec<usize>,
+}
+
 const DEFAULT_COLOUR_NAMES: [&str; 12] =
     ["i", "j", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u"];
 pub const PARAM_VARS: [&str; 3] = ["u", "v", "w"];
@@ -544,12 +556,57 @@ impl<R: Ring> Context<R> {
         }
     }
 
+    /// The interchange of two adjacent layers, `lower` directly below `upper`, when their
+    /// generators sit side by side: the new lower and upper layers (positions adjusted) and
+    /// whether the move costs a Koszul sign. `None` when the layers share strands.
+    pub fn swap_adjacent(&self, lower: &Layer, upper: &Layer) -> Option<(Layer, Layer, bool)> {
+        let upper_left = self.relative(lower, upper)?;
+        let (gl, gu) = (lower.generator as usize, upper.generator as usize);
+        let (sl, tl) = (self.source_len(gl) as i64, self.target_len(gl) as i64);
+        let (su, tu) = (self.source_len(gu) as i64, self.target_len(gu) as i64);
+        let (pl, pu) = (lower.pos as i64, upper.pos as i64);
+        let (new_lower_pos, new_upper_pos) = if upper_left {
+            (pu, pl + tu - su)
+        } else {
+            (pu - tl + sl, pl)
+        };
+        let mut nl = upper.clone();
+        nl.pos = new_lower_pos as u16;
+        let mut nu = lower.clone();
+        nu.pos = new_upper_pos as u16;
+        Some((nl, nu, self.layer_odd(lower) && self.layer_odd(upper)))
+    }
+
     /// Moves every generator as low as possible, same-height generators left to right. Returns
     /// the canonical word and whether the Koszul signs of the moves multiply to −1.
     pub fn canonical(&self, w: &Word) -> (Word, bool) {
+        let c = self.canonical_impl(w, false);
+        (c.word, c.sign)
+    }
+
+    /// [`Context::canonical`], also recording the interchange moves (each the index of the lower
+    /// of two exchanged layers, in order) and, for each layer of the result, its index in `w`.
+    pub fn canonical_tracked(&self, w: &Word) -> Reordered {
+        self.canonical_impl(w, true)
+    }
+
+    /// [`Context::canonical`] with, for each layer of the result, its index in `w` (no moves).
+    pub fn canonical_origin(&self, w: &Word) -> Reordered {
+        self.canonical_impl(w, false)
+    }
+
+    fn canonical_impl(&self, w: &Word, track: bool) -> Reordered {
         let levels = self.levels(w);
-        let mut items: Vec<(Layer, u32)> = w.layers.iter().cloned().zip(levels).collect();
+        let mut items: Vec<(Layer, u32, usize)> = w
+            .layers
+            .iter()
+            .cloned()
+            .zip(levels)
+            .enumerate()
+            .map(|(k, (l, lev))| (l, lev, k))
+            .collect();
         let mut sign = false;
+        let mut swaps = Vec::new();
         loop {
             let mut swapped = false;
             for i in 0..items.len().saturating_sub(1) {
@@ -561,37 +618,72 @@ impl<R: Ring> Context<R> {
                 if !(lu < ll || (lu == ll && upper_left)) {
                     continue;
                 }
-                let (gl, gu) = (lower.generator as usize, upper.generator as usize);
-                let (sl, tl) = (self.source_len(gl) as i64, self.target_len(gl) as i64);
-                let (su, tu) = (self.source_len(gu) as i64, self.target_len(gu) as i64);
-                let (pl, pu) = (lower.pos as i64, upper.pos as i64);
-                let (new_lower_pos, new_upper_pos) = if upper_left {
-                    (pu, pl + tu - su)
-                } else {
-                    (pu - tl + sl, pl)
-                };
-                if self.layer_odd(lower) && self.layer_odd(upper) {
-                    sign = !sign;
+                let (nl, nu, odd) = self.swap_adjacent(lower, upper).expect("side by side");
+                sign ^= odd;
+                let (ol, ou) = (items[i].2, items[i + 1].2);
+                items[i] = (nl, lu, ou);
+                items[i + 1] = (nu, ll, ol);
+                if track {
+                    swaps.push(i);
                 }
-                let mut nl = upper.clone();
-                nl.pos = new_lower_pos as u16;
-                let mut nu = lower.clone();
-                nu.pos = new_upper_pos as u16;
-                items[i] = (nl, lu);
-                items[i + 1] = (nu, ll);
                 swapped = true;
             }
             if !swapped {
                 break;
             }
         }
-        (
-            Word {
+        Reordered {
+            origin: items.iter().map(|x| x.2).collect(),
+            word: Word {
                 source: w.source.clone(),
                 layers: items.into_iter().map(|x| x.0).collect(),
             },
             sign,
-        )
+            swaps,
+        }
+    }
+
+    /// Reorders the layers of `w` by interchange moves so that their keys are nondecreasing,
+    /// keeping the order of equal keys. `None` if a needed move exchanges layers sharing strands.
+    pub fn reorder(&self, w: &Word, key: &[u8]) -> Option<Reordered> {
+        let mut items: Vec<(Layer, u8, usize)> = w
+            .layers
+            .iter()
+            .cloned()
+            .zip(key.iter().copied())
+            .enumerate()
+            .map(|(k, (l, c))| (l, c, k))
+            .collect();
+        let mut sign = false;
+        let mut swaps = Vec::new();
+        loop {
+            let mut swapped = false;
+            for i in 0..items.len().saturating_sub(1) {
+                if items[i].1 <= items[i + 1].1 {
+                    continue;
+                }
+                let (nl, nu, odd) = self.swap_adjacent(&items[i].0, &items[i + 1].0)?;
+                sign ^= odd;
+                let (kl, ol) = (items[i].1, items[i].2);
+                let (ku, ou) = (items[i + 1].1, items[i + 1].2);
+                items[i] = (nl, ku, ou);
+                items[i + 1] = (nu, kl, ol);
+                swaps.push(i);
+                swapped = true;
+            }
+            if !swapped {
+                break;
+            }
+        }
+        Some(Reordered {
+            origin: items.iter().map(|x| x.2).collect(),
+            word: Word {
+                source: w.source.clone(),
+                layers: items.into_iter().map(|x| x.0).collect(),
+            },
+            sign,
+            swaps,
+        })
     }
 
     // -----------------------------------------------------------------------------------------

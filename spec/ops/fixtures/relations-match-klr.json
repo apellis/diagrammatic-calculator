@@ -1,0 +1,12 @@
+{
+  "op": "relations.match",
+  "request": {
+    "context": "klr type=A2 nu=i+j ring=ZZ",
+    "term": "psi_1 x_2 psi_1 e(ij)",
+    "rectangle": { "layers": [1, 2], "strands": [1, 2] }
+  },
+  "expect": {
+    "status": "ok",
+    "word": "psi_1 x_2 psi_1 e(ij)"
+  }
+}

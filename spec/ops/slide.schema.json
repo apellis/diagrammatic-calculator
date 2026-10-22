@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/slide.schema.json",
+  "title": "slide: move a dot along its strand through the crossings it meets, applying the dot-slide relations",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/location"
+        }
+      ],
+      "required": [
+        "term",
+        "layer",
+        "direction"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "layer": {
+          "description": "The dot's layer.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "direction": {
+          "enum": [
+            "up",
+            "down"
+          ]
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "start",
+            "term",
+            "steps"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "start": {
+              "type": "string"
+            },
+            "term": {
+              "type": "string"
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/step"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/relation.apply.schema.json",
+  "title": "relation.apply: rewrite with one match, or with the first match in every summand",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/location"
+        }
+      ],
+      "required": [
+        "term"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "match": {
+          "description": "Index into the matches relations.match lists for the same request.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "everywhere": {
+          "description": "Apply the first match of the (chosen) relations in every summand instead.",
+          "type": "boolean"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "start",
+            "term",
+            "steps"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "start": {
+              "type": "string"
+            },
+            "term": {
+              "type": "string"
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/step"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

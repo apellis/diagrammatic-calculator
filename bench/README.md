@@ -20,7 +20,7 @@ and times them:
 - **B8** what one interaction costs the engine, parsing included: re-checking an edited watch,
   sliding a dot through a crossing, checking a braid relation (target: under 150 ms);
 - **B9** straightening random words of 10 to 200 layers, checked against the representation's
-  action (by the representation until the rewriting engine of phase 3);
+  action; the representation's own time is recorded alongside;
 - **B10** the largest heap peak of any workload run, against a phone tab's 256 MB. Every result
   also records its own `peak_bytes`, counted by the bench's allocator.
 

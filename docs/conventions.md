@@ -127,6 +127,37 @@ arXiv:0812.5023v1, Prop. 3.12).
   bounded degree at every source, and records the action tables in `tests/golden/actions.json`.
   The engine's test suite must reproduce both the normal forms and the tables.
 
+## Rewriting
+
+- **Rules.** Each relation `lhs = rhs` gives one rule per direction where it can be solved: the
+  pattern is the word of that side with the most layers whose coefficient in `lhs − rhs` is a
+  unit (±1 over ℤ), and the rule replaces it by the rest of the relation divided by that
+  coefficient. Both directions are offered.
+- **Locations.** Layers are numbered from 1 at the bottom of a word in canonical layering;
+  strands from 1 at the left. A rectangle `{layers: [a, b], strands: [c, d]}` includes both ends.
+  An occurrence of a pattern may be spread through the word: the interchange moves that bring it
+  together are listed (each by the lower of the two exchanged layers) with their Koszul sign, and
+  the rectangle is where the pattern sits after them.
+- **Provenance.** Each result word lists, for each of its layers, the layer of the rewritten word
+  it came from, or nothing for a layer the rule created.
+- **Straightening** rewrites to the basis of the presentation's first representation that has
+  one (KLR: `ψ_ŵ x^a`; `ONH_n`: `x^a ψ_ŵ`), working upwards one layer at a time. Dots move through
+  crossings by the dot slides; crossings are brought to the canonical reduced word by braid moves,
+  or to a double crossing that the quadratic relation removes. The result agrees with `simplify`.
+
+## Lean export
+
+`export.lean` and `diagcalc lean-chains` write a chain as a Lean theorem about
+categorification-lean's KL III diagrams `dg RD k μ s t L` (encoding `kl3-dg`, declared in the
+presentation's `[lean]` table). A word becomes the list `L` of layers bottom first, each
+`(left, shape, right)` with the strands beside the generator; `psi` on colours `a b` is
+`.cross true a b` and `x` on `a` is `.dot (up a)`. Colours become variables `ci, cj, …` with a
+hypothesis `ci ≠ cj` for each pair, and the Cartan data a step uses (`C.dot`, `C.dij`) become
+hypotheses with the context's values, so one theorem covers every Cartan datum with those values.
+Each step is one library lemma whiskered by `dg_stepL_at`; each interchange move is `dswap`.
+Only integer coefficients and even generators are exported; anything else is refused with a
+reason.
+
 ## Drawing
 
 TikZ export matches the drawing style of Brundan–Ellis, *Super Kac–Moody 2-categories*

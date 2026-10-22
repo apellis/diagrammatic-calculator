@@ -18,6 +18,7 @@ use diagcalc_core::context::{Context, ContextSpec};
 use diagcalc_core::elab::CTerm;
 use diagcalc_core::poly::Monomial;
 use diagcalc_core::rep::{self, Evaluator};
+use diagcalc_core::rewrite;
 use diagcalc_core::ring::{Integers, Ring};
 use diagcalc_core::term::Letter;
 use serde_json::{Value, json};
@@ -556,11 +557,14 @@ impl Bench {
         }
     }
 
-    /// B9: straightening long random words to normal form (by the representation until the
-    /// rewriting engine of phase 3), checked against the representation's action.
+    /// B9: straightening long random words to normal form by rewriting, each result checked
+    /// against the representation's normal form; the representation's own time is recorded
+    /// alongside.
     fn long_words(&mut self, context: &str, lens: &[usize], words: usize) {
         let s = Setup::new(context);
         let ev = s.eval();
+        let rules = rewrite::rules(&s.ctx).expect("rules");
+        let layout = rep::basis_layout(&s.ctx, &s.ctx.pres.representations[0]).expect("layout");
         let coloured = s.ctx.objects.len() > 1;
         for &len in lens {
             let mut rng = Rng(0xb9 + len as u64);
@@ -586,7 +590,7 @@ impl Bench {
             self.record(
                 "B9",
                 context,
-                &format!("straighten random word, {len} layers"),
+                &format!("normal form by the representation, {len} layers"),
                 Timing {
                     count: words,
                     secs,
@@ -594,6 +598,56 @@ impl Bench {
                     ok,
                 },
             );
+            let normal = |t: &CTerm<R>| {
+                rewrite::normal_form(&s.ctx, &rules, &layout, t, 10_000_000).expect("rewriting")
+            };
+            // One timed pass, checked afterwards: the long words take seconds each.
+            let start = Instant::now();
+            let results: Vec<(CTerm<R>, usize)> = ts.iter().map(normal).collect();
+            let secs = start.elapsed().as_secs_f64();
+            let steps: usize = results.iter().map(|r| r.1).sum();
+            let ok = ts
+                .iter()
+                .zip(&results)
+                .all(|(t, (nf, _))| *nf == ev.normal_form(t).unwrap());
+            self.record(
+                "B9",
+                context,
+                &format!("normal form by rewriting, {len} layers"),
+                Timing {
+                    count: words,
+                    secs,
+                    terms,
+                    ok,
+                },
+            );
+            if let Some(r) = self.results.last_mut() {
+                r["mean_steps"] = json!(steps / words);
+            }
+            // Keeping the chain (every step, for provenance and export) costs memory in
+            // proportion to steps times layers; it is timed where that stays small.
+            if len <= 50 {
+                let ok = ts.iter().all(|t| {
+                    let chain = rewrite::straighten(&s.ctx, &rules, &layout, t, 10_000_000)
+                        .expect("straighten");
+                    chain.end == ev.normal_form(t).unwrap()
+                });
+                let secs = time_batch(&ts, 1, |t| {
+                    rewrite::straighten(&s.ctx, &rules, &layout, t, 10_000_000)
+                        .expect("straighten");
+                });
+                self.record(
+                    "B9",
+                    context,
+                    &format!("straighten with the chain kept, {len} layers"),
+                    Timing {
+                        count: words,
+                        secs,
+                        terms,
+                        ok,
+                    },
+                );
+            }
         }
     }
 
@@ -717,7 +771,7 @@ impl Bench {
             let (lens, words): (&[usize], usize) = if self.opts.quick {
                 (&[10, 50, 100], 3)
             } else {
-                (&[10, 50, 100, 200], 5)
+                (&[10, 50, 100, 200], 3)
             };
             self.long_words("nilhecke n=4", lens, words);
             self.long_words("klr type=A2 nu=2i+j", lens, words);

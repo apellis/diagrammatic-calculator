@@ -1,0 +1,13 @@
+{
+  "op": "interchange",
+  "request": {
+    "context": "odd-nilhecke nu=3 ring=ZZ",
+    "term": "x_1 x_3",
+    "layer": 1
+  },
+  "expect": {
+    "status": "ok",
+    "sign": -1,
+    "same_diagram": true
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/export.lean.schema.json",
+  "title": "export.lean: a rewrite chain as a Lean theorem",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        }
+      ],
+      "required": [
+        "term"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "rhs": {
+          "description": "The other side; without it the theorem states that the term equals its normal form.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "doc": {
+          "type": "string"
+        },
+        "max_steps": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "theorem",
+            "steps",
+            "lean"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "theorem": {
+              "type": "string"
+            },
+            "steps": {
+              "type": "integer"
+            },
+            "lean": {
+              "description": "A Lean file with the theorem.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

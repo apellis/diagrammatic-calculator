@@ -1,0 +1,12 @@
+{
+  "op": "straighten",
+  "request": {
+    "context": "klr type=A2 nu=2i+j ring=ZZ",
+    "term": "x_1 psi_1 psi_2 psi_1 e(iji)"
+  },
+  "expect": {
+    "status": "ok",
+    "agrees": true,
+    "basis": "polynomial"
+  }
+}

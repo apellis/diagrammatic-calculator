@@ -20,10 +20,10 @@ What a family needs beyond its presentation file plugs in through one trait per 
 | Strategy | Trait | First implementations |
 |---|---|---|
 | Faithful representation | `Representation` | polynomial representation of KLR algebras (nilHecke is the one-colour case); skew-polynomial representation of the odd nilHecke algebra |
-| Basis normal form | `NormalForm` | phase 3 |
-| Confluent rewriting | `RewriteSystem` | phase 3 |
+| Basis normal form | `rewrite::straighten` with a `Layout` | straightening to a basis of crossings and dots, for any presentation whose representation names those roles |
+| Confluent rewriting | (none yet) | not needed so far: straightening is planned, not a search for a confluent system |
 | Finite-dimensional linear algebra | `FiniteQuotient` | phase 2 |
-| Bounded search | (generic) | phase 3 |
+| Bounded search | `chain.find` | both sides straightened to the basis; a general search is not built |
 
 A representation is attached to a presentation in its file (`[representation]` section) by naming a
 built-in action kind and mapping each generator to an operator of that kind; the file also states
@@ -92,6 +92,67 @@ the trace-form radical needs characteristic 0 and a complete finite algebra).
 `groebner.rs` (tier 2), whose basis-size, degree and step limits make running out of budget an
 answer rather than a hang. Over ℚ the step count bounds operations but not coefficient growth, so
 wall time is not bounded there; prime fields do not have this problem.
+
+## Rewriting
+
+`rewrite.rs` works on any presentation: its rules come from the presentation's relations (one per
+direction, see the conventions), and nothing in matching or applying a rule knows about KLR
+algebras. A match of a pattern is a set of layers of a word that is convex in the word's
+dependency graph (no layer outside the set lies both above and below it) and that interchange
+moves can bring together into the pattern's shape. The word is reordered as everything not above
+the set, then the set, then the rest; the pattern is then a contiguous block, compared after
+canonical layering. The moves and their Koszul sign are recorded with the match, so a step can be
+replayed exactly, in Lean too.
+
+A step replaces the block by each word of the rule's replacement and brings the result back to
+canonical layering, remembering where every layer came from (`origin`). That provenance is what
+lets the interface follow a strand or a dot through a step (`slide` uses it to keep track of the
+dot it moves), and it replaces the eternal layer identifiers of earlier drafts.
+
+Straightening needs to know which generator is the dot and which the crossing; a representation
+declares those roles, and `rep::basis_layout` reads them, so a family with the same shape of basis
+(KLR, nilHecke, odd nilHecke) straightens with no family-specific code. The strategy is planned
+rather than searched: dots go through crossings to their side of the basis, then the exchange
+property gives the braid moves that turn a crossing word into the canonical reduced word or expose
+a double crossing. Two choices keep long words feasible. The term is advanced one layer at a time,
+always rewriting the word with the most layers still to come, so equal words produced along
+different paths meet and cancel early: on one random 30-layer nilHecke word this cut the steps
+from about 80,000 to about 350. And only the words a step touches are re-examined. A chain keeps every
+intermediate word, which grows like steps times layers; `rewrite::normal_form` gives the same
+normal form without keeping the steps (B9 uses it beyond 50 layers).
+
+## Lean bridge
+
+`lean.rs` turns a chain into a Lean theorem over categorification-lean's KL III diagrams (the
+encoding is described in the conventions). The presentation's `[lean]` table names, for each
+relation, the library lemma that proves it and the Cartan facts it needs, so the exporter is
+generic in the presentation and only the encoding (`kl3-dg`) is specific. Each step becomes a
+`have` proved by that lemma whiskered into place, and the theorem is the chain of these steps
+under rewriting. A layering that the lemma states differently from canonical layering is declared
+(`layering = "left-first"`) and bridged with `dswap`. The exporter refuses what it cannot state
+faithfully (scalars outside ℤ, odd generators) instead of exporting something weaker.
+
+`lean/chains/` is a Lake project pinned to one categorification-lean commit. `chains.toml` lists
+the chains to export; `diagcalc lean-chains` writes `DiagcalcChains/*.lean`, a Rust test keeps
+them current, and the Lean chains workflow builds them, with `Checks.lean` deriving the library's
+own statement of a relation from an exported theorem.
+
+Generating presentation files from Lean was tried for KLR. The relations can be read: the
+metaprogram `lean/chains/PrintRelations.lean` walks the equations of the library's `relation`
+definition and prints each relation, with its side condition, in the calculator's text format. The
+rest of a presentation file (degrees, parities, drawing, representations and their certificates,
+the Lean lemma table) has no counterpart in the Lean definition, so the file stays hand-written.
+Instead the printed relations guard it: a Rust test checks that each one, at every colouring its
+side condition allows in types A₂, B₂, G₂ and A₃, is one of the calculator's rules up to sign and
+vanishes in the representation, and that every relation of the file arises this way; CI checks
+that the printed file is current.
+
+## Command line and MCP
+
+`diagcalc` exposes every operation (`call OP` takes the JSON request on stdin; the rewriting
+operations also have their own commands). `diagcalc mcp` serves the same operations as MCP tools
+over stdio, one tool per operation with its request schema from `spec/ops/`, so an AI client and
+the command line see exactly the operation API.
 
 ## Worker pool
 

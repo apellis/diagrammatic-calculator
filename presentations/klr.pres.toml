@@ -91,3 +91,37 @@ roles = { crossing = "psi", dot = "x" }
 certificate.status = "literature"
 certificate.reference = "Rouquier, arXiv:1112.3619v1, Section 3.2; for the default Q also categorification-lean: KL2.polyRepKL2_injective"
 certificate.hypotheses = "coefficients in an integral domain; Q_ab != 0 for a != b"
+
+[lean]
+encoding = "kl3-dg"
+module = "Categorification.Diagrams.KL3.Rewriting Categorification.Diagrams.KL3.BubbleSlidesGen"
+namespace = "Categorification.KL3.Diagram"
+open = "CategoryTheory StringDiagrams QuantumGroup UDot Presentation"
+generators = { psi = ".cross true {a} {b}", x = ".dot (up {a})" }
+
+[lean.relations.braid]
+lemma = "dg_braid RD k ν {a} {b} {c} {simp}"
+
+[lean.relations.braid-corrected]
+lemma = "dg_braidQ RD k ν {a} {b} {a!=b} (by assumption)"
+facts = ["dot≠0 {a} {b}", "dij {a} {b}"]
+layering = "left-first"
+
+[lean.relations.dot-slide-left-distinct]
+lemma = "dg_slideLNe RD k ν {a} {b} {a!=b}"
+
+[lean.relations.dot-slide-left-same]
+lemma = "dg_slideLEq RD k ν {a}"
+
+[lean.relations.dot-slide-right-distinct]
+lemma = "dg_slideRNe RD k ν {a} {b} {a!=b}"
+
+[lean.relations.dot-slide-right-same]
+lemma = "dg_slideREq RD k ν {a}"
+
+[lean.relations.square-distinct]
+lemma = "dg_sqNe RD k ν {a} {b} {a!=b}"
+facts = ["dot {a} {b}", "dij {a} {b}", "dij {b} {a}"]
+
+[lean.relations.square-same]
+lemma = "dg_sqEq RD k ν {a}"

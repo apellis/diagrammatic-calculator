@@ -303,6 +303,29 @@ pub fn evaluators<'a, R: Ring + 'a>(
         .collect()
 }
 
+/// The basis a declared representation writes normal forms in: the dot and crossing generators
+/// and whether the dots sit on top (`x^a ψ_ŵ`) or at the bottom (`ψ_ŵ x^a`).
+pub fn basis_layout<R: Ring>(
+    ctx: &Context<R>,
+    decl: &RepresentationDecl,
+) -> Result<crate::rewrite::Layout> {
+    let dots_on_top = match decl.kind.as_str() {
+        "klr-polynomial" => false,
+        "nil-coxeter" | "odd-nil-coxeter" => true,
+        k => {
+            return Err(Error::precondition(format!(
+                "representation {} ({k}) has no basis of crossings and dots",
+                decl.name
+            )));
+        }
+    };
+    Ok(crate::rewrite::Layout {
+        dot: role(ctx, decl, "dot")?,
+        crossing: role(ctx, decl, "crossing")?,
+        dots_on_top,
+    })
+}
+
 fn role<R: Ring>(ctx: &Context<R>, decl: &RepresentationDecl, r: &str) -> Result<u16> {
     let name = decl
         .roles

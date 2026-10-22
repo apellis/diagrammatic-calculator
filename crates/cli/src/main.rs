@@ -1,5 +1,7 @@
 //! `diagcalc`: the command-line surface of the calculator.
 
+mod mcp;
+
 use diagcalc_core::builtin;
 use diagcalc_core::ops::{self, Request};
 use diagcalc_core::workspace::Workspace;
@@ -16,6 +18,16 @@ commands:
   fmt FILE.dcw [--write]            print a workspace in canonical form, numbering new cells
   check-presentation NAME|FILE [-c CONTEXT]
   presentations                     list the shipped presentations
+  match -c CONTEXT TERM             relations that apply, each with a preview of the result
+  apply -c CONTEXT TERM             apply one relation (--relation, --match) or --everywhere
+  interchange -c CONTEXT TERM --layer N
+  slide -c CONTEXT TERM --layer N --dir up|down
+  straighten -c CONTEXT TERM        rewrite to the basis, step by step
+  chain -c CONTEXT LHS RHS          rewrite chains proving LHS = RHS
+  export-lean -c CONTEXT LHS [RHS] --name NAME
+  lean-chains FILE.toml [--check]   write (or check) the Lean files for a list of chains
+  call OPERATION                    run an operation on a JSON request read from stdin
+  mcp                               serve the operations over MCP (stdio)
   version
 
 options:
@@ -23,7 +35,16 @@ options:
   --pres FILE             a presentation file not shipped with the calculator
   --strategy NAME         a representation declared by the presentation
   --json                  print the operation's JSON result
-  -o FILE                 write the output to FILE";
+  -o FILE                 write the output to FILE
+
+rewriting options:
+  --summand N             the summand to work on (default 1)
+  --relation NAME         only this relation
+  --match N               which match to apply (default 1)
+  --everywhere            apply the relation at every disjoint match
+  --rect L1-L2,S1-S2      only matches inside these layers and strands
+  --layer N --dir up|down the layer to interchange or slide, and the direction
+  --max-steps N           a cap on the number of steps";
 
 #[derive(Default)]
 struct Args {
@@ -35,6 +56,20 @@ struct Args {
     output: Option<String>,
     json: bool,
     write: bool,
+    check: bool,
+    rewrite: serde_json::Map<String, Value>,
+}
+
+/// `1-3,2-4` as `{"layers": [1, 3], "strands": [2, 4]}`.
+fn rectangle(s: &str) -> Result<Value, String> {
+    let bad = || format!("--rect takes L1-L2,S1-S2, not '{s}'");
+    let range = |r: &str| -> Result<Value, String> {
+        let (a, b) = r.split_once('-').unwrap_or((r, r));
+        let n = |x: &str| x.trim().parse::<u64>().map_err(|_| bad());
+        Ok(serde_json::json!([n(a)?, n(b)?]))
+    };
+    let (l, st) = s.split_once(',').ok_or_else(bad)?;
+    Ok(serde_json::json!({ "layers": range(l)?, "strands": range(st)? }))
 }
 
 fn parse_args(raw: Vec<String>) -> Result<Args, String> {
@@ -50,6 +85,36 @@ fn parse_args(raw: Vec<String>) -> Result<Args, String> {
             "-o" | "--output" => a.output = Some(val(&x)?),
             "--json" => a.json = true,
             "--write" => a.write = true,
+            "--check" => a.check = true,
+            "--everywhere" => {
+                a.rewrite.insert("everywhere".into(), Value::Bool(true));
+            }
+            "--summand" | "--match" | "--layer" | "--max-steps" => {
+                let v = val(&x)?;
+                let n: u64 = v
+                    .parse()
+                    .map_err(|_| format!("{x} takes a number, not '{v}'"))?;
+                let key = x.trim_start_matches("--").replace('-', "_");
+                // Matches are numbered from 1 on the command line, from 0 in requests.
+                let n = if key == "match" {
+                    n.saturating_sub(1)
+                } else {
+                    n
+                };
+                a.rewrite.insert(key, n.into());
+            }
+            "--relation" | "--name" | "--doc" => {
+                let v = val(&x)?;
+                a.rewrite.insert(x[2..].into(), v.into());
+            }
+            "--dir" => {
+                let v = val(&x)?;
+                a.rewrite.insert("direction".into(), v.into());
+            }
+            "--rect" => {
+                let v = rectangle(&val(&x)?)?;
+                a.rewrite.insert("rectangle".into(), v);
+            }
             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
             _ => a.positional.push(x),
         }
@@ -144,8 +209,145 @@ fn human(cmd: &str, v: &Value) -> String {
             }
             out.trim_end().to_string()
         }
+        "match" => {
+            let mut out = String::new();
+            for m in v["matches"].as_array().into_iter().flatten() {
+                out.push_str(&format!(
+                    "{}. {}\n   => {}\n",
+                    m["index"].as_u64().unwrap_or(0) + 1,
+                    match_line(m),
+                    s(&m["preview"])
+                ));
+            }
+            if out.is_empty() {
+                "no relation applies".into()
+            } else {
+                out.trim_end().to_string()
+            }
+        }
+        "interchange" => format!("{}\n  [interchange sign {}]", s(&v["term"]), v["sign"]),
+        "export-lean" => s(&v["lean"]).to_string(),
+        "apply" | "slide" | "straighten" => {
+            let mut out = chain_text(v);
+            if cmd == "straighten" {
+                out.push_str(&format!(
+                    "\n  [basis {}; agrees with the representation: {}]",
+                    s(&v["basis"]),
+                    v["agrees"]
+                ));
+            }
+            out
+        }
+        "chain" => {
+            let mut out = format!(
+                "{}\n",
+                if v["equal"] == true {
+                    "equal"
+                } else {
+                    "not equal"
+                }
+            );
+            for c in v["chains"].as_array().into_iter().flatten() {
+                out.push_str(&chain_text(c));
+                out.push('\n');
+            }
+            out.trim_end().to_string()
+        }
         _ => v.to_string(),
     }
+}
+
+fn match_line(m: &Value) -> String {
+    let r = &m["rectangle"];
+    let sign = if m["sign"] == -1 { ", sign -1" } else { "" };
+    format!(
+        "{} ({}) at layers {}-{}, strands {}-{}{sign}",
+        s(&m["relation"]),
+        s(&m["direction"]),
+        r["layers"][0],
+        r["layers"][1],
+        r["strands"][0],
+        r["strands"][1]
+    )
+}
+
+/// A chain as numbered steps, each with the word it rewrites and what it becomes.
+fn chain_text(v: &Value) -> String {
+    let mut out = format!("{}\n", s(&v["start"]));
+    for (i, st) in v["steps"].as_array().into_iter().flatten().enumerate() {
+        let results: Vec<&str> = st["results"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|r| s(&r["term"]))
+            .collect();
+        let results = if results.is_empty() {
+            "0".to_string()
+        } else {
+            results.join(" + ")
+        };
+        out.push_str(&format!(
+            "  {}. {}\n     {} -> {}\n",
+            i + 1,
+            match_line(st),
+            s(&st["word"]),
+            results
+        ));
+    }
+    out.push_str(&format!("= {}", s(&v["term"])));
+    out
+}
+
+/// The JSON request of a rewriting command.
+fn rewrite_request(a: &Args, terms: &[String]) -> Result<Value, String> {
+    let mut m = a.rewrite.clone();
+    m.insert(
+        "context".into(),
+        a.context
+            .clone()
+            .ok_or("this command needs -c CONTEXT")?
+            .into(),
+    );
+    if let Some(p) = &a.pres {
+        m.insert("presentation".into(), read(p)?.into());
+    }
+    if let Some(st) = &a.strategy {
+        m.insert("strategy".into(), st.clone().into());
+    }
+    let (t, rest) = terms.split_first().ok_or("this command needs a term")?;
+    m.insert("term".into(), t.clone().into());
+    if let Some(r) = rest.first() {
+        m.insert("rhs".into(), r.clone().into());
+    }
+    Ok(Value::Object(m))
+}
+
+/// Writes the Lean files for the chains listed in `path`, next to it; with `check`, only
+/// reports whether the files on disk are current.
+fn lean_chains(path: &str, check: bool) -> Result<bool, String> {
+    let dir = std::path::Path::new(path)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
+    let files = diagcalc_core::lean::export_batch(&read(path)?, "DiagcalcChains")
+        .map_err(|e| e.to_string())?;
+    let mut current = true;
+    for (rel, text) in files {
+        let file = dir.join(&rel);
+        if check {
+            if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) {
+                eprintln!("{} is out of date", file.display());
+                current = false;
+            }
+        } else {
+            if let Some(d) = file.parent() {
+                std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(&file, text)
+                .map_err(|e| format!("cannot write {}: {e}", file.display()))?;
+            println!("wrote {}", file.display());
+        }
+    }
+    Ok(current)
 }
 
 fn run(raw: Vec<String>) -> Result<bool, String> {
@@ -214,6 +416,33 @@ fn run(raw: Vec<String>) -> Result<bool, String> {
             };
             ops::presentation_check(&text, a.context.as_deref())
         }
+        "match" | "apply" | "interchange" | "slide" | "straighten" | "chain" | "export-lean" => {
+            let op = match cmd.as_str() {
+                "match" => "relations.match",
+                "apply" => "relation.apply",
+                "chain" => "chain.find",
+                "export-lean" => "export.lean",
+                c => c,
+            };
+            ops::call(op, &rewrite_request(&a, rest)?)
+        }
+        "call" => {
+            let op = one("operation")?;
+            let mut input = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+                .map_err(|e| e.to_string())?;
+            let req: Value = serde_json::from_str(&input).map_err(|e| format!("request: {e}"))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&ops::call(&op, &req)).unwrap()
+            );
+            return Ok(true);
+        }
+        "mcp" => {
+            mcp::serve().map_err(|e| e.to_string())?;
+            return Ok(true);
+        }
+        "lean-chains" => return lean_chains(&one("chain file")?, a.check),
         c => return Err(format!("unknown command '{c}'\n\n{USAGE}")),
     };
     let ok = v["status"] == "ok" && v["ok"] != false && v["holds"] != false;

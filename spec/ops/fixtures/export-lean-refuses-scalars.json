@@ -1,0 +1,11 @@
+{
+  "op": "export.lean",
+  "request": {
+    "context": "klr type=A2 nu=i+j ring=GF(5)",
+    "term": "psi_1 psi_1 e(ij)"
+  },
+  "expect": {
+    "status": "error",
+    "kind": "precondition"
+  }
+}

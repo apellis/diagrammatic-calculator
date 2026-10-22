@@ -1,0 +1,41 @@
+# Rewrite chains exported to Lean by `diagcalc lean-chains lean/chains/chains.toml`, which
+# writes DiagcalcChains/*.lean; CI builds them against the pinned categorification-lean.
+# An entry with only `lhs` proves that the left side equals its normal form; with `rhs`, that
+# the two sides are equal (both are rewritten to the same normal form).
+
+[[chain]]
+name = "cross_dots_cross_A2"
+context = "klr type=A2 nu=i+j"
+lhs = "psi_1 x_2^2 psi_1 e(ij)"
+doc = "A crossing, two dots and the crossing back, for adjacent colours of type A2: the library's `dg_cross_dots_cross` at m = 2 (see Checks.lean)."
+
+[[chain]]
+name = "cross_dots_cross_B2"
+context = "klr type=B2 nu=i+j"
+lhs = "psi_1 x_2^2 psi_1 e(ij)"
+doc = "The same diagram for the two colours of type B2, where the double crossing has a dot term of degree 2."
+
+[[chain]]
+name = "cross_dots_cross_G2"
+context = "klr type=G2 nu=i+j"
+lhs = "psi_1 x_2 psi_1 e(ji)"
+doc = "A crossing, a dot and the crossing back for the two colours of type G2."
+
+[[chain]]
+name = "braid_iji_A2"
+context = "klr type=A2 nu=2i+j"
+lhs = "psi_1 psi_2 psi_1 e(iji)"
+rhs = "psi_2 psi_1 psi_2 e(iji) + e(iji)"
+doc = "The braid relation with its correction term on the colour sequence iji of type A2."
+
+[[chain]]
+name = "dots_through_braid_A2"
+context = "klr type=A2 nu=2i+j"
+lhs = "x_1 psi_1 psi_2 psi_1 e(iji)"
+doc = "A dot pushed down through a braid and straightened to the polynomial basis."
+
+[[chain]]
+name = "straighten_A3"
+context = "klr type=A3 nu=i+j+k"
+lhs = "psi_2 x_1 psi_1 psi_2 psi_1 e(ijk)"
+doc = "A word of type A3 with a non-reduced crossing pattern, straightened to the basis."

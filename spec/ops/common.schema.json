@@ -9,52 +9,326 @@
     },
     "termRequest": {
       "type": "object",
-      "required": ["context"],
+      "required": [
+        "context"
+      ],
       "properties": {
-        "context": { "$ref": "#/$defs/context" },
-        "presentation": { "description": "The text of a presentation file, when the context names one that is not shipped.", "type": "string" },
-        "strategy": { "description": "The name of a representation the presentation declares; the first one by default.", "type": "string" }
+        "context": {
+          "$ref": "#/$defs/context"
+        },
+        "presentation": {
+          "description": "The text of a presentation file, when the context names one that is not shipped.",
+          "type": "string"
+        },
+        "strategy": {
+          "description": "The name of a representation the presentation declares; the first one by default.",
+          "type": "string"
+        }
       }
     },
     "provenance": {
       "type": "object",
-      "required": ["strategy", "method", "certificate"],
+      "required": [
+        "strategy",
+        "method",
+        "certificate"
+      ],
       "properties": {
-        "strategy": { "enum": ["basis normal form", "faithful representation", "confluent rewriting", "finite-dimensional linear algebra", "bounded search"] },
-        "method": { "type": "string" },
+        "strategy": {
+          "enum": [
+            "basis normal form",
+            "faithful representation",
+            "confluent rewriting",
+            "finite-dimensional linear algebra",
+            "bounded search"
+          ]
+        },
+        "method": {
+          "type": "string"
+        },
         "notes": {
           "description": "What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra).",
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "certificate": {
           "type": "object",
-          "required": ["status", "reference", "hypotheses"],
+          "required": [
+            "status",
+            "reference",
+            "hypotheses"
+          ],
           "properties": {
-            "status": { "enum": ["lean", "literature", "assumed", "unknown"] },
-            "reference": { "type": "string" },
-            "hypotheses": { "type": "string" }
+            "status": {
+              "enum": [
+                "lean",
+                "literature",
+                "assumed",
+                "unknown"
+              ]
+            },
+            "reference": {
+              "type": "string"
+            },
+            "hypotheses": {
+              "type": "string"
+            }
           }
         }
       }
     },
     "error": {
       "type": "object",
-      "required": ["status", "kind", "message"],
+      "required": [
+        "status",
+        "kind",
+        "message"
+      ],
       "properties": {
-        "status": { "const": "error" },
-        "kind": { "enum": ["syntax", "invalid", "precondition", "limit"] },
-        "message": { "type": "string" }
+        "status": {
+          "const": "error"
+        },
+        "kind": {
+          "enum": [
+            "syntax",
+            "invalid",
+            "precondition",
+            "limit"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
       }
     },
     "verdict": {
       "type": "object",
-      "required": ["status", "holds", "witness", "provenance"],
+      "required": [
+        "status",
+        "holds",
+        "witness",
+        "provenance"
+      ],
       "properties": {
-        "status": { "const": "ok" },
-        "holds": { "type": "boolean" },
-        "witness": { "description": "When the check fails: the normal form of what should vanish.", "type": ["string", "null"] },
-        "provenance": { "$ref": "#/$defs/provenance" }
+        "status": {
+          "const": "ok"
+        },
+        "holds": {
+          "type": "boolean"
+        },
+        "witness": {
+          "description": "When the check fails: the normal form of what should vanish.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "location": {
+      "description": "Where in a term: the summand (numbered from 1 in printed order) and optionally a rectangle of its canonical layering (layers numbered from 1 at the bottom, strands from 1 at the left; both ends included).",
+      "type": "object",
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "summand": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rectangle": {
+          "type": "object",
+          "required": [
+            "layers",
+            "strands"
+          ],
+          "properties": {
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "strands": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        "relation": {
+          "description": "Only this relation.",
+          "type": "string"
+        }
+      }
+    },
+    "match": {
+      "type": "object",
+      "required": [
+        "relation",
+        "direction",
+        "binding",
+        "pattern",
+        "replacement",
+        "occurrence",
+        "moves",
+        "sign",
+        "rectangle"
+      ],
+      "properties": {
+        "relation": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "left to right",
+            "right to left"
+          ]
+        },
+        "binding": {
+          "description": "The colours bound to the relation's colour variables.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "pattern": {
+          "description": "The side of the relation instance that is matched.",
+          "type": "string"
+        },
+        "replacement": {
+          "description": "What the pattern equals.",
+          "type": "string"
+        },
+        "occurrence": {
+          "description": "The matched layers of the summand, in the pattern's order.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "moves": {
+          "description": "Interchange moves bringing the pattern together, each the lower of two exchanged layers.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "sign": {
+          "description": "The Koszul sign of the moves.",
+          "enum": [
+            1,
+            -1
+          ]
+        },
+        "rectangle": {
+          "description": "The rectangle the pattern fills after the moves.",
+          "type": "object",
+          "required": [
+            "layers",
+            "strands"
+          ],
+          "properties": {
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "strands": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "preview": {
+          "description": "The summand after applying this match.",
+          "type": "string"
+        }
+      }
+    },
+    "step": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/match"
+        }
+      ],
+      "type": "object",
+      "required": [
+        "word",
+        "results"
+      ],
+      "properties": {
+        "word": {
+          "description": "The rewritten summand with its coefficient.",
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "term",
+              "from"
+            ],
+            "properties": {
+              "term": {
+                "type": "string"
+              },
+              "from": {
+                "description": "Provenance: for each layer of the result, the layer of the rewritten summand it came from, or null if the relation created it.",
+                "type": "array",
+                "items": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "chain": {
+      "type": "object",
+      "required": [
+        "start",
+        "term",
+        "steps"
+      ],
+      "properties": {
+        "start": {
+          "type": "string"
+        },
+        "term": {
+          "description": "The term after the last step.",
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        }
       }
     }
   }

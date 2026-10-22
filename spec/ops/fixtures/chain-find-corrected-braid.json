@@ -1,0 +1,13 @@
+{
+  "op": "chain.find",
+  "request": {
+    "context": "klr type=A2 nu=2i+j ring=ZZ",
+    "term": "psi_1 psi_2 psi_1 e(iji)",
+    "rhs": "psi_2 psi_1 psi_2 e(iji) + e(iji)"
+  },
+  "expect": {
+    "status": "ok",
+    "equal": true,
+    "agrees": true
+  }
+}

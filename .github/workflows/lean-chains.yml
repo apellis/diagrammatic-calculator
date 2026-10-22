@@ -1,0 +1,64 @@
+name: Lean chains
+
+# Builds the rewrite chains exported by `diagcalc lean-chains` (lean/chains/DiagcalcChains) and the
+# hand-written comparisons with the library (lean/chains/Checks.lean) against the pinned
+# categorification-lean commit, and checks that lean/chains/klr-relations.txt is what
+# PrintRelations.lean prints from the library's definition of the KLR relations. The Rust test
+# `chain_files_are_current` keeps the generated files in step with the exporter, so a change to
+# the export always touches lean/chains/.
+#
+# A cold build of the categorification-lean modules the chains import is slow, so the built
+# dependencies are cached by manifest; Mathlib comes from its own cache. The pin never moves by
+# itself, so the job runs when lean/chains changes, and twice a week to keep the cache alive.
+
+on:
+  push:
+    branches: [master]
+    paths: ["lean/chains/**", ".github/workflows/lean-chains.yml"]
+  schedule:
+    - cron: "17 4 * * 1,4"
+  workflow_dispatch:
+
+concurrency:
+  group: lean-chains-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: lean/chains
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lean
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Fetch the dependencies and the Mathlib cache
+        run: lake exe cache get < /dev/null
+      - name: Restore the built dependencies
+        id: deps
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            lean/chains/.lake/packages/Categorification/.lake
+            lean/chains/.lake/packages/StringDiagrams/.lake
+            lean/chains/.lake/packages/LieLean/.lake
+          key: lean-chains-deps-${{ hashFiles('lean/chains/lake-manifest.json', 'lean/chains/lean-toolchain') }}
+      - name: Build the chains
+        run: lake build < /dev/null
+      - name: Print the KLR relations from Lean and compare
+        run: |
+          lake env lean PrintRelations.lean > /tmp/klr-relations.txt < /dev/null
+          diff -u klr-relations.txt /tmp/klr-relations.txt
+      - name: Save the built dependencies
+        if: ${{ !cancelled() && steps.deps.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            lean/chains/.lake/packages/Categorification/.lake
+            lean/chains/.lake/packages/StringDiagrams/.lake
+            lean/chains/.lake/packages/LieLean/.lake
+          key: ${{ steps.deps.outputs.cache-primary-key }}

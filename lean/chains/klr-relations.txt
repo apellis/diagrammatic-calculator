@@ -1,0 +1,8 @@
+sqEq; a; ; psi_1 psi_1 e(a a)
+sqNe; a b; a ≠ b; psi_1 psi_1 e(a b) - Q_ab(x_1, x_2) e(a b)
+slideLEq; a; ; x_1 psi_1 e(a a) - psi_1 x_2 e(a a) - e(a a)
+slideLNe; a b; a ≠ b; x_1 psi_1 e(a b) - psi_1 x_2 e(a b)
+slideREq; a; ; psi_1 x_1 e(a a) - x_2 psi_1 e(a a) - e(a a)
+slideRNe; a b; a ≠ b; psi_1 x_1 e(a b) - x_2 psi_1 e(a b)
+braid; a b c; ¬(a = c ∧ a ≠ b); psi_1 psi_2 psi_1 e(a b c) - psi_2 psi_1 psi_2 e(a b c)
+braidQ; a b; a ≠ b; psi_1 psi_2 psi_1 e(a b a) - psi_2 psi_1 psi_2 e(a b a) - Qbar_ab(x_1, x_2, x_3) e(a b a)

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/chain.find.schema.json",
+  "title": "chain.find: rewrite chains straightening one or both sides of an equation",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        }
+      ],
+      "required": [
+        "term"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "rhs": {
+          "type": "string"
+        },
+        "max_steps": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "equal",
+            "agrees",
+            "chains"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "equal": {
+              "type": "boolean"
+            },
+            "agrees": {
+              "type": "boolean"
+            },
+            "chains": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/chain"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

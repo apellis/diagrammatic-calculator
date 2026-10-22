@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/relations.match.schema.json",
+  "title": "relations.match: the relation instances that apply to a summand, up to interchange",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/location"
+        }
+      ],
+      "required": [
+        "term"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "word",
+            "matches"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "word": {
+              "type": "string"
+            },
+            "matches": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/match"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}
