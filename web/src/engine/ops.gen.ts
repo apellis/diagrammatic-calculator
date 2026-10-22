@@ -800,7 +800,7 @@ export interface TermLayoutLayout {
    * Drawing primitives; 'layer' names the piece a primitive draws and 'strand' the strand it is part of.
    */
   lines: {
-    kind: 'strand' | 'turn' | 'dot' | 'box' | 'label';
+    kind: 'strand' | 'turn' | 'dot' | 'box' | 'label' | 'arrow' | 'note';
     layer?: number;
     strand?: number;
     x0?: number;
@@ -810,6 +810,11 @@ export interface TermLayoutLayout {
     x?: number;
     y?: number;
     /**
+     * arrow: the direction it points in (a unit vector, y up).
+     */
+    dx?: number;
+    dy?: number;
+    /**
      * turn: a cup (true) or a cap.
      */
     up?: boolean;
@@ -818,7 +823,7 @@ export interface TermLayoutLayout {
      */
     label?: string;
     /**
-     * label: the colour under a strand.
+     * label: the colour under a strand; note: the colour of a strand that does not start at the bottom, or the weight of the rightmost region.
      */
     text?: string;
   }[];

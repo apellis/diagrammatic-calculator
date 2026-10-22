@@ -45,6 +45,20 @@ pub enum Prim {
         y: f64,
         text: String,
     },
+    /// An arrowhead at `(x, y)` pointing along `(dx, dy)`: the orientation of a strand.
+    Arrow {
+        x: f64,
+        y: f64,
+        dx: f64,
+        dy: f64,
+    },
+    /// Text centred at `(x, y)`: the colour of a strand that does not start at the bottom, or
+    /// the weight of the rightmost region.
+    Note {
+        x: f64,
+        y: f64,
+        text: String,
+    },
 }
 
 /// The primitives of one word, with its width and height, and what each primitive belongs to:
@@ -175,6 +189,9 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
     let levels = draw_levels(ctx, w, rank);
     let mut prims = Vec::new();
     let mut tags = Vec::new();
+    // For each primitive that draws a line: whether the strand points up there (for a turn,
+    // its left end).
+    let mut ups: Vec<Option<bool>> = Vec::new();
     let mut pieces = Vec::new();
     let mut st = Strands {
         parent: vec![],
@@ -198,6 +215,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
             layer: None,
             strand: Some(ids[p]),
         });
+        ups.push(None);
     }
     let mut boundaries = vec![Boundary {
         y: 0.0,
@@ -219,6 +237,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                 layer: None,
                 strand: Some(id),
             });
+            ups.push(Some(obj[p].up));
         }
         y = 1.0;
     }
@@ -254,15 +273,22 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
         let mut p = 0; // bottom position
         let mut q = 0; // top position
         let mut top_ids: Vec<usize> = Vec::new();
-        let line = |prims: &mut Vec<Prim>, tags: &mut Vec<Tag>, prim: Prim, tag: Tag| {
+        let line = |prims: &mut Vec<Prim>,
+                    tags: &mut Vec<Tag>,
+                    ups: &mut Vec<Option<bool>>,
+                    prim: Prim,
+                    tag: Tag,
+                    up: Option<bool>| {
             prims.push(prim);
             tags.push(tag);
+            ups.push(up);
         };
         for &(k, l, pb, s, t) in &group {
             while p < pb {
                 line(
                     &mut prims,
                     &mut tags,
+                    &mut ups,
                     Prim::Strand {
                         x0: p as f64,
                         y0,
@@ -273,6 +299,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                         layer: None,
                         strand: Some(ids[p]),
                     },
+                    Some(obj[p].up),
                 );
                 top_ids.push(ids[p]);
                 p += 1;
@@ -292,6 +319,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                     line(
                         &mut prims,
                         &mut tags,
+                        &mut ups,
                         Prim::Strand {
                             x0: xb,
                             y0,
@@ -299,13 +327,16 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                             y1,
                         },
                         tag(Some(ids[p])),
+                        Some(obj[p].up),
                     );
                     let (cx, cy) = ((xb + xt) / 2.0, (y0 + y1) / 2.0);
                     line(
                         &mut prims,
                         &mut tags,
+                        &mut ups,
                         Prim::Dot { x: cx, y: cy },
                         tag(Some(ids[p])),
+                        None,
                     );
                     top_ids.push(ids[p]);
                     (bx0, bx1, by0, by1) = (cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25);
@@ -314,6 +345,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                     line(
                         &mut prims,
                         &mut tags,
+                        &mut ups,
                         Prim::Strand {
                             x0: xb,
                             y0,
@@ -321,10 +353,12 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                             y1,
                         },
                         tag(Some(ids[p])),
+                        Some(obj[p].up),
                     );
                     line(
                         &mut prims,
                         &mut tags,
+                        &mut ups,
                         Prim::Strand {
                             x0: xb + 1.0,
                             y0,
@@ -332,6 +366,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                             y1,
                         },
                         tag(Some(ids[p + 1])),
+                        Some(obj[p + 1].up),
                     );
                     top_ids.push(ids[p + 1]);
                     top_ids.push(ids[p]);
@@ -342,6 +377,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                     line(
                         &mut prims,
                         &mut tags,
+                        &mut ups,
                         Prim::Turn {
                             x0: xt,
                             x1: xt + 1.0,
@@ -349,6 +385,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                             up: true,
                         },
                         tag(Some(id)),
+                        Some(top_obj[q].up),
                     );
                     top_ids.push(id);
                     top_ids.push(id);
@@ -359,6 +396,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                     line(
                         &mut prims,
                         &mut tags,
+                        &mut ups,
                         Prim::Turn {
                             x0: xb,
                             x1: xb + 1.0,
@@ -366,6 +404,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                             up: false,
                         },
                         tag(Some(ids[p])),
+                        Some(obj[p].up),
                     );
                     (bx0, bx1, by0, by1) = (xb, xb + 1.0, y0, y0 + 0.6);
                 }
@@ -378,6 +417,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                         line(
                             &mut prims,
                             &mut tags,
+                            &mut ups,
                             Prim::Strand {
                                 x0: x,
                                 y0,
@@ -385,6 +425,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                                 y1: b0,
                             },
                             tag(Some(ids[p + kk])),
+                            Some(obj[p + kk].up),
                         );
                     }
                     for kk in 0..t {
@@ -393,6 +434,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                         line(
                             &mut prims,
                             &mut tags,
+                            &mut ups,
                             Prim::Strand {
                                 x0: x,
                                 y0: b1,
@@ -400,12 +442,14 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                                 y1,
                             },
                             tag(Some(id)),
+                            Some(top_obj[q + kk].up),
                         );
                         top_ids.push(id);
                     }
                     line(
                         &mut prims,
                         &mut tags,
+                        &mut ups,
                         Prim::Box {
                             x0: lo,
                             y0: b0,
@@ -414,6 +458,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                             label: g.name.clone(),
                         },
                         tag(None),
+                        None,
                     );
                     (bx0, bx1, by0, by1) = (lo, hi, b0, b1);
                 }
@@ -437,6 +482,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
             line(
                 &mut prims,
                 &mut tags,
+                &mut ups,
                 Prim::Strand {
                     x0: p as f64,
                     y0,
@@ -447,6 +493,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                     layer: None,
                     strand: Some(ids[p]),
                 },
+                Some(obj[p].up),
             );
             top_ids.push(ids[p]);
             p += 1;
@@ -464,6 +511,18 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
             below: j,
             object: obj.clone(),
         });
+    }
+    let mut width = max_width.saturating_sub(1) as f64;
+    mark_strands(ctx, &mut st, &mut prims, &mut tags, &ups);
+    if let Some(mu) = &ctx.mu {
+        let x = if max_width == 0 { 0.5 } else { width + 0.8 };
+        prims.push(Prim::Note {
+            x,
+            y: y / 2.0,
+            text: ctx.fmt_region(mu),
+        });
+        tags.push(Tag::default());
+        width = x + 0.5;
     }
     // strands joined by caps take one number; strands are numbered in order of appearance
     let mut number: Vec<Option<usize>> = vec![None; st.parent.len()];
@@ -491,9 +550,110 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
         pieces,
         strands,
         boundaries,
-        width: max_width.saturating_sub(1) as f64,
+        width,
         height: y,
     }
+}
+
+/// A point of the strand curve from `(x0, y0)` to `(x1, y1)` (a cubic leaving and arriving
+/// vertically) at parameter `t`, with the direction of travel there.
+fn on_strand(x0: f64, y0: f64, x1: f64, y1: f64, t: f64) -> (f64, f64, f64, f64) {
+    let ym = (y0 + y1) / 2.0;
+    let u = 1.0 - t;
+    let x = u * u * u * x0 + 3.0 * u * u * t * x0 + 3.0 * u * t * t * x1 + t * t * t * x1;
+    let y = u * u * u * y0 + 3.0 * u * u * t * ym + 3.0 * u * t * t * ym + t * t * t * y1;
+    let dx = 6.0 * u * t * (x1 - x0);
+    let dy = 3.0 * u * u * (ym - y0) + 3.0 * t * t * (y1 - ym);
+    let n = (dx * dx + dy * dy).sqrt();
+    (x, y, dx / n, dy / n)
+}
+
+/// One arrowhead on each strand of an oriented colour, and the colour of each strand that does
+/// not start at the bottom. A strand's mark goes on its first plain vertical stretch, else on a
+/// stretch with a dot (below the dot), else on a crossing, else on the end of a cup or cap.
+fn mark_strands<R: Ring>(
+    ctx: &Context<R>,
+    st: &mut Strands,
+    prims: &mut Vec<Prim>,
+    tags: &mut Vec<Tag>,
+    ups: &[Option<bool>],
+) {
+    let mut labelled = std::collections::BTreeSet::new();
+    let mut best: std::collections::BTreeMap<usize, (u8, usize)> = Default::default();
+    for (k, (p, t)) in prims.iter().zip(tags.iter()).enumerate() {
+        let Some(id) = t.strand else { continue };
+        let r = st.find(id);
+        let rank = match p {
+            Prim::Label { .. } => {
+                labelled.insert(r);
+                continue;
+            }
+            Prim::Strand { x0, x1, y0, y1 } if x0 == x1 && (y1 - y0) > 0.9 => {
+                u8::from(t.layer.is_some())
+            }
+            Prim::Strand { x0, x1, .. } if x0 != x1 => 2,
+            Prim::Strand { .. } => 3,
+            Prim::Turn { .. } => 4,
+            _ => continue,
+        };
+        if ups[k].is_some() && best.get(&r).is_none_or(|b| rank < b.0) {
+            best.insert(r, (rank, k));
+        }
+    }
+    for (&r, &(rank, k)) in &best {
+        let up = ups[k] == Some(true);
+        let (x, y, dx, dy, nx, ny) = match prims[k] {
+            Prim::Strand { x0, y0, x1, y1 } => {
+                let t = match rank {
+                    1 => 0.2,
+                    2 => 0.22,
+                    _ => 0.5,
+                };
+                let (x, y, dx, dy) = on_strand(x0, y0, x1, y1, t);
+                let s = if up { 1.0 } else { -1.0 };
+                (x, y, s * dx, s * dy, x - 0.32, y)
+            }
+            Prim::Turn { x0, x1, y, up: cup } => {
+                let (x, d) = ((x0 + x1) / 2.0, if cup { -0.45 } else { 0.45 });
+                // along a cup whose left end points up the strand runs right to left
+                let right = up != cup;
+                let dx = if right { 1.0 } else { -1.0 };
+                (x, y + d, dx, 0.0, x, y + d + d * 0.6)
+            }
+            _ => continue,
+        };
+        let info = &st.info[r];
+        let colour = &ctx.colours[info.colour as usize];
+        let tag = tags[k];
+        if colour.oriented {
+            prims.push(Prim::Arrow { x, y, dx, dy });
+            tags.push(Tag {
+                layer: None,
+                strand: tag.strand,
+            });
+        }
+        if !labelled.contains(&r) {
+            prims.push(Prim::Note {
+                x: nx,
+                y: ny,
+                text: colour.name.clone(),
+            });
+            tags.push(Tag {
+                layer: None,
+                strand: tag.strand,
+            });
+        }
+    }
+}
+
+/// The corners of an arrowhead: tip, then the two back corners.
+pub fn arrowhead(x: f64, y: f64, dx: f64, dy: f64) -> [(f64, f64); 3] {
+    let (l, h) = (0.13, 0.1);
+    [
+        (x + dx * l, y + dy * l),
+        (x - dx * l - dy * h, y - dy * l + dx * h),
+        (x - dx * l + dy * h, y - dy * l - dx * h),
+    ]
 }
 
 fn num(x: f64) -> String {
@@ -556,6 +716,26 @@ pub fn tikz_word<R: Ring>(ctx: &Context<R>, w: &Word) -> String {
             Prim::Label { x, y, text } => {
                 format!(
                     "\\node[below] at ({},{}) {{$\\scriptstyle {}$}};",
+                    num(*x),
+                    num(*y),
+                    text
+                )
+            }
+            Prim::Arrow { x, y, dx, dy } => {
+                let [a, b, c] = arrowhead(*x, *y, *dx, *dy);
+                format!(
+                    "\\fill ({},{}) -- ({},{}) -- ({},{}) -- cycle;",
+                    num(a.0),
+                    num(a.1),
+                    num(b.0),
+                    num(b.1),
+                    num(c.0),
+                    num(c.1)
+                )
+            }
+            Prim::Note { x, y, text } => {
+                format!(
+                    "\\node at ({},{}) {{$\\scriptstyle {}$}};",
                     num(*x),
                     num(*y),
                     text
@@ -717,6 +897,22 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
                     num(base - (y + off) * U + 13.0),
                     esc(text)
                 ),
+                Prim::Arrow { x, y, dx, dy } => {
+                    let pts: Vec<String> = arrowhead(*x, *y, *dx, *dy)
+                        .iter()
+                        .map(|(a, b)| format!("{},{}", px(*a), py(*b)))
+                        .collect();
+                    format!(
+                        "<polygon points=\"{}\" fill=\"currentColor\" stroke=\"none\"/>",
+                        pts.join(" ")
+                    )
+                }
+                Prim::Note { x, y, text } => format!(
+                    "<text x=\"{}\" y=\"{}\" font-size=\"11\" font-style=\"italic\" text-anchor=\"middle\" stroke=\"none\" fill=\"currentColor\">{}</text>",
+                    px(*x),
+                    num(base - (y + off) * U + 4.0),
+                    esc(text)
+                ),
             };
             body.push_str(&line);
             body.push('\n');
@@ -753,6 +949,46 @@ mod tests {
         assert!(tz.starts_with("-2\\;"), "{tz}");
         let s = svg(&ctx, &t);
         assert!(s.starts_with("<svg") && s.contains("<circle"), "{s}");
+    }
+
+    #[test]
+    fn oriented_strands_bubbles_and_regions() {
+        let spec = ContextSpec::parse("kl type=A1 mu=-2").unwrap();
+        let ctx = Context::new(builtin::presentation("kl").unwrap(), spec, Rationals).unwrap();
+        // a clockwise bubble with one dot beside a downward strand
+        let t = ctx.parse_term("cw_{i,1} e(i*)").unwrap();
+        let pic = picture(&ctx, &t.terms[0].0);
+        let arrows: Vec<(f64, f64)> = pic
+            .prims
+            .iter()
+            .filter_map(|p| match p {
+                Prim::Arrow { dx, dy, .. } => Some((*dx, *dy)),
+                _ => None,
+            })
+            .collect();
+        // the strand points down; the bubble runs up its left side
+        assert_eq!(arrows, vec![(0.0, -1.0), (0.0, 1.0)], "{:?}", pic.prims);
+        let notes: Vec<&str> = pic
+            .prims
+            .iter()
+            .filter_map(|p| match p {
+                Prim::Note { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(notes, vec!["i", "-2"]);
+        let tz = tikz(&ctx, &t);
+        assert!(tz.contains("\\fill (0,0.37) -- "), "{tz}");
+        // an unoriented presentation draws no arrows
+        let spec = ContextSpec::parse("klr type=A1 nu=2i").unwrap();
+        let ctx = Context::new(builtin::presentation("klr").unwrap(), spec, Rationals).unwrap();
+        let t = ctx.parse_term("psi_1 e(ii)").unwrap();
+        let pic = picture(&ctx, &t.terms[0].0);
+        assert!(
+            !pic.prims
+                .iter()
+                .any(|p| matches!(p, Prim::Arrow { .. } | Prim::Note { .. }))
+        );
     }
 
     #[test]

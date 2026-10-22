@@ -11,7 +11,7 @@ import type { RelationsMatchResponse } from '../engine/ops.gen';
 import { isMac, mod } from '../app';
 import { Typeset } from './Typeset';
 import {
-  along, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
+  along, arrowPoints, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
   offsetFor, onStrand, path, piece, piecesIn, pullMove, rectangle, sameOrder, track, type Layout, type Line, type Piece, type Rect,
 } from '../canvas/geometry';
 
@@ -796,6 +796,10 @@ export function Canvas(props: CanvasProps) {
           );
         case 'label':
           return <text x={line.x} y={0.55} font-size="0.36" font-style="italic" text-anchor="middle" fill={strandColour(line.strand)}>{line.text}</text>;
+        case 'arrow':
+          return <polygon points={arrowPoints(line)} fill={line.strand === undefined ? 'currentColor' : strandColour(line.strand)} />;
+        case 'note':
+          return <text x={line.x} y={-line.y! + 0.13} font-size="0.36" font-style="italic" text-anchor="middle" fill={line.strand === undefined ? 'currentColor' : strandColour(line.strand)}>{line.text}</text>;
       }
     };
     return (
@@ -900,6 +904,7 @@ export function Canvas(props: CanvasProps) {
                   line.kind === 'strand' || line.kind === 'turn' ? <path d={path(line)} stroke={colourOf(l.strands[line.strand ?? 0]?.colour ?? '')} stroke-width={0.08} fill="none" />
                   : line.kind === 'dot' ? <circle cx={line.x} cy={-line.y!} r={0.15} fill="currentColor" />
                   : line.kind === 'box' ? <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="none" stroke="currentColor" stroke-width={0.06} />
+                  : line.kind === 'arrow' ? <polygon points={arrowPoints(line, 1.3)} fill={colourOf(l.strands[line.strand ?? 0]?.colour ?? '')} />
                   : null}
               </For>
             </svg>

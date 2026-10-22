@@ -222,3 +222,15 @@ export function path(line: Line, off: [number, number] = [0, 0]): string {
   }
   return '';
 }
+
+/** SVG points of an arrowhead line (y flipped), as the core draws it; `scale` enlarges it. */
+export function arrowPoints(line: Line, scale = 1): string {
+  const [x, y, dx, dy] = [line.x!, line.y!, line.dx ?? 0, line.dy ?? 1];
+  const [l, h] = [0.13 * scale, 0.1 * scale];
+  const pts = [
+    [x + dx * l, y + dy * l],
+    [x - dx * l - dy * h, y - dy * l + dx * h],
+    [x - dx * l + dy * h, y - dy * l - dx * h],
+  ];
+  return pts.map(([a, b]) => `${+a.toFixed(3)},${+(-b).toFixed(3)}`).join(' ');
+}

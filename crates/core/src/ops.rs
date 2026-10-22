@@ -289,14 +289,19 @@ impl<'a, R: Ring> Session<'a, R> {
     }
 
     pub fn render(&self, t: &CTerm<R>, format: &str) -> Result<String> {
-        match format {
-            "text" => Ok(self.ctx.fmt_term(t)),
-            "tikz" => Ok(render::tikz(self.ctx, t)),
-            "svg" => Ok(render::svg(self.ctx, t)),
-            f => Err(Error::invalid(format!(
-                "unknown format '{f}': use text, tikz or svg"
-            ))),
-        }
+        render_term(self.ctx, t, format)
+    }
+}
+
+/// A term as text, TikZ or SVG.
+pub fn render_term<R: Ring>(ctx: &Context<R>, t: &CTerm<R>, format: &str) -> Result<String> {
+    match format {
+        "text" => Ok(ctx.fmt_term(t)),
+        "tikz" => Ok(render::tikz(ctx, t)),
+        "svg" => Ok(render::svg(ctx, t)),
+        f => Err(Error::invalid(format!(
+            "unknown format '{f}': use text, tikz or svg"
+        ))),
     }
 }
 
@@ -364,6 +369,16 @@ impl RingVisitor for TermOp<'_> {
         let spec = ContextSpec::parse(&self.req.context)?;
         let pres = load_presentation(&spec, self.req.presentation.as_deref())?;
         let ctx = Context::new(pres, spec, base)?;
+        if self.op == "render" {
+            // Drawing needs no equality strategy.
+            let [t] = self.terms else {
+                return Err(Error::invalid("render takes one term"));
+            };
+            let t = ctx.elaborate(&text::parse(t)?, &Scope::default())?;
+            let format = self.format.unwrap_or("text");
+            let output = render_term(&ctx, &t, format)?;
+            return Ok(json!({ "format": format, "output": output }));
+        }
         let s = Session::new(&ctx, self.req.strategy.as_deref())?;
         let terms: Vec<CTerm<R>> = self
             .terms
@@ -376,14 +391,6 @@ impl RingVisitor for TermOp<'_> {
                     return Err(Error::invalid("simplify takes one term"));
                 };
                 s.simplify(t)
-            }
-            "render" => {
-                let [t] = terms.as_slice() else {
-                    return Err(Error::invalid("render takes one term"));
-                };
-                Ok(
-                    json!({ "format": self.format.unwrap_or("text"), "output": s.render(t, self.format.unwrap_or("text"))? }),
-                )
             }
             name => s.check(name, &terms),
         }

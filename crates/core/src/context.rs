@@ -236,12 +236,17 @@ impl<R: Ring> Context<R> {
                         names.len()
                     )));
                 }
+                // Strands carry an orientation when the presentation has downward ones.
+                let oriented = pres
+                    .generators
+                    .iter()
+                    .any(|g| g.source.iter().chain(&g.target).any(|l| !l.up));
                 names
                     .into_iter()
                     .map(|name| Colour {
                         name,
                         odd: false,
-                        oriented: false,
+                        oriented,
                     })
                     .collect()
             }

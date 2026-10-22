@@ -226,3 +226,9 @@ wherever it is entered (a click on typeset text opens it). Typesetting changes o
 TikZ export matches the drawing style of Brundan–Ellis, *Super Kac–Moody 2-categories*
 (arXiv:1701.04133v2), using core TikZ and no nonstandard packages. SVG uses the same proportions.
 Details are fixed with the drawing code.
+
+In a 2-category, every strand of an oriented colour (any colour of a presentation with downward
+strands) carries one arrowhead: on its first plain vertical stretch, else below a dot, else on a
+crossing, else on its cup or cap. A strand that does not start at the bottom, such as a bubble,
+has its colour written beside that arrowhead, and the weight of the rightmost region is written
+to the right of the diagram, in the context's `mu=` notation.

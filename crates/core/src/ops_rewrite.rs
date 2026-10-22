@@ -465,6 +465,12 @@ fn layout_json<R: Ring>(
                 Prim::Label { x, y, text } => {
                     json!({ "kind": "label", "x": x, "y": y, "text": text })
                 }
+                Prim::Arrow { x, y, dx, dy } => {
+                    json!({ "kind": "arrow", "x": x, "y": y, "dx": dx, "dy": dy })
+                }
+                Prim::Note { x, y, text } => {
+                    json!({ "kind": "note", "x": x, "y": y, "text": text })
+                }
             };
             if let Some(l) = tag.layer {
                 v["layer"] = json!(rank[l] + 1);
