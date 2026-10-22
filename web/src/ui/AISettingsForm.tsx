@@ -25,6 +25,16 @@ export function AISettingsForm() {
   const [remember, setRemember] = createSignal(stored.remembered);
   const [saved, setSaved] = createSignal(false);
   const [check, setCheck] = createSignal<{ ok: boolean; message: string } | null>(null);
+  const [checking, setChecking] = createSignal(false);
+  const runCheck = async () => {
+    setCheck(null);
+    setChecking(true);
+    try {
+      setCheck(await checkProvider(key(), settings()));
+    } finally {
+      setChecking(false);
+    }
+  };
   /** The provider's model list (as last fetched), whether it is being fetched, and why it could not be. */
   const [models, setModels] = createSignal<ModelOption[]>(loadModels(settings())?.models ?? []);
   const [listing, setListing] = createSignal(false);
@@ -124,7 +134,9 @@ export function AISettingsForm() {
       <div class="row">
         <button class="primary" onClick={saveAll} data-testid="ai-save">Save</button>
         <Show when={saved()}><span class="hint" data-testid="ai-saved">Saved.</span></Show>
-        <button onClick={async () => setCheck(await checkProvider(key(), settings()))}>Check the connection</button>
+        <button onClick={() => void runCheck()} disabled={checking()} data-testid="ai-check-run">
+          <Show when={checking()} fallback="Check the connection"><span class="spinner" aria-hidden="true" /> Checking…</Show>
+        </button>
       </div>
       <Show when={check()}>{(c) => <div class={c().ok ? 'hint' : 'error'} data-testid="ai-check">{c().message}</div>}</Show>
       <div class="hint">The key is sent only to the provider. Your calls are billed to it.</div>

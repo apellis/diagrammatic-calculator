@@ -189,6 +189,13 @@ a.button {
   padding: 3px 10px; text-decoration: none;
 }
 a.button:hover { border-color: var(--muted); }
+a.button.icon { display: inline-flex; align-items: center; padding: 4px 6px; color: var(--muted); }
+a.button.icon:hover { color: var(--text); }
+.spinner {
+  display: inline-block; width: 11px; height: 11px; vertical-align: -1px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent); animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
 .settings section { margin-top: 22px; }
 .settings h3 { margin: 0 0 6px; }
 .settings .ai-settings { max-width: 440px; padding: 0; border: none; }

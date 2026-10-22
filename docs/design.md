@@ -302,8 +302,11 @@ OpenAI is called through its Responses API (`store: false`), which, unlike chat 
 accepts function tools from reasoning models; a local OpenAI-compatible server speaks the
 chat-completions protocol. The provider, model, effort and key are set on the settings page
 (`#/settings`, reached from the document list or from the panel, which links there while no
-provider is set up); the panel itself only chats. "Check the connection" there calls the provider's model list
-from the page and says whether the browser can reach it. The model is chosen from that list
+provider is set up); the panel itself only chats. "Check the connection" there makes the kind of call the chat
+makes (for OpenAI a Responses request of a few tokens to the chosen model; for Anthropic and a
+compatible server the model list), with a spinner while it waits and a 30-second limit, and
+reports the provider's own error message when it answers with one. The model is chosen from the
+provider's list
 (Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
 server's as given), kept per provider in local storage and fetched again with ↻; "Other…" takes a
 typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay in session storage unless "Remember on this

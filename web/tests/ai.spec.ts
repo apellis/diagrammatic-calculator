@@ -249,6 +249,35 @@ test('the browser check for an OpenAI-compatible server says whether this page c
   await expect(page.getByTestId('ai-check')).toContainText('accepts calls from this page');
 });
 
+test('the OpenAI check makes a small Responses call, showing a spinner while it waits', async ({ page }) => {
+  const bodies: Record<string, unknown>[] = [];
+  await page.route('https://api.openai.com/**', async (route) => {
+    const r = route.request();
+    if (r.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (await modelList(route, { object: 'list', data: [{ id: 'gpt-test', created: 1, object: 'model' }] })) return;
+    bodies.push(r.postDataJSON());
+    await new Promise((done) => setTimeout(done, 700));
+    if (bodies.length === 1) {
+      return route.fulfill({ status: 404, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ error: { message: 'The model gpt-test does not exist.' } }) });
+    }
+    await route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ id: 'resp', status: 'incomplete', output: [] }) });
+  });
+  await openSettings(page);
+  await page.getByLabel('Provider').selectOption('openai');
+  await page.getByLabel('API key').fill('sk-test');
+  await page.getByLabel('API key').blur();
+  await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-test');
+  const run = page.getByTestId('ai-check-run');
+  await run.click();
+  await expect(run).toContainText('Checking…');
+  await expect(run).toBeDisabled();
+  await expect(page.getByTestId('ai-check')).toHaveText('OpenAI answered 404: The model gpt-test does not exist.');
+  await expect(run).toHaveText('Check the connection');
+  await run.click();
+  await expect(page.getByTestId('ai-check')).toHaveText('OpenAI accepts calls from this page with gpt-test.');
+  expect(bodies[0]).toMatchObject({ model: 'gpt-test', max_output_tokens: 16, store: false });
+});
+
 test('the model list comes from the provider, and the refresh button fetches it again', async ({ page }) => {
   await page.goto('/');
   let anthropicLists = 0;

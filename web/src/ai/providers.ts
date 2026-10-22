@@ -106,27 +106,56 @@ export class BrowserBlocked extends Error {}
 const base = (s: AISettings) => (s.provider === 'openai' ? 'https://api.openai.com/v1' : s.baseUrl.replace(/\/+$/, ''));
 const providerName = (s: AISettings) => (s.provider === 'anthropic' ? 'Anthropic' : s.provider === 'openai' ? 'OpenAI' : `the server at ${base(s)}`);
 
-/** The browser check: can this page call the provider with this key? */
+/** How long the connection check waits for an answer. */
+const CHECK_TIMEOUT_MS = 30_000;
+
+/**
+ * The browser check: can this page call the provider with this key? It makes the same kind of
+ * call the chat makes (for OpenAI a minimal Responses request with the chosen model, a few tokens),
+ * so a check that passes means the chat can reach the provider, and one that fails says why.
+ */
 export async function checkProvider(key: string, s: AISettings): Promise<{ ok: boolean; message: string }> {
   const name = providerName(s);
   if (s.provider === 'anthropic') {
     try {
-      const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true, maxRetries: 0 });
+      const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true, maxRetries: 0, timeout: CHECK_TIMEOUT_MS });
       await client.models.list({ limit: 1 });
       return { ok: true, message: `${name} accepts calls from this page.` };
     } catch (e) {
       return { ok: false, message: explain(e, name) };
     }
   }
+  if (s.provider === 'openai' && !s.model) return { ok: false, message: 'Choose a model first: the check sends it a one-word request.' };
   let res: Response;
   try {
-    res = await fetch(`${base(s)}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
-  } catch {
-    return { ok: false, message: blockedMessage(name) };
+    res =
+      s.provider === 'openai'
+        ? await fetch(`${base(s)}/responses`, {
+            method: 'POST',
+            signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+            body: JSON.stringify({ model: s.model, input: 'Reply with OK.', max_output_tokens: 16, store: false }),
+          })
+        : await fetch(`${base(s)}/models`, { signal: AbortSignal.timeout(CHECK_TIMEOUT_MS), headers: key ? { Authorization: `Bearer ${key}` } : {} });
+  } catch (e) {
+    if ((e as Error).name === 'TimeoutError') return { ok: false, message: `${name} did not answer within ${CHECK_TIMEOUT_MS / 1000} seconds.` };
+    return { ok: false, message: blockedMessage(name, (e as Error).message) };
   }
   if (res.status === 401) return { ok: false, message: `${name} refused the key.` };
-  if (!res.ok) return { ok: false, message: `${name} answered ${res.status} ${res.statusText}.` };
-  return { ok: true, message: `${name} accepts calls from this page.` };
+  if (!res.ok) return { ok: false, message: `${name} answered ${res.status}: ${await errorText(res)}` };
+  return { ok: true, message: s.provider === 'openai' ? `${name} accepts calls from this page with ${s.model}.` : `${name} accepts calls from this page.` };
+}
+
+/** The error message in a provider's error answer, else the start of its text. */
+async function errorText(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const m = (JSON.parse(text) as { error?: { message?: string } }).error?.message;
+    if (m) return m;
+  } catch {
+    /* not JSON */
+  }
+  return text.slice(0, 300) || res.statusText;
 }
 
 export interface ModelOption {
@@ -156,8 +185,8 @@ export async function listModels(key: string, s: AISettings): Promise<ModelOptio
   let res: Response;
   try {
     res = await fetch(`${base(s)}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
-  } catch {
-    throw new Error(blockedMessage(name));
+  } catch (e) {
+    throw new Error(blockedMessage(name, (e as Error).message));
   }
   if (res.status === 401) throw new Error(`${name} refused the key.`);
   if (!res.ok) throw new Error(`${name} answered ${res.status} ${res.statusText}.`);
@@ -188,8 +217,9 @@ export function saveModels(s: AISettings, models: ModelOption[]) {
   }
 }
 
-const blockedMessage = (name: string) =>
-  `This page cannot reach ${name}: it refuses calls made from a browser (or is not running). Use the command-line tool or the MCP server (diagcalc mcp) with that provider instead.`;
+/** A call the browser could not make at all; the browser does not say why, so the likely causes are listed. */
+const blockedMessage = (name: string, detail?: string) =>
+  `The browser could not reach ${name}${detail ? ` (${detail})` : ''}. The network may be down, a browser extension may block the call, or ${name} refuses calls made from a browser (or is not running). In the last case use the command-line tool or the MCP server (diagcalc mcp) with that provider instead.`;
 
 type ChatMessage =
   | { role: 'system' | 'user'; content: string }
@@ -242,7 +272,7 @@ export function chatCompletions(key: string, s: AISettings): Provider {
         });
       } catch (e) {
         if ((e as Error).name === 'AbortError') throw e;
-        throw new BrowserBlocked(blockedMessage(name));
+        throw new BrowserBlocked(blockedMessage(name, (e as Error).message));
       }
       if (!res.ok) throw new Error(`${name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
       const j = (await res.json()) as {
@@ -318,7 +348,7 @@ export function openaiResponses(key: string, s: AISettings): Provider {
         });
       } catch (e) {
         if ((e as Error).name === 'AbortError') throw e;
-        throw new BrowserBlocked(blockedMessage(name));
+        throw new BrowserBlocked(blockedMessage(name, (e as Error).message));
       }
       if (!res.ok) throw new Error(`${name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
       const j = (await res.json()) as {
