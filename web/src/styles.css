@@ -87,7 +87,7 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .outline input { width: 100%; margin-bottom: 8px; }
 .oitem { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 5px; cursor: pointer; font-size: 13px; }
 .oitem:hover, .oitem.on { background: var(--sunken); }
-.oitem .t { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oitem .t { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--border); }
 .dot.fresh { background: var(--good); }
 .dot.stale, .dot.running { background: var(--warn); }
@@ -98,7 +98,7 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .cell.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
 .cell .head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; min-height: 34px; }
 .kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); width: 3.6em; flex: none; }
-.cell .text { font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell .text { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell .summary { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
 .cell .body { border-top: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .cell .tools { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -134,7 +134,7 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .summand.new { border-color: var(--good); background: var(--good-soft); }
 .summand.gone { opacity: 0.3; text-decoration: line-through; }
 .summand:hover { background: var(--sunken); }
-.textform { font-family: var(--mono); font-size: 12.5px; background: var(--sunken); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
+.textform { font-size: 14px; background: var(--sunken); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
 .changed { font-size: 12.5px; }
 .changed summary { cursor: pointer; color: var(--muted); }
 table.kv { border-collapse: collapse; font-size: 13px; }
@@ -153,7 +153,7 @@ table.kv td:first-child { color: var(--muted); }
 .palette input { width: 100%; font-size: 15px; padding: 8px; }
 .palette .opt { padding: 6px 8px; border-radius: 5px; cursor: pointer; }
 .palette .opt.on { background: var(--accent-soft); }
-kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
+kbd { font-size: 12px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
 
 /* document list */
 .doclist { max-width: 860px; margin: 0 auto; padding: 28px 18px; }
@@ -180,7 +180,7 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border)
 .canvas-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .canvas-body { flex: 1; display: flex; min-height: 0; }
 .palette-bar { width: 108px; flex: none; border-right: 1px solid var(--border); background: var(--panel); padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
-.gen { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; font-family: var(--mono); font-size: 12px; cursor: grab; }
+.gen { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; font-size: 12px; cursor: grab; }
 .gen.on { border-color: var(--accent); background: var(--accent-soft); }
 .canvas-view { flex: 1; position: relative; overflow: hidden; cursor: default; }
 .canvas-board { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; width: max-content; max-width: 2400px; }
@@ -192,6 +192,14 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border)
 .diagram { display: block; color: var(--text); touch-action: none; user-select: none; }
 .hit-piece { cursor: grab; }
 .hit-piece[data-draw='dot'] { cursor: ns-resize; }
+.live-dot { stroke: var(--panel); stroke-width: 0.025; }
+.live-halo { fill: var(--accent); opacity: 0.22; }
+.xing { transform-box: fill-box; transform-origin: center; }
+.xing.near { fill: none; stroke: var(--accent); stroke-width: 0.035; animation: glow 0.7s ease-in-out infinite alternate; }
+.xing.passed { fill: var(--accent); fill-opacity: 0.12; stroke: var(--accent); stroke-width: 0.05; animation: pop 0.28s ease-out; }
+@keyframes glow { from { stroke-opacity: 0.35; } to { stroke-opacity: 1; } }
+@keyframes pop { 0% { transform: scale(0.5); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .xing.near, .xing.passed { animation: none; } }
 .hit-strand { cursor: pointer; }
 .relmenu {
   position: absolute; right: 12px; top: 12px; z-index: 6; width: min(420px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto;
@@ -249,3 +257,18 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
   .ai { position: fixed; right: 0; top: 0; bottom: 0; z-index: 25; box-shadow: -8px 0 30px rgba(0,0,0,0.15); width: min(380px, 100vw); }
 }
 .pinned { border-bottom: 1px solid var(--border); margin-bottom: 8px; padding-bottom: 6px; }
+
+/* Typeset text: the reading font shows; the fixed-width font is only for entering text. */
+.typeset .katex { font-size: 1.08em; }
+.value { cursor: text; }
+.value.raw, pre.textform, .ai-tool .textform, .tl-detail { font-family: var(--mono); font-size: 12.5px; }
+.value.raw { outline: 1px solid var(--accent); outline-offset: 1px; white-space: pre-wrap; }
+.celltext { padding: 6px 8px; border-radius: 6px; cursor: text; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.celltext:hover, .celltext:focus-visible { background: var(--sunken); outline: none; }
+.celltext .typeset .katex-display { margin: 0; text-align: left; }
+.celltext .typeset .katex-display > .katex { text-align: left; }
+.celltext .kw { font-variant: small-caps; color: var(--muted); letter-spacing: 0.04em; }
+.celltext .opt { flex-basis: 100%; color: var(--muted); font-size: 13px; padding-left: 2px; }
+.cell .text .katex, .oitem .t .katex { font-size: 1em; }
+.ctx-name { font-variant: small-caps; letter-spacing: 0.04em; }
+.relname, .toolname { font-weight: 500; }

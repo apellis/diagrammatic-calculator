@@ -23,23 +23,23 @@ test('a scratch branch: try a change, leave it, come back, accept it, undo the a
   // the document itself is unchanged
   await page.getByRole('button', { name: 'Leave' }).click();
   await expect(page.getByTestId('branch')).toHaveCount(0);
-  await expect(text(page, 0)).toHaveText('a := x_1 e(iji)');
+  await expect(text(page, 0)).toHaveAttribute('data-text', 'a := x_1 e(iji)');
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term, degree 4');
 
   // back on the branch, compare and accept
   await page.getByLabel('Branches').selectOption({ label: 'what if 1' });
-  await expect(text(page, 0)).toHaveText('a := x_1 e(iji) + x_3 e(iji)');
+  await expect(text(page, 0)).toHaveAttribute('data-text', 'a := x_1 e(iji) + x_3 e(iji)');
   await page.getByRole('button', { name: 'Accept…' }).click();
   await expect(page.getByTestId('branch-diff')).toContainText('→ def a := x_1 e(iji) + x_3 e(iji)');
   await page.getByRole('button', { name: 'Accept', exact: true }).click();
   await expect(page.getByTestId('branch')).toHaveCount(0);
   await expect(page.getByLabel('Branches')).toHaveCount(0);
-  await expect(text(page, 0)).toHaveText('a := x_1 e(iji) + x_3 e(iji)');
+  await expect(text(page, 0)).toHaveAttribute('data-text', 'a := x_1 e(iji) + x_3 e(iji)');
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('3 terms, degree 4');
 
   // accepting is one step
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(text(page, 0)).toHaveText('a := x_1 e(iji)');
+  await expect(text(page, 0)).toHaveAttribute('data-text', 'a := x_1 e(iji)');
 });
 
 test('discarding a branch leaves the document as it was', async ({ page }) => {

@@ -9,9 +9,10 @@ import type { Doc, Hint } from '../doc/model';
 import type { Calls } from '../eval/evaluator';
 import type { RelationsMatchResponse } from '../engine/ops.gen';
 import { isMac, mod } from '../app';
+import { Typeset } from './Typeset';
 import {
-  bounds, centre, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand, offsetFor,
-  onStrand, path, piece, piecesIn, rectangle, sameOrder, type Layout, type Line, type Piece, type Rect,
+  along, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
+  offsetFor, onStrand, path, piece, piecesIn, rectangle, sameOrder, track, type Layout, type Line, type Piece, type Rect,
 } from '../canvas/geometry';
 
 export interface Generator {
@@ -83,6 +84,12 @@ export function Canvas(props: CanvasProps) {
   const [ghost, setGhost] = createSignal<{ summand: number; layer: number; dx: number; dy: number } | null>(null);
   const [boxDrag, setBoxDrag] = createSignal<{ summand: number; a: [number, number]; b: [number, number] } | null>(null);
   const [drop, setDrop] = createSignal<{ summand: number; x: number; y: number; width: number } | null>(null);
+  /**
+   * A dot being dragged, drawn where it is on its strand: the crossings it has passed (which fire
+   * on release) and the one it is nearing, with how near (0 to 1). After release it stays where it
+   * was let go (`held`) until the rewritten term is drawn, or eases back when nothing changes.
+   */
+  const [live, setLive] = createSignal<{ summand: number; layer: number; x: number; y: number; passed: number[]; near?: { layer: number; w: number }; held?: boolean } | null>(null);
   let root!: HTMLDivElement;
   let board!: HTMLDivElement;
   let space = false;
@@ -128,6 +135,7 @@ export function Canvas(props: CanvasProps) {
         setFresh(added);
         setTimeout(() => setFresh(new Set<string>()), 2000);
       }
+      if (live()?.held) setLive(null);
       if (firstSelect) {
         const k = summands.findIndex((l) => l.word === firstSelect);
         if (k >= 0) setSel({ summand: k, layers: [] });
@@ -168,6 +176,7 @@ export function Canvas(props: CanvasProps) {
   };
   /** Writes a new term to the cell as one step, outlining the summands it adds. */
   const write = (term: string, note: string) => {
+    changed = true;
     pending = { term: props.term, words: new Set(layouts().map((l) => l.word)) };
     setSel({ summand: sel().summand, layers: [] });
     props.onWrite(term, note);
@@ -199,6 +208,7 @@ export function Canvas(props: CanvasProps) {
       const moved = r.summands[k];
       const h = hintOf(l) ?? {};
       const canonical = order.every((x, i) => x === i + 1);
+      changed = true;
       props.doc.setHint(props.cellId, l.word, { ...h, order: canonical ? undefined : order }, note);
       say(moved.sign !== l.sign ? 'Interchange of two odd pieces: the coefficient of this summand changes sign (−1).' : 'Interchanged; the coefficient is unchanged.');
     });
@@ -290,7 +300,11 @@ export function Canvas(props: CanvasProps) {
     return [p.x, -p.y];
   };
 
-  let drag: { k: number; layer?: number; start: [number, number]; alt: boolean; moved: boolean; svg: SVGSVGElement; additive: boolean } | null = null;
+  let drag: {
+    k: number; layer?: number; start: [number, number]; alt: boolean; moved: boolean; svg: SVGSVGElement; additive: boolean;
+    /** For a dot: the run of its strand and the crossings on it. */
+    run?: Line[]; crossings?: Piece[];
+  } | null = null;
   let pan: { x: number; y: number; vx: number; vy: number } | null = null;
 
   const onDown = (k: number, e: PointerEvent) => {
@@ -304,6 +318,12 @@ export function Canvas(props: CanvasProps) {
     if (e.button !== 0) return;
     const t = (e.target as Element).closest('[data-layer]');
     drag = { k, layer: t ? Number(t.getAttribute('data-layer')) : undefined, start: units(svg, e), alt: e.altKey, moved: false, svg, additive: mod(e as unknown as KeyboardEvent) };
+    const l = layouts()[k];
+    const pc = drag.layer !== undefined && l ? piece(l, drag.layer) : undefined;
+    if (pc?.draw === 'dot' && !e.altKey) {
+      drag.run = track(l, pc);
+      drag.crossings = crossingsOn(l, pc);
+    }
     svg.setPointerCapture(e.pointerId);
     setMenu(null);
   };
@@ -317,7 +337,22 @@ export function Canvas(props: CanvasProps) {
     const [dx, dy] = [p[0] - drag.start[0], p[1] - drag.start[1]];
     if (!drag.moved && Math.hypot(dx, dy) < 0.12) return;
     drag.moved = true;
-    if (drag.layer !== undefined) {
+    if (drag.layer !== undefined && drag.run?.length) {
+      const l = layouts()[drag.k];
+      const pc = piece(l, drag.layer)!;
+      const y0 = centre(pc)[1];
+      const [x, y] = along(drag.run, y0 + dy);
+      const up = y > y0;
+      const passed = drag.crossings!.filter((c) => (up ? centre(c)[1] > y0 && centre(c)[1] < y : centre(c)[1] < y0 && centre(c)[1] > y)).map((c) => c.layer);
+      const ahead = drag.crossings!
+        .filter((c) => !passed.includes(c.layer))
+        .map((c) => ({ layer: c.layer, d: Math.abs(centre(c)[1] - y) }))
+        .sort((a, b) => a.d - b.d)[0];
+      const near = ahead && ahead.d < REACH ? { layer: ahead.layer, w: 1 - ahead.d / REACH } : undefined;
+      setLive({ summand: drag.k, layer: drag.layer, x, y, passed, near });
+      const n = passed.length;
+      say(n ? `Let go to slide the dot ${up ? 'up' : 'down'} through ${n} crossing${n > 1 ? 's' : ''}.` : near ? 'Keep going to pass the crossing.' : 'Sliding the dot along its strand; it settles where you let go.');
+    } else if (drag.layer !== undefined) {
       const l = layouts()[drag.k];
       const pc = piece(l, drag.layer);
       setGhost({ summand: drag.k, layer: drag.layer, dx: drag.alt && pc?.draw !== 'dot' ? dx : 0, dy });
@@ -335,6 +370,7 @@ export function Canvas(props: CanvasProps) {
     setGhost(null);
     setBoxDrag(null);
     if (!d) return;
+    if (!d.moved && live()) setLive(null);
     const l = layouts()[d.k];
     if (!l) return;
     const p = units(d.svg, e);
@@ -361,13 +397,55 @@ export function Canvas(props: CanvasProps) {
     }
     const [dx, dy] = [p[0] - d.start[0], p[1] - d.start[1]];
     if (d.alt) return lookMove(d.k, d.layer, [pc.draw === 'dot' ? 0 : dx, dy]);
-    const y = centre(pc)[1] + dy;
+    const lv = live();
+    const y = lv && lv.layer === d.layer ? lv.y : centre(pc)[1] + dy;
     if (pc.draw === 'dot') {
       const { direction, steps } = crossingsPassed(l, pc, y);
-      if (steps > 0) return void slide(d.k, pc, direction, steps);
+      if (steps > 0) {
+        hold();
+        return void slide(d.k, pc, direction, steps).finally(release);
+      }
+      const order = moveTo(l, d.layer, y);
+      if (sameOrder(order, l.order)) return settleBack(d.run ?? [], centre(pc)[1]);
+      hold();
+      return void reorder(d.k, order, 'interchange').finally(release);
     }
     void reorder(d.k, moveTo(l, d.layer, y), 'interchange');
   };
+
+  /** Keeps a released dot where it was let go until the rewritten term is drawn. */
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  let changed = false;
+  const hold = () => {
+    changed = false;
+    const lv = live();
+    if (lv) setLive({ ...lv, passed: [], near: undefined, held: true });
+  };
+  /** Lets go of a held dot at once if the gesture changed nothing, else when the new drawing is late. */
+  const release = () => {
+    clearTimeout(holdTimer);
+    if (!changed) return void (live()?.held && setLive(null));
+    holdTimer = setTimeout(() => live()?.held && setLive(null), 1500);
+  };
+  /** Eases a released dot back along its strand to where it is drawn. */
+  const settleBack = (run: Line[], to: number) => {
+    const lv = live();
+    if (!lv || !run.length) return setLive(null);
+    say('');
+    const from = lv.y;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const cur = live();
+      if (!cur || cur.layer !== lv.layer) return;
+      const t = Math.min(1, (now - t0) / 180);
+      const [x, y] = along(run, from + (to - from) * (1 - (1 - t) ** 3));
+      if (t >= 1) return setLive(null);
+      setLive({ ...cur, x, y, passed: [], near: undefined });
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+  onCleanup(() => clearTimeout(holdTimer));
 
   const onDblClick = (k: number, e: MouseEvent) => {
     const t = (e.target as Element).closest('[data-strand]');
@@ -535,7 +613,13 @@ export function Canvas(props: CanvasProps) {
 
   // drawing ---------------------------------------------------------------------------------
 
-  const lead = (l: Layout, k: number) => (l.negative ? '− ' : k === 0 ? '' : '+ ') + (l.coefficient ?? '');
+  /** A summand's sign and coefficient, typeset. */
+  const Lead = (q: { l: Layout; k: number }) => (
+    <>
+      {q.l.negative ? '−' : q.k === 0 && !q.l.coefficient ? '+' : q.k === 0 ? '' : '+'}
+      <Show when={q.l.coefficient}>{(c) => <> <Typeset text={c()} /></>}</Show>
+    </>
+  );
 
   const Diagram = (p: { l: Layout; k: number }) => {
     const l = () => p.l;
@@ -554,22 +638,24 @@ export function Canvas(props: CanvasProps) {
     const strandDash = (s?: number) => (s === undefined ? undefined : dashOf(l().strands[s]?.colour ?? ''));
     const vb = () => `${-pad} ${-(l().height + pad)} ${l().width + 2 * pad} ${l().height + 2 * pad + 0.5}`;
     const snapped = () => (selected().size ? bounds(l(), [...selected()]) : undefined);
+    const isLive = (layer?: number) => {
+      const lv = live();
+      return !!lv && lv.summand === p.k && lv.layer === layer;
+    };
     const lineEl = (line: Line) => {
-      const o = off(line.layer);
-      const hot = line.layer !== undefined && selected().has(line.layer);
-      const strandHot = sel().summand === p.k && sel().strand !== undefined && line.strand === sel().strand;
+      const o = () => (isLive(line.layer) ? [0, 0] as [number, number] : off(line.layer));
+      const hot = () => line.layer !== undefined && selected().has(line.layer);
+      const strandHot = () => sel().summand === p.k && sel().strand !== undefined && line.strand === sel().strand;
       switch (line.kind) {
         case 'strand':
         case 'turn':
-          return <path d={path(line, o)} stroke={strandColour(line.strand)} stroke-dasharray={strandDash(line.strand)} stroke-width={hot || strandHot ? 0.09 : 0.055} fill="none" />;
-        case 'dot': {
-          const y = line.y! + o[1];
-          return <circle cx={line.x! + o[0]} cy={-y} r={hot ? 0.15 : 0.11} fill={hot ? 'var(--accent)' : strandColour(line.strand)} />;
-        }
+          return <path d={path(line, o())} stroke={strandColour(line.strand)} stroke-dasharray={strandDash(line.strand)} stroke-width={hot() || strandHot() ? 0.09 : 0.055} fill="none" />;
+        case 'dot':
+          return <circle cx={line.x! + o()[0]} cy={-(line.y! + o()[1])} r={hot() ? 0.15 : 0.11} fill={hot() ? 'var(--accent)' : strandColour(line.strand)} visibility={isLive(line.layer) ? 'hidden' : undefined} />;
         case 'box':
           return (
-            <g transform={`translate(${o[0]} ${-o[1]})`}>
-              <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="var(--panel)" stroke={hot ? 'var(--accent)' : 'currentColor'} stroke-width={0.04} />
+            <g transform={`translate(${o()[0]} ${-o()[1]})`}>
+              <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="var(--panel)" stroke={hot() ? 'var(--accent)' : 'currentColor'} stroke-width={0.04} />
               <text x={(line.x0! + line.x1!) / 2} y={-(line.y0! + line.y1!) / 2 + 0.13} font-size="0.36" text-anchor="middle" fill="currentColor">{line.label}</text>
             </g>
           );
@@ -616,6 +702,23 @@ export function Canvas(props: CanvasProps) {
             </g>
           )}
         </Show>
+        <Show when={live()?.summand === p.k && live()}>
+          {(lv) => {
+            const at = (layer: number) => centre(piece(l(), layer)!);
+            return (
+              <g pointer-events="none" data-testid="live">
+                <Show when={lv().near}>
+                  {(n) => <circle class="xing near" data-layer={n().layer} cx={at(n().layer)[0]} cy={-at(n().layer)[1]} r={0.24 + 0.14 * n().w} opacity={0.25 + 0.75 * n().w} />}
+                </Show>
+                <For each={lv().passed}>
+                  {(layer) => <circle class="xing passed" data-layer={layer} cx={at(layer)[0]} cy={-at(layer)[1]} r={0.36} />}
+                </For>
+                <circle class="live-halo" cx={lv().x} cy={-lv().y} r={0.26} />
+                <circle class="live-dot" cx={lv().x} cy={-lv().y} r={0.14} fill={strandColour(piece(l(), lv().layer)?.inputs[0])} />
+              </g>
+            );
+          }}
+        </Show>
       </svg>
     );
   };
@@ -625,7 +728,7 @@ export function Canvas(props: CanvasProps) {
       <For each={p.ls}>
         {(l, k) => (
           <span class="summand">
-            <Show when={lead(l, k())}><span class="c">{lead(l, k())}</span></Show>
+            <Show when={l.negative || k() > 0 || l.coefficient}><span class="c"><Lead l={l} k={k()} /></span></Show>
             <svg viewBox={`-0.5 ${-(l.height + 0.5)} ${l.width + 1} ${l.height + 1.3}`} width={(l.width + 1) * 16} height={(l.height + 1.3) * 16}>
               <For each={l.lines}>
                 {(line) =>
@@ -717,7 +820,7 @@ export function Canvas(props: CanvasProps) {
                       <div class="frame" data-summand={k() + 1} data-word={l.word}
                         classList={{ on: sel().summand === k(), new: fresh().has(l.word) }}>
                         <div class="row frame-head">
-                          <span class="c">{lead(l, k()) || '+'}</span>
+                          <span class="c"><Lead l={l} k={k()} /></span>
                           <Show when={l.sign === -1}><span class="badge warn" title="This drawing's layers are in an order that costs a Koszul sign">−1 from interchange</span></Show>
                           <span class="hint">degree {l.degree}</span>
                         </div>
@@ -738,8 +841,8 @@ export function Canvas(props: CanvasProps) {
                     <button class="relitem" onClick={() => void apply(i())} data-relation={x.relation}>
                       <kbd>{i() + 1}</kbd>
                       <span class="grow">
-                        <span class="mono">{x.relation}</span> <span class="hint">{x.direction}{x.sign === -1 ? ', sign −1' : ''}</span>
-                        <Show when={m().previews[i()]} fallback={<div class="hint mono">{x.preview}</div>}>
+                        <span class="relname">{x.relation}</span> <span class="hint">{x.direction}{x.sign === -1 ? ', sign −1' : ''}</span>
+                        <Show when={m().previews[i()]} fallback={<div class="hint"><Typeset text={x.preview ?? ''} /></div>}>
                           {(ls) => <div><Mini ls={ls()} /></div>}
                         </Show>
                       </span>
@@ -764,9 +867,12 @@ export function Canvas(props: CanvasProps) {
   );
 }
 
+/** How near (in units) a dragged dot must come to a crossing on its strand before the crossing glows. */
+const REACH = 0.75;
+
 const ALT = isMac ? '⌥' : 'Alt+';
 const GESTURES: [string, string][] = [
-  ['drag a dot', 'slide it along its strand; crossings it passes fire the dot-slide relation'],
+  ['drag a dot', 'slide it along its strand: a crossing glows as the dot nears it and rings once passed; letting go fires the dot-slide relation through the rung crossings'],
   ['drag a piece', 'interchange it with distant pieces; a −1 badge shows when two odd pieces swap'],
   [`${ALT}drag`, 'move a piece for looks only (a layout hint)'],
   ['drag on empty space', 'box-select'],

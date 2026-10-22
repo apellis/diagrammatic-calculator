@@ -81,7 +81,7 @@ test('an AI what-if on a branch: edits there, reads the values, proposes accepti
   await expect(chat.locator('.ai-tool').nth(3)).toContainText('simplify: 0');
   // the workspace shows the branch, with the edit made there
   await expect(page.getByTestId('branch')).toContainText('slide the dot up');
-  await expect(cell(page, 0).locator('.head .text')).toHaveText('a := x_2 psi_1 e(iij) + e(iij)');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_2 psi_1 e(iij) + e(iij)');
 
   // what the model received: the tool result for workspace_read carries the watch's value
   const third = requests[1].body.messages as { role: string; content: { type: string; content?: string }[] }[];
@@ -103,9 +103,9 @@ test('an AI what-if on a branch: edits there, reads the values, proposes accepti
   // the person accepts the proposal; the document now has the change, and one undo takes it back
   await page.getByTestId('proposal').getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('branch')).toHaveCount(0);
-  await expect(cell(page, 0).locator('.head .text')).toHaveText('a := x_2 psi_1 e(iij) + e(iij)');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_2 psi_1 e(iij) + e(iij)');
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(cell(page, 0).locator('.head .text')).toHaveText('a := psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := psi_1 x_1 e(iij)');
 
   // the activity timeline lists the request and the AI's steps with their notes
   await page.getByTestId('activity-tab').click();
@@ -162,7 +162,7 @@ test('a multi-step AI request undoes as one step; pinned watches sit at the top 
   await expect(page.getByTestId('chat')).toContainText('e is idempotent.');
   await expect(page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(3);
   await expect(cell(page, 2).getByTestId('summary')).toHaveText('holds');
-  await expect(page.getByTestId('pinned')).toContainText('e e - e');
+  await expect(page.getByTestId('pinned').locator('.t')).toHaveAttribute('data-text', /e e - e/);
   await page.getByTestId('activity-tab').click();
   await expect(page.getByTestId('timeline').locator('.tl-milestone')).toContainText('e e - e = 0 and the check holds.');
 

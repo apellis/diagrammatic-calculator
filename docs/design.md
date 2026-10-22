@@ -227,6 +227,22 @@ order and look-only offsets) are part of the undo scope but never of the term. E
 key: Tab between pieces, arrows slide a dot, ⌥-arrows interchange, R lists relations and 1–9 applies
 one, I then a digit inserts, Delete removes, F fits; `?` lists them.
 
+A dragged dot is drawn where it is at every moment: it follows the drawn curve of its strand
+(`track` joins the strand's segments end to end through the dot, `along` finds the point of that
+run at the pointer's height), a crossing on the strand glows as the dot nears it and rings once
+the dot has passed its middle, and the bar says what letting go will do. On release the dot stays
+where it was let go until the rewritten term is drawn; when nothing changes (a dot on a bare strand
+moved within its row) it eases back along the strand to its drawn position.
+
+**Display and entry.** Text is entered in the fixed-width font and shown typeset in the reading
+font, so the fixed-width font always means plain text being entered or read exactly. `src/ui/tex.ts`
+turns the calculator's text into LaTeX for KaTeX token by token (the mapping is in
+docs/conventions.md, Display) and never changes what it says. A cell shows its text typeset; a
+click (or Enter on it, or a click on its head) opens it in the editor, and committing or leaving
+typesets it again. A result is typeset; a click shows its text in the fixed-width font, selected,
+to copy. Raw views of files and data (a version's `.dcw`, a snapshot's JSON, an AI tool call's
+input) stay in the fixed-width font.
+
 **Branches (4b).** A branch is its own Yjs document, kept as an update in the main document's
 `branches` map with the inputs it started from; the page shows either the document or a branch,
 each with its own evaluator over the shared cache. `branch.accept` is a three-way merge of the

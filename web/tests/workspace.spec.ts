@@ -17,13 +17,13 @@ test('a definition and a watch: values, diffs, and undo from the cache', async (
   await cell(page, 1).locator('.head').click();
   await expect(cell(page, 1).locator('.summand.new')).toHaveCount(1);
   await expect(cell(page, 1).locator('.changed summary')).toHaveText('Changed: 1 new, 1 gone, 0 with a new coefficient');
-  await expect(cell(page, 1).getByTestId('textform')).toHaveText('x_2 e(iji) + x_3^2 e(iji)');
+  await expect(cell(page, 1).getByTestId('textform')).toHaveAttribute('data-text', 'x_2 e(iji) + x_3^2 e(iji)');
 
   // undo with the button: the earlier values come back from the cache
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(cell(page, 1).getByTestId('textform')).toHaveText('x_2 e(iji) + x_1^2 e(iji)');
+  await expect(cell(page, 1).getByTestId('textform')).toHaveAttribute('data-text', 'x_2 e(iji) + x_1^2 e(iji)');
   await page.getByRole('button', { name: 'Redo' }).click();
-  await expect(cell(page, 1).getByTestId('textform')).toHaveText('x_2 e(iji) + x_3^2 e(iji)');
+  await expect(cell(page, 1).getByTestId('textform')).toHaveAttribute('data-text', 'x_2 e(iji) + x_3^2 e(iji)');
 });
 
 test('solve and check cells, and parse errors', async ({ page }) => {
@@ -39,7 +39,7 @@ test('solve and check cells, and parse errors', async ({ page }) => {
   await expect(cell(page, 4).getByTestId('summary')).toHaveText('error');
   await cell(page, 1).locator('.head').click();
   await expect(cell(page, 1).getByTestId('outcome')).toHaveText('4 solutions');
-  await expect(cell(page, 1).locator('td.mono')).toContainText('(c1 = 1, c2 = -1)');
+  await expect(cell(page, 1).locator('.kv .value[data-text="(c1 = 1, c2 = -1)"]')).toHaveCount(1);
   await cell(page, 4).locator('.head').click();
   await expect(cell(page, 4).locator('.error')).toBeVisible();
 });
@@ -48,7 +48,7 @@ test('a bare term becomes a definition, and / offers the cell kinds', async ({ p
   await newDoc(page);
   await typeCell(page, 'psi_1 e(iji)');
   await expect(cell(page, 0)).toHaveAttribute('data-kind', 'def');
-  await expect(cell(page, 0).locator('.head .text')).toHaveText('t1 := psi_1 e(iji)');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 't1 := psi_1 e(iji)');
   await page.getByTestId('add-cell').click();
   await page.keyboard.type('/wa');
   await page.getByRole('button', { name: 'watch' }).click();
@@ -60,13 +60,13 @@ test('a bare term becomes a definition, and / offers the cell kinds', async ({ p
 test('changing the context recomputes every cell, and a bad context is refused', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'watch x_1 psi_1 - psi_1 x_2');
-  await expect(cell(page, 0).getByTestId('textform')).toHaveText('e(iij)');
+  await expect(cell(page, 0).getByTestId('textform')).toHaveAttribute('data-text', 'e(iij)');
   await page.getByTestId('context').click();
   const input = page.getByLabel('Context');
   await input.fill('nilhecke nu=3 ring=GF(5)');
   await input.press('Enter');
-  await expect(page.getByTestId('context')).toHaveText('nilhecke nu=3 ring=GF(5)');
-  await expect(cell(page, 0).getByTestId('textform')).toHaveText('1');
+  await expect(page.getByTestId('context').locator('.ctx')).toHaveAttribute('data-text', 'nilhecke nu=3 ring=GF(5)');
+  await expect(cell(page, 0).getByTestId('textform')).toHaveAttribute('data-text', '1');
   await page.getByTestId('context').click();
   await page.getByLabel('Context').fill('klr type=Z9');
   await page.getByLabel('Context').press('Enter');
@@ -173,4 +173,32 @@ test('latency: edits and cached watches meet the interactive target', async ({ p
   console.log(`latency: computed edit ${computed.toFixed(0)} ms; cached undo/redo worst ${worst.toFixed(0)} ms (${[...undo, ...redo].map((x) => x.toFixed(0)).join(', ')})`);
   expect(computed).toBeLessThan(1000);
   expect(worst).toBeLessThan(150);
+});
+
+test('cells and results are typeset; clicking a cell edits its text, clicking a result shows its text', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1^2 psi_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  // after committing, the cell shows its text typeset, not in an editor
+  await expect(cell(page, 0).locator('.cm-content')).toHaveCount(0);
+  const shown = cell(page, 0).getByTestId('cell-display');
+  await expect(shown.locator('.katex')).toHaveCount(1);
+  await expect(shown.locator('.katex .msupsub').first()).toBeVisible();
+  await expect(cell(page, 0).locator('.head .text .katex')).toHaveCount(1);
+  // clicking it edits the plain text
+  await shown.click();
+  await expect(cell(page, 0).locator('.cm-content')).toBeFocused();
+  await expect(cell(page, 0).locator('.cm-content')).toHaveText('def a := x_1^2 psi_1 e(iij)');
+  await page.keyboard.press('End');
+  await page.keyboard.type(' + e(iij)');
+  await page.keyboard.press('Enter');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('2 terms');
+  await expect(cell(page, 0).getByTestId('cell-display')).toHaveAttribute('data-text', 'def a := x_1^2 psi_1 e(iij) + e(iij)');
+  // a result is typeset; a click shows its text in the fixed-width font, selected
+  const form = cell(page, 0).getByTestId('textform');
+  await expect(form.locator('.katex')).toHaveCount(1);
+  await form.click();
+  await expect(form).toHaveClass(/raw/);
+  await expect(form).toHaveText(/^a := /);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toMatch(/^a := /);
 });

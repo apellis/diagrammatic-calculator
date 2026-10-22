@@ -2,7 +2,8 @@
 import { createSignal, For, Show } from 'solid-js';
 import type { CellData, Snapshot, Version } from '../doc/model';
 import type { CellState } from '../eval/evaluator';
-import { summary } from './Results';
+import { NoteView, summary } from './Results';
+import { Typeset } from './Typeset';
 import { ago } from '../app';
 
 export function label(c: CellData, s?: CellState): string {
@@ -11,6 +12,15 @@ export function label(c: CellData, s?: CellState): string {
   if (p?.kind === 'note') return (p.note ?? '').split('\n')[0] || 'note';
   if (p?.kind === 'check') return c.text.replace(/^check\s+/, '');
   return c.text.replace(/^(watch|solve)\s+/, '');
+}
+
+/** A cell's label typeset; a note's first line as written. */
+function Label(props: { c: CellData; s?: CellState }) {
+  return (
+    <Show when={props.s?.parsed?.kind === 'note'} fallback={<Typeset text={label(props.c, props.s)} />}>
+      <NoteView text={label(props.c, props.s)} inline />
+    </Show>
+  );
 }
 
 export function Outline(props: {
@@ -45,7 +55,7 @@ export function Outline(props: {
                   <Show when={c()}>
                     <div class="oitem" onClick={() => props.onSelect(p.id)} title={`${c()!.text}\nterm counts: ${p.trend.join(', ')}`}>
                       <span class={`dot ${props.state(p.id)?.status ?? ''}`} />
-                      <span class="t grow">{label(c()!, props.state(p.id))}</span>
+                      <span class="t grow" data-text={label(c()!, props.state(p.id))}><Label c={c()!} s={props.state(p.id)} /></span>
                       <Trend values={p.trend} />
                       <span class="muted" style={{ 'font-size': '11.5px' }}>{props.state(p.id) ? summary(props.state(p.id)!) : ''}</span>
                     </div>
@@ -60,7 +70,7 @@ export function Outline(props: {
           {(c) => (
             <div class="oitem" classList={{ on: props.active === c.id }} onClick={() => props.onSelect(c.id)} title={c.text}>
               <span class={`dot ${props.state(c.id)?.status ?? ''}`} />
-              <span class="t grow">{label(c, props.state(c.id))}</span>
+              <span class="t grow" data-text={label(c, props.state(c.id))}><Label c={c} s={props.state(c.id)} /></span>
               <span class="muted" style={{ 'font-size': '11.5px' }}>{props.state(c.id) ? summary(props.state(c.id)!) : ''}</span>
             </div>
           )}

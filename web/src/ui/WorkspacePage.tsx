@@ -8,7 +8,8 @@ import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app'
 import { exportDch, exportDcw, fileName } from '../doc/dcw';
 import { Cell } from './Cell';
 import { Outline } from './Outline';
-import { ContextChip } from './ContextChip';
+import { ContextChip, ContextText } from './ContextChip';
+import { Typeset } from './Typeset';
 import { Palette, type Command } from './Palette';
 import { importText } from './DocList';
 import { Canvas, type Generator, type Selection } from './Canvas';
@@ -628,10 +629,10 @@ function DocView(props: {
             <div class="modal" onClick={(e) => e.stopPropagation()}>
               <h3 style={{ margin: '0 0 8px' }}>{s.name}</h3>
               <table class="kv"><tbody>
-                <tr><td>cell</td><td class="mono">{s.cellText}</td></tr>
-                <tr><td>context</td><td class="mono">{s.context}</td></tr>
+                <tr><td>cell</td><td><Typeset text={s.cellText} /></td></tr>
+                <tr><td>context</td><td><ContextText context={s.context} /></td></tr>
                 <tr><td>version</td><td>{s.version}, {new Date(s.time).toLocaleString()}</td></tr>
-                <tr><td>inputs</td><td class="mono">{s.key}</td></tr>
+                <tr><td>inputs</td><td class="hint">{s.key}</td></tr>
               </tbody></table>
               <pre class="textform" style={{ 'margin-top': '8px' }}>{JSON.stringify(stripSvg(s.value), null, 2)}</pre>
               <button onClick={() => setModal(null)}>Close</button>
@@ -721,7 +722,9 @@ function Keys(props: { onClose: () => void }) {
   const rows: [string, string][] = [
     [`${K}Z, ${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z or Ctrl+Y'}`, 'Undo, redo (outside a cell editor)'],
     [`${K}K`, 'Command palette'],
+    ['click, Enter', 'Edit a cell: its typeset text opens as plain text in a fixed-width font'],
     [`Enter or ${K}Enter`, 'Commit the cell being edited (Enter adds a line in a note)'],
+    ['click a result', 'Show its text, selected, to copy'],
     ['Esc', 'Stop editing, close a dialog'],
     [`${K}O, ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, 'Import a workspace, export this one'],
     [`${K}B`, 'Start a scratch branch: try something, then accept or discard it'],

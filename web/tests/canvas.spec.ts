@@ -34,12 +34,62 @@ test('dragging a dot through a crossing slides it, and undo restores the term', 
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await expect(canvas(page)).toBeHidden();
-  await expect(cell(page, 0).locator('.head .text')).not.toHaveText('a := psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).locator('.head .text')).not.toHaveAttribute('data-text', 'a := psi_1 x_1 e(iij)');
 
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(cell(page, 0).locator('.head .text')).toHaveText('a := psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := psi_1 x_1 e(iij)');
 });
 
+
+test('a dragged dot follows its strand, a crossing glows as it nears and rings once passed', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const dot = frames(page).first().locator('[data-draw="dot"]');
+  const box = (await dot.boundingBox())!;
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  const live = canvas(page).getByTestId('live');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  // a little way up: the dot moves with the pointer and the crossing ahead starts to glow
+  await page.mouse.move(x, y - 18, { steps: 3 });
+  await expect(live.locator('.live-dot')).toHaveCount(1);
+  const liveBox = (await live.locator('.live-dot').boundingBox())!;
+  expect(liveBox.y + liveBox.height / 2).toBeLessThan(y - 10);
+  await expect(live.locator('.xing.near')).toHaveCount(1);
+  await expect(live.locator('.xing.passed')).toHaveCount(0);
+  // past the crossing's middle: it rings, and the dot has moved across with the strand
+  await page.mouse.move(x, y - 70, { steps: 4 });
+  await expect(live.locator('.xing.passed')).toHaveCount(1);
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Let go to slide the dot up through 1 crossing');
+  const across = (await live.locator('.live-dot').boundingBox())!;
+  expect(across.x + across.width / 2).toBeGreaterThan(x + 10);
+  await page.mouse.up();
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Slid the dot up through 1 crossing');
+  await expect(frames(page)).toHaveCount(2);
+  await expect(live).toHaveCount(0);
+});
+
+test('a dot on a bare strand slides with the pointer and settles back when nothing changes', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_3 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const dot = frames(page).first().locator('[data-draw="dot"]');
+  const box = (await dot.boundingBox())!;
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  const live = canvas(page).getByTestId('live');
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 12, { steps: 3 });
+  const moved = (await live.locator('.live-dot').boundingBox())!;
+  expect(moved.y + moved.height / 2).toBeLessThan(y - 6);
+  await expect(live.locator('.xing')).toHaveCount(0);
+  await page.mouse.up();
+  await expect(live).toHaveCount(0);
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_3 e(iij)');
+});
 
 test('keyboard path: R lists relations and 1 applies one; undo; Tab to the dot and the arrow slides it', async ({ page }) => {
   await newDoc(page);
@@ -110,7 +160,7 @@ test('interchanging odd dots shows the sign, box selection narrows relations, an
   await page.keyboard.up('Alt');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
-  await expect(cell(page, 0).locator('.head .text')).toHaveText('d := x_1 x_2');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'd := x_1 x_2');
 
   // a watch that uses a definition opens written out
   await addCell(page, 'watch d psi_1');

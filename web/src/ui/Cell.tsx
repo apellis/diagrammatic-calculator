@@ -1,9 +1,12 @@
-// One cell: a one-line summary when collapsed; its editor, result and tools when expanded.
-import { createSignal, For, Show } from 'solid-js';
+// One cell: a one-line summary when collapsed; its text, result and tools when expanded. The text
+// is shown typeset; clicking it (or Enter) opens it for editing in the fixed-width font.
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import type { CellState } from '../eval/evaluator';
 import { kindOf } from '../doc/model';
 import { Editor } from './Editor';
-import { ResultView, summary } from './Results';
+import { NoteView, ResultView, summary } from './Results';
+import { Typeset } from './Typeset';
+import { toTex } from './tex';
 
 export const TEMPLATES: [string, string, number?][] = [
   ['def', 'def a := ', undefined],
@@ -42,28 +45,53 @@ export function Cell(props: CellProps) {
     return props.text.replace(/^(def|watch|solve|check)\s+/, '');
   };
   const slash = () => draft().startsWith('/');
+  // editing when new or opened by a click; typeset otherwise, and again once the cell is left
+  const [editing, setEditing] = createSignal(!!props.isNew);
+  createEffect(on(() => props.active, (a) => !a && setEditing(!!props.isNew), { defer: true }));
+  const edit = () => {
+    setEditing(true);
+    queueMicrotask(() => editor?.focus());
+  };
   const canPin = () => props.state?.status === 'fresh' && props.state.value?.status === 'ok';
   const canTikz = () => canPin() && ['watch', 'def'].includes((props.state!.value as { kind: string }).kind);
 
   return (
     <div class={`cell ${props.active ? 'active' : ''}`} id={`cell-${props.id}`} data-cell={props.id} data-kind={kind()} data-status={props.state?.status ?? ''}>
-      <div class="head" onClick={props.onToggle}>
+      <div class="head" onClick={() => {
+        if (!props.expanded) setEditing(true);
+        props.onToggle();
+      }}>
         <span class={`dot ${props.state?.status ?? ''}`} />
         <span class="kind">{kind()}</span>
-        <span class="text grow">{head() || <span class="muted">empty cell</span>}</span>
+        <span class="text grow" data-text={head()}>
+          <Show when={head()} fallback={<span class="muted">empty cell</span>}>
+            <Show when={kind() === 'note'} fallback={<Typeset text={head()} />}>
+              <NoteView text={head()} inline />
+            </Show>
+          </Show>
+        </span>
         <span class="summary" data-testid="summary">{props.state ? summary(props.state) : ''}</span>
       </div>
       <Show when={props.expanded}>
         <div class="body">
-          <Editor
-            text={props.text}
-            autofocus={props.active}
-            placeholder="Type a term to define it, or / for a cell kind"
-            onChange={setDraft}
-            onCommit={props.onCommit}
-            onCancel={props.onCancel}
-            ref={(api) => (editor = api)}
-          />
+          <Show when={editing()} fallback={<CellText text={props.text} kind={kind()} onEdit={edit} />}>
+            <Editor
+              text={props.text}
+              autofocus={props.active || editing()}
+              placeholder="Type a term to define it, or / for a cell kind"
+              onChange={setDraft}
+              onCommit={(t) => {
+                if (!props.isNew) setEditing(false);
+                props.onCommit(t);
+              }}
+              onCancel={() => {
+                if (!props.isNew) setEditing(false);
+                props.onCancel();
+              }}
+              onLeave={() => !props.isNew && setEditing(false)}
+              ref={(api) => (editor = api)}
+            />
+          </Show>
           <Show when={slash()}>
             <div class="kindmenu">
               <For each={TEMPLATES.filter(([k]) => k.startsWith(draft().slice(1).trim()))}>
@@ -71,7 +99,7 @@ export function Cell(props: CellProps) {
               </For>
             </div>
           </Show>
-          <Show when={props.state && !props.isNew}>
+          <Show when={props.state && !props.isNew && (kind() !== 'note' || editing())}>
             <ResultView s={props.state!} onFocus={props.onCanvas} />
           </Show>
           <div class="tools">
@@ -88,6 +116,27 @@ export function Cell(props: CellProps) {
             <button class="ghost" onClick={props.onRemove}>Delete</button>
           </div>
         </div>
+      </Show>
+    </div>
+  );
+}
+
+/** A cell's text typeset (its kind is in the head above); options on lines of their own. */
+function CellText(props: { text: string; kind: string; onEdit: () => void }) {
+  const lines = () => props.text.split('\n');
+  const first = () => lines()[0].replace(/^(def|watch|solve|check)\s+/, '');
+  const options = () => lines().slice(1).map((l) => l.trim()).filter(Boolean);
+  const note = () => /^note\s*"""([\s\S]*?)("""\s*)?$/.exec(props.text.trim())?.[1] ?? '';
+  return (
+    <div class="celltext" data-testid="cell-display" data-text={props.text} role="button" tabindex={0} title="Click to edit"
+      onClick={(e) => (e.target as HTMLElement).closest('a') || props.onEdit()} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), props.onEdit())}>
+      <Show when={props.kind === 'note'} fallback={
+        <Show when={props.text.trim()} fallback={<span class="muted">empty cell</span>}>
+          <Typeset text={first()} display />
+          <For each={options()}>{(o) => <div class="opt"><Typeset text={o} tex={toTex(o.replace(/=/, ' = '))} /></div>}</For>
+        </Show>
+      }>
+        <NoteView text={note()} />
       </Show>
     </div>
   );

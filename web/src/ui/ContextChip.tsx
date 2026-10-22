@@ -1,6 +1,8 @@
 // The context chip: the presentation, type, weight and ring; click to change them.
 import { createResource, createSignal, For, Show } from 'solid-js';
 import { engine } from '../app';
+import { contextTex, ringTex, toTex } from './tex';
+import { Typeset } from './Typeset';
 
 export function ContextChip(props: { context: string; scalars: string[]; onSet: (c: string) => void }) {
   const [open, setOpen] = createSignal(false);
@@ -27,7 +29,7 @@ export function ContextChip(props: { context: string; scalars: string[]; onSet: 
       <span class="chip" role="button" tabIndex={0} title="Change the context" data-testid="context"
         onClick={() => { setDraft(props.context); setError(''); setOpen(!open()); }}
         onKeyDown={(e) => e.key === 'Enter' && (setDraft(props.context), setOpen(true))}>
-        {props.context}
+        <ContextText context={props.context} />
       </span>
       <Show when={open()}>
         <div class="pop" style={{ top: '30px', left: 0 }}>
@@ -46,12 +48,12 @@ export function ContextChip(props: { context: string; scalars: string[]; onSet: 
               <table class="kv" style={{ 'margin-top': '8px' }}>
                 <tbody>
                   <tr><td>presentation</td><td>{d().title}</td></tr>
-                  <tr><td>ring</td><td class="mono">{d().ring}</td></tr>
-                  <tr><td>objects</td><td class="mono">{d().objects.join('  ')}</td></tr>
-                  <tr><td>generators</td><td class="mono">{d().generators.map((g) => g.name).join(', ')}</td></tr>
-                  <tr><td>relations</td><td class="mono" style={{ 'font-size': '12px' }}>{d().relations.join(', ')}</td></tr>
+                  <tr><td>ring</td><td><Typeset text={d().ring} tex={ringTex(d().ring)} /></td></tr>
+                  <tr><td>objects</td><td><Typeset text={d().objects.join('  ')} tex={d().objects.map(toTex).join(',\\quad ')} /></td></tr>
+                  <tr><td>generators</td><td><Typeset text={d().generators.map((g) => g.name).join(', ')} /></td></tr>
+                  <tr><td>relations</td><td style={{ 'font-size': '12px' }}>{d().relations.join(', ')}</td></tr>
                   <tr><td>computed by</td><td>{d().provenance.strategy}, {d().provenance.method} ({d().provenance.certificate.status})</td></tr>
-                  <Show when={props.scalars.length}><tr><td>unknowns</td><td class="mono">{props.scalars.join(', ')}</td></tr></Show>
+                  <Show when={props.scalars.length}><tr><td>unknowns</td><td><Typeset text={props.scalars.join(', ')} /></td></tr></Show>
                   <For each={d().provenance.notes ?? []}>{(n) => <tr><td /><td class="hint">{n}</td></tr>}</For>
                 </tbody>
               </table>
@@ -59,6 +61,18 @@ export function ContextChip(props: { context: string; scalars: string[]; onSet: 
           </Show>
         </div>
       </Show>
+    </span>
+  );
+}
+
+/** A context typeset: the presentation's name, then its options as mathematics. */
+export function ContextText(props: { context: string }) {
+  const name = () => props.context.trim().split(/\s+/)[0] ?? '';
+  const options = () => props.context.trim().slice(name().length);
+  return (
+    <span class="ctx" data-text={props.context}>
+      <span class="ctx-name">{name()}</span>{' '}
+      <Typeset text={options()} tex={contextTex(options())} />
     </span>
   );
 }

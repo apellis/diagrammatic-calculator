@@ -11,6 +11,8 @@ export interface EditorProps {
   onCommit: (text: string) => void;
   onCancel: () => void;
   onChange?: (text: string) => void;
+  /** Focus left the cell (after committing any change). */
+  onLeave?: () => void;
   /** Gives the parent a way to replace the text, e.g. from the cell-kind menu. */
   ref?: (api: { set: (t: string, cursor?: number) => void; focus: () => void }) => void;
 }
@@ -52,6 +54,7 @@ export function Editor(props: EditorProps) {
               const to = (e as FocusEvent).relatedTarget as Node | null;
               if (to && host.closest('.cell')?.contains(to)) return false;
               if (text() !== committed) commit();
+              props.onLeave?.();
               return false;
             },
           }),

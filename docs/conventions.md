@@ -158,6 +158,24 @@ Each step is one library lemma whiskered by `dg_stepL_at`; each interchange move
 Only integer coefficients and even generators are exported; anything else is refused with a
 reason.
 
+## Display
+
+The web app shows text typeset wherever it is only read, and as plain text in a fixed-width font
+wherever it is entered (a click on typeset text opens it). Typesetting changes only the look:
+
+| Text | Shown as |
+|---|---|
+| `x_1^2`, `q^-1`, `x_{12}` | x₁², q⁻¹, x₁₂ (subscripts and superscripts) |
+| `psi_1`, `pi`, `Lambda` and other Greek names | ψ₁, π, Λ |
+| `c1`, `t2` (a name ending in digits) | c₁, t₂ |
+| `e(iij)`, `Q_ij(x_1, x_2)`, `Qbar_ij` | e(iij), Q_ij(x₁, x₂), Q̄_ij, with colour names in italics |
+| a name of several letters | in italics; upright when it is applied, as in idempotent(a) |
+| `a b` | a b side by side (the product); a thin space between names of several letters |
+| `a := t`, `*`, `(x)` or `⊗`, `∘` | a ≔ t, ·, ⊗, ∘ |
+| `solve … for c1, c2` | … for c₁, c₂ |
+| `ring=QQ`, `ZZ[I]`, `GF(5)`, `QQ(q)` | ℚ, ℤ[I], 𝔽₅, ℚ(q) |
+| `type=A2 nu=2i+j` | type A₂, ν = 2i+j |
+
 ## Drawing
 
 TikZ export matches the drawing style of Brundan–Ellis, *Super Kac–Moody 2-categories*

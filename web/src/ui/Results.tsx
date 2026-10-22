@@ -3,6 +3,7 @@ import { createEffect, createSignal, For, Match, on, Show, Switch } from 'solid-
 import type { CellState, CellValue } from '../eval/evaluator';
 import type { Provenance, Summand, WorkspaceRunCell } from '../engine/ops.gen';
 import katex from 'katex';
+import { Typeset, Value } from './Typeset';
 
 type Ok = WorkspaceRunCell;
 
@@ -64,11 +65,13 @@ export function Badge(props: { p?: Provenance }) {
 }
 
 function SummandView(props: { s: Summand; cls?: string; first: boolean; onFocus?: (word: string) => void }) {
-  const lead = () => (props.s.negative ? '− ' : props.first ? '' : '+ ') + (props.s.coefficient ?? '');
+  const sign = () => (props.s.negative ? '−' : props.first ? '' : '+');
   return (
     <span class={`summand ${props.cls ?? ''}`} title={props.onFocus ? `${props.s.text}\n(double-click to open the canvas)` : props.s.text} data-word={props.s.word}
       onDblClick={() => props.onFocus?.(props.s.word)}>
-      <Show when={lead()}><span class="c">{lead()}</span></Show>
+      <Show when={sign() || props.s.coefficient}>
+        <span class="c">{sign()}<Show when={props.s.coefficient}>{(c) => <>{sign() ? ' ' : ''}<Typeset text={c()} /></>}</Show></span>
+      </Show>
       <span innerHTML={props.s.svg} />
     </span>
   );
@@ -108,11 +111,13 @@ export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey
         <details class="changed">
           <summary>Changed: {added().size} new, {gone().length} gone, {recoef().length} with a new coefficient</summary>
           <div class="textform">
-            {[...(props.r.summands ?? []).filter((s) => added().has(s.word)).map((s) => `+ ${s.text}`), ...gone().map((s) => `− ${s.text}`), ...recoef().map((s) => `~ ${s.text}`)].join('\n')}
+            <For each={(props.r.summands ?? []).filter((s) => added().has(s.word))}>{(s) => <div>new: <Typeset text={s.text} /></div>}</For>
+            <For each={gone()}>{(s) => <div>gone: <Typeset text={s.text} /></div>}</For>
+            <For each={recoef()}>{(s) => <div>new coefficient: <Typeset text={s.text} /></div>}</For>
           </div>
         </details>
       </Show>
-      <div class="textform" data-testid="textform">{props.text}</div>
+      <Value class="textform" testid="textform" text={props.text} />
     </div>
   );
 }
@@ -125,7 +130,7 @@ function CheckView(props: { r: Ok }) {
       </div>
       <Show when={props.r.witness}>
         <div class="hint">Witness (should vanish):</div>
-        <div class="textform">{props.r.witness}</div>
+        <Value class="textform" text={props.r.witness!} />
       </Show>
     </div>
   );
@@ -133,6 +138,11 @@ function CheckView(props: { r: Ok }) {
 
 function assignments(m?: Record<string, string>) {
   return Object.entries(m ?? {}).map(([k, v]) => `${k} = ${v}`).join(', ');
+}
+
+/** Assignments typeset, one set per line. */
+function Assigned(props: { lines: string[] }) {
+  return <For each={props.lines}>{(l) => <div><Value text={l} /></div>}</For>;
 }
 
 function SolveView(props: { r: Ok }) {
@@ -143,13 +153,13 @@ function SolveView(props: { r: Ok }) {
         <tbody>
           <tr><td>outcome</td><td data-testid="outcome">{solveSummary(r())}</td></tr>
           <tr><td>method</td><td>{r().tier === 1 ? 'linear system' : 'Gröbner basis'}, {r().equations} equations</td></tr>
-          <Show when={r().solution}><tr><td>solution</td><td class="mono">{assignments(r().solution)}</td></tr></Show>
-          <Show when={r().particular}><tr><td>particular</td><td class="mono">{assignments(r().particular)}</td></tr></Show>
+          <Show when={r().solution}><tr><td>solution</td><td><Assigned lines={[assignments(r().solution)]} /></td></tr></Show>
+          <Show when={r().particular}><tr><td>particular</td><td><Assigned lines={[assignments(r().particular)]} /></td></tr></Show>
           <Show when={r().directions?.length}>
-            <tr><td>directions</td><td class="mono">{r().directions!.map((d) => assignments(d)).join('\n')}</td></tr>
+            <tr><td>directions</td><td><Assigned lines={r().directions!.map((d) => assignments(d))} /></td></tr>
           </Show>
           <Show when={r().points?.length}>
-            <tr><td>points</td><td class="mono" style={{ 'white-space': 'pre' }}>{r().points!.map((p) => `(${(r().variables ?? []).map((v, i) => `${v} = ${p[i]}`).join(', ')})`).join('\n')}</td></tr>
+            <tr><td>points</td><td><Assigned lines={r().points!.map((p) => `(${(r().variables ?? []).map((v, i) => `${v} = ${p[i]}`).join(', ')})`)} /></td></tr>
           </Show>
         </tbody>
       </table>
@@ -157,17 +167,16 @@ function SolveView(props: { r: Ok }) {
   );
 }
 
-/** A note's text, with $…$ and $$…$$ as mathematics. */
-export function NoteView(props: { text: string }) {
-  const html = () =>
-    props.text
-      .split(/\n\s*\n/)
-      .map((para) => `<p>${para.split(/(\$\$[^$]+\$\$|\$[^$]+\$)/).map((part) => {
-        if (part.startsWith('$$')) return katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
-        if (part.startsWith('$') && part.length > 1) return katex.renderToString(part.slice(1, -1), { throwOnError: false });
-        return part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      }).join('')}</p>`)
-      .join('');
+/** A note's text, with $…$ and $$…$$ as mathematics; `inline` for one line in a cell's head. */
+export function NoteView(props: { text: string; inline?: boolean }) {
+  const part = (part: string) => {
+    if (part.startsWith('$$')) return katex.renderToString(part.slice(2, -2), { displayMode: !props.inline, throwOnError: false });
+    if (part.startsWith('$') && part.length > 1) return katex.renderToString(part.slice(1, -1), { throwOnError: false });
+    return part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+  const split = (t: string) => t.split(/(\$\$[^$]+\$\$|\$[^$]+\$)/).map(part).join('');
+  if (props.inline) return <span class="note" innerHTML={split(props.text)} />;
+  const html = () => props.text.split(/\n\s*\n/).map((para) => `<p>${split(para)}</p>`).join('');
   return <div class="note" innerHTML={html()} />;
 }
 

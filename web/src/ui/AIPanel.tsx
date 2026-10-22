@@ -274,7 +274,7 @@ export function AIPanel(props: AIPanelProps) {
                               <Match when={p.type === 'tool' && p}>
                                 {(t) => (
                                   <details class="ai-tool" classList={{ bad: !!t().isError, pending: !t().summary }}>
-                                    <summary><span class="mono">{t().name}</span> <span class="hint">{t().summary ?? 'running…'}</span></summary>
+                                    <summary><span class="toolname">{t().name}</span> <span class="hint">{t().summary ?? 'running…'}</span></summary>
                                     <div class="textform">{t().input}</div>
                                   </details>
                                 )}

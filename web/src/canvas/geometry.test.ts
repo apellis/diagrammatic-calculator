@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nodeEngine } from '../eval/testing';
-import { crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand, onStrand, piece, piecesIn, rectangle, type Layout } from './geometry';
+import { along, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand, onStrand, piece, piecesIn, rectangle, track, trackRange, type Layout } from './geometry';
 
 const engine = nodeEngine();
 
@@ -21,6 +21,30 @@ describe('canvas geometry', () => {
     expect(nextOnStrand(l, dot, false)).toBeUndefined();
     // the strand through the dot meets the dot and the crossings it passes through
     expect(onStrand(l, dot.inputs[0]).length).toBe(3);
+  });
+
+  it('follows a dragged dot along its strand through the crossings', async () => {
+    const [l] = await layout('nilhecke nu=3', 'psi_1 psi_2 psi_1 x_1');
+    const dot = l.pieces.find((p) => p.draw === 'dot')!;
+    const run = track(l, dot);
+    // the run is one strand drawn end to end, from the bottom of the diagram to the top
+    expect(run[0].y0).toBe(0);
+    expect(run[run.length - 1].y1).toBe(l.height);
+    run.slice(1).forEach((seg, i) => expect([seg.x0, seg.y0]).toEqual([run[i].x1, run[i].y1]));
+    const [lo, hi] = trackRange(run);
+    expect(along(run, -5)[1]).toBe(lo);
+    expect(along(run, 99)[1]).toBe(hi);
+    // half way up a crossing the strand is half way across it; at its ends it is on the ends
+    const c = crossingsOn(l, dot)[0];
+    const seg = run.find((x) => x.layer === c.layer)!;
+    expect(along(run, (seg.y0! + seg.y1!) / 2)[0]).toBeCloseTo((seg.x0! + seg.x1!) / 2, 3);
+    expect(along(run, seg.y0! + 1e-9)[0]).toBeCloseTo(seg.x0!, 3);
+    expect(crossingsOn(l, dot).length).toBe(2);
+    // a dot on a bare strand has a run of its own strand only, with no crossings
+    const [bare] = await layout('klr type=A2 nu=i+j', 'x_1 e(ij)');
+    const d = bare.pieces[0];
+    expect(track(bare, d).length).toBe(1);
+    expect(crossingsOn(bare, d)).toEqual([]);
   });
 
   it('turns a box into a rectangle of layers and strands', async () => {

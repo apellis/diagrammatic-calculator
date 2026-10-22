@@ -69,6 +69,56 @@ export function crossingsPassed(l: Layout, dot: Piece, y: number): { direction: 
   return { direction: up ? 'up' : 'down', steps };
 }
 
+/**
+ * The drawn run of a dot's strand through the dot: the strand's segments joined end to end, from
+ * the dot's own segment up and down until a turn or the edge. A dragged dot follows this run.
+ */
+export function track(l: Layout, dot: Piece): Line[] {
+  const s = dotStrand(dot);
+  const segs = l.lines.filter((x) => x.kind === 'strand' && x.strand === s);
+  const own = segs.find((x) => x.layer === dot.layer);
+  if (!own) return [];
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+  const run = [own];
+  for (let cur = own, next; (next = segs.find((x) => !run.includes(x) && near(x.y0!, cur.y1!) && near(x.x0!, cur.x1!))); cur = next) run.push(next);
+  for (let cur = own, next; (next = segs.find((x) => !run.includes(x) && near(x.y1!, cur.y0!) && near(x.x1!, cur.x0!))); cur = next) run.unshift(next);
+  return run;
+}
+
+/** The lowest and highest heights a dot may be dragged to on its run, kept off the ends. */
+export function trackRange(run: Line[]): [number, number] {
+  if (!run.length) return [0, 0];
+  return [run[0].y0! + 0.12, run[run.length - 1].y1! - 0.12];
+}
+
+/**
+ * The point of the run at height `y` (clamped to the run), on the drawn curve: each segment is the
+ * cubic of `path`, whose height is monotone in its parameter, so a few bisection steps find it.
+ */
+export function along(run: Line[], y: number): [number, number] {
+  if (!run.length) return [0, y];
+  const [lo, hi] = trackRange(run);
+  const h = Math.max(lo, Math.min(hi, y));
+  const seg = run.find((x) => h <= x.y1!) ?? run[run.length - 1];
+  const [x0, y0, x1, y1] = [seg.x0!, seg.y0!, seg.x1!, seg.y1!];
+  const target = y1 === y0 ? 0 : (h - y0) / (y1 - y0);
+  // height fraction 3t(1-t)/2 + t^3 and width fraction 3t^2 - 2t^3 of the cubic in `path`
+  let [a, b] = [0, 1];
+  for (let i = 0; i < 24; i++) {
+    const t = (a + b) / 2;
+    if (1.5 * t * (1 - t) + t * t * t < target) a = t;
+    else b = t;
+  }
+  const t = (a + b) / 2;
+  return [x0 + (x1 - x0) * (3 * t * t - 2 * t * t * t), h];
+}
+
+/** The crossings a dot's strand passes through, bottom to top. */
+export function crossingsOn(l: Layout, dot: Piece): Piece[] {
+  const s = dotStrand(dot);
+  return l.pieces.filter((p) => p.draw === 'crossing' && s !== undefined && p.inputs.includes(s)).sort((a, b) => centre(a)[1] - centre(b)[1]);
+}
+
 /** The next piece on a dot's strand above or below it, if any. */
 export function nextOnStrand(l: Layout, dot: Piece, up: boolean): Piece | undefined {
   const s = dotStrand(dot);
