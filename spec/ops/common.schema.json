@@ -330,6 +330,55 @@
           }
         }
       }
+    },
+    "summand": {
+      "description": "One summand of a term for display. The term's text is the summands' texts joined with their signs; the drawing shows the word in its canonical layering, and 'negative' and 'coefficient' are the sign and absolute coefficient that go with the drawing (they can differ in sign from 'text' when odd generators are written in another order).",
+      "type": "object",
+      "required": [
+        "text",
+        "word",
+        "degree",
+        "source",
+        "target",
+        "negative",
+        "coefficient",
+        "svg"
+      ],
+      "properties": {
+        "text": {
+          "description": "The summand alone in canonical text form, with its coefficient.",
+          "type": "string"
+        },
+        "word": {
+          "description": "The word without its coefficient; distinct summands of a term have distinct words.",
+          "type": "string"
+        },
+        "degree": {
+          "type": "integer"
+        },
+        "source": {
+          "description": "The bottom object, as inside e(...).",
+          "type": "string"
+        },
+        "target": {
+          "description": "The top object.",
+          "type": "string"
+        },
+        "negative": {
+          "type": "boolean"
+        },
+        "coefficient": {
+          "description": "The absolute value of the coefficient, null when it is 1.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "svg": {
+          "description": "The word drawn as a standalone SVG.",
+          "type": "string"
+        }
+      }
     }
   }
 }

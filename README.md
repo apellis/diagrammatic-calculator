@@ -7,7 +7,12 @@ read and edited as string diagrams.
 Status: the headless calculator is built (phases 1 to 3 of `docs/spec.md`): exact normal forms
 through faithful representations, finite-dimensional quotients and their linear algebra, and
 rewriting by the defining relations, with rewrite chains exported as Lean proofs. The live
-workspace in the browser (phase 4) is next. `AGENTS.md` says how to work in this repository.
+workspace in the browser (phase 4a) is in `web/`; gestures on diagrams and the in-app AI (phase 4b)
+are next. `AGENTS.md` says how to work in this repository.
+
+```sh
+cd web && npm ci && npm run wasm && npm run dev    # the web app on http://localhost:5173
+```
 
 ```sh
 diagcalc simplify -c "klr type=A2 nu=2i+j" "psi_1 psi_2 psi_1 e(iji)"

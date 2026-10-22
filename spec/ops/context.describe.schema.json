@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/context.describe.schema.json",
+  "title": "context.describe: check a context line and say what it provides",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["context"],
+      "properties": {
+        "context": { "$ref": "common.schema.json#/$defs/context" },
+        "presentation": { "description": "The text of a presentation file, when the context names one that is not shipped.", "type": "string" }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "context", "presentation", "title", "ring", "colours", "objects", "generators", "relations", "representations", "scalars", "provenance"],
+          "properties": {
+            "status": { "const": "ok" },
+            "context": { "description": "The context line in canonical form.", "type": "string" },
+            "presentation": { "type": "string" },
+            "title": { "type": "string" },
+            "ring": { "type": "string" },
+            "colours": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "odd", "oriented"],
+                "properties": { "name": { "type": "string" }, "odd": { "type": "boolean" }, "oriented": { "type": "boolean" } }
+              }
+            },
+            "objects": { "description": "The objects a word without an idempotent ranges over.", "type": "array", "items": { "type": "string" } },
+            "generators": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "draw"],
+                "properties": { "name": { "type": "string" }, "draw": { "type": "string" } }
+              }
+            },
+            "relations": { "type": "array", "items": { "type": "string" } },
+            "representations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "kind", "certificate"],
+                "properties": { "name": { "type": "string" }, "kind": { "type": "string" }, "certificate": { "type": "string" } }
+              }
+            },
+            "scalars": { "type": "array", "items": { "type": "string" } },
+            "provenance": { "description": "How results in this context are computed by default.", "$ref": "common.schema.json#/$defs/provenance" }
+          }
+        },
+        { "$ref": "common.schema.json#/$defs/error" }
+      ]
+    }
+  }
+}

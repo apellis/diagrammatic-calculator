@@ -13,6 +13,8 @@ these schemas in `crates/core/tests/schemas.rs`.
 | `term.render` | 1 | `term.render.schema.json` |
 | `presentation.check` | 1 | `presentation.check.schema.json` |
 | `workspace.run` | 1 | `workspace.run.schema.json` |
+| `workspace.parse` | 4a | `workspace.parse.schema.json` |
+| `context.describe` | 4a | `context.describe.schema.json` |
 | `relations.match` | 3 | `relations.match.schema.json` |
 | `relation.apply` | 3 | `relation.apply.schema.json` |
 | `interchange` | 3 | `interchange.schema.json` |

@@ -1,0 +1,18 @@
+diagcalc-workspace/1
+context klr type=A2 nu=2i+j ring=QQ Lambda=2i+j
+
+note """Idempotents of e(iji) in the cyclotomic quotient $R^\Lambda(2\alpha_i+\alpha_j)$ of type $A_2$, $\Lambda = 2\Lambda_i + \Lambda_j$.
+
+Every idempotent in the span of $e(iji)$ and $\psi_1\psi_2\psi_1 e(iji)$, then the two that split $e(iji)$."""  # id=n1
+def e := c1 e(iji) + c2 psi_1 psi_2 psi_1 e(iji)  # id=d2
+watch e e - e  # id=w3
+solve e e - e = 0 for c1, c2  # id=s4
+def a := psi_1 psi_2 psi_1 e(iji)  # id=d5
+def b := e(iji) - a  # id=d6
+check idempotent(a)  # id=k7
+check idempotent(b)  # id=k8
+check orthogonal(a, b)  # id=k9
+check equal(b, -psi_2 psi_1 psi_2 e(iji))  # id=k10
+check primitive(a)  # id=k11
+check primitive(b)  # id=k12
+watch psi_1 psi_2 psi_1 e(iji) - psi_2 psi_1 psi_2 e(iji)  # id=w13

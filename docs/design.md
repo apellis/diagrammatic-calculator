@@ -159,6 +159,57 @@ the command line see exactly the operation API.
 `pool::par_map` splits independent work (products for an ideal, entries of a Gram matrix) across
 threads natively and keeps the input order, so a parallel run gives exactly the sequential answer.
 A WebAssembly module has one thread. In the browser the pool is a set of Web Workers, each with its
-own module instance: the front end splits a job into slices (rows of a Gram matrix, degrees of a
-quotient) and each worker computes its slice through the same operations, so the engine needs no
-shared memory. That front-end half arrives with the web app (phase 4a).
+own module instance (see "Web app"). Independent cells already run on different workers. Splitting
+one heavy job into slices (rows of a Gram matrix, degrees of a quotient) for several workers,
+through the same operations so the engine needs no shared memory, is not built yet; no 4a workload
+needs it.
+
+## Web app
+
+`web/` is the browser workspace (phase 4a): Vite, TypeScript and Solid. Solid won a small trial
+against Preact on what the workspace does most, a keyed list of SVG diagrams: rendering 1000
+summands took 171 ms against 216 ms, a diff update of 10% of them 39 ms against 47 ms, and the
+bundle was 5.0 KB against 8.4 KB gzipped (headless Chromium, median of five).
+
+**Engine.** `crates/wasm` built with the `web` profile (LTO, no debug information) and
+`wasm-bindgen --target web` (`npm run wasm`). The main thread compiles the module once and hands
+it to each Web Worker, so replacing a worker is cheap. `src/engine/engine.ts` has two lanes: one
+worker for quick operations (parsing a cell, describing a context), answered in order, and a pool
+for evaluations, where a job can be cancelled or stopped at its time limit by replacing its
+worker. Requests and responses are typed by `src/engine/ops.gen.ts`, generated from `spec/ops/`
+(`npm run gen-ops`; CI checks it is current).
+
+**Document.** `src/doc/model.ts`: a Yjs document holding the context, the cells (each an ID and
+its text as one entry of a `.dcw` file), pinned snapshots and the version history. Every change is
+one step through `Doc.step`, so it is one undo step (Yjs `UndoManager`) and one version, recorded
+with a Yjs snapshot so any version opens read-only and can be restored. Documents are stored in
+IndexedDB (`y-indexeddb`) with an index for the document list; `.dcw` export and import go through
+`workspace.parse`, so the file is canonical. A `.dch` file holds the history (`spec/history.md`).
+
+**Evaluation.** `src/eval/evaluator.ts`. A cell's result is keyed by a hash of its inputs: the
+engine build, the context, the unknowns it mentions, its text and the keys of the definitions it
+uses. An edit changes the keys of exactly the cells downstream of it, so every other cell, and
+every state reached again by undo, is a cache hit (`src/eval/cache.ts`: memory, then IndexedDB
+with a size cap and least-recently-used eviction). A cell with a new key is computed by
+`workspace.run` on a small workspace of just the definitions it needs and itself, and shows as
+stale until the value arrives; a job whose key no cell needs any more is cancelled. The core runs
+a whole `.dcw` file the same way: each cell's context has only the unknowns that it, or the
+definitions it uses, mention, so an unrelated solve cell never turns a cell's coefficients into
+polynomials.
+
+**Showing results.** `workspace.run` draws the summands of definitions and watches
+(`summands`, each with its word, degree and SVG). A watch outlines summands that are new since
+its previous value, shows the vanished ones faded for two seconds, and lists the changes under
+"Changed". Every result carries a badge with its equality strategy and certificate, in the warning
+colour when it rests on an assumption or a finite quotient or truncation, whose notes are shown.
+
+**Tests.** Unit tests (`npm test`, Vitest) run the evaluator and the document model in Node
+against the real WebAssembly engine. The Playwright suite (`npx playwright test`) drives the app in
+Chromium: typing and editing cells, watch diffs, solve and check cells, context changes, history
+and restore, persistence across reloads, the document list, export and import, snapshots, the gate
+example, and latency. On the development container a computed edit shows its new value in about
+60 ms and cached undo and redo in at most about 70 ms, against the 150 ms target.
+
+**Not yet in 4a.** Clicking a summand to see which terms of the definitions produced it, persisting
+a linked file across reloads, importing `.dch` files, and size diagnostics when a job is stopped at
+its time limit (it reports the time and points to the command-line tool).

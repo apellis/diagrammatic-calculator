@@ -327,35 +327,97 @@ impl Workspace {
     pub fn print(&self) -> String {
         let mut s = format!("{WORKSPACE_FORMAT}\ncontext {}\n", self.context.print());
         for c in &self.cells {
-            let mut line = match &c.body {
-                CellBody::Def { name, term } => format!("def {name} := {}", text::print(term)),
-                CellBody::Watch { term } => format!("watch {}", text::print(term)),
-                CellBody::Solve { lhs, rhs, unknowns } => {
-                    format!(
-                        "solve {} = {} for {}",
-                        text::print(lhs),
-                        text::print(rhs),
-                        unknowns.join(", ")
-                    )
-                }
-                CellBody::Check { name, args } => {
-                    let a: Vec<String> = args.iter().map(text::print).collect();
-                    format!("check {name}({})", a.join(", "))
-                }
-                CellBody::Note { text } => format!("note \"\"\"{text}\"\"\""),
-                CellBody::Comment(t) => format!("# {t}").trim_end().to_string(),
-                CellBody::Blank => String::new(),
-            };
-            for (k, v) in &c.options {
-                line.push_str(&format!("  {k}={v}"));
-            }
-            if let Some(id) = &c.id {
-                line.push_str(&format!("  # id={id}"));
-            }
-            s.push_str(&line);
+            s.push_str(&c.print());
             s.push('\n');
         }
         s
+    }
+}
+
+impl Cell {
+    /// Parses one cell from its text: one line, or several for a note.
+    pub fn parse(src: &str) -> Result<Cell> {
+        let mut lines = src.lines().map(String::from).enumerate().peekable();
+        let first = lines.next().map(|x| x.1).unwrap_or_default();
+        let cell = parse_cell(&first, &mut lines)?;
+        if let Some((_, extra)) = lines.find(|(_, l)| !l.trim().is_empty()) {
+            return Err(Error::invalid(format!(
+                "one cell per entry: unexpected '{}'",
+                extra.trim()
+            )));
+        }
+        Ok(cell)
+    }
+
+    /// The cell in canonical form, with its options and ID, as one entry of a workspace file.
+    pub fn print(&self) -> String {
+        let c = self;
+        let mut line = match &c.body {
+            CellBody::Def { name, term } => format!("def {name} := {}", text::print(term)),
+            CellBody::Watch { term } => format!("watch {}", text::print(term)),
+            CellBody::Solve { lhs, rhs, unknowns } => {
+                format!(
+                    "solve {} = {} for {}",
+                    text::print(lhs),
+                    text::print(rhs),
+                    unknowns.join(", ")
+                )
+            }
+            CellBody::Check { name, args } => {
+                let a: Vec<String> = args.iter().map(text::print).collect();
+                format!("check {name}({})", a.join(", "))
+            }
+            CellBody::Note { text } => format!("note \"\"\"{text}\"\"\""),
+            CellBody::Comment(t) => format!("# {t}").trim_end().to_string(),
+            CellBody::Blank => String::new(),
+        };
+        for (k, v) in &c.options {
+            line.push_str(&format!("  {k}={v}"));
+        }
+        if let Some(id) = &c.id {
+            line.push_str(&format!("  # id={id}"));
+        }
+        line
+    }
+
+    /// The name a definition introduces.
+    pub fn defines(&self) -> Option<&str> {
+        match &self.body {
+            CellBody::Def { name, .. } => Some(name),
+            _ => None,
+        }
+    }
+
+    /// The bare names (no subscript, no arguments) the cell's terms mention: the definitions and
+    /// unknowns it may depend on, along with any scalars of the context.
+    pub fn names_used(&self) -> Vec<String> {
+        fn walk(a: &Ast, out: &mut std::collections::BTreeSet<String>) {
+            match a {
+                Ast::Name { name, sub, args } => {
+                    if sub.is_none() && args.is_none() {
+                        out.insert(name.clone());
+                    }
+                    for x in args.iter().flatten() {
+                        walk(x, out);
+                    }
+                }
+                Ast::Pow(x, _) => walk(x, out),
+                Ast::Comp(xs) | Ast::Tensor(xs) => xs.iter().for_each(|x| walk(x, out)),
+                Ast::Sum(xs) => xs.iter().for_each(|(_, x)| walk(x, out)),
+                Ast::Int(_) | Ast::Frac(..) | Ast::Imag | Ast::Idem(_) | Ast::Id(_) => {}
+            }
+        }
+        let mut out = std::collections::BTreeSet::new();
+        match &self.body {
+            CellBody::Def { term, .. } | CellBody::Watch { term } => walk(term, &mut out),
+            CellBody::Solve { lhs, rhs, .. } => {
+                walk(lhs, &mut out);
+                walk(rhs, &mut out);
+            }
+            CellBody::Check { args, .. } => args.iter().for_each(|a| walk(a, &mut out)),
+            CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => {}
+        }
+        out.into_iter().collect()
     }
 }
 
@@ -401,5 +463,26 @@ step 3.\"\"\"  # id=n6
             .unwrap_err();
         assert!(e.message.starts_with("line 3"), "{}", e.message);
         assert!(Workspace::parse("context nilhecke\n").is_err());
+    }
+
+    #[test]
+    fn single_cells() {
+        let c = Cell::parse("def e:=c1 (x_1 psi_1)^2 e(iij)+ f  view=diagrams  # id=d3").unwrap();
+        assert_eq!(c.defines(), Some("e"));
+        assert_eq!(c.names_used(), ["c1", "f"]);
+        assert_eq!(
+            c.print(),
+            "def e := c1 (x_1 psi_1)^2 e(iij) + f  view=diagrams  # id=d3"
+        );
+        let n = Cell::parse("note \"\"\"two\nlines\"\"\"").unwrap();
+        assert_eq!(
+            n.body,
+            CellBody::Note {
+                text: "two\nlines".into()
+            }
+        );
+        assert!(Cell::parse("watch a\nwatch b").is_err());
+        let s = Cell::parse("solve a a = a for c1, c2").unwrap();
+        assert_eq!(s.names_used(), ["a"]);
     }
 }

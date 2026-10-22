@@ -1,0 +1,12 @@
+{
+  "op": "context.describe",
+  "request": {
+    "context": "klr type=A2 nu=2i+j"
+  },
+  "expect": {
+    "status": "ok",
+    "context": "klr type=A2 nu=2i+j ring=QQ",
+    "objects": ["iij", "iji", "jii"],
+    "relations": ["dot-slide-left-same", "dot-slide-left-distinct", "dot-slide-right-same", "dot-slide-right-distinct", "square-same", "square-distinct", "braid-corrected", "braid"]
+  }
+}

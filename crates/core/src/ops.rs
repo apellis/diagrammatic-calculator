@@ -17,7 +17,7 @@ use crate::ring::{GaussianIntegers, Integers, PrimeField, Rationals, Ring};
 use crate::solve;
 use crate::text;
 use crate::toolkit;
-use crate::workspace::{CellBody, Workspace};
+use crate::workspace::{Cell, CellBody, Workspace};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -175,12 +175,21 @@ impl<'a, R: Ring> Session<'a, R> {
     }
 
     pub fn simplify(&self, t: &CTerm<R>) -> Result<Value> {
+        self.simplify_shown(t, None)
+    }
+
+    /// `simplify`, with the first `shown` summands drawn when it is given.
+    pub fn simplify_shown(&self, t: &CTerm<R>, shown: Option<usize>) -> Result<Value> {
         let nf = self.eval.normal_form(t)?;
-        Ok(json!({
+        let mut v = json!({
             "normal_form": self.ctx.fmt_term(&nf),
             "terms": nf.len(),
             "provenance": provenance_json(self.eval.as_ref()),
-        }))
+        });
+        if let Some(n) = shown {
+            v["summands"] = summands_json(self.ctx, &nf, n);
+        }
+        Ok(v)
     }
 
     /// A named yes-or-no check; the witness is the normal form of what should vanish.
@@ -289,6 +298,44 @@ impl<'a, R: Ring> Session<'a, R> {
             ))),
         }
     }
+}
+
+/// The first `shown` summands of a term for display, in printed order: each with its signed text
+/// (as in the term's text form), its word as a key, its degree, and a drawing of the word in its
+/// canonical layering with the sign and coefficient that go with that drawing.
+pub fn summands_json<R: Ring>(ctx: &Context<R>, t: &CTerm<R>, shown: usize) -> Value {
+    let one = ctx.coeff.one();
+    let items: Vec<Value> = t
+        .terms
+        .iter()
+        .take(shown)
+        .map(|(w, c)| {
+            let single = crate::term::Term {
+                terms: vec![(w.clone(), c.clone())],
+            };
+            let neg = ctx.coeff.is_negative(c);
+            let abs = if neg { ctx.coeff.neg(c) } else { c.clone() };
+            let coefficient = (!ctx.coeff.is_one(&abs)).then(|| {
+                let cs = ctx.coeff.fmt_elem(&abs);
+                if ctx.coeff.needs_parens(&abs) {
+                    format!("({cs})")
+                } else {
+                    cs
+                }
+            });
+            json!({
+                "text": ctx.fmt_term(&single),
+                "word": ctx.fmt_word(w),
+                "degree": ctx.word_degree(w),
+                "source": ctx.fmt_object(&w.source),
+                "target": ctx.fmt_object(&ctx.target(w)),
+                "negative": neg,
+                "coefficient": coefficient,
+                "svg": render::svg(ctx, &ctx.monomial_term(w, one.clone())),
+            })
+        })
+        .collect();
+    json!(items)
 }
 
 fn error_json(e: &Error) -> Value {
@@ -465,35 +512,155 @@ pub struct CellResult {
 struct RunWorkspace<'a> {
     ws: &'a Workspace,
     presentation: Option<&'a str>,
+    /// Draw up to this many summands of each definition and watch.
+    shown: Option<usize>,
+    /// Scalars to add to the context, such as the unknowns of solve cells elsewhere.
+    scalars: &'a [String],
+}
+
+/// The definitions and unknowns each cell of a workspace depends on.
+struct Dependencies {
+    /// For each cell, the definitions its terms use: the latest one of each name before it.
+    defs: Vec<Vec<usize>>,
+    /// For each cell, the unknowns of solve cells that it or the definitions it uses mention.
+    unknowns: Vec<Vec<String>>,
+}
+
+impl Dependencies {
+    fn of(ws: &Workspace) -> Dependencies {
+        // the unknowns of all solve cells, in order of first appearance
+        let mut all: Vec<String> = Vec::new();
+        for cell in &ws.cells {
+            if let CellBody::Solve { unknowns, .. } = &cell.body {
+                for u in unknowns {
+                    if !all.contains(u) {
+                        all.push(u.clone());
+                    }
+                }
+            }
+        }
+        let n = ws.cells.len();
+        let mut defs = vec![Vec::new(); n];
+        let mut needs: Vec<std::collections::BTreeSet<String>> = vec![Default::default(); n];
+        let mut latest: BTreeMap<String, usize> = BTreeMap::new();
+        for (i, cell) in ws.cells.iter().enumerate() {
+            for name in cell.names_used() {
+                if let Some(&j) = latest.get(&name) {
+                    defs[i].push(j);
+                    let nj = needs[j].clone();
+                    needs[i].extend(nj);
+                }
+                if all.contains(&name) {
+                    needs[i].insert(name);
+                }
+            }
+            if let CellBody::Solve { unknowns, .. } = &cell.body {
+                needs[i].extend(unknowns.iter().cloned());
+            }
+            if let Some(name) = cell.defines() {
+                latest.insert(name.to_string(), i);
+            }
+        }
+        let unknowns = needs
+            .iter()
+            .map(|need| all.iter().filter(|u| need.contains(*u)).cloned().collect())
+            .collect();
+        Dependencies { defs, unknowns }
+    }
+}
+
+/// A session for one set of scalars, with the definitions elaborated in it so far.
+struct Scoped<'c, R: Ring> {
+    s: Session<'c, R>,
+    terms: BTreeMap<usize, Result<CTerm<R>>>,
+}
+
+impl<R: Ring> Scoped<'_, R> {
+    /// Binds the names of the definitions cell `i` uses, elaborating them first.
+    fn bind(&mut self, ws: &Workspace, deps: &Dependencies, i: usize) -> Result<()> {
+        let mut defs = BTreeMap::new();
+        for &j in &deps.defs[i] {
+            let t = self.def(ws, deps, j)?;
+            defs.insert(ws.cells[j].defines().unwrap_or_default().to_string(), t);
+        }
+        self.s.defs = defs;
+        Ok(())
+    }
+
+    /// The term of the definition in cell `j`.
+    fn def(&mut self, ws: &Workspace, deps: &Dependencies, j: usize) -> Result<CTerm<R>> {
+        if let Some(t) = self.terms.get(&j) {
+            return t.clone();
+        }
+        let CellBody::Def { name, term } = &ws.cells[j].body else {
+            return Err(Error::invalid("not a definition"));
+        };
+        let t = self
+            .bind(ws, deps, j)
+            .and_then(|_| self.s.term(term))
+            .map_err(|e| Error {
+                message: format!("in the definition of {name}: {}", e.message),
+                ..e
+            });
+        self.terms.insert(j, t.clone());
+        t
+    }
 }
 
 impl RingVisitor for RunWorkspace<'_> {
     type Out = Vec<CellResult>;
     fn visit<R: Ring>(self, base: R) -> Result<Vec<CellResult>> {
-        let mut spec = self.ws.context.clone();
-        // the unknowns of solve cells are scalars of the context, so definitions can use them
-        for cell in &self.ws.cells {
-            if let CellBody::Solve { unknowns, .. } = &cell.body {
-                for u in unknowns {
+        // Each cell runs in the context with the unknowns that it, or the definitions it uses,
+        // mention: an unknown of some solve cell never turns the coefficients of an unrelated
+        // cell into polynomials.
+        let ws = self.ws;
+        let deps = Dependencies::of(ws);
+        let mut sets: Vec<Vec<String>> = vec![vec![]];
+        let which: Vec<usize> = deps
+            .unknowns
+            .iter()
+            .map(|u| match sets.iter().position(|s| s == u) {
+                Some(k) => k,
+                None => {
+                    sets.push(u.clone());
+                    sets.len() - 1
+                }
+            })
+            .collect();
+        let pres = load_presentation(&ws.context, self.presentation)?;
+        let ctxs: Vec<Context<R>> = sets
+            .iter()
+            .map(|set| {
+                let mut spec = ws.context.clone();
+                for u in self.scalars.iter().chain(set) {
                     if !spec.scalars.contains(u) {
                         spec.scalars.push(u.clone());
                     }
                 }
-            }
-        }
-        let pres = load_presentation(&spec, self.presentation)?;
-        let ctx = Context::new(pres, spec, base)?;
-        let mut s = Session::new(&ctx, None)?;
+                Context::new(pres.clone(), spec, base.clone())
+            })
+            .collect::<Result<_>>()?;
+        let mut scoped: Vec<Scoped<R>> = ctxs
+            .iter()
+            .map(|c| {
+                Ok(Scoped {
+                    s: Session::new(c, None)?,
+                    terms: BTreeMap::new(),
+                })
+            })
+            .collect::<Result<_>>()?;
         let mut out = Vec::new();
-        for cell in &self.ws.cells {
+        for (i, cell) in ws.cells.iter().enumerate() {
+            let sc = &mut scoped[which[i]];
+            let ctx = sc.s.ctx;
             let strategy = cell
                 .options
                 .iter()
                 .find(|(k, _)| k == "strategy")
                 .map(|(_, v)| v.as_str());
             if let Some(name) = strategy {
-                s.eval = evaluator_for(
-                    &ctx,
+                sc.s.eval = evaluator_for(
+                    ctx,
                     ctx.pres
                         .representations
                         .iter()
@@ -504,29 +671,40 @@ impl RingVisitor for RunWorkspace<'_> {
                 )?;
             }
             let (kind, r): (&str, Result<Value>) = match &cell.body {
-                CellBody::Def { name, term } => (
+                CellBody::Def { name, .. } => (
                     "def",
-                    s.term(term).map(|t| {
-                        let v = json!({ "name": name, "term": ctx.fmt_term(&t) });
-                        s.defs.insert(name.clone(), t);
+                    sc.def(ws, &deps, i).map(|t| {
+                        let mut v =
+                            json!({ "name": name, "term": ctx.fmt_term(&t), "terms": t.len() });
+                        if let Some(n) = self.shown {
+                            v["summands"] = summands_json(ctx, &t, n);
+                        }
                         v
                     }),
                 ),
-                CellBody::Watch { term } => ("watch", s.term(term).and_then(|t| s.simplify(&t))),
+                CellBody::Watch { term } => (
+                    "watch",
+                    sc.bind(ws, &deps, i)
+                        .and_then(|_| sc.s.term(term))
+                        .and_then(|t| sc.s.simplify_shown(&t, self.shown)),
+                ),
                 CellBody::Check { name, args } => (
                     "check",
-                    args.iter()
-                        .map(|a| s.term(a))
-                        .collect::<Result<Vec<_>>>()
-                        .and_then(|ts| s.check(name, &ts)),
+                    sc.bind(ws, &deps, i).and_then(|_| {
+                        args.iter()
+                            .map(|a| sc.s.term(a))
+                            .collect::<Result<Vec<_>>>()
+                            .and_then(|ts| sc.s.check(name, &ts))
+                    }),
                 ),
                 CellBody::Solve { lhs, rhs, unknowns } => (
                     "solve",
                     (|| {
-                        let t = ctx.sub(&s.term(lhs)?, &s.term(rhs)?);
-                        let nf = s.eval.normal_form(&t)?;
-                        let mut v = solve::solve(&ctx, &nf, unknowns, &Limits::default())?;
-                        v["provenance"] = provenance_json(s.eval.as_ref());
+                        sc.bind(ws, &deps, i)?;
+                        let t = ctx.sub(&sc.s.term(lhs)?, &sc.s.term(rhs)?);
+                        let nf = sc.s.eval.normal_form(&t)?;
+                        let mut v = solve::solve(ctx, &nf, unknowns, &Limits::default())?;
+                        v["provenance"] = provenance_json(sc.s.eval.as_ref());
                         Ok(v)
                     })(),
                 ),
@@ -545,7 +723,7 @@ impl RingVisitor for RunWorkspace<'_> {
                 value,
             });
             if strategy.is_some() {
-                s.eval = Session::new(&ctx, None)?.eval;
+                sc.s.eval = Session::new(ctx, None)?.eval;
             }
         }
         Ok(out)
@@ -554,6 +732,17 @@ impl RingVisitor for RunWorkspace<'_> {
 
 /// `workspace.run`: evaluates every cell of a workspace in order.
 pub fn run_workspace(src: &str, presentation: Option<&str>) -> Value {
+    run_workspace_with(src, presentation, None, &[])
+}
+
+/// `workspace.run`, drawing up to `shown` summands of each definition and watch, with extra
+/// scalars in the context.
+pub fn run_workspace_with(
+    src: &str,
+    presentation: Option<&str>,
+    shown: Option<usize>,
+    scalars: &[String],
+) -> Value {
     let run = || -> Result<Value> {
         let ws = Workspace::parse(src)?;
         let ring = ws.context.ring.clone();
@@ -562,6 +751,8 @@ pub fn run_workspace(src: &str, presentation: Option<&str>) -> Value {
             RunWorkspace {
                 ws: &ws,
                 presentation,
+                shown,
+                scalars,
             },
         )?;
         Ok(json!({ "context": ws.context.print(), "cells": cells }))
@@ -569,13 +760,107 @@ pub fn run_workspace(src: &str, presentation: Option<&str>) -> Value {
     with_status(run())
 }
 
+fn cell_json(c: &Cell) -> Value {
+    let kind = match &c.body {
+        CellBody::Def { .. } => "def",
+        CellBody::Watch { .. } => "watch",
+        CellBody::Solve { .. } => "solve",
+        CellBody::Check { .. } => "check",
+        CellBody::Note { .. } => "note",
+        CellBody::Comment(_) => "comment",
+        CellBody::Blank => "blank",
+    };
+    let bare = Cell {
+        id: None,
+        options: vec![],
+        ..c.clone()
+    };
+    let mut v = json!({
+        "id": c.id,
+        "kind": kind,
+        "text": bare.print(),
+        "options": c.options.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>(),
+        "uses": c.names_used(),
+    });
+    match &c.body {
+        CellBody::Def { name, .. } => v["defines"] = json!(name),
+        CellBody::Solve { unknowns, .. } => v["unknowns"] = json!(unknowns),
+        CellBody::Check { name, .. } => v["check"] = json!(name),
+        CellBody::Note { text } => v["note"] = json!(text),
+        _ => {}
+    }
+    v
+}
+
+/// `workspace.parse`: a workspace file, or one cell, in canonical form with what each cell
+/// defines and mentions. A file's cells without an ID get one.
+pub fn parse_workspace(workspace: Option<&str>, cell: Option<&str>) -> Value {
+    with_status((|| match (workspace, cell) {
+        (Some(src), None) => {
+            let mut ws = Workspace::parse(src)?;
+            ws.assign_ids();
+            Ok(json!({
+                "context": ws.context.print(),
+                "cells": ws.cells.iter().map(cell_json).collect::<Vec<_>>(),
+                "canonical": ws.print(),
+            }))
+        }
+        (None, Some(src)) => Ok(json!({ "cell": cell_json(&Cell::parse(src)?) })),
+        _ => Err(Error::invalid(
+            "workspace.parse takes either 'workspace' or 'cell'",
+        )),
+    })())
+}
+
+struct Describe<'a> {
+    spec: ContextSpec,
+    presentation: Option<&'a str>,
+}
+
+impl RingVisitor for Describe<'_> {
+    type Out = Value;
+    fn visit<R: Ring>(self, base: R) -> Result<Value> {
+        let pres = load_presentation(&self.spec, self.presentation)?;
+        let ctx = Context::new(pres, self.spec, base)?;
+        let s = Session::new(&ctx, None)?;
+        Ok(json!({
+            "context": ctx.spec.print(),
+            "presentation": ctx.pres.name,
+            "title": ctx.pres.title,
+            "ring": ctx.spec.ring,
+            "colours": ctx.colours.iter().map(|c| json!({ "name": c.name, "odd": c.odd, "oriented": c.oriented })).collect::<Vec<_>>(),
+            "objects": ctx.objects.iter().map(|o| ctx.fmt_object(o)).collect::<Vec<_>>(),
+            "generators": ctx.pres.generators.iter().map(|g| json!({ "name": g.name, "draw": g.draw })).collect::<Vec<_>>(),
+            "relations": ctx.pres.relations.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
+            "representations": ctx.pres.representations.iter().map(|d| json!({
+                "name": d.name,
+                "kind": d.kind,
+                "certificate": d.certificate.status,
+            })).collect::<Vec<_>>(),
+            "scalars": ctx.spec.scalars,
+            "provenance": provenance_json(s.eval.as_ref()),
+        }))
+    }
+}
+
+/// `context.describe`: checks a context line and says what it provides.
+pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
+    with_status((|| {
+        let spec = ContextSpec::parse(context)?;
+        let ring = spec.ring.clone();
+        with_ring(&ring, Describe { spec, presentation })
+    })())
+}
+
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 12] = [
+pub const OPERATIONS: [&str; 14] = [
     "simplify",
     "check",
     "term.render",
     "presentation.check",
     "workspace.run",
+    "workspace.parse",
+    "context.describe",
     "relations.match",
     "relation.apply",
     "interchange",
@@ -586,7 +871,7 @@ pub const OPERATIONS: [&str; 12] = [
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 12] = [
+pub const SCHEMAS: [(&str, &str); 14] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -603,6 +888,14 @@ pub const SCHEMAS: [(&str, &str); 12] = [
     (
         "workspace.run",
         include_str!("../../../spec/ops/workspace.run.schema.json"),
+    ),
+    (
+        "workspace.parse",
+        include_str!("../../../spec/ops/workspace.parse.schema.json"),
+    ),
+    (
+        "context.describe",
+        include_str!("../../../spec/ops/context.describe.schema.json"),
     ),
     (
         "relations.match",
@@ -671,7 +964,31 @@ pub fn call(op: &str, input: &Value) -> Value {
                 presentation_check(&need("presentation")?, str_field("context").as_deref())
             }
             "workspace.run" => {
-                run_workspace(&need("workspace")?, str_field("presentation").as_deref())
+                let shown =
+                    match input.get("summands") {
+                        None => None,
+                        Some(v) => Some(v.as_u64().ok_or_else(|| {
+                            Error::invalid("'summands' must be a nonnegative integer")
+                        })? as usize),
+                    };
+                let scalars: Vec<String> = match input.get("scalars") {
+                    None => vec![],
+                    Some(v) => serde_json::from_value(v.clone())
+                        .map_err(|_| Error::invalid("'scalars' must be a list of names"))?,
+                };
+                run_workspace_with(
+                    &need("workspace")?,
+                    str_field("presentation").as_deref(),
+                    shown,
+                    &scalars,
+                )
+            }
+            "workspace.parse" => parse_workspace(
+                str_field("workspace").as_deref(),
+                str_field("cell").as_deref(),
+            ),
+            "context.describe" => {
+                describe_context(&need("context")?, str_field("presentation").as_deref())
             }
             "relations.match" | "relation.apply" | "interchange" | "slide" | "straighten"
             | "chain.find" | "export.lean" => {

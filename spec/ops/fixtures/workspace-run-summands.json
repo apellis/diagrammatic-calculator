@@ -1,0 +1,13 @@
+{
+  "op": "workspace.run",
+  "request": {
+    "workspace": "diagcalc-workspace/1\ncontext nilhecke nu=2\nwatch c x_1 psi_1 - psi_1 x_2  # id=w1\n",
+    "summands": 5,
+    "scalars": [
+      "c"
+    ]
+  },
+  "expect": {
+    "status": "ok"
+  }
+}

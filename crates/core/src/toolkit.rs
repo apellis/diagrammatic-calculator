@@ -139,6 +139,14 @@ impl Indexed {
 fn require_field<R: Ring>(ctx: &Context<R>) -> Result<()> {
     if ctx.coeff.is_field() {
         Ok(())
+    } else if !ctx.spec.scalars.is_empty() {
+        Err(Error::precondition(format!(
+            "linear algebra needs a field of coefficients; here they are polynomials in {} over {} \
+             (the unknowns of solve cells are scalars of the whole workspace, so check this in a \
+             workspace without them)",
+            ctx.spec.scalars.join(", "),
+            ctx.spec.ring
+        )))
     } else {
         Err(Error::precondition(format!(
             "linear algebra needs a field of coefficients; here they are {}",

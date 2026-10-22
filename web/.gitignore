@@ -1,0 +1,5 @@
+node_modules/
+dist/
+src/engine/pkg/
+test-results/
+playwright-report/

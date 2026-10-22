@@ -149,6 +149,54 @@ fn provenance_line(v: &Value) -> String {
     )
 }
 
+/// A solve result on one line: the outcome and the solutions found.
+fn solve_line(c: &Value) -> String {
+    let assign = |m: &Value| {
+        m.as_object()
+            .map(|o| {
+                o.iter()
+                    .map(|(k, v)| format!("{k} = {}", v.as_str().unwrap_or("?")))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default()
+    };
+    match c["outcome"].as_str().unwrap_or("") {
+        "none" => "no solution".into(),
+        "unique" => format!("unique solution: {}", assign(&c["solution"])),
+        "finite" => {
+            let vars: Vec<&str> = c["variables"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            let pts: Vec<String> = c["points"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|p| {
+                    let xs: Vec<String> = p
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .zip(&vars)
+                        .map(|(x, v)| format!("{v} = {}", x.as_str().unwrap_or("?")))
+                        .collect();
+                    format!("({})", xs.join(", "))
+                })
+                .collect();
+            format!("{} solutions: {}", pts.len(), pts.join(" "))
+        }
+        "family" => format!(
+            "a family of dimension {}",
+            c["dimension"].as_u64().unwrap_or(0)
+        ),
+        "limit_reached" => "limit reached".into(),
+        o => o.to_string(),
+    }
+}
+
 fn verdict(v: &Value) -> String {
     let mut out = if v["holds"] == true {
         "holds".to_string()
@@ -202,6 +250,7 @@ fn human(cmd: &str, v: &Value) -> String {
                         "def" => format!("{} := {}", s(&c["name"]), s(&c["term"])),
                         "watch" => s(&c["normal_form"]).to_string(),
                         "check" => verdict(c),
+                        "solve" => solve_line(c),
                         _ => String::new(),
                     }
                 };

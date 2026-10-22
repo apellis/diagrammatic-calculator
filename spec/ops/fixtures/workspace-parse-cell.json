@@ -1,0 +1,17 @@
+{
+  "op": "workspace.parse",
+  "request": {
+    "cell": "def e:=c1 x_1 psi_1 e(iij)+c2 psi_1 x_2 e(iij)  view=diagrams"
+  },
+  "expect": {
+    "status": "ok",
+    "cell": {
+      "id": null,
+      "kind": "def",
+      "text": "def e := c1 x_1 psi_1 e(iij) + c2 psi_1 x_2 e(iij)",
+      "options": { "view": "diagrams" },
+      "uses": ["c1", "c2"],
+      "defines": "e"
+    }
+  }
+}

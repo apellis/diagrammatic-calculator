@@ -8,7 +8,9 @@
       "required": ["workspace"],
       "properties": {
         "workspace": { "description": "The text of a .dcw file.", "type": "string" },
-        "presentation": { "description": "The text of a presentation file the context names, when it is not shipped.", "type": "string" }
+        "presentation": { "description": "The text of a presentation file the context names, when it is not shipped.", "type": "string" },
+        "summands": { "description": "Draw up to this many summands of each definition (as written) and watch (normal form) in 'summands'.", "type": "integer", "minimum": 0 },
+        "scalars": { "description": "Names to add to the context's scalars, such as the unknowns of solve cells that are not part of this workspace.", "type": "array", "items": { "type": "string" } }
       }
     },
     "cell": {
@@ -21,6 +23,8 @@
         "name": { "description": "def: the name defined.", "type": "string" },
         "term": { "description": "def: the elaborated term.", "type": "string" },
         "normal_form": { "description": "watch: as in simplify.", "type": "string" },
+        "terms": { "description": "def and watch: the number of summands (of the term as written for def, of the normal form for watch).", "type": "integer", "minimum": 0 },
+        "summands": { "description": "def and watch, when the request asks: the first summands, drawn.", "type": "array", "items": { "$ref": "common.schema.json#/$defs/summand" } },
         "holds": { "description": "check: as in check.", "type": "boolean" },
         "witness": { "type": ["string", "null"] },
         "provenance": { "$ref": "common.schema.json#/$defs/provenance" },

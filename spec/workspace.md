@@ -36,8 +36,9 @@ A context with `Lambda`, `dotcap` or `degcap` computes in that finite quotient o
 results carry the quotient and the degrees computed under `provenance.notes`.
 
 `solve lhs = rhs for c1, c2` treats the unknowns as scalars of the context (definitions may use
-them) and solves for every coefficient of the normal form of `lhs − rhs` to vanish, over the
-ground field. Tier 1 (all coefficients linear in the unknowns) gives `outcome` `none`, `unique`
+them; each cell's context has the unknowns that it, or the definitions it uses, mention, so a
+cell that mentions none keeps coefficients in the ground ring) and solves for every coefficient
+of the normal form of `lhs − rhs` to vanish, over the ground field. Tier 1 (all coefficients linear in the unknowns) gives `outcome` `none`, `unique`
 (with `solution`) or `family` (with `particular`, `directions` and `dimension`). Tier 2 uses
 Gröbner bases with limits: `none`, `finite` (solution counts with and without multiplicity,
 `points` in the ground field, `all_found`, the grevlex and lex bases), `family` (`dimension`,

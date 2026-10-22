@@ -1,0 +1,65 @@
+name: Deploy web app
+
+# Every push to master deploys the web app to Cloudflare Pages (project "diagcalc"), where
+# Cloudflare Access keeps it private until the public release. The job does nothing until the
+# repository has the secrets CLOUDFLARE_API_TOKEN (a token with Cloudflare Pages: Edit) and
+# CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  push:
+    branches: [master]
+    paths: ["web/**", "crates/core/**", "crates/wasm/**", "presentations/**", "examples/**", "Cargo.lock", ".github/workflows/deploy-web.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Not configured
+        if: env.CONFIGURED != 'true'
+        working-directory: .
+        run: echo "No Cloudflare secrets yet; nothing to deploy." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: env.CONFIGURED == 'true'
+      - uses: dtolnay/rust-toolchain@stable
+        if: env.CONFIGURED == 'true'
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        if: env.CONFIGURED == 'true'
+        with:
+          key: web
+      - uses: taiki-e/install-action@v2
+        if: env.CONFIGURED == 'true'
+        with:
+          tool: wasm-bindgen@0.2.129
+      - uses: actions/setup-node@v4
+        if: env.CONFIGURED == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build
+        if: env.CONFIGURED == 'true'
+        run: |
+          npm ci
+          npm run wasm
+          npm run build
+      - name: Deploy to Cloudflare Pages
+        if: env.CONFIGURED == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: pages deploy dist --project-name=diagcalc --branch=master
