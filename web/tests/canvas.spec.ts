@@ -91,6 +91,77 @@ test('a dot on a bare strand slides with the pointer and settles back when nothi
   await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_3 e(iij)');
 });
 
+/** The crossings of the first frame, bottom to top, as page boxes. */
+async function crossings(page: Page) {
+  const boxes = [];
+  for (const el of await frames(page).first().locator('.hit-piece[data-draw="crossing"]').all()) {
+    const b = await el.boundingBox();
+    if (b) boxes.push(b);
+  }
+  return boxes.sort((a, b) => b.y - a.y);
+}
+
+test('pulling the middle crossing of a triangle across applies the braid relation, with its result shown first', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 psi_2 psi_1 e(iji)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const [, middle] = await crossings(page);
+  const [x, y] = [middle.x + middle.width / 2, middle.y + middle.height / 2];
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  // the wrong way (right) does not arm it
+  await page.mouse.move(x + 30, y, { steps: 4 });
+  await expect(canvas(page).getByTestId('pull').locator('.xing')).toHaveCount(3);
+  await expect(canvas(page).getByTestId('pull').locator('.xing.passed')).toHaveCount(0);
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Pull left to apply braid');
+  // towards the other two: armed, and the result is previewed
+  await page.mouse.move(x - 30, y, { steps: 6 });
+  await expect(canvas(page).getByTestId('pull').locator('.xing.passed')).toHaveCount(3);
+  await expect(canvas(page).getByTestId('pull-result')).toBeVisible();
+  await page.mouse.up();
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Applied braid-corrected');
+  await expect(frames(page)).toHaveCount(2);
+});
+
+test('pulling a stacked pair of crossings apart applies the square relation', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 psi_1 e(iji)');
+  await expect(cell(page, 0).getByTestId('summary')).not.toHaveText('');
+  await openCanvas(page, false);
+  const [bottom] = await crossings(page);
+  const [x, y] = [bottom.x + bottom.width / 2, bottom.y + bottom.height / 2];
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 35, y, { steps: 6 });
+  await expect(canvas(page).getByTestId('pull').locator('.xing.passed')).toHaveCount(2);
+  await page.mouse.up();
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Applied square');
+  await expect(frames(page).first().locator('.hit-piece[data-draw="crossing"]')).toHaveCount(0);
+});
+
+test('a crossing dragged up past a piece on other strands is redrawn there as it moves, and stays on release', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_3 psi_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const dot = frames(page).first().locator('.hit-piece[data-draw="dot"]');
+  const [c] = await crossings(page);
+  const before = (await dot.boundingBox())!;
+  const [x, y] = [c.x + c.width / 2, c.y + c.height / 2];
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 90, { steps: 8 });
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Let go to interchange');
+  // the dot is redrawn below the crossing while dragging
+  await expect.poll(async () => (await dot.boundingBox())?.y ?? 0).toBeGreaterThan(before.y + 10);
+  // the crossing stays centred between its strands
+  await expect.poll(async () => Math.abs(((await crossings(page))[0]?.x ?? 1e9) - c.x)).toBeLessThan(2);
+  await page.mouse.up();
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Interchanged');
+  await expect.poll(async () => (await dot.boundingBox())?.y ?? 0).toBeGreaterThan(before.y + 10);
+});
+
 test('keyboard path: R lists relations and 1 applies one; undo; Tab to the dot and the arrow slides it', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'def b := psi_1 x_1 e(iij)');

@@ -119,6 +119,29 @@ export function crossingsOn(l: Layout, dot: Piece): Piece[] {
   return l.pieces.filter((p) => p.draw === 'crossing' && s !== undefined && p.inputs.includes(s)).sort((a, b) => centre(a)[1] - centre(b)[1]);
 }
 
+/**
+ * The Reidemeister-like move a sideways drag of a crossing can make: among the relation matches of
+ * a summand, one whose matched pieces are all crossings and include this one. A triangle of three
+ * crossings with this one in the middle (a braid relation) is preferred, and is made by dragging
+ * the middle crossing towards the other two (`side`, −1 for left); a stacked pair (a square
+ * relation) is pulled apart in either direction (`side` 0).
+ */
+export function pullMove(l: Layout, matches: { occurrence: number[] }[], layer: number): { index: number; side: -1 | 0 | 1; layers: number[] } | undefined {
+  const crossing = (k: number) => piece(l, k)?.draw === 'crossing';
+  const found = matches
+    .map((m, index) => ({ m, index }))
+    .filter(({ m }) => m.occurrence.includes(layer) && m.occurrence.length >= 2 && m.occurrence.length <= 3 && m.occurrence.every(crossing));
+  const triangle = found.find(({ m }) => m.occurrence.length === 3 && m.occurrence[1] === layer);
+  if (triangle) {
+    const x = centre(piece(l, layer)!)[0];
+    const others = triangle.m.occurrence.filter((k) => k !== layer).map((k) => centre(piece(l, k)!)[0]);
+    const side = Math.sign(others.reduce((a, b) => a + b, 0) / others.length - x) as -1 | 0 | 1;
+    return { index: triangle.index, side, layers: triangle.m.occurrence };
+  }
+  const pair = found.find(({ m }) => m.occurrence.length === 2);
+  return pair && { index: pair.index, side: 0, layers: pair.m.occurrence };
+}
+
 /** The next piece on a dot's strand above or below it, if any. */
 export function nextOnStrand(l: Layout, dot: Piece, up: boolean): Piece | undefined {
   const s = dotStrand(dot);
@@ -188,12 +211,10 @@ export function path(line: Line, off: [number, number] = [0, 0]): string {
   if (line.kind === 'strand') {
     const [x0, y0, x1, y1] = [line.x0!, line.y0!, line.x1!, line.y1!];
     const ym = (y0 + y1) / 2;
-    if (!off[0] && !off[1]) return `M ${n(x0)} ${f(y0)} C ${n(x0)} ${f(ym)} ${n(x1)} ${f(ym)} ${n(x1)} ${f(y1)}`;
-    // through the moved middle of the piece
-    const mx = (x0 + x1) / 2 + off[0];
-    const my = ym + off[1];
-    const dx = (x1 - x0) / 4;
-    return `M ${n(x0)} ${f(y0)} C ${n(x0)} ${f((y0 + my) / 2)} ${n(mx - dx)} ${f(my - 0.15)} ${n(mx)} ${f(my)} C ${n(mx + dx)} ${f(my + 0.15)} ${n(x1)} ${f((my + y1) / 2)} ${n(x1)} ${f(y1)}`;
+    // a moved piece moves the middle of its curve: both control points shift, so the ends stay put
+    // and the curve stays smooth (its middle moves by three quarters of the offset)
+    const [ox, oy] = off;
+    return `M ${n(x0)} ${f(y0)} C ${n(x0 + ox)} ${f(ym + oy)} ${n(x1 + ox)} ${f(ym + oy)} ${n(x1)} ${f(y1)}`;
   }
   if (line.kind === 'turn') {
     const d = line.up ? -0.6 : 0.6;

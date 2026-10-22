@@ -272,3 +272,6 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
 .cell .text .katex, .oitem .t .katex { font-size: 1em; }
 .ctx-name { font-variant: small-caps; letter-spacing: 0.04em; }
 .relname, .toolname { font-weight: 500; }
+.pullresult { position: absolute; right: 14px; top: 12px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 6px 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 8px; pointer-events: none; }
+.pulled { opacity: 0.55; }
+.turn { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

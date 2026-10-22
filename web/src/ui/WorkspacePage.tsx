@@ -550,8 +550,8 @@ function DocView(props: {
         <div class="grow" />
         <Show when={message()}><span class="hint" onClick={() => setMessage('')}>{message()}</span></Show>
         <Show when={linked() && !onBranch()}><span class="hint" title="Saved after every step">↔ {linked()!.name}</span></Show>
-        <button class="ghost" title={`Undo (${K}Z)`} disabled={!canUndo()} onClick={() => doc.undo()} aria-label="Undo">↶</button>
-        <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo">↷</button>
+        <button class="ghost" title={`Undo (${K}Z)`} disabled={!canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
+        <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
         <span class={`light ${jobs() ? 'busy' : ''}`} title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'} data-testid="light"
           onClick={() => jobs() && ev?.cancelAll()} />
         <button class="ghost" classList={{ on: props.aiOpen }} onClick={props.onToggleAI} title={`AI panel (${K}J)`} data-testid="ai-toggle">AI</button>
@@ -742,5 +742,15 @@ function Keys(props: { onClose: () => void }) {
         </tbody></table>
       </div>
     </div>
+  );
+}
+
+/** The undo arrow (redo mirrored): an even arch whose two ends sit at the same height. */
+function TurnArrow(props: { redo?: boolean }) {
+  return (
+    <svg class="turn" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style={props.redo ? { transform: 'scaleX(-1)' } : undefined}>
+      <path d="M5 16 C5 10.5 8.2 7.5 12 7.5 C15.8 7.5 19 10.5 19 16" />
+      <path d="M2.2 13.2 L5 16.2 L7.8 13.2" />
+    </svg>
   );
 }

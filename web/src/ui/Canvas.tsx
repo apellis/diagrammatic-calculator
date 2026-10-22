@@ -12,7 +12,7 @@ import { isMac, mod } from '../app';
 import { Typeset } from './Typeset';
 import {
   along, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
-  offsetFor, onStrand, path, piece, piecesIn, rectangle, sameOrder, track, type Layout, type Line, type Piece, type Rect,
+  offsetFor, onStrand, path, piece, piecesIn, pullMove, rectangle, sameOrder, track, type Layout, type Line, type Piece, type Rect,
 } from '../canvas/geometry';
 
 export interface Generator {
@@ -89,6 +89,10 @@ export function Canvas(props: CanvasProps) {
    * on release) and the one it is nearing, with how near (0 to 1). After release it stays where it
    * was let go (`held`) until the rewritten term is drawn, or eases back when nothing changes.
    */
+  /** A crossing being dragged up or down: its summand drawn with the order it would get. */
+  const [preview, setPreview] = createSignal<{ summand: number; order: number[]; layout: Layout; held?: boolean } | null>(null);
+  /** A crossing being dragged sideways: the crossings of the move it would make, and that move's result. */
+  const [pull, setPull] = createSignal<{ summand: number; layer: number; dx: number; layers: number[]; armed: boolean; result?: Layout[] } | null>(null);
   const [live, setLive] = createSignal<{ summand: number; layer: number; x: number; y: number; passed: number[]; near?: { layer: number; w: number }; held?: boolean } | null>(null);
   let root!: HTMLDivElement;
   let board!: HTMLDivElement;
@@ -136,6 +140,7 @@ export function Canvas(props: CanvasProps) {
         setTimeout(() => setFresh(new Set<string>()), 2000);
       }
       if (live()?.held) setLive(null);
+      if (preview()?.held) setPreview(null);
       if (firstSelect) {
         const k = summands.findIndex((l) => l.word === firstSelect);
         if (k >= 0) setSel({ summand: k, layers: [] });
@@ -249,13 +254,16 @@ export function Canvas(props: CanvasProps) {
       });
     });
 
-  const apply = (i: number) =>
+  const apply = (i: number) => {
+    const m = menu();
+    if (!m || !m.matches[i]) return;
+    setMenu(null);
+    return applyMatch(m.summand, m.matches[i], i, m.rect);
+  };
+  /** Applies match `i` of the summand (in its rectangle, if one was given) and writes the result. */
+  const applyMatch = (k: number, match: Match, i: number, rect?: Rect) =>
     run(async () => {
-      const m = menu();
-      if (!m || !m.matches[i]) return;
-      setMenu(null);
-      const match = m.matches[i];
-      const o = await props.engine.call('relation.apply', { context: props.context, term: props.term!, summand: m.summand + 1, ...(m.rect ? { rectangle: m.rect } : {}), match: i }, { lane: 'interactive' });
+      const o = await props.engine.call('relation.apply', { context: props.context, term: props.term!, summand: k + 1, ...(rect ? { rectangle: rect } : {}), match: i }, { lane: 'interactive' });
       if (o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
@@ -304,6 +312,12 @@ export function Canvas(props: CanvasProps) {
     k: number; layer?: number; start: [number, number]; alt: boolean; moved: boolean; svg: SVGSVGElement; additive: boolean;
     /** For a dot: the run of its strand and the crossings on it. */
     run?: Line[]; crossings?: Piece[];
+    /** For another piece: up and down ('v') or sideways ('h'), fixed by the first movement. */
+    mode?: 'v' | 'h';
+    /** The summand's relation matches, and the sideways move this piece can make. */
+    matches?: Match[]; move?: ReturnType<typeof pullMove>; resultAsked?: boolean;
+    /** The drawn order last asked for while dragging up or down. */
+    asked?: number[];
   } | null = null;
   let pan: { x: number; y: number; vx: number; vy: number } | null = null;
 
@@ -323,6 +337,13 @@ export function Canvas(props: CanvasProps) {
     if (pc?.draw === 'dot' && !e.altKey) {
       drag.run = track(l, pc);
       drag.crossings = crossingsOn(l, pc);
+    } else if (pc && !e.altKey) {
+      const d = drag;
+      void props.engine.call('relations.match', { context: props.context, term: props.term!, summand: k + 1 }, { lane: 'interactive' }).then((o) => {
+        if (o.status !== 'done' || o.response.status !== 'ok') return;
+        d.matches = o.response.matches;
+        d.move = pullMove(l, d.matches, pc.layer);
+      });
     }
     svg.setPointerCapture(e.pointerId);
     setMenu(null);
@@ -352,10 +373,17 @@ export function Canvas(props: CanvasProps) {
       setLive({ summand: drag.k, layer: drag.layer, x, y, passed, near });
       const n = passed.length;
       say(n ? `Let go to slide the dot ${up ? 'up' : 'down'} through ${n} crossing${n > 1 ? 's' : ''}.` : near ? 'Keep going to pass the crossing.' : 'Sliding the dot along its strand; it settles where you let go.');
+    } else if (drag.layer !== undefined && drag.alt) {
+      const pc = piece(layouts()[drag.k], drag.layer);
+      setGhost({ summand: drag.k, layer: drag.layer, dx: pc?.draw !== 'dot' ? dx : 0, dy });
     } else if (drag.layer !== undefined) {
-      const l = layouts()[drag.k];
-      const pc = piece(l, drag.layer);
-      setGhost({ summand: drag.k, layer: drag.layer, dx: drag.alt && pc?.draw !== 'dot' ? dx : 0, dy });
+      if (!drag.mode) {
+        // sideways only for a crossing with a move to make; wait for the matches before deciding
+        if (Math.abs(dx) > Math.abs(dy) && drag.matches === undefined) return;
+        drag.mode = drag.move && Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+      if (drag.mode === 'h') pullSideways(drag, dx);
+      else moveUpDown(drag, dy);
     } else {
       setBoxDrag({ summand: drag.k, a: drag.start, b: p });
     }
@@ -371,6 +399,23 @@ export function Canvas(props: CanvasProps) {
     setBoxDrag(null);
     if (!d) return;
     if (!d.moved && live()) setLive(null);
+    const pulled = pull();
+    setPull(null);
+    if (d.mode === 'h') {
+      say('');
+      if (pulled?.armed && d.move && d.matches) void applyMatch(d.k, d.matches[d.move.index], d.move.index);
+      return;
+    }
+    if (d.mode === 'v') {
+      const pv = preview();
+      const l0 = layouts()[d.k];
+      if (!pv || pv.summand !== d.k || !l0 || sameOrder(pv.order, l0.order)) {
+        setPreview(null);
+        return say('');
+      }
+      setPreview({ ...pv, held: true });
+      return void reorder(d.k, pv.order, 'interchange').finally(() => setTimeout(() => preview()?.held && setPreview(null), 1500));
+    }
     const l = layouts()[d.k];
     if (!l) return;
     const p = units(d.svg, e);
@@ -411,6 +456,48 @@ export function Canvas(props: CanvasProps) {
       return void reorder(d.k, order, 'interchange').finally(release);
     }
     void reorder(d.k, moveTo(l, d.layer, y), 'interchange');
+  };
+
+  /** A piece dragged up or down: the summand is drawn with the order the piece would get. */
+  const moveUpDown = (d: NonNullable<typeof drag>, dy: number) => {
+    const l = layouts()[d.k];
+    const pc = l && piece(l, d.layer!);
+    if (!pc) return;
+    const order = moveTo(l, pc.layer, centre(pc)[1] + dy);
+    if (sameOrder(order, l.order)) {
+      d.asked = undefined;
+      setPreview(null);
+      return say('Drag past a piece on other strands to interchange heights.');
+    }
+    if (d.asked && sameOrder(d.asked, order)) return;
+    d.asked = order;
+    void props.engine.call('term.layout', { context: props.context, term: props.term!, summands: d.k + 1, orders: { [d.k + 1]: order } }, { lane: 'interactive' }).then((o) => {
+      if (drag !== d || !d.asked || !sameOrder(d.asked, order) || o.status !== 'done') return;
+      const r = o.response;
+      if (r.status !== 'ok') return say(`It cannot go there: ${r.message}`);
+      const next = r.summands[d.k];
+      setPreview({ summand: d.k, order, layout: next });
+      say(next.sign !== l.sign ? 'Let go to interchange: two odd pieces swap, so this summand changes sign (−1).' : 'Let go to interchange: an equality, so only the drawing changes.');
+    });
+  };
+
+  /** A crossing dragged sideways: arms its braid or square move once pulled far enough the right way. */
+  const pullSideways = (d: NonNullable<typeof drag>, dx: number) => {
+    const mv = d.move!;
+    const m = d.matches![mv.index];
+    const right = mv.side === 0 || Math.sign(dx) === mv.side;
+    const shift = Math.max(-0.8, Math.min(0.8, dx)) * (right ? 1 : 0.25);
+    const armed = right && Math.abs(dx) > PULL;
+    setPull({ summand: d.k, layer: d.layer!, dx: shift, layers: mv.layers, armed, result: pull()?.result });
+    const way = mv.side < 0 ? 'left' : mv.side > 0 ? 'right' : 'sideways';
+    say(armed ? `Let go to apply ${m.relation}${m.sign === -1 ? ' (sign −1 from interchanges)' : ''}.` : `Pull ${way} to apply ${m.relation}.`);
+    if (armed && !d.resultAsked && m.preview) {
+      d.resultAsked = true;
+      void props.engine.call('term.layout', { context: props.context, term: m.preview, summands: 4 }, { lane: 'interactive' }).then((o) => {
+        const cur = pull();
+        if (drag === d && cur && o.status === 'done' && o.response.status === 'ok') setPull({ ...cur, result: o.response.summands });
+      });
+    }
   };
 
   /** Keeps a released dot where it was let go until the rewritten term is drawn. */
@@ -702,6 +789,24 @@ export function Canvas(props: CanvasProps) {
             </g>
           )}
         </Show>
+        <Show when={pull()?.summand === p.k && pull()}>
+          {(pl) => (
+            <g pointer-events="none" data-testid="pull">
+              {/* the crossing being pulled, carried along by the pointer; the drawing itself stays */}
+              <g class="pulled" transform={`translate(${pl().dx} 0)`}>
+                <For each={l().lines.filter((x) => x.kind === 'strand' && x.layer === pl().layer)}>
+                  {(line) => <path d={path(line)} stroke={strandColour(line.strand)} stroke-width={0.07} fill="none" />}
+                </For>
+              </g>
+              <For each={pl().layers}>
+                {(layer) => {
+                  const c = () => centre(piece(l(), layer) ?? l().pieces[0]);
+                  return <circle class={`xing ${pl().armed ? 'passed' : 'near'}`} data-layer={layer} cx={c()[0]} cy={-c()[1]} r={0.34} />;
+                }}
+              </For>
+            </g>
+          )}
+        </Show>
         <Show when={live()?.summand === p.k && live()}>
           {(lv) => {
             const at = (layer: number) => centre(piece(l(), layer)!);
@@ -824,13 +929,16 @@ export function Canvas(props: CanvasProps) {
                           <Show when={l.sign === -1}><span class="badge warn" title="This drawing's layers are in an order that costs a Koszul sign">−1 from interchange</span></Show>
                           <span class="hint">degree {l.degree}</span>
                         </div>
-                        <Diagram l={l} k={k()} />
+                        <Diagram l={preview()?.summand === k() ? preview()!.layout : l} k={k()} />
                       </div>
                     )}
                   </For>
                 </Show>
               </div>
             </Show>
+          </Show>
+          <Show when={pull()?.armed && pull()?.result}>
+            {(ls) => <div class="pullresult" data-testid="pull-result"><span class="hint">Becomes</span> <Mini ls={ls()} /></div>}
           </Show>
           <Show when={menu()}>
             {(m) => (
@@ -869,11 +977,14 @@ export function Canvas(props: CanvasProps) {
 
 /** How near (in units) a dragged dot must come to a crossing on its strand before the crossing glows. */
 const REACH = 0.75;
+/** How far (in units) a crossing must be pulled sideways to arm its move. */
+const PULL = 0.45;
 
 const ALT = isMac ? '⌥' : 'Alt+';
 const GESTURES: [string, string][] = [
   ['drag a dot', 'slide it along its strand: a crossing glows as the dot nears it and rings once passed; letting go fires the dot-slide relation through the rung crossings'],
-  ['drag a piece', 'interchange it with distant pieces; a −1 badge shows when two odd pieces swap'],
+  ['drag a piece up or down', 'interchange its height with pieces on other strands; the drawing follows as you drag, and a −1 badge shows when two odd pieces swap'],
+  ['drag a crossing sideways', 'the middle crossing of a braid triangle, towards the other two: the braid relation; either crossing of a stacked pair: pull them apart by the square relation. The crossings glow, ring when armed, and the result shows'],
   [`${ALT}drag`, 'move a piece for looks only (a layout hint)'],
   ['drag on empty space', 'box-select'],
   [`click, ${K}click`, 'select, add or remove from the selection'],

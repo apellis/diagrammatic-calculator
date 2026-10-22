@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nodeEngine } from '../eval/testing';
-import { along, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand, onStrand, piece, piecesIn, rectangle, track, trackRange, type Layout } from './geometry';
+import { along, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand, onStrand, pullMove, piece, piecesIn, rectangle, track, trackRange, type Layout } from './geometry';
 
 const engine = nodeEngine();
 
@@ -45,6 +45,31 @@ describe('canvas geometry', () => {
     const d = bare.pieces[0];
     expect(track(bare, d).length).toBe(1);
     expect(crossingsOn(bare, d)).toEqual([]);
+  });
+
+  it('finds the braid triangle and the stacked pair a sideways crossing drag can resolve', async () => {
+    const match = async (context: string, term: string) => {
+      const o = await engine.call('relations.match', { context, term, summand: 1 });
+      if (o.status !== 'done' || o.response.status !== 'ok') throw new Error(JSON.stringify(o));
+      return o.response.matches;
+    };
+    const ctx = 'klr type=A2 nu=2i+j';
+    const [l] = await layout(ctx, 'psi_1 psi_2 psi_1 e(iji)');
+    const ms = await match(ctx, 'psi_1 psi_2 psi_1 e(iji)');
+    const order = [...l.pieces].sort((a, b) => a.box[1] - b.box[1]);
+    const [bottom, middle] = order;
+    // the middle crossing is on the right (positions 2, 3): it is dragged left, towards the others
+    const move = pullMove(l, ms, middle.layer)!;
+    expect(ms[move.index].relation).toMatch(/braid/);
+    expect(move.side).toBe(-1);
+    expect(move.layers.length).toBe(3);
+    // an outer crossing of the triangle alone makes no move
+    expect(pullMove(l, ms, bottom.layer)).toBeUndefined();
+    // a stacked pair of crossings is pulled apart by the square relation, either way
+    const [sq] = await layout(ctx, 'psi_1 psi_1 e(iji)');
+    const pair = pullMove(sq, await match(ctx, 'psi_1 psi_1 e(iji)'), sq.pieces[0].layer)!;
+    expect(pair.side).toBe(0);
+    expect(pair.layers.length).toBe(2);
   });
 
   it('turns a box into a rectangle of layers and strands', async () => {
