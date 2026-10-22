@@ -154,13 +154,23 @@ test('a refused key and a refusal are shown as plain messages', async ({ page })
   await expect(page.getByTestId('chat').locator('.error').nth(1)).toContainText('declined');
 });
 
-test('No AI keeps the document away from the AI, and the key stays for the session only by default', async ({ page }) => {
+test('the key stays for the session only by default; a reply shows its mathematics typeset and its code fixed-width', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'def a := x_1 e(iij)');
+  await recordedModel(page, [
+    () => sse([{ type: 'text', text: 'They differ by a sign:\n\\[\na=\\psi_1e(iji),\\qquad b=-a.\n\\]\n\n- \\(a^2=a\\), by the new `check idempotent(a)`.\n- **Orthogonal** too.' }], 'end_turn'),
+  ]);
   await enterKey(page);
   expect(await page.evaluate(() => [sessionStorage.getItem('diagcalc.ai.key.anthropic'), localStorage.getItem('diagcalc.ai.key.anthropic')])).toEqual(['sk-ant-test', null]);
-  await page.getByText('No AI for this document').click();
-  await expect(page.getByLabel('Message to the AI')).toBeDisabled();
+  await expect(page.getByText('No AI for this document')).toHaveCount(0);
+  await page.getByLabel('Message to the AI').fill('compare');
+  await page.keyboard.press('Enter');
+  const reply = page.getByTestId('chat').locator('.ai-text');
+  await expect(reply.locator('.katex-display')).toHaveCount(1);
+  await expect(reply.locator('li .katex')).toHaveCount(1);
+  await expect(reply.locator('code')).toHaveText('check idempotent(a)');
+  await expect(reply.locator('strong')).toHaveText('Orthogonal');
+  await expect(reply).not.toContainText('\\[');
 });
 
 test('a multi-step AI request undoes as one step; pinned watches sit at the top of the outline', async ({ page }) => {

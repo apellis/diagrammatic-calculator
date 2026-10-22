@@ -51,7 +51,7 @@ function Workspace(props: { o: OpenDoc }) {
   const main = props.o.doc;
   const linked = createSignal<FileSystemFileHandle | null>(null);
   // the AI panel shows by default once a key is entered
-  const [aiOpen, setAiOpen] = createSignal(!main.noAI && (!!loadKey(loadSettings().provider).key || loadSettings().provider === 'compatible'));
+  const [aiOpen, setAiOpen] = createSignal(!!loadKey(loadSettings().provider).key || loadSettings().provider === 'compatible');
   const [selection, setSelection] = createSignal<Selection | null>(null);
   const [proposals, setProposals] = createSignal<Proposal[]>([]);
   let view: ViewApi | null = null;

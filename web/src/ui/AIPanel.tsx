@@ -8,6 +8,7 @@ import { run, userMessage, type AgentEvent } from '../ai/agent';
 import { ANTHROPIC_MODELS, checkProvider, listModels, loadKey, loadModels, loadSettings, provider, saveKey, saveModels, saveSettings, type AISettings, type ModelOption, type ProviderId } from '../ai/providers';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { isMac } from '../app';
+import { markdown } from './markdown';
 
 type Part =
   | { type: 'text'; text: string }
@@ -23,7 +24,7 @@ const OTHER = '__other__';
 
 export interface AIPanelProps {
   host: ToolHost;
-  /** The document itself: its timeline and its "No AI" switch. */
+  /** The document itself: its timeline. */
   main: Doc;
   proposals: Proposal[];
   onDecide: (p: Proposal, accept: boolean) => void;
@@ -47,7 +48,6 @@ export function AIPanel(props: AIPanelProps) {
   const [listError, setListError] = createSignal('');
   const [other, setOther] = createSignal(false);
   const [noticeSeen, setNoticeSeen] = createSignal(seen());
-  const [noAI, setNoAI] = createSignal(props.main.noAI);
   const [entries, setEntries] = createStore<Entry[]>([]);
   const [draft, setDraft] = createSignal('');
   const [attach, setAttach] = createSignal(true);
@@ -61,12 +61,9 @@ export function AIPanel(props: AIPanelProps) {
   let log!: HTMLDivElement;
 
   const onTimeline = () => setTimeline(props.main.timeline.toArray());
-  const onMeta = () => setNoAI(props.main.noAI);
   props.main.timeline.observe(onTimeline);
-  props.main.meta.observe(onMeta);
   onCleanup(() => {
     props.main.timeline.unobserve(onTimeline);
-    props.main.meta.unobserve(onMeta);
     abort?.abort();
   });
   onMount(() => props.focusRef?.(() => box?.focus()));
@@ -218,7 +215,7 @@ export function AIPanel(props: AIPanelProps) {
       <Show when={!noticeSeen()}>
         <div class="banner ai-notice" data-testid="ai-notice">
           Every message sends your text, the selection and the terms involved to the provider you choose, with your key, straight from this browser.
-          Nothing goes anywhere else. Turn on “No AI” below for unpublished work.
+          Nothing goes anywhere else.
           <div><button onClick={() => { markSeen(); setNoticeSeen(true); }}>I understand</button></div>
         </div>
       </Show>
@@ -273,10 +270,6 @@ export function AIPanel(props: AIPanelProps) {
         </div>
       </Show>
 
-      <label class="row hint ai-noai" title="This document's terms are never sent to an AI while this is on">
-        <input type="checkbox" checked={noAI()} onChange={(e) => props.main.setNoAI(e.currentTarget.checked)} /> No AI for this document
-      </label>
-
       <Switch>
         <Match when={tab() === 'activity'}>
           <div class="ai-log" data-testid="timeline">
@@ -322,9 +315,9 @@ export function AIPanel(props: AIPanelProps) {
                         <For each={a().parts}>
                           {(p) => (
                             <Switch>
-                              <Match when={p.type === 'text' && p}>{(t) => <div class="ai-text">{t().text}</div>}</Match>
+                              <Match when={p.type === 'text' && p}>{(t) => <div class="ai-text" innerHTML={markdown(t().text)} />}</Match>
                               <Match when={p.type === 'thinking' && p}>
-                                {(t) => <details class="ai-thinking"><summary>Thinking</summary><div>{t().text}</div></details>}
+                                {(t) => <details class="ai-thinking"><summary>Thinking</summary><div class="ai-text" innerHTML={markdown(t().text)} /></details>}
                               </Match>
                               <Match when={p.type === 'tool' && p}>
                                 {(t) => (
@@ -380,10 +373,10 @@ export function AIPanel(props: AIPanelProps) {
           )}
         </Show>
         <textarea ref={box} rows={3} value={draft()} onInput={(e) => setDraft(e.currentTarget.value)} onKeyDown={onKey} aria-label="Message to the AI"
-          disabled={noAI() || !noticeSeen()}
-          placeholder={noAI() ? 'The AI is off for this document.' : !key() && settings().provider !== 'compatible' ? 'Enter a key in the settings first.' : 'Ask about the workspace; Enter sends, Shift+Enter starts a new line.'} />
+          disabled={!noticeSeen()}
+          placeholder={!key() && settings().provider !== 'compatible' ? 'Enter a key in the settings first.' : 'Ask about the workspace; Enter sends, Shift+Enter starts a new line.'} />
         <div class="row">
-          <Show when={busy()} fallback={<button class="primary" onClick={() => void send()} disabled={!draft().trim() || noAI() || !noticeSeen()} data-testid="ai-send">Send</button>}>
+          <Show when={busy()} fallback={<button class="primary" onClick={() => void send()} disabled={!draft().trim() || !noticeSeen()} data-testid="ai-send">Send</button>}>
             <button onClick={stop} data-testid="ai-stop">Stop</button>
           </Show>
           <button class="ghost" onClick={newConversation} disabled={busy()} title="Start a new conversation; the workspace and the activity stay">New conversation</button>

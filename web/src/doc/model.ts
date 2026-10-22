@@ -214,15 +214,6 @@ export class Doc {
     this.step(`${pinned ? 'pin' : 'unpin'} ${id}`, () => this.meta.set('pinned', pinned ? [...now, id] : now));
   }
 
-  /** The document's "No AI" switch, for unpublished work. */
-  get noAI(): boolean {
-    return this.meta.get('noAI') === true;
-  }
-  setNoAI(on: boolean) {
-    // a setting, not a step of the work: undo leaves it alone
-    this.ydoc.transact(() => this.meta.set('noAI', on), HISTORY);
-  }
-
   rename(name: string) {
     this.step(`rename to ${name}`, () => this.meta.set('name', name));
   }

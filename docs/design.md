@@ -296,7 +296,11 @@ from the page and says whether the browser can reach it. The model is chosen fro
 server's as given), kept per provider in local storage and fetched again with ↻; "Other…" takes a
 typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay in session storage unless "Remember on this
 device" is ticked, and go only to the chosen provider. The first time the panel opens it says what
-leaves the browser; a document's "No AI" switch turns the panel off for it.
+leaves the browser (there is no per-document switch: nothing is sent unless one writes to the AI).
+Replies are shown as formatted text by `src/ui/markdown.ts`: a small, escaped Markdown subset
+(paragraphs, headings, lists, emphasis, code spans and fenced code in the fixed-width font) with
+LaTeX mathematics (`\(…\)`, `$…$`, `\[…\]`, `$$…$$`) typeset by KaTeX in the same style as the
+rest of the app.
 
 **Tests (4b).** Unit tests for the canvas geometry, branches and merging, AI tool schemas,
 validation and the chat-completions translation. Playwright drives the gestures (drag-slide,

@@ -279,7 +279,7 @@ The AI never does algebra itself: it calls the engine's operations, so every ans
 
 **Providers and keys.** Anthropic first: its API accepts calls made directly from a browser when the request opts in, which the official TypeScript SDK supports, so no server is needed. Other providers come only after a check, because not every provider accepts browser calls made with an API key. Phase 4b starts by testing OpenAI and an OpenAI-compatible local endpoint. If a provider refuses, the app says so and points to the command-line tool and MCP instead. The key is kept for the session only by default; "Remember on this device" stores it in that browser's storage. It is sent only to the chosen provider. The default model is Claude Opus 5.5 with adaptive thinking and streaming. Settings offers other models and an effort level, since the user pays. The stable prefix (skill text and tool list) is marked for prompt caching, which cuts the user's cost on every turn after the first. Refusals and rate limits are shown as plain messages, never as silent failures.
 
-**What leaves the browser.** Every AI message sends the selection and the terms involved to the provider. The AI panel says so the first time it opens, and each document has a "No AI" switch for unpublished work.
+**What leaves the browser.** Every AI message sends the selection and the terms involved to the provider. The AI panel says so the first time it opens; nothing is sent unless the person writes to the AI.
 
 **The skill.** `skill/SKILL.md` in the repository, a few pages long: the text term format, the ID scheme, relation names by presentation, sign conventions, and habits such as "simplify before reporting a term count" and "run what-if questions on a branch". The same file is bundled into the web app and shipped with the command-line tool for outside agents.
 
@@ -423,7 +423,7 @@ Phases 1 to 5 run with no server and no running cost. Phase 6 starts the $5 a mo
 | Safari clears local storage after about 7 days without a visit | Anonymous users lose documents | Ask for persistent storage, show the notice, suggest installing the app, remind to export; signing in (phase 6) removes the risk |
 | Gestures prove awkward in practice | The diagram canvas goes unused | Gestures come after the text workspace (4b), so they cannot hold back the rest; every gesture has a keyboard and text path; Alex tries them at the phase 4 gate |
 | Some AI providers refuse calls from a browser | The in-app AI works only with some providers | Anthropic first; other providers only after a check; the command-line tool and MCP as the alternative |
-| Unpublished research is sent to an AI provider | Data leaves the user's browser | A notice on first use and a "No AI" switch per document |
+| Unpublished research is sent to an AI provider | Data leaves the user's browser | A notice on first use; nothing is sent unless the person writes to the AI |
 | AI models change behaviour or prices | The in-app AI gets worse or costs users more | Model picker; skill text versioned in the repository; the replayed transcript suite catches tool-call regressions |
 | Cloudflare free-tier terms change | Running costs rise | The static site and the Rust core move to any static host unchanged; only phases 6 and 7 depend on Workers |
 
