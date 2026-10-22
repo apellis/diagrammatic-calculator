@@ -369,6 +369,17 @@ impl<R: Ring> Context<R> {
         Some(r)
     }
 
+    /// The region `r` moved left across the strands `obj`.
+    pub fn shift_region(&self, r: &[i64], obj: &[Letter]) -> Vec<i64> {
+        let mut r = r.to_vec();
+        for l in obj {
+            for (x, d) in r.iter_mut().zip(self.shift(*l)) {
+                *x += d;
+            }
+        }
+        r
+    }
+
     /// Formats region pairings in fundamental-weight coordinates, as `mu=` reads them.
     pub fn fmt_region(&self, r: &[i64]) -> String {
         if self.colours.len() == 1 {
@@ -544,6 +555,63 @@ impl<R: Ring> Context<R> {
         let mut binding: Vec<Option<u16>> = vec![None; g_decl.vars.len()];
         for (k, p) in g_decl.source.iter().enumerate() {
             let l = obj[pos + k];
+            if l.up != p.up {
+                return None;
+            }
+            match &p.colour {
+                PatColour::Var(v) => match binding[*v] {
+                    Some(c) if c != l.colour => return None,
+                    _ => binding[*v] = Some(l.colour),
+                },
+                PatColour::Fixed(name) => {
+                    if self.colour_index(name) != Some(l.colour as usize) {
+                        return None;
+                    }
+                }
+            }
+        }
+        let binding: Option<Vec<u16>> = binding.into_iter().collect();
+        Some(Layer {
+            generator: g as u16,
+            pos: pos as u16,
+            binding: binding?,
+        })
+    }
+
+    /// Whether generator `g` has colour variables its source does not determine (a cup).
+    pub fn needs_colours(&self, g: usize) -> bool {
+        let d = &self.pres.generators[g];
+        (0..d.vars.len()).any(|v| {
+            !d.source
+                .iter()
+                .any(|p| matches!(p.colour, PatColour::Var(x) if x == v))
+        })
+    }
+
+    /// [`Context::match_layer`], with the leading letters of the target given as well: they
+    /// bind the colour variables the source leaves open and choose among generators that share
+    /// a written name (`cup_{1,i}` is the cup whose left strand at the top is `i`).
+    pub fn match_layer_explicit(
+        &self,
+        g: usize,
+        obj: &[Letter],
+        pos: usize,
+        explicit: &[Letter],
+    ) -> Option<Layer> {
+        if explicit.is_empty() {
+            return self.match_layer(g, obj, pos);
+        }
+        let d = &self.pres.generators[g];
+        if pos + d.source.len() > obj.len() || explicit.len() > d.target.len() {
+            return None;
+        }
+        let mut binding: Vec<Option<u16>> = vec![None; d.vars.len()];
+        let letters = d
+            .source
+            .iter()
+            .zip(&obj[pos..pos + d.source.len()])
+            .chain(d.target.iter().zip(explicit));
+        for (p, l) in letters {
             if l.up != p.up {
                 return None;
             }
@@ -1004,8 +1072,7 @@ impl<R: Ring> Context<R> {
                 j += 1;
             }
             let count = j - i;
-            let g = &self.pres.generators[l.generator as usize];
-            let s = format!("{}_{}", g.name, l.pos + 1);
+            let s = self.fmt_layer_name(l);
             parts.push(if count > 1 { format!("{s}^{count}") } else { s });
             i = j;
         }
@@ -1017,6 +1084,40 @@ impl<R: Ring> Context<R> {
             }
         }
         parts.join(" ")
+    }
+
+    /// A layer as written in a word: the generator's written name and its position, and for a
+    /// generator whose source leaves colours open (a cup) the leading target letters that fix
+    /// them: `cup_{1,i*}`.
+    pub fn fmt_layer_name(&self, l: &Layer) -> String {
+        let g = &self.pres.generators[l.generator as usize];
+        let gi = l.generator as usize;
+        if !self.needs_colours(gi) {
+            return format!("{}_{}", g.written, l.pos + 1);
+        }
+        let mut open: Vec<usize> = (0..g.vars.len())
+            .filter(|&v| {
+                !g.source
+                    .iter()
+                    .any(|p| matches!(p.colour, PatColour::Var(x) if x == v))
+            })
+            .collect();
+        let mut letters = Vec::new();
+        for t in &g.target {
+            if open.is_empty() {
+                break;
+            }
+            let colour = match &t.colour {
+                PatColour::Var(v) => {
+                    open.retain(|x| x != v);
+                    l.binding[*v]
+                }
+                PatColour::Fixed(name) => self.colour_index(name).expect("fixed colour") as u16,
+            };
+            let n = &self.colours[colour as usize].name;
+            letters.push(if t.up { n.clone() } else { format!("{n}*") });
+        }
+        format!("{}_{{{},{}}}", g.written, l.pos + 1, letters.join(","))
     }
 
     /// Canonical text of a term.

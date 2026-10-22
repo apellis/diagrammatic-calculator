@@ -8,14 +8,16 @@
 //! sum     := [+|-] tensor ((+|-) tensor)*
 //! tensor  := comp ((x) | ⊗) comp)*
 //! comp    := factor ([*] factor)*          juxtaposition is composition: a b = a ∘ b
-//! factor  := atom [^ int]
+//! factor  := atom [^ int | ^{intexpr}]
 //! atom    := int [/ int] | I | name [_sub] [(sum, …)] | e(colours) | 1_obj | (sum)
+//!          | sum_{f=lo..hi} comp            a sum over an integer range; empty if hi < lo
 //! ```
 //!
 //! Unicode forms are accepted for `ψ`, `π`, `⊗`, `−`, `·` and `∘`; the printer writes ASCII
 //! except for names that were typed in Unicode.
 
 use crate::error::{Error, Result};
+use crate::expr::{TermInt, parse_term_int};
 use num_bigint::BigInt;
 use num_traits::{One, Signed, Zero};
 
@@ -36,6 +38,15 @@ pub enum Ast {
     /// An identity `1_obj`, with the object as written.
     Id(String),
     Pow(Box<Ast>, i64),
+    /// A power whose exponent is an integer expression: `x_1^{h(i) - 1 - f}`.
+    PowExpr(Box<Ast>, TermInt),
+    /// `sum_{var=lo..hi} body`: the sum of `body` for `var` from `lo` to `hi`.
+    Range {
+        var: String,
+        lo: TermInt,
+        hi: TermInt,
+        body: Box<Ast>,
+    },
     /// Composition, top factor first: `a b` is `[a, b]`.
     Comp(Vec<Ast>),
     /// Tensor product, left factor first.
@@ -50,6 +61,8 @@ enum Tok {
     Name(String),
     /// `_` followed by its subscript text.
     Sub(String),
+    /// `^{...}`: an exponent written as an integer expression.
+    Sup(String),
     Raw(String),
     Sym(char),
     Tensor,
@@ -97,6 +110,23 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>> {
                 i += 1;
             }
             out.push((Tok::Num(n), off));
+            continue;
+        }
+        if c == '^' && at(i + 1) == Some('{') {
+            i += 2;
+            let mut raw = String::new();
+            loop {
+                match at(i) {
+                    None => return Err(Error::syntax("unclosed '^{'", off)),
+                    Some('}') => {
+                        i += 1;
+                        break;
+                    }
+                    Some(ch) => raw.push(ch),
+                }
+                i += 1;
+            }
+            out.push((Tok::Sup(raw), off));
             continue;
         }
         if c == '_' {
@@ -282,6 +312,15 @@ impl Parser {
 
     fn factor(&mut self) -> Result<Ast> {
         let a = self.atom()?;
+        if let Some(Tok::Sup(raw)) = self.peek().cloned() {
+            let off = self.off();
+            self.pos += 1;
+            let e = parse_term_int(&raw).map_err(|e| Error::syntax(e.message, off))?;
+            return Ok(match e.constant() {
+                Some(n) => Ast::Pow(Box::new(a), n),
+                None => Ast::PowExpr(Box::new(a), e),
+            });
+        }
         if self.eat('^') {
             let braced = self.eat_brace_open();
             let neg = self.eat('-');
@@ -358,6 +397,28 @@ impl Parser {
                 } else {
                     None
                 };
+                if name == "sum"
+                    && let Some(r) = sub.as_deref().filter(|r| r.contains('='))
+                {
+                    let (var, range) = r.split_once('=').unwrap();
+                    let (lo, hi) = range
+                        .split_once("..")
+                        .ok_or_else(|| Error::syntax("a sum is written sum_{f=lo..hi}", off))?;
+                    let var = var.trim().to_string();
+                    if var.is_empty() || !var.chars().all(|c| c.is_alphanumeric()) {
+                        return Err(Error::syntax("the index of a sum is a name", off));
+                    }
+                    let parse =
+                        |t: &str| parse_term_int(t).map_err(|e| Error::syntax(e.message, off));
+                    let (lo, hi) = (parse(lo)?, parse(hi)?);
+                    let body = self.comp()?;
+                    return Ok(Ast::Range {
+                        var,
+                        lo,
+                        hi,
+                        body: Box::new(body),
+                    });
+                }
                 let args = if self.peek() == Some(&Tok::Sym('('))
                     && sub.is_some()
                     && name.chars().next().is_some_and(|c| c.is_uppercase())
@@ -392,6 +453,7 @@ fn describe(t: &Tok) -> String {
         Tok::Num(n) => format!("number {n}"),
         Tok::Name(n) => format!("'{n}'"),
         Tok::Sub(s) => format!("subscript '_{s}'"),
+        Tok::Sup(s) => format!("exponent '^{{{s}}}'"),
         Tok::Raw(_) => "idempotent contents".into(),
         Tok::Sym(c) => format!("'{c}'"),
         Tok::Tensor => "'(x)'".into(),
@@ -466,6 +528,16 @@ fn print_prec(a: &Ast, prec: u8) -> String {
             };
             (format!("{bs}^{es}"), 3)
         }
+        Ast::PowExpr(b, e) => (format!("{}^{{{}}}", print_prec(b, 4), e.print()), 3),
+        Ast::Range { var, lo, hi, body } => (
+            format!(
+                "sum_{{{var}={}..{}}} {}",
+                lo.print(),
+                hi.print(),
+                print_prec(body, 2)
+            ),
+            2,
+        ),
         Ast::Comp(items) => {
             let parts: Vec<String> = items.iter().map(|x| print_prec(x, 3)).collect();
             (parts.join(" "), 2)
@@ -498,7 +570,7 @@ fn print_prec(a: &Ast, prec: u8) -> String {
                 Ast::Int(_) | Ast::Imag | Ast::Name { .. } | Ast::Idem(_) | Ast::Id(_)
             ) || matches!(a, Ast::Int(n) if n.is_negative())
         }
-        (Ast::Comp(_), 3) => true,
+        (Ast::Comp(_) | Ast::Range { .. }, 3) => true,
         _ => p < prec,
     };
     if needs && !(matches!(a, Ast::Int(n) if n.is_negative())) {
@@ -552,6 +624,17 @@ mod tests {
         assert_eq!(round("1_{ij*}"), "1_ij*");
         assert_eq!(round("(q + 1)/q^2 psi_1"), "(q + 1) (q^2)^-1 psi_1");
         assert_eq!(round("1/2/(q + 1)"), "1/2 (q + 1)^-1");
+        assert_eq!(round("x_1^{h(i) - 1 - f} e(i)"), "x_1^{h(i) - 1 - f} e(i)");
+        assert_eq!(round("x_1^{2} e(i)"), "x_1^2 e(i)");
+        assert_eq!(
+            round("sum_{f=0..h(i)-1} x_1^{f} x_2^{h(i) - 1 - f} + 1"),
+            "sum_{f=0..h(i) - 1} x_1^{f} x_2^{h(i) - 1 - f} + 1"
+        );
+        assert_eq!(
+            round("y (sum_{g=0..2} x_1^{g}) z"),
+            "y (sum_{g=0..2} x_1^{g}) z"
+        );
+        assert!(parse("sum_{f=0} x_1").is_err());
         assert!(parse("x_1 +").is_err());
         assert!(parse("2_i").is_err());
     }

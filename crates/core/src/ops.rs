@@ -164,8 +164,8 @@ impl<'a, R: Ring> Session<'a, R> {
 
     pub fn term(&self, ast: &text::Ast) -> Result<CTerm<R>> {
         let scope = Scope {
-            colour_vars: vec![],
             defs: Some(&self.defs),
+            ..Scope::default()
         };
         self.ctx.elaborate(ast, &scope)
     }

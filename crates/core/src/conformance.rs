@@ -54,8 +54,16 @@ fn finding(check: String, ok: bool, detail: impl Into<String>) -> Finding {
     }
 }
 
-/// All colour bindings of a relation schema that satisfy its side condition.
-pub fn instances<R: Ring>(ctx: &Context<R>, rel: &Relation) -> Result<Vec<Vec<usize>>> {
+/// One instance of a relation schema: its colour variables bound, and its integer variables.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Instance {
+    pub colours: Vec<usize>,
+    pub ints: Vec<i64>,
+}
+
+/// All instances of a relation schema: colour bindings that satisfy its side condition, with
+/// every value of its integer variables in their ranges (evaluated at the context's `μ`).
+pub fn instances<R: Ring>(ctx: &Context<R>, rel: &Relation) -> Result<Vec<Instance>> {
     let k = ctx.colours.len();
     let m = rel.vars.len();
     let mut out = Vec::new();
@@ -68,28 +76,62 @@ pub fn instances<R: Ring>(ctx: &Context<R>, rel: &Relation) -> Result<Vec<Vec<us
             c /= k;
         }
         b.reverse();
-        if rel.when.eval(&b, ctx)? {
-            out.push(b);
+        if !rel.when.eval(&b, ctx)? {
+            continue;
+        }
+        let scope = colour_scope::<R>(rel, &b);
+        let mut ranges = Vec::new();
+        for (_, lo, hi) in &rel.ints {
+            ranges.push((ctx.eval_int(lo, &scope)?, ctx.eval_int(hi, &scope)?));
+        }
+        let mut vals: Vec<Vec<i64>> = vec![vec![]];
+        for (lo, hi) in ranges {
+            vals = vals
+                .into_iter()
+                .flat_map(|v| {
+                    (lo..=hi).map(move |x| {
+                        let mut v = v.clone();
+                        v.push(x);
+                        v
+                    })
+                })
+                .collect();
+        }
+        for ints in vals {
+            out.push(Instance {
+                colours: b.clone(),
+                ints,
+            });
         }
     }
     Ok(out)
 }
 
-/// Both sides of one relation instance.
-pub fn instance_terms<R: Ring>(
-    ctx: &Context<R>,
-    rel: &Relation,
-    b: &[usize],
-) -> Result<(CTerm<R>, CTerm<R>)> {
-    let scope = Scope {
+fn colour_scope<'a, R: Ring>(rel: &Relation, b: &[usize]) -> Scope<'a, R> {
+    Scope {
         colour_vars: rel
             .vars
             .iter()
             .cloned()
             .zip(b.iter().map(|&c| c as u16))
             .collect(),
-        defs: None,
-    };
+        ..Scope::default()
+    }
+}
+
+/// Both sides of one relation instance.
+pub fn instance_terms<R: Ring>(
+    ctx: &Context<R>,
+    rel: &Relation,
+    inst: &Instance,
+) -> Result<(CTerm<R>, CTerm<R>)> {
+    let mut scope = colour_scope::<R>(rel, &inst.colours);
+    scope.ints = rel
+        .ints
+        .iter()
+        .map(|(v, _, _)| v.clone())
+        .zip(inst.ints.iter().copied())
+        .collect();
     let mut sides =
         ctx.elaborate_together(&[text::parse(&rel.lhs)?, text::parse(&rel.rhs)?], &scope)?;
     let rhs = sides.pop().unwrap();
@@ -97,15 +139,21 @@ pub fn instance_terms<R: Ring>(
     Ok((lhs, rhs))
 }
 
-fn binding_text<R: Ring>(ctx: &Context<R>, rel: &Relation, b: &[usize]) -> String {
-    if b.is_empty() {
+fn binding_text<R: Ring>(ctx: &Context<R>, rel: &Relation, b: &Instance) -> String {
+    if b.colours.is_empty() && b.ints.is_empty() {
         return String::new();
     }
     let parts: Vec<String> = rel
         .vars
         .iter()
-        .zip(b)
+        .zip(&b.colours)
         .map(|(v, &c)| format!("{v}={}", ctx.colours[c].name))
+        .chain(
+            rel.ints
+                .iter()
+                .zip(&b.ints)
+                .map(|((v, _, _), n)| format!("{v}={n}")),
+        )
         .collect();
     format!(" [{}]", parts.join(", "))
 }
@@ -250,13 +298,30 @@ fn check_parameters<R: Ring>(ctx: &Context<R>, findings: &mut Vec<Finding>) {
 }
 
 /// The contexts a shipped presentation is checked in: every Cartan type of rank at most three
-/// (plus `G2`) for Cartan presentations, the presentation alone otherwise.
+/// (plus `G2`) for Cartan presentations, the presentation alone otherwise. A presentation
+/// whose regions carry weights is checked at several rightmost weights in a few types.
 pub fn standard_contexts(pres: &Presentation) -> Vec<ContextSpec> {
     let base = ContextSpec {
         presentation: pres.name.clone(),
         ring: "QQ".into(),
         ..Default::default()
     };
+    if uses_weights(pres) {
+        let at = |t: &str, mus: &[&str]| -> Vec<ContextSpec> {
+            mus.iter()
+                .map(|m| ContextSpec {
+                    cartan_type: Some(t.to_string()),
+                    region: Some(m.to_string()),
+                    ..base.clone()
+                })
+                .collect()
+        };
+        let mut out = at("A1", &["-3", "-2", "-1", "0", "1", "2", "3"]);
+        out.extend(at("A2", &["0", "i", "-j", "2i-j", "-i-2j"]));
+        out.extend(at("B2", &["0", "i-j", "-2j"]));
+        out.extend(at("G2", &["0", "i", "-j"]));
+        return out;
+    }
     match pres.colours {
         ColourSpec::Cartan => ["A1", "A2", "A3", "B2", "B3", "C3", "G2"]
             .iter()
@@ -267,6 +332,14 @@ pub fn standard_contexts(pres: &Presentation) -> Vec<ContextSpec> {
             .collect(),
         ColourSpec::Fixed(_) => vec![base],
     }
+}
+
+/// Whether a presentation's regions carry weights: some degree or relation depends on them, or
+/// it has bubbles.
+pub fn uses_weights(pres: &Presentation) -> bool {
+    !pres.bubbles.is_empty()
+        || pres.generators.iter().any(|g| g.degree.uses_pairing())
+        || pres.relations.iter().any(|r| pres.relation_uses_region(r))
 }
 
 /// Checks a presentation over ℚ in its standard contexts.
@@ -304,8 +377,10 @@ mod tests {
                 r.context,
                 fails.join("\n")
             );
+            let pres = builtin::presentation(&r.presentation).unwrap();
             assert!(
-                r.findings.iter().any(|f| f.check.contains("holds in")),
+                pres.representations.is_empty()
+                    || r.findings.iter().any(|f| f.check.contains("holds in")),
                 "{}",
                 r.context
             );

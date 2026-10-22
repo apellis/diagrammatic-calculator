@@ -65,6 +65,13 @@
         "$ref": "#/$defs/generator"
       }
     },
+    "bubbles": {
+      "description": "Bubble families of a 2-category: written NAME_{c,m} in terms, a closed diagram in the region it sits in. For m with index(m) >= 0 the bubble is its word; below that it is a fake bubble, determined by the infinite Grassmannian relation with its partner family.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/bubbleFamily"
+      }
+    },
     "relations": {
       "type": "array",
       "items": {
@@ -223,6 +230,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "written": {
+          "description": "The name the generator is written with in terms, when several generators share it (for example a dot on an upward and on a downward strand). The source decides which one is meant; a generator with an empty source takes its colour explicitly, as cup_{1,a*}.",
+          "type": "string"
         }
       }
     },
@@ -279,6 +290,14 @@
         "when": {
           "description": "A side condition: a = b, a != b, and, or, not, comparisons of integer expressions.",
           "type": "string"
+        },
+        "ints": {
+          "description": "Integer variables of the schema, each with an inclusive range whose ends are integer expressions (they may use h(a), the weight of the relation's rightmost region). An empty range gives no instance.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^.+\\.\\..+$"
+          }
         },
         "lhs": {
           "type": "string"
@@ -346,6 +365,33 @@
               "type": "string"
             }
           }
+        }
+      }
+    },
+    "bubbleFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "word",
+        "index",
+        "partner"
+      ],
+      "properties": {
+        "colours": {
+          "type": "string",
+          "default": ""
+        },
+        "word": {
+          "description": "The bubble for label m, a term with no source or target in which the integer variable m may appear.",
+          "type": "string"
+        },
+        "index": {
+          "description": "Half the degree divided by d_a, as an expression in m and h(a); the bubble is real where it is >= 0. The fake bubbles of index k are the coefficients of the inverse of the partner family's generating series.",
+          "type": "string"
+        },
+        "partner": {
+          "description": "The family that enters the infinite Grassmannian relation with this one.",
+          "type": "string"
         }
       }
     }

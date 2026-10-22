@@ -4,7 +4,7 @@ use crate::error::{Error, Result};
 use crate::pres::Presentation;
 
 /// Name and file text of every shipped presentation.
-pub const PRESENTATIONS: [(&str, &str); 3] = [
+pub const PRESENTATIONS: [(&str, &str); 4] = [
     (
         "nilhecke",
         include_str!("../../../presentations/nilhecke.pres.toml"),
@@ -14,6 +14,7 @@ pub const PRESENTATIONS: [(&str, &str); 3] = [
         include_str!("../../../presentations/odd-nilhecke.pres.toml"),
     ),
     ("klr", include_str!("../../../presentations/klr.pres.toml")),
+    ("kl", include_str!("../../../presentations/kl.pres.toml")),
 ];
 
 /// A shipped presentation by name.

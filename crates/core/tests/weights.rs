@@ -91,3 +91,80 @@ fn degrees_read_the_region_right_of_the_generator() {
     let (word, _) = w.terms.first().unwrap();
     assert_eq!(c.word_degree(word), -3);
 }
+
+#[test]
+fn kl_presentation_conforms_at_several_weights() {
+    use diagcalc_core::builtin;
+    use diagcalc_core::conformance;
+    let pres = builtin::presentation("kl").unwrap();
+    let reports = conformance::check_presentation(&pres).unwrap();
+    assert!(reports.len() > 10);
+    for r in &reports {
+        let fails: Vec<String> = r
+            .failures()
+            .map(|f| format!("{}: {}", f.check, f.detail))
+            .collect();
+        assert!(fails.is_empty(), "{}:\n{}", r.context, fails.join("\n"));
+        let typed = r
+            .findings
+            .iter()
+            .filter(|f| f.check.contains("typing"))
+            .count();
+        eprintln!(
+            "{}: {} findings, {typed} typing",
+            r.context,
+            r.findings.len()
+        );
+    }
+}
+
+fn kl(spec: &str) -> Context<Rationals> {
+    let spec = ContextSpec::parse(spec).unwrap();
+    let pres = diagcalc_core::builtin::presentation("kl").unwrap();
+    Context::new(pres, spec, Rationals).unwrap()
+}
+
+#[test]
+fn kl_terms_read_and_print() {
+    let c = kl("kl type=A1 mu=2");
+    // cups name their colour; overloaded x and psi follow the orientation of the strands
+    let t = c.parse_term("cap_1 x_2^2 cup_{1,i} e()").unwrap();
+    assert_eq!(c.fmt_term(&t), "cap_1 x_2^2 cup_{1,i} e()");
+    // degree 2 d_i (m + 1 - n) with m = n = 2
+    assert_eq!(c.word_degree(&t.terms[0].0), 2);
+    let t = c.parse_term("x_1 psi_1 e(i* i*)").unwrap();
+    assert_eq!(c.fmt_term(&t), "x_1 psi_1 e(i* i*)");
+    assert!(c.parse_term("cup_1 e()").is_err());
+    // sums and exponents that depend on the weight
+    let t = c.parse_term("sum_{f=0..h(i)} x_1^{h(i) - f} e(i)").unwrap();
+    assert_eq!(c.fmt_term(&t), "e(i) + x_1 e(i) + x_1^2 e(i)");
+    assert!(c.parse_term("x_1^{-h(i)} e(i)").is_err());
+}
+
+#[test]
+fn fake_bubbles_follow_the_grassmannian_relation() {
+    // n = <i, mu> = 2: the counterclockwise bubbles of labels -3, -2 are fake, of degree index
+    // 0 and 1: 1 and minus the clockwise bubble of degree index 1 (two dots)
+    let c = kl("kl type=A1 mu=2");
+    let f = |s: &str| c.fmt_term(&c.parse_term(s).unwrap());
+    assert_eq!(f("ccw_{i,-3} e()"), "e()");
+    assert_eq!(f("ccw_{i,-2} e()"), "-cap_1 x_2^2 cup_{1,i} e()");
+    assert_eq!(f("ccw_{i,-4} e()"), "0");
+    assert_eq!(f("cw_{i,-1} e()"), "0");
+    // index 2: p_1^2 - p_2 with p_j the clockwise bubble of label j + 1
+    assert_eq!(
+        f("ccw_{i,-1} e()"),
+        c.fmt_term(
+            &c.parse_term(
+                "cap_1 x_2^2 cup_{1,i} cap_1 x_2^2 cup_{1,i} e() - cap_1 x_2^3 cup_{1,i} e()"
+            )
+            .unwrap()
+        )
+    );
+    // a bubble beside strands sits in the rightmost region; in a tensor factor, in its own
+    let t = c.parse_term("ccw_{i,-2} e(i)").unwrap();
+    assert_eq!(c.fmt_term(&t), "-cap_2 x_3^2 cup_{2,i} e(i)");
+    // left of an upward i strand the pairing is 4, so the label -2 has degree index -1 + 4 + 1
+    let t = c.parse_term("ccw_{i,-5} (x) 1_i").unwrap();
+    assert_eq!(c.fmt_term(&t), "e(i)");
+}

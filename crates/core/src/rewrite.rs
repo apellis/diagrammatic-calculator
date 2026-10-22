@@ -27,6 +27,11 @@ pub struct Rule<R: Ring> {
     pub relation: String,
     /// The colours bound to the relation's colour variables.
     pub binding: Vec<usize>,
+    /// The values of the relation's integer variables.
+    pub ints: Vec<i64>,
+    /// In a 2-category, the weight of the region right of the pattern, for a relation whose
+    /// instances depend on it; the rule matches only there.
+    pub region: Option<Vec<i64>>,
     /// From the left-hand side to the right-hand side.
     pub forward: bool,
     pub pattern: Word,
@@ -38,29 +43,83 @@ pub struct Rule<R: Ring> {
 /// The pattern of a direction is the word of that side with the most layers whose coefficient
 /// in `lhs − rhs` is a unit (ties: the first in word order); identity words are never patterns.
 pub fn rules<R: Ring>(ctx: &Context<R>) -> Result<Vec<Rule<R>>> {
+    let regions: Vec<Vec<i64>> = ctx.mu.iter().cloned().collect();
+    rules_for_regions(ctx, &regions)
+}
+
+/// The rules of [`rules`], with those of weight-dependent relations instantiated at each of
+/// `regions` (as the region right of the pattern).
+pub fn rules_for_regions<R: Ring>(ctx: &Context<R>, regions: &[Vec<i64>]) -> Result<Vec<Rule<R>>> {
     let mut free = ctx.clone();
     free.objects.clear();
     free.weight = None;
     let mut out = Vec::new();
     for rel in &ctx.pres.relations {
-        for b in instances(&free, rel)? {
-            let (lhs, rhs) = instance_terms(&free, rel, &b)?;
-            let d = ctx.sub(&lhs, &rhs);
-            let fwd = lead(ctx, &lhs, &d);
-            let bwd = lead(ctx, &rhs, &d).filter(|p| Some(p) != fwd.as_ref());
-            for (forward, p) in [(true, fwd), (false, bwd)] {
-                let Some(p) = p else { continue };
-                out.push(Rule {
-                    relation: rel.name.clone(),
-                    binding: b.clone(),
-                    forward,
-                    replacement: solve_for(ctx, &d, &p),
-                    pattern: p,
-                });
+        if ctx.pres.relation_uses_region(rel) {
+            for r in regions {
+                let mut local = free.clone();
+                local.mu = Some(r.clone());
+                relation_rules(&local, rel, Some(r.clone()), &mut out)?;
             }
+        } else {
+            relation_rules(&free, rel, None, &mut out)?;
         }
     }
     Ok(out)
+}
+
+/// The rules for every region that occurs in `t` (and the context's `μ`).
+pub fn rules_for_term<R: Ring>(ctx: &Context<R>, t: &CTerm<R>) -> Result<Vec<Rule<R>>> {
+    rules_for_regions(ctx, &regions_in(ctx, t))
+}
+
+/// The weights of all regions of the words of `t`, sorted.
+pub fn regions_in<R: Ring>(ctx: &Context<R>, t: &CTerm<R>) -> Vec<Vec<i64>> {
+    let mut out: BTreeSet<Vec<i64>> = ctx.mu.iter().cloned().collect();
+    if ctx.mu.is_none() {
+        return vec![];
+    }
+    for (w, _) in &t.terms {
+        let mut obj = w.source.clone();
+        let mut add = |obj: &[crate::term::Letter]| {
+            for p in 0..=obj.len() {
+                out.extend(ctx.region(obj, p));
+            }
+        };
+        add(&obj);
+        for l in &w.layers {
+            obj = ctx.apply(l, &obj);
+            add(&obj);
+        }
+    }
+    out.into_iter().collect()
+}
+
+fn relation_rules<R: Ring>(
+    ctx: &Context<R>,
+    rel: &crate::pres::Relation,
+    region: Option<Vec<i64>>,
+    out: &mut Vec<Rule<R>>,
+) -> Result<()> {
+    for b in instances(ctx, rel)? {
+        let (lhs, rhs) = instance_terms(ctx, rel, &b)?;
+        let d = ctx.sub(&lhs, &rhs);
+        let fwd = lead(ctx, &lhs, &d);
+        let bwd = lead(ctx, &rhs, &d).filter(|p| Some(p) != fwd.as_ref());
+        for (forward, p) in [(true, fwd), (false, bwd)] {
+            let Some(p) = p else { continue };
+            out.push(Rule {
+                relation: rel.name.clone(),
+                binding: b.colours.clone(),
+                ints: b.ints.clone(),
+                region: region.clone(),
+                forward,
+                replacement: solve_for(ctx, &d, &p),
+                pattern: p,
+            });
+        }
+    }
+    Ok(())
 }
 
 fn coeff_of<E: Clone>(t: &Term<E>, w: &Word) -> Option<E> {
@@ -313,6 +372,11 @@ fn match_set<R: Ring>(
     }
     'window: for p in 0..=obj.len() - m {
         if obj[p..p + m] != src[..] {
+            continue;
+        }
+        if let Some(r) = &rule.region
+            && ctx.region(&obj, p + m).as_ref() != Some(r)
+        {
             continue;
         }
         let mut width = m;

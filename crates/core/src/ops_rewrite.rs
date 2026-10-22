@@ -77,7 +77,7 @@ impl RingVisitor for RewriteOp<'_> {
         let pres = load_presentation(&spec, self.r.req.presentation.as_deref())?;
         let ctx = Context::new(pres, spec, base)?;
         let t = ctx.parse_term(&self.r.term)?;
-        let rules: Vec<Rule<R>> = rewrite::rules(&ctx)?
+        let rules: Vec<Rule<R>> = rewrite::rules_for_term(&ctx, &t)?
             .into_iter()
             .filter(|r| self.r.relation.as_ref().is_none_or(|n| &r.relation == n))
             .collect();

@@ -134,7 +134,29 @@ impl IntExpr {
     }
 }
 
+impl IntExpr {
+    pub fn uses_pairing(&self) -> bool {
+        match self {
+            IntExpr::Pair(_) => true,
+            IntExpr::Neg(e) => e.uses_pairing(),
+            IntExpr::Add(x, y) | IntExpr::Sub(x, y) | IntExpr::Mul(x, y) => {
+                x.uses_pairing() || y.uses_pairing()
+            }
+            _ => false,
+        }
+    }
+}
+
 impl Cond {
+    pub fn uses_pairing(&self) -> bool {
+        match self {
+            Cond::Compare(x, _, y) => x.uses_pairing() || y.uses_pairing(),
+            Cond::And(x, y) | Cond::Or(x, y) => x.uses_pairing() || y.uses_pairing(),
+            Cond::Not(x) => x.uses_pairing(),
+            _ => false,
+        }
+    }
+
     pub fn eval(&self, b: &[usize], env: &dyn ColourEnv) -> Result<bool> {
         Ok(match self {
             Cond::True => true,
@@ -479,6 +501,150 @@ impl P<'_> {
         let r = self.int_expr()?;
         Ok(Cond::Compare(l, op, r))
     }
+}
+
+/// An integer expression inside a term: exponents `x_1^{h(i) - 1 - f}`, the bounds of sums
+/// `sum_{f=0..h(i)-1}` and the labels of bubbles. Names are resolved when the term is
+/// elaborated: a name is a summation index or an integer variable of a relation; `h(c)` is the
+/// pairing ⟨h_c, μ⟩ with the weight of the rightmost region, for a colour or colour variable `c`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TermInt {
+    Const(i64),
+    Var(String),
+    Pair(String),
+    Neg(Box<TermInt>),
+    Add(Box<TermInt>, Box<TermInt>),
+    Sub(Box<TermInt>, Box<TermInt>),
+    Mul(Box<TermInt>, Box<TermInt>),
+}
+
+impl TermInt {
+    pub fn eval(
+        &self,
+        var: &dyn Fn(&str) -> Option<i64>,
+        pair: &dyn Fn(&str) -> Result<i64>,
+    ) -> Result<i64> {
+        Ok(match self {
+            TermInt::Const(n) => *n,
+            TermInt::Var(v) => {
+                var(v).ok_or_else(|| Error::invalid(format!("'{v}' is not an index in scope")))?
+            }
+            TermInt::Pair(c) => pair(c)?,
+            TermInt::Neg(e) => -e.eval(var, pair)?,
+            TermInt::Add(x, y) => x.eval(var, pair)? + y.eval(var, pair)?,
+            TermInt::Sub(x, y) => x.eval(var, pair)? - y.eval(var, pair)?,
+            TermInt::Mul(x, y) => x.eval(var, pair)? * y.eval(var, pair)?,
+        })
+    }
+
+    /// The constant, if the expression has no names.
+    pub fn constant(&self) -> Option<i64> {
+        self.eval(&|_| None, &|_| Err(Error::invalid("not constant")))
+            .ok()
+    }
+
+    pub fn print(&self) -> String {
+        self.print_prec(0)
+    }
+
+    fn print_prec(&self, prec: u8) -> String {
+        let s = match self {
+            TermInt::Const(n) if *n < 0 => (n.to_string(), 1),
+            TermInt::Const(n) => return n.to_string(),
+            TermInt::Var(v) => return v.clone(),
+            TermInt::Pair(c) => return format!("h({c})"),
+            TermInt::Neg(e) => (format!("-{}", e.print_prec(3)), 1),
+            TermInt::Add(x, y) => (format!("{} + {}", x.print_prec(1), y.print_prec(2)), 1),
+            TermInt::Sub(x, y) => (format!("{} - {}", x.print_prec(1), y.print_prec(2)), 1),
+            TermInt::Mul(x, y) => (format!("{}*{}", x.print_prec(2), y.print_prec(3)), 2),
+        };
+        if s.1 < prec {
+            format!("({})", s.0)
+        } else {
+            s.0
+        }
+    }
+}
+
+impl P<'_> {
+    fn term_int(&mut self) -> Result<TermInt> {
+        let mut e = if self.eat("-") {
+            TermInt::Neg(Box::new(self.term_int_term()?))
+        } else {
+            self.term_int_term()?
+        };
+        loop {
+            if self.eat("+") {
+                e = TermInt::Add(Box::new(e), Box::new(self.term_int_term()?));
+            } else if self.eat("-") {
+                e = TermInt::Sub(Box::new(e), Box::new(self.term_int_term()?));
+            } else {
+                return Ok(e);
+            }
+        }
+    }
+    fn term_int_term(&mut self) -> Result<TermInt> {
+        let mut e = self.term_int_atom()?;
+        loop {
+            let star = self.eat("*");
+            if !star
+                && !matches!(
+                    self.peek(),
+                    Some(Tok::Int(_) | Tok::Ident(_) | Tok::Sym("("))
+                )
+            {
+                return Ok(e);
+            }
+            e = TermInt::Mul(Box::new(e), Box::new(self.term_int_atom()?));
+        }
+    }
+    fn term_int_atom(&mut self) -> Result<TermInt> {
+        let off = self.off();
+        match self.peek().cloned() {
+            Some(Tok::Int(n)) => {
+                self.pos += 1;
+                Ok(TermInt::Const(n))
+            }
+            Some(Tok::Sym("(")) => {
+                self.pos += 1;
+                let e = self.term_int()?;
+                self.expect(")")?;
+                Ok(e)
+            }
+            Some(Tok::Ident(w)) => {
+                self.pos += 1;
+                if w == "h" && self.eat("(") {
+                    let c = match self.peek().cloned() {
+                        Some(Tok::Ident(c)) => c,
+                        _ => return Err(Error::syntax("expected a colour in h(...)", self.off())),
+                    };
+                    self.pos += 1;
+                    self.expect(")")?;
+                    return Ok(TermInt::Pair(c));
+                }
+                Ok(TermInt::Var(w))
+            }
+            _ => Err(Error::syntax("expected an integer expression", off)),
+        }
+    }
+}
+
+pub fn parse_term_int(s: &str) -> Result<TermInt> {
+    let mut p = parser(s, &[])?;
+    let e = p.term_int()?;
+    if p.pos != p.toks.len() {
+        return Err(Error::syntax(
+            "unexpected text after the expression",
+            p.off(),
+        ));
+    }
+    // a plain negative constant stays a constant
+    Ok(match e {
+        TermInt::Neg(b) if matches!(*b, TermInt::Const(_)) => {
+            TermInt::Const(-b.constant().unwrap())
+        }
+        e => e,
+    })
 }
 
 fn parser<'a>(s: &str, vars: &'a [String]) -> Result<P<'a>> {

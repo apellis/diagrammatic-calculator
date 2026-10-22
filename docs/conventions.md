@@ -105,6 +105,39 @@ every `Q_ij` (`i ≠ j`) is nonzero; for the default `Q` this is proved in categ
 ring with zero divisors it can fail (categorification-lean README, on Rouquier,
 arXiv:0812.5023v1, Prop. 3.12).
 
+## The Khovanov–Lauda 2-category
+
+`presentations/kl.pres.toml` is the 2-category `U(g)` of Khovanov–Lauda (A categorification of
+quantum sl(n), arXiv:0807.3250v1, Definition 3.1), in the form formalized in categorification-lean
+(`KL3/Relations.lean`, `Rel`). An upward strand `a` is `E_a`, a downward strand `a*` is `F_a`. Degrees use the region `ν` just right
+of the generator:
+
+| Generator | Written | Source → target | Degree | categorification-lean |
+|---|---|---|---|---|
+| `x`, `xd` | `x` | `a → a`, `a* → a*` | `(a,a)` | `.dot (up a)`, `.dot (dn a)` |
+| `psi`, `psid` | `psi` | `a b → b a`, `a* b* → b* a*` | `−(a,b)` | `.cross true a b`, `.cross false a b` |
+| `cup` | `cup_{k,a}` | `1 → a a*` | `d_a(1 − h(a))` | `.cup (up a)` |
+| `cupd` | `cup_{k,a*}` | `1 → a* a` | `d_a(1 + h(a))` | `.cup (dn a)` |
+| `cap` | `cap` | `a a* → 1` | `d_a(1 − h(a))` | `.cap (dn a)` |
+| `capd` | `cap` | `a* a → 1` | `d_a(1 + h(a))` | `.cap (up a)` |
+
+Bubbles: `cw_{a,m}` is `cap_1 x_2^{m} cup_{1,a}` (a clockwise circle with `m` dots on its downward
+side) of degree `2 d_a (m + 1 − h(a))`, `ccw_{a,m}` is `cap_1 x_2^{m} cup_{1,a*}` of degree
+`2 d_a (m + 1 + h(a))`, with `h(a)` read in the region the bubble sits in. Bubbles of negative
+degree are zero. A label `m < 0` with nonnegative degree names a fake bubble: writing `c_k` and `c'_k` for the
+bubbles of degree `2 d_a k`, `c_0 = c'_0 = 1` and `Σ_{j=0..k} c_j c'_{k−j} = 0` for `k > 0`
+(categorification-lean `cwL`, `ccwL`, `grassInv`).
+
+Relations (the names of `kl.pres.toml`, then `Rel`): the four zigzags (biadjointness, from the
+pivotal structure); `cyclic-dot-*`, `cyclic-crossing-*` (`cycDotR`, `cycDotL`, `cycCrossR`,
+`cycCrossL`): the downward dot and crossing are the rotations of the upward ones;
+`bubble-*-negative`, `bubble-*-one` (`cwNeg`, `ccwNeg`, `cwOne`, `ccwOne`); `curl-right`,
+`curl-left` (`curlR`, `curlL`); `decompose-ef`, `decompose-fe` (`decompEF`, `decompFE`), with the
+sideways crossings `cap_3 psi_2 cup_{1,b*}: E_a F_b → F_b E_a` and `cap_1 psi_2 cup_{3,b}: F_b E_a →
+E_a F_b`; `mixed-ef`, `mixed-fe` (`downupEF`, `downupFE`); the KLR relations on upward strands
+(`klr`), with `Q_ab = u^{d_ab} + v^{d_ba}` by default. Relations whose terms involve `h(a)` hold for
+every weight of the rightmost region; the calculator instantiates them per region.
+
 ## nilHecke and odd nilHecke algebras
 
 - The nilHecke algebra `NH_n` is the one-colour KLR algebra: `ψ_k² = 0`,

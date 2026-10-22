@@ -6,7 +6,7 @@
 //! its terms. Nothing here is specific to any family of algebras; see `docs/design.md`.
 
 use crate::error::{Error, Result};
-use crate::expr::{Cond, IntExpr, parse_cond, parse_int_expr};
+use crate::expr::{Cond, IntExpr, TermInt, parse_cond, parse_int_expr, parse_term_int};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -58,6 +58,10 @@ pub struct PatLetter {
 pub struct Generator {
     pub name: String,
     pub aliases: Vec<String>,
+    /// The name typed and printed. Several generators may share one, told apart by the
+    /// strands they sit on (a dot on an upward or a downward strand) or, for a generator with
+    /// no source such as a cup, by the colours written after its position (`cup_{1,i*}`).
+    pub written: String,
     pub vars: Vec<String>,
     pub source: Vec<PatLetter>,
     pub target: Vec<PatLetter>,
@@ -85,6 +89,9 @@ pub struct Parameter {
 pub struct Relation {
     pub name: String,
     pub vars: Vec<String>,
+    /// Integer variables with their ranges `lo..hi` (both ends included), which may use `h(a)`:
+    /// one instance per value, as for the colour variables.
+    pub ints: Vec<(String, TermInt, TermInt)>,
     pub when: Cond,
     pub lhs: String,
     pub rhs: String,
@@ -110,6 +117,24 @@ pub struct RepresentationDecl {
     pub certificate: Certificate,
 }
 
+/// A family of bubbles, written `name_{a,m}` for a colour `a` and an integer label `m`: for
+/// `m ≥ 0` the diagram `word` (a term in the colour variable and `m`), for `m < 0` the fake
+/// bubble defined by the infinite Grassmannian relation with the partner family, or zero.
+///
+/// `index` is the bubble's degree index, linear in `m` with slope 1 (degree `2 d_a` times it;
+/// `m + 1 - h(a)` for the clockwise KL bubble). A fake bubble of index `k ≥ 0` is
+/// `f_k` with `f_0 = 1` and `f_k = -Σ_{j=1}^k p_j f_{k-j}`, where `p_j` is the partner's real
+/// bubble of index `j` (zero when its label is negative); a fake bubble of negative index is
+/// zero.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BubbleFamily {
+    pub name: String,
+    pub var: String,
+    pub word: String,
+    pub index: TermInt,
+    pub partner: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Presentation {
     pub name: String,
@@ -119,6 +144,7 @@ pub struct Presentation {
     pub generators: Vec<Generator>,
     pub parameters: Vec<Parameter>,
     pub relations: Vec<Relation>,
+    pub bubbles: Vec<BubbleFamily>,
     pub representations: Vec<RepresentationDecl>,
     /// How the presentation is written in a Lean library, for exporting rewrite chains.
     pub lean: Option<LeanDecl>,
@@ -161,6 +187,36 @@ impl Presentation {
             .iter()
             .position(|g| g.name == name || g.aliases.iter().any(|a| a == name))
     }
+    /// The generators a typed name may mean: those written that way, else the one so named.
+    pub fn generators_written(&self, name: &str) -> Vec<usize> {
+        let w: Vec<usize> = (0..self.generators.len())
+            .filter(|&i| {
+                let g = &self.generators[i];
+                g.written == name || g.aliases.iter().any(|a| a == name)
+            })
+            .collect();
+        if w.is_empty() {
+            self.generator(name).into_iter().collect()
+        } else {
+            w
+        }
+    }
+    /// Whether a relation's instances depend on the weight of the region right of them: its
+    /// side condition, integer ranges or terms mention `h(...)`, or its terms use bubbles
+    /// (whose fake values depend on the region).
+    pub fn relation_uses_region(&self, r: &Relation) -> bool {
+        let text = format!("{} {}", r.lhs, r.rhs);
+        r.when.uses_pairing()
+            || !r.ints.is_empty()
+            || text.contains("h(")
+            || self
+                .bubbles
+                .iter()
+                .any(|b| text.contains(&format!("{}_", b.name)))
+    }
+    pub fn bubble(&self, name: &str) -> Option<&BubbleFamily> {
+        self.bubbles.iter().find(|b| b.name == name)
+    }
     pub fn parameter(&self, name: &str) -> Option<&Parameter> {
         self.parameters.iter().find(|p| p.name == name)
     }
@@ -184,6 +240,8 @@ struct RawPres {
     generators: BTreeMap<String, RawGen>,
     #[serde(default)]
     relations: Vec<RawRel>,
+    #[serde(default)]
+    bubbles: BTreeMap<String, RawBubble>,
     #[serde(default)]
     representations: Vec<RawRep>,
     /// Order of generators in the file (TOML tables are unordered).
@@ -252,6 +310,17 @@ struct RawGen {
     draw: String,
     #[serde(default)]
     aliases: Vec<String>,
+    #[serde(default)]
+    written: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawBubble {
+    colours: String,
+    word: String,
+    index: String,
+    partner: String,
 }
 
 fn zero() -> toml::Value {
@@ -281,6 +350,8 @@ struct RawRel {
     colours: String,
     #[serde(default)]
     when: Option<String>,
+    #[serde(default)]
+    ints: BTreeMap<String, String>,
     lhs: String,
     rhs: String,
 }
@@ -406,6 +477,7 @@ impl Presentation {
             generators.push(Generator {
                 name: name.clone(),
                 aliases: g.aliases.clone(),
+                written: g.written.clone().unwrap_or_else(|| name.clone()),
                 source: pattern(&g.source, &vars),
                 target: pattern(&g.target, &vars),
                 degree: int_or_expr(&g.degree, &vars, &format!("degree of {name}"))?,
@@ -433,13 +505,54 @@ impl Presentation {
                     .map_err(|e| Error::invalid(format!("relation {}: {}", r.name, e.message)))?,
                 None => Cond::True,
             };
+            let mut ints = Vec::new();
+            for (v, range) in &r.ints {
+                let bad = || {
+                    Error::invalid(format!(
+                        "relation {}: the range of {v} is written lo..hi",
+                        r.name
+                    ))
+                };
+                let (lo, hi) = range.split_once("..").ok_or_else(bad)?;
+                let parse = |t: &str| {
+                    parse_term_int(t)
+                        .map_err(|e| Error::invalid(format!("relation {}: {}", r.name, e.message)))
+                };
+                ints.push((v.clone(), parse(lo)?, parse(hi)?));
+            }
             relations.push(Relation {
                 name: r.name,
                 vars,
+                ints,
                 when,
                 lhs: r.lhs,
                 rhs: r.rhs,
             });
+        }
+        let mut bubbles = Vec::new();
+        for (name, b) in raw.bubbles {
+            let vars = words(&b.colours);
+            if vars.len() != 1 {
+                return Err(Error::invalid(format!(
+                    "bubbles.{name}: one colour variable"
+                )));
+            }
+            bubbles.push(BubbleFamily {
+                index: parse_term_int(&b.index)
+                    .map_err(|e| Error::invalid(format!("bubbles.{name}: {}", e.message)))?,
+                name,
+                var: vars[0].clone(),
+                word: b.word,
+                partner: b.partner,
+            });
+        }
+        for b in &bubbles {
+            if !bubbles.iter().any(|c| c.name == b.partner) {
+                return Err(Error::invalid(format!(
+                    "bubbles.{}: no partner family '{}'",
+                    b.name, b.partner
+                )));
+            }
         }
         let representations = raw
             .representations
@@ -505,6 +618,7 @@ impl Presentation {
             generators,
             parameters,
             relations,
+            bubbles,
             representations,
             lean,
         })
@@ -584,6 +698,16 @@ impl Presentation {
                 let al: Vec<String> = g.aliases.iter().map(|a| q(a)).collect();
                 o.push_str(&format!("aliases = [{}]\n", al.join(", ")));
             }
+            if g.written != g.name {
+                o.push_str(&format!("written = {}\n", q(&g.written)));
+            }
+        }
+        for b in &self.bubbles {
+            o.push_str(&format!("\n[bubbles.{}]\n", b.name));
+            o.push_str(&format!("colours = {}\n", q(&b.var)));
+            o.push_str(&format!("word = {}\n", q(&b.word)));
+            o.push_str(&format!("index = {}\n", q(&b.index.print())));
+            o.push_str(&format!("partner = {}\n", q(&b.partner)));
         }
         for r in &self.relations {
             o.push_str("\n[[relations]]\n");
@@ -593,6 +717,16 @@ impl Presentation {
             }
             if r.when != Cond::True {
                 o.push_str(&format!("when = {}\n", q(&r.when.print(&r.vars))));
+            }
+            if !r.ints.is_empty() {
+                let is: Vec<String> = r
+                    .ints
+                    .iter()
+                    .map(|(v, lo, hi)| {
+                        format!("{v} = {}", q(&format!("{}..{}", lo.print(), hi.print())))
+                    })
+                    .collect();
+                o.push_str(&format!("ints = {{ {} }}\n", is.join(", ")));
             }
             o.push_str(&format!("lhs = {}\n", q(&r.lhs)));
             o.push_str(&format!("rhs = {}\n", q(&r.rhs)));

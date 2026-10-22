@@ -1,0 +1,297 @@
+format = "diagcalc-presentation/1"
+name = "kl"
+title = "Khovanov-Lauda 2-category U(g)"
+colours = "cartan"
+objects = "explicit"
+generator_order = ["x", "xd", "psi", "psid", "cup", "cupd", "cap", "capd"]
+
+[parameters.Q]
+vars = ["u", "v"]
+default = "klq2"
+hypotheses = ["Q_ab(u, v) = Q_ba(v, u)", "Q_ab != 0"]
+
+[parameters.Qbar]
+vars = ["u", "v", "w"]
+derived = "qbar(Q)"
+
+[generators.x]
+colours = "a"
+source = "a"
+target = "a"
+degree = "(a,a)"
+parity = 0
+draw = "dot"
+
+[generators.xd]
+colours = "a"
+source = "a*"
+target = "a*"
+degree = "(a,a)"
+parity = 0
+draw = "dot"
+written = "x"
+
+[generators.psi]
+colours = "a b"
+source = "a b"
+target = "b a"
+degree = "-(a,b)"
+parity = 0
+draw = "crossing"
+aliases = ["ψ"]
+
+[generators.psid]
+colours = "a b"
+source = "a* b*"
+target = "b* a*"
+degree = "-(a,b)"
+parity = 0
+draw = "crossing"
+written = "psi"
+
+[generators.cup]
+colours = "a"
+source = ""
+target = "a a*"
+degree = "d_a (1 - h(a))"
+parity = 0
+draw = "cup"
+
+[generators.cupd]
+colours = "a"
+source = ""
+target = "a* a"
+degree = "d_a (1 + h(a))"
+parity = 0
+draw = "cup"
+written = "cup"
+
+[generators.cap]
+colours = "a"
+source = "a a*"
+target = ""
+degree = "d_a (1 - h(a))"
+parity = 0
+draw = "cap"
+
+[generators.capd]
+colours = "a"
+source = "a* a"
+target = ""
+degree = "d_a (1 + h(a))"
+parity = 0
+draw = "cap"
+written = "cap"
+
+[bubbles.ccw]
+colours = "a"
+word = "cap_1 x_2^{m} cup_{1,a*}"
+index = "m + 1 + h(a)"
+partner = "cw"
+
+[bubbles.cw]
+colours = "a"
+word = "cap_1 x_2^{m} cup_{1,a}"
+index = "m + 1 - h(a)"
+partner = "ccw"
+
+[[relations]]
+name = "zigzag-up-left"
+colours = "a"
+lhs = "cap_2 cup_{1,a} e(a)"
+rhs = "e(a)"
+
+[[relations]]
+name = "zigzag-up-right"
+colours = "a"
+lhs = "cap_1 cup_{2,a*} e(a)"
+rhs = "e(a)"
+
+[[relations]]
+name = "zigzag-down-left"
+colours = "a"
+lhs = "cap_2 cup_{1,a*} e(a*)"
+rhs = "e(a*)"
+
+[[relations]]
+name = "zigzag-down-right"
+colours = "a"
+lhs = "cap_1 cup_{2,a} e(a*)"
+rhs = "e(a*)"
+
+[[relations]]
+name = "cyclic-dot-right"
+colours = "a"
+lhs = "cap_1 x_2 cup_{2,a} e(a*)"
+rhs = "x_1 e(a*)"
+
+[[relations]]
+name = "cyclic-dot-left"
+colours = "a"
+lhs = "cap_2 x_2 cup_{1,a*} e(a*)"
+rhs = "x_1 e(a*)"
+
+[[relations]]
+name = "cyclic-crossing-right"
+colours = "a b"
+lhs = "cap_1 cap_2 psi_3 cup_{4,b} cup_{3,a} e(a* b*)"
+rhs = "psi_1 e(a* b*)"
+
+[[relations]]
+name = "cyclic-crossing-left"
+colours = "a b"
+lhs = "cap_3 cap_4 psi_3 cup_{2,a*} cup_{1,b*} e(a* b*)"
+rhs = "psi_1 e(a* b*)"
+
+[[relations]]
+name = "bubble-cw-negative"
+colours = "a"
+ints = { m = "0..h(a) - 2" }
+lhs = "cap_1 x_2^{m} cup_{1,a} e()"
+rhs = "0"
+
+[[relations]]
+name = "bubble-ccw-negative"
+colours = "a"
+ints = { m = "0..-h(a) - 2" }
+lhs = "cap_1 x_2^{m} cup_{1,a*} e()"
+rhs = "0"
+
+[[relations]]
+name = "bubble-cw-one"
+colours = "a"
+when = "h(a) >= 1"
+lhs = "cap_1 x_2^{h(a) - 1} cup_{1,a} e()"
+rhs = "e()"
+
+[[relations]]
+name = "bubble-ccw-one"
+colours = "a"
+when = "h(a) <= -1"
+lhs = "cap_1 x_2^{-h(a) - 1} cup_{1,a*} e()"
+rhs = "e()"
+
+[[relations]]
+name = "curl-right"
+colours = "a"
+lhs = "cap_2 psi_1 cup_{2,a} e(a)"
+rhs = "-sum_{f=0..-h(a)} x_1^{-h(a) - f} cw_{a,h(a) - 1 + f} e(a)"
+
+[[relations]]
+name = "curl-left"
+colours = "a"
+lhs = "cap_1 psi_2 cup_{1,a*} e(a)"
+rhs = "sum_{g=0..h(a) + 2} x_1^{h(a) + 2 - g} (ccw_{a,-h(a) - 3 + g} (x) 1_a)"
+
+[[relations]]
+name = "decompose-ef"
+colours = "a"
+lhs = "e(a a*)"
+rhs = "-cap_1 psi_2 cup_{3,a} cap_3 psi_2 cup_{1,a*} e(a a*) + sum_{f=0..h(a) - 1} sum_{g=0..f} x_2^{h(a) - 1 - f} cup_{1,a} ccw_{a,-h(a) - 1 + g} cap_1 x_1^{f - g} e(a a*)"
+
+[[relations]]
+name = "decompose-fe"
+colours = "a"
+lhs = "e(a* a)"
+rhs = "-cap_3 psi_2 cup_{1,a*} cap_1 psi_2 cup_{3,a} e(a* a) + sum_{f=0..-h(a) - 1} sum_{g=0..f} x_2^{-h(a) - 1 - f} cup_{1,a*} cw_{a,h(a) - 1 + g} cap_1 x_1^{f - g} e(a* a)"
+
+[[relations]]
+name = "mixed-ef"
+colours = "a b"
+when = "a != b"
+lhs = "cap_1 psi_2 cup_{3,b} cap_3 psi_2 cup_{1,b*} e(a b*)"
+rhs = "e(a b*)"
+
+[[relations]]
+name = "mixed-fe"
+colours = "a b"
+when = "a != b"
+lhs = "cap_3 psi_2 cup_{1,a*} cap_1 psi_2 cup_{3,a} e(a* b)"
+rhs = "e(a* b)"
+
+[[relations]]
+name = "dot-slide-left-same"
+colours = "a"
+lhs = "x_1 psi_1 e(a a)"
+rhs = "psi_1 x_2 e(a a) + e(a a)"
+
+[[relations]]
+name = "dot-slide-left-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "x_1 psi_1 e(a b)"
+rhs = "psi_1 x_2 e(a b)"
+
+[[relations]]
+name = "dot-slide-right-same"
+colours = "a"
+lhs = "psi_1 x_1 e(a a)"
+rhs = "x_2 psi_1 e(a a) + e(a a)"
+
+[[relations]]
+name = "dot-slide-right-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 x_1 e(a b)"
+rhs = "x_2 psi_1 e(a b)"
+
+[[relations]]
+name = "square-same"
+colours = "a"
+lhs = "psi_1 psi_1 e(a a)"
+rhs = "0"
+
+[[relations]]
+name = "square-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 psi_1 e(a b)"
+rhs = "Q_ab(x_1, x_2) e(a b)"
+
+[[relations]]
+name = "braid-corrected"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 psi_2 psi_1 e(a b a)"
+rhs = "psi_2 psi_1 psi_2 e(a b a) + Qbar_ab(x_1, x_2, x_3) e(a b a)"
+
+[[relations]]
+name = "braid"
+colours = "a b c"
+when = "a != c or a = b"
+lhs = "psi_1 psi_2 psi_1 e(a b c)"
+rhs = "psi_2 psi_1 psi_2 e(a b c)"
+
+[lean]
+encoding = "kl3-dg"
+module = "Categorification.Diagrams.KL3.Rewriting Categorification.Diagrams.KL3.BubbleSlidesGen"
+namespace = "Categorification.KL3.Diagram"
+open = "CategoryTheory StringDiagrams QuantumGroup UDot Presentation"
+generators = { cap = ".cap (dn {a})", capd = ".cap (up {a})", cup = ".cup (up {a})", cupd = ".cup (dn {a})", psi = ".cross true {a} {b}", psid = ".cross false {a} {b}", x = ".dot (up {a})", xd = ".dot (dn {a})" }
+
+[lean.relations.braid]
+lemma = "dg_braid RD k ν {a} {b} {c} {simp}"
+
+[lean.relations.braid-corrected]
+lemma = "dg_braidQ RD k ν {a} {b} {a!=b} (by assumption)"
+facts = ["dot≠0 {a} {b}", "dij {a} {b}"]
+layering = "left-first"
+
+[lean.relations.dot-slide-left-distinct]
+lemma = "dg_slideLNe RD k ν {a} {b} {a!=b}"
+
+[lean.relations.dot-slide-left-same]
+lemma = "dg_slideLEq RD k ν {a}"
+
+[lean.relations.dot-slide-right-distinct]
+lemma = "dg_slideRNe RD k ν {a} {b} {a!=b}"
+
+[lean.relations.dot-slide-right-same]
+lemma = "dg_slideREq RD k ν {a}"
+
+[lean.relations.square-distinct]
+lemma = "dg_sqNe RD k ν {a} {b} {a!=b}"
+facts = ["dot {a} {b}", "dij {a} {b}", "dij {b} {a}"]
+
+[lean.relations.square-same]
+lemma = "dg_sqEq RD k ν {a}"
