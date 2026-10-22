@@ -17,8 +17,9 @@
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
 }
+/* dark: the system choice unless Settings says light, or when Settings says dark */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #161618;
     --panel: #1e1e21;
     --sunken: #26262a;
@@ -35,6 +36,23 @@
     --bad-soft: #3d1f1d;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #161618;
+  --panel: #1e1e21;
+  --sunken: #26262a;
+  --text: #ececef;
+  --muted: #9a9aa3;
+  --border: #34343a;
+  --accent: #7ea2ff;
+  --accent-soft: #23304f;
+  --good: #6fd08f;
+  --good-soft: #1d3324;
+  --warn: #f0b45a;
+  --warn-soft: #3a2d17;
+  --bad: #ff8a80;
+  --bad-soft: #3d1f1d;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body, #app { margin: 0; height: 100%; }
@@ -166,6 +184,32 @@ kbd { font-size: 12px; border: 1px solid var(--border); border-bottom-width: 2px
 .doclist th { font-weight: 500; color: var(--muted); font-size: 12.5px; }
 .doclist tr:hover td { background: var(--sunken); }
 .doclist .open { cursor: pointer; font-weight: 500; }
+a.button {
+  color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  padding: 3px 10px; text-decoration: none;
+}
+a.button:hover { border-color: var(--muted); }
+.settings section { margin-top: 22px; }
+.settings h3 { margin: 0 0 6px; }
+.settings .ai-settings { max-width: 440px; padding: 0; border: none; }
+
+/* the theme switch: three positions with a knob that slides between them */
+.theme-switch {
+  position: relative; display: inline-grid; grid-template-columns: repeat(3, 76px);
+  background: var(--sunken); border: 1px solid var(--border); border-radius: 999px; padding: 3px;
+}
+.theme-switch .knob {
+  position: absolute; top: 3px; left: 3px; width: 76px; height: calc(100% - 6px);
+  background: var(--accent); border-radius: 999px; transition: transform 0.18s ease;
+}
+.theme-switch button {
+  position: relative; background: none; border: none; border-radius: 999px; padding: 4px 0;
+  color: var(--muted); font-size: 13px;
+}
+.theme-switch button:hover:not(:disabled) { background: none; color: var(--text); }
+.theme-switch button[aria-checked="true"] { color: var(--bg); font-weight: 500; }
+.theme-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .theme-switch .knob { transition: none; } }
 .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
 @media (max-width: 760px) {

@@ -300,7 +300,9 @@ their term counts over the session.
 
 OpenAI is called through its Responses API (`store: false`), which, unlike chat completions,
 accepts function tools from reasoning models; a local OpenAI-compatible server speaks the
-chat-completions protocol. The settings' "Check the connection" calls the provider's model list
+chat-completions protocol. The provider, model, effort and key are set on the settings page
+(`#/settings`, reached from the document list or from the panel, which links there while no
+provider is set up); the panel itself only chats. "Check the connection" there calls the provider's model list
 from the page and says whether the browser can reach it. The model is chosen from that list
 (Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
 server's as given), kept per provider in local storage and fetched again with ↻; "Other…" takes a
@@ -311,6 +313,12 @@ Replies are shown as formatted text by `src/ui/markdown.ts`: a small, escaped Ma
 (paragraphs, headings, lists, emphasis, code spans and fenced code in the fixed-width font) with
 LaTeX mathematics (`\(…\)`, `$…$`, `\[…\]`, `$$…$$`) typeset by KaTeX in the same style as the
 rest of the app.
+
+The settings page also holds the appearance: a three-position switch (Light, System, Dark).
+System, the default, follows the operating system's `prefers-color-scheme`; Light and Dark set
+`data-theme` on the root element, which `styles.css` reads to choose the colour variables. The
+choice is kept in local storage (`diagcalc.theme`) and applied by an inline script in
+`index.html` before the first paint, so a page never flashes in the other theme.
 
 **Tests (4b).** Unit tests for the canvas geometry, branches and merging, AI tool schemas,
 validation and the chat-completions translation. Playwright drives the gestures (drag-slide,

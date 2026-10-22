@@ -6,6 +6,10 @@
     <title>diagrammatic-calculator</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="description" content="A fast, exact calculator for diagrammatic algebra." />
+    <script>
+      // the chosen theme before the first paint (src/ui/theme.ts keeps it)
+      try { const t = localStorage.getItem('diagcalc.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+    </script>
   </head>
   <body>
     <div id="app"></div>

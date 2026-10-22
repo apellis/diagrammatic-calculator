@@ -53,6 +53,7 @@ export function DocList() {
         <button onClick={doImport}>Import .dcw…</button>
         <div class="grow" />
         <input placeholder="Search" value={query()} onInput={(e) => setQuery(e.currentTarget.value)} aria-label="Search documents" />
+        <a class="button" href="#/settings" data-testid="open-settings" title="Appearance and the AI assistant">Settings</a>
       </div>
       <Show when={error()}><div class="error" style={{ 'margin-top': '8px' }}>{error()}</div></Show>
       <table>

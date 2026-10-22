@@ -58,11 +58,24 @@ async function recordedModel(page: Page, turns: (() => string)[]) {
   return requests;
 }
 
-async function enterKey(page: Page) {
+/** Sets the AI up from a document: the panel's link to Settings, the form there, and back. */
+async function enterKey(page: Page, fill = async (p: Page) => p.getByLabel('API key').fill('sk-ant-test')) {
   await page.getByTestId('ai-toggle').click();
   await page.getByRole('button', { name: 'I understand' }).click();
-  await page.getByLabel('API key').fill('sk-ant-test');
+  await page.getByTestId('ai-setup-link').click();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await fill(page);
   await page.getByTestId('ai-save').click();
+  await expect(page.getByTestId('ai-saved')).toBeVisible();
+  await page.getByTestId('settings-back').click();
+  await expect(page.getByLabel('Message to the AI')).toBeVisible();
+}
+
+/** The settings page, from the document list. */
+async function openSettings(page: Page) {
+  await page.goto('/');
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 }
 
 test('an AI what-if on a branch: edits there, reads the values, proposes accepting; one undo takes it back', async ({ page }) => {
@@ -162,7 +175,6 @@ test('the key stays for the session only by default; a reply shows its mathemati
   ]);
   await enterKey(page);
   expect(await page.evaluate(() => [sessionStorage.getItem('diagcalc.ai.key.anthropic'), localStorage.getItem('diagcalc.ai.key.anthropic')])).toEqual(['sk-ant-test', null]);
-  await expect(page.getByText('No AI for this document')).toHaveCount(0);
   await page.getByLabel('Message to the AI').fill('compare');
   await page.keyboard.press('Enter');
   const reply = page.getByTestId('chat').locator('.ai-text');
@@ -202,10 +214,12 @@ test('a multi-step AI request undoes as one step; pinned watches sit at the top 
 
 test('Cmd-L in the canvas asks about the selection, which travels with the message as references', async ({ page }) => {
   await newDoc(page);
-  await typeCell(page, 'def a := psi_1 x_1 e(iij)');
-  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
   const requests = await recordedModel(page, [() => sse([{ type: 'text', text: 'That is a dot below a crossing.' }], 'end_turn')]);
   await enterKey(page);
+  // back from Settings the message box has the focus; the empty document's new cell is open
+  await page.getByLabel('Cell text').click();
+  await typeCell(page, 'def a := psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
   await cell(page, 0).getByTestId('open-canvas').click();
   await expect(page.locator('.canvas .frame svg.diagram').first()).toBeVisible();
   await page.locator('.canvas').focus();
@@ -223,9 +237,7 @@ test('Cmd-L in the canvas asks about the selection, which travels with the messa
 });
 
 test('the browser check for an OpenAI-compatible server says whether this page can reach it', async ({ page }) => {
-  await newDoc(page);
-  await page.getByTestId('ai-toggle').click();
-  await page.getByRole('button', { name: 'I understand' }).click();
+  await openSettings(page);
   await page.getByLabel('Provider').selectOption('compatible');
   await page.route('http://localhost:11434/**', (route) => route.abort('failed'));
   await page.getByRole('button', { name: 'Check the connection' }).click();
@@ -238,7 +250,7 @@ test('the browser check for an OpenAI-compatible server says whether this page c
 });
 
 test('the model list comes from the provider, and the refresh button fetches it again', async ({ page }) => {
-  await newDoc(page);
+  await page.goto('/');
   let anthropicLists = 0;
   await page.route('https://api.anthropic.com/**', async (route) => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
@@ -257,8 +269,7 @@ test('the model list comes from the provider, and the refresh button fetches it 
       ],
     });
   });
-  await page.getByTestId('ai-toggle').click();
-  await page.getByRole('button', { name: 'I understand' }).click();
+  await openSettings(page);
   const model = page.getByLabel('Model', { exact: true });
   // before a key, the built-in Anthropic list
   await expect(model.locator('option')).toContainText(['Claude Opus 5.5', 'Claude Sonnet 5.5']);
@@ -282,7 +293,9 @@ test('the model list comes from the provider, and the refresh button fetches it 
   await page.getByLabel('Model', { exact: true }).selectOption({ label: 'Other…' });
   await page.locator('input[aria-label="Model"]').fill('gpt-custom');
   await page.getByTestId('ai-save').click();
-  await page.getByLabel('AI settings').click();
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByLabel('Provider')).toHaveValue('openai');
   await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-custom');
 });
 
@@ -302,13 +315,12 @@ test('OpenAI goes through the Responses API: a tool call, its result sent back, 
       : [{ type: 'message', id: 'msg_1', role: 'assistant', content: [{ type: 'output_text', text: 'The workspace has one definition.', annotations: [] }] }];
     await route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ id: 'resp', status: 'completed', output, usage: { input_tokens: 10, output_tokens: 5 } }) });
   });
-  await page.getByTestId('ai-toggle').click();
-  await page.getByRole('button', { name: 'I understand' }).click();
-  await page.getByLabel('Provider').selectOption('openai');
-  await page.getByLabel('API key').fill('sk-test');
-  await page.getByLabel('API key').blur();
-  await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-test');
-  await page.getByTestId('ai-save').click();
+  await enterKey(page, async (p) => {
+    await p.getByLabel('Provider').selectOption('openai');
+    await p.getByLabel('API key').fill('sk-test');
+    await p.getByLabel('API key').blur();
+    await expect(p.getByLabel('Model', { exact: true })).toHaveValue('gpt-test');
+  });
   await page.getByLabel('Message to the AI').fill('what is here?');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('chat')).toContainText('The workspace has one definition.');
