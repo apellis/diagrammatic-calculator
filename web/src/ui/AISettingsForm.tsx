@@ -41,6 +41,15 @@ export function AISettingsForm() {
   const [listing, setListing] = createSignal(false);
   const [listError, setListError] = createSignal('');
   const [other, setOther] = createSignal(false);
+  /** Why the server URL cannot be used, shown once the person has left the field or asked for the list. */
+  const [urlProblem, setUrlProblem] = createSignal('');
+  const compatible = () => settings().provider === 'compatible';
+  /** For a compatible server: whether its URL can be used; if not, says why. */
+  const urlOk = () => {
+    if (!compatible() || hasServerUrl(settings())) return setUrlProblem(''), true;
+    setUrlProblem(settings().baseUrl.trim() ? 'Enter a URL starting with http:// or https://, such as https://my-server.example/v1.' : 'Enter the server URL first.');
+    return false;
+  };
 
   const saveAll = () => {
     saveSettings(settings());
@@ -48,12 +57,13 @@ export function AISettingsForm() {
     setSaved(true);
   };
   const setProvider = (p: ProviderId) => {
-    const s = { ...settings(), provider: p, model: p === 'anthropic' ? 'claude-opus-5-5' : p === 'openai' ? '' : settings().model };
+    const s = { ...settings(), provider: p, model: p === 'anthropic' ? 'claude-opus-5-5' : '' };
     setSettings(s);
     const k = loadKey(p);
     setKey(k.key);
     setRemember(k.remembered);
     setCheck(null);
+    setUrlProblem('');
     showModels();
   };
 
@@ -77,20 +87,36 @@ export function AISettingsForm() {
       saveModels(s, list);
       setModels(list);
       if (list.length && !list.some((x) => x.id === settings().model)) setSettings({ ...settings(), model: list[0].id });
-      if (!list.length) setListError('The provider listed no models; type a model name.');
+      if (!list.length) {
+        setListError('The provider listed no models; type a model name.');
+        setOther(true);
+      }
     } catch (e) {
       setListError((e as Error).message);
     } finally {
       setListing(false);
     }
   };
-  /** Shows the kept list for the current provider, fetching it when there is none yet. */
+  /**
+   * Shows the kept list for the current provider, fetching it when there is none yet. A compatible
+   * server's list is known only for its URL once fetched; it is fetched when the URL is entered.
+   */
   const showModels = () => {
-    setModels(loadModels(settings())?.models ?? []);
+    setModels(!compatible() || hasServerUrl(settings()) ? (loadModels(settings())?.models ?? []) : []);
     setListError('');
     setOther(false);
-    if (!models().length && (key() || settings().provider === 'compatible')) void refreshModels();
+    if (!models().length && key() && !compatible()) void refreshModels();
   };
+  /** Leaving the URL field: an empty field says nothing; a usable URL fetches the list; anything else is marked. */
+  const leaveUrl = () => {
+    if (settings().baseUrl.trim() && urlOk()) void refreshModels();
+  };
+  /** What the empty model menu of a compatible server says. */
+  const noModels = () =>
+    listing() ? 'Loading the models…'
+    : listError() ? 'No models: see below'
+    : hasServerUrl(settings()) ? 'Refresh to load the models'
+    : 'Enter the server URL to load the models';
   if (key() && !models().length) void refreshModels();
 
   return (
@@ -103,10 +129,25 @@ export function AISettingsForm() {
         </select>
       </label>
       <Show when={settings().provider === 'compatible'}>
-        <label>Server URL <input value={settings().baseUrl} placeholder="https://my-server.example/v1" onInput={(e) => setSettings({ ...settings(), baseUrl: e.currentTarget.value })} onChange={showModels} aria-label="Server URL" /></label>
+        <label>Server URL
+          <input value={settings().baseUrl} placeholder="https://my-server.example/v1" aria-label="Server URL" classList={{ invalid: !!urlProblem() }} aria-invalid={!!urlProblem()}
+            onInput={(e) => {
+              // the list and model belong to the server they came from
+              setSettings({ ...settings(), baseUrl: e.currentTarget.value, model: '' });
+              setModels([]);
+              setListError('');
+              setOther(false);
+              setUrlProblem('');
+            }}
+            onBlur={leaveUrl} onKeyDown={(e) => e.key === 'Enter' && leaveUrl()} />
+        </label>
+        <Show when={urlProblem()}><div class="error small" data-testid="url-problem">{urlProblem()}</div></Show>
       </Show>
       <label>Model
         <span class="row model-pick">
+          <Show when={options().length || other() || !compatible()} fallback={
+            <select aria-label="Model" disabled><option selected>{noModels()}</option></select>
+          }>
           <Show when={options().length && !other()} fallback={
             <input value={settings().model} placeholder="model name" onInput={(e) => setSettings({ ...settings(), model: e.currentTarget.value })} aria-label="Model" />
           }>
@@ -120,7 +161,13 @@ export function AISettingsForm() {
               <option value={OTHER}>Other…</option>
             </select>
           </Show>
-          <button class="ghost refresh" classList={{ spinning: listing() }} disabled={listing()} onClick={(e) => { e.preventDefault(); setOther(false); void refreshModels(); }}
+          </Show>
+          <button class="ghost refresh" classList={{ spinning: listing() }} disabled={listing()} onClick={(e) => {
+              e.preventDefault();
+              if (!urlOk()) return;
+              setOther(false);
+              void refreshModels();
+            }}
             title="Fetch the list of models again from the provider" aria-label="Refresh the model list" data-testid="models-refresh">↻</button>
         </span>
       </label>

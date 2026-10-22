@@ -246,10 +246,28 @@ test('the browser check for an OpenAI-compatible server says whether this page c
   await expect(page.getByTestId('models-error')).toHaveCount(0);
   await page.getByRole('button', { name: 'Check the connection' }).click();
   await expect(page.getByTestId('ai-check')).toContainText('Enter the server URL first');
+  // the model menu is empty until a list is fetched
+  const model = page.getByLabel('Model', { exact: true });
+  await expect(model).toBeDisabled();
+  await expect(model).toContainText('Enter the server URL to load the models');
+  // an unusable URL is marked when the field is left, and the refresh button refuses it
+  const url = page.getByLabel('Server URL');
+  await url.fill('localhost:11434');
+  await url.blur();
+  await expect(url).toHaveClass(/invalid/);
+  await expect(page.getByTestId('url-problem')).toContainText('http:// or https://');
+  await url.fill('');
+  await expect(page.getByTestId('url-problem')).toHaveCount(0);
+  await page.getByTestId('models-refresh').click();
+  await expect(page.getByTestId('url-problem')).toContainText('Enter the server URL first');
   expect(calls).toBe(0);
-  await page.getByLabel('Server URL').fill('http://localhost:11434/v1');
-  await page.getByLabel('Server URL').blur();
+  // a usable URL fetches the list when the field is left; an unreachable server says so
+  await url.fill('http://localhost:11434/v1');
+  await url.blur();
+  await expect(url).not.toHaveClass(/invalid/);
   await expect(page.getByTestId('models-error')).toContainText('could not reach');
+  await expect(model).toContainText('No models');
+  expect(calls).toBe(1);
   await page.getByRole('button', { name: 'Check the connection' }).click();
   await expect(page.getByTestId('ai-check')).toContainText('refuses calls made from a browser');
   await expect(page.getByTestId('ai-check')).toContainText('MCP');
@@ -258,6 +276,12 @@ test('the browser check for an OpenAI-compatible server says whether this page c
   await page.getByRole('button', { name: 'Check the connection' }).click();
   await expect(page.getByTestId('ai-check')).toContainText('accepts calls from this page');
   await expect(page.getByTestId('ai-check')).toHaveClass(/ok/);
+  // a server that answers fills the menu
+  await page.unroute('http://localhost:11434/**');
+  await page.route('http://localhost:11434/**', (route) => route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{"data":[{"id":"llama-test"}]}' }));
+  await page.getByTestId('models-refresh').click();
+  await expect(model).toBeEnabled();
+  await expect(model).toHaveValue('llama-test');
 });
 
 test('the OpenAI check makes a small Responses call, showing a spinner while it waits', async ({ page }) => {

@@ -306,8 +306,10 @@ provider is set up); the panel itself only chats. "Check the connection" there m
 makes (for OpenAI a Responses request of a few tokens to the chosen model; for Anthropic and a
 compatible server the model list), with a spinner while it waits and a 30-second limit, and
 reports the provider's own error message when it answers with one (green with a tick when it
-passes). A compatible server has no default URL, and nothing is called or reported for it until
-one is entered. The model is chosen from the provider's list (Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
+passes). A compatible server has no default URL and an empty, disabled model menu until its list has
+been fetched. Leaving the URL field fetches the list when the URL is usable (http or https with
+a host) and marks the field invalid otherwise; ↻ refuses an unusable URL the same way; a server
+that cannot be reached is reported under the menu. The model is chosen from the provider's list (Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
 server's as given), kept per provider in local storage and fetched again with ↻; "Other…" takes a
 typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay in session storage unless "Remember on this
 device" is ticked, and go only to the chosen provider. The first time the panel opens it says what
