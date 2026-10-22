@@ -13,11 +13,8 @@ fn ctx<R: Ring>(spec: &str, base: R) -> Context<R> {
     Context::new(pres, spec, base).unwrap()
 }
 
-fn quotient_of<'a>(
-    c: &'a Context<Rationals>,
-    ev: &'a dyn rep::Evaluator<Rationals>,
-) -> Quotient<'a, Rationals> {
-    Quotient::from_context(c, ev).unwrap()
+fn quotient_of(c: &Context<Rationals>) -> Quotient<'_, Rationals> {
+    Quotient::from_context(c, rep::evaluators(c).unwrap().remove(0)).unwrap()
 }
 
 #[test]
@@ -36,8 +33,7 @@ fn radical_blocks_and_centre() {
         ("klr type=A2 nu=i+j Lambda=i+j", 6, 4, [1, 2, 0]),
     ] {
         let c = ctx(spec, Rationals);
-        let evs = rep::evaluators(&c).unwrap();
-        let q = quotient_of(&c, evs[0].as_ref());
+        let q = quotient_of(&c);
         assert_eq!(toolkit::basis(&q).unwrap().len(), dim, "{spec}");
         assert_eq!(toolkit::radical(&q).unwrap().len(), rad, "{spec}");
         assert_eq!(toolkit::semisimple_dimension(&q).unwrap(), dim - rad);
@@ -55,8 +51,7 @@ fn radical_blocks_and_centre() {
 #[test]
 fn idempotents() {
     let c = ctx("klr type=A2 nu=2i+j Lambda=2i", Rationals);
-    let evs = rep::evaluators(&c).unwrap();
-    let q = quotient_of(&c, evs[0].as_ref());
+    let q = quotient_of(&c);
     let t = |s: &str| c.parse_term(s).unwrap();
     // e(iji) R e(iji) has dimensions 1, 1 in degrees 0, 2: local
     assert!(toolkit::is_primitive(&q, &t("e(iji)")).unwrap());
@@ -93,7 +88,6 @@ fn idempotents() {
     }
     // a truncation has no radical
     let c = ctx("klr type=A2 nu=2i+j degcap=2", Rationals);
-    let evs = rep::evaluators(&c).unwrap();
-    let q = quotient_of(&c, evs[0].as_ref());
+    let q = quotient_of(&c);
     assert!(toolkit::radical(&q).is_err());
 }

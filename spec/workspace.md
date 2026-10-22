@@ -7,7 +7,8 @@ Version line `diagcalc-workspace/1`. Round-trip and canonical-form tests are in
 file     := "diagcalc-workspace/1" NL "context " context NL (line NL)*
 context  := presentation (" " key "=" value)*
             keys: type, colours, odd, nu (or n), ring, scalars, and
-            parameter values such as Q_ij="u^2 + v" (quoted when they contain spaces)
+            parameter values such as Q_ij="u^2 + v" (quoted when they contain spaces);
+            Lambda, dotcap, degcap name a finite quotient or truncation
 line     := cell [options] ["# id=" id] | "#" comment | ""
 cell     := "def " name " := " term
           | "watch " term
@@ -26,5 +27,19 @@ Terms are in the text term format (`text-term.md`). Only inputs are stored, neve
 Printing writes canonical terms, two spaces before each option and before `# id=`, and keeps
 blank lines and whole-line comments. `diagcalc fmt` also numbers cells that have no ID.
 
-Checks available in phase 1: `equal(a, b)`, `zero(a)`, `idempotent(e)`, `orthogonal(e, f)`,
-`homogeneous(a)`. `solve`, `central` and `primitive` need phase 2 and report a precondition error.
+Checks: `equal(a, b)`, `zero(a)`, `idempotent(e)`, `orthogonal(e, f)`, `homogeneous(a)`,
+`central(z)` (commutes with every generator and lies in the sum of the `e(i) A e(i)`) and
+`primitive(e)` (`e A e / e J e` is one-dimensional; needs a finite quotient over a field of
+characteristic 0).
+
+A context with `Lambda`, `dotcap` or `degcap` computes in that finite quotient or truncation:
+results carry the quotient and the degrees computed under `provenance.notes`.
+
+`solve lhs = rhs for c1, c2` treats the unknowns as scalars of the context (definitions may use
+them) and solves for every coefficient of the normal form of `lhs − rhs` to vanish, over the
+ground field. Tier 1 (all coefficients linear in the unknowns) gives `outcome` `none`, `unique`
+(with `solution`) or `family` (with `particular`, `directions` and `dimension`). Tier 2 uses
+Gröbner bases with limits: `none`, `finite` (solution counts with and without multiplicity,
+`points` in the ground field, `all_found`, the grevlex and lex bases), `family` (`dimension`,
+`independent_variables`, `basis`) or `limit_reached`. Other scalars may not occur in the
+equation.

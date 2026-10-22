@@ -715,9 +715,10 @@ pub struct Reducer<R: Ring> {
 }
 
 impl<R: Ring> Reducer<R> {
-    /// The zero span in a space of `ncols`-component vectors. The ring must be a field.
+    /// The zero span in a space of `ncols`-component vectors. Over a field anything may be
+    /// inserted; over another ring (such as polynomials in scalars), only vectors whose pivots
+    /// after reduction are units, such as vectors with constant entries.
     pub fn new(ring: R, ncols: usize) -> Self {
-        debug_assert!(ring.is_field(), "a span reducer needs a field");
         Reducer {
             ring,
             ncols,
@@ -815,7 +816,7 @@ impl<R: Ring> Reducer<R> {
         };
         let inv = ring
             .inv(&w[c])
-            .expect("a nonzero element of a field is invertible");
+            .expect("the pivot of an inserted vector must be a unit");
         for x in &mut w[c..] {
             if !ring.is_zero(x) {
                 *x = ring.mul(x, &inv);

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/check.schema.json",
   "title": "check: a named yes-or-no property with a witness",
-  "description": "Phase 1 checks: equal(a, b), zero(a), idempotent(e), orthogonal(e, f), homogeneous(a). central and primitive refuse with a precondition error until phase 2.",
+  "description": "Checks: equal(a, b), zero(a), idempotent(e), orthogonal(e, f), homogeneous(a), central(z) (commutes with every generator and idempotent), primitive(e) (e A e / e J e is one-dimensional; needs a finite quotient over a field of characteristic 0).",
   "$defs": {
     "request": {
       "allOf": [{ "$ref": "common.schema.json#/$defs/termRequest" }],

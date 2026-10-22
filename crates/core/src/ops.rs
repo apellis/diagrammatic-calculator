@@ -6,13 +6,17 @@ use crate::conformance::{self, Report, Status};
 use crate::context::{Context, ContextSpec};
 use crate::elab::{CTerm, Scope};
 use crate::error::{Error, Result};
+use crate::groebner::Limits;
 use crate::poly::PolyRing;
 use crate::pres::Presentation;
+use crate::quotient;
 use crate::ratfun::RationalFunctions;
 use crate::render;
 use crate::rep::{self, Evaluator, Provenance};
 use crate::ring::{GaussianIntegers, Integers, PrimeField, Rationals, Ring};
+use crate::solve;
 use crate::text;
+use crate::toolkit;
 use crate::workspace::{CellBody, Workspace};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -101,8 +105,9 @@ pub fn load_presentation(spec: &ContextSpec, pres_text: Option<&str>) -> Result<
     }
 }
 
-fn provenance_json(p: &Provenance) -> Value {
-    json!({
+fn provenance_json<R: Ring>(eval: &dyn Evaluator<R>) -> Value {
+    let p: &Provenance = eval.provenance();
+    let mut v = json!({
         "strategy": p.strategy.as_str(),
         "method": p.method,
         "certificate": {
@@ -110,7 +115,20 @@ fn provenance_json(p: &Provenance) -> Value {
             "reference": p.certificate.reference,
             "hypotheses": p.certificate.hypotheses,
         }
-    })
+    });
+    let notes = eval.notes();
+    if !notes.is_empty() {
+        v["notes"] = json!(notes);
+    }
+    v
+}
+
+/// The evaluator for a representation declaration, inside the quotient the context names.
+fn evaluator_for<'a, R: Ring + 'a>(
+    ctx: &'a Context<R>,
+    decl: &crate::pres::RepresentationDecl,
+) -> Result<Box<dyn Evaluator<R> + 'a>> {
+    quotient::for_context(ctx, rep::evaluator(ctx, decl)?)
 }
 
 /// A context with its definitions and its chosen equality strategy.
@@ -140,7 +158,7 @@ impl<'a, R: Ring> Session<'a, R> {
         Ok(Session {
             ctx,
             defs: BTreeMap::new(),
-            eval: rep::evaluator(ctx, decl)?,
+            eval: evaluator_for(ctx, decl)?,
         })
     }
 
@@ -161,7 +179,7 @@ impl<'a, R: Ring> Session<'a, R> {
         Ok(json!({
             "normal_form": self.ctx.fmt_term(&nf),
             "terms": nf.len(),
-            "provenance": provenance_json(self.eval.provenance()),
+            "provenance": provenance_json(self.eval.as_ref()),
         }))
     }
 
@@ -210,10 +228,45 @@ impl<'a, R: Ring> Session<'a, R> {
                 let witness = (!ok).then(|| format!("degrees {:?}", degs));
                 return Ok(self.verdict(ok, witness));
             }
-            "central" | "primitive" => {
-                return Err(Error::precondition(format!(
-                    "{name} needs a basis of a finite-dimensional piece, which arrives in phase 2"
-                )));
+            "central" => {
+                arity(1)?;
+                let z = self.eval.normal_form(&args[0])?;
+                if let Some((w, _)) = z.terms.iter().find(|(w, _)| c.target(w) != w.source) {
+                    return Ok(self.verdict(
+                        false,
+                        Some(format!(
+                            "{} does not commute with the idempotents",
+                            c.fmt_word(w)
+                        )),
+                    ));
+                }
+                for g in toolkit::generator_layers(c) {
+                    let gt = c.monomial_term(&g, c.coeff.one());
+                    let comm = self
+                        .eval
+                        .normal_form(&c.sub(&c.compose(&z, &gt), &c.compose(&gt, &z)))?;
+                    if !comm.is_zero() {
+                        return Ok(self.verdict(
+                            false,
+                            Some(format!(
+                                "with {}: a g - g a = {}",
+                                c.fmt_word(&g),
+                                c.fmt_term(&comm)
+                            )),
+                        ));
+                    }
+                }
+                return Ok(self.verdict(true, None));
+            }
+            "primitive" => {
+                arity(1)?;
+                let alg = toolkit::Ambient {
+                    ctx: c,
+                    eval: self.eval.as_ref(),
+                };
+                let ok = toolkit::is_primitive(&alg, &args[0])?;
+                let witness = (!ok).then(|| "e A e / e J e has dimension greater than 1".into());
+                return Ok(self.verdict(ok, witness));
             }
             _ => return Err(Error::invalid(format!("unknown check '{name}'"))),
         };
@@ -223,7 +276,7 @@ impl<'a, R: Ring> Session<'a, R> {
     }
 
     fn verdict(&self, holds: bool, witness: Option<String>) -> Value {
-        json!({ "holds": holds, "witness": witness, "provenance": provenance_json(self.eval.provenance()) })
+        json!({ "holds": holds, "witness": witness, "provenance": provenance_json(self.eval.as_ref()) })
     }
 
     pub fn render(&self, t: &CTerm<R>, format: &str) -> Result<String> {
@@ -417,7 +470,17 @@ struct RunWorkspace<'a> {
 impl RingVisitor for RunWorkspace<'_> {
     type Out = Vec<CellResult>;
     fn visit<R: Ring>(self, base: R) -> Result<Vec<CellResult>> {
-        let spec = self.ws.context.clone();
+        let mut spec = self.ws.context.clone();
+        // the unknowns of solve cells are scalars of the context, so definitions can use them
+        for cell in &self.ws.cells {
+            if let CellBody::Solve { unknowns, .. } = &cell.body {
+                for u in unknowns {
+                    if !spec.scalars.contains(u) {
+                        spec.scalars.push(u.clone());
+                    }
+                }
+            }
+        }
         let pres = load_presentation(&spec, self.presentation)?;
         let ctx = Context::new(pres, spec, base)?;
         let mut s = Session::new(&ctx, None)?;
@@ -429,7 +492,7 @@ impl RingVisitor for RunWorkspace<'_> {
                 .find(|(k, _)| k == "strategy")
                 .map(|(_, v)| v.as_str());
             if let Some(name) = strategy {
-                s.eval = rep::evaluator(
+                s.eval = evaluator_for(
                     &ctx,
                     ctx.pres
                         .representations
@@ -457,11 +520,15 @@ impl RingVisitor for RunWorkspace<'_> {
                         .collect::<Result<Vec<_>>>()
                         .and_then(|ts| s.check(name, &ts)),
                 ),
-                CellBody::Solve { .. } => (
+                CellBody::Solve { lhs, rhs, unknowns } => (
                     "solve",
-                    Err(Error::precondition(
-                        "solving arrives in phase 2; this cell is kept but not run",
-                    )),
+                    (|| {
+                        let t = ctx.sub(&s.term(lhs)?, &s.term(rhs)?);
+                        let nf = s.eval.normal_form(&t)?;
+                        let mut v = solve::solve(&ctx, &nf, unknowns, &Limits::default())?;
+                        v["provenance"] = provenance_json(s.eval.as_ref());
+                        Ok(v)
+                    })(),
                 ),
                 CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => continue,
             };
@@ -595,6 +662,83 @@ mod tests {
     }
 
     #[test]
+    fn quotients_and_finite_checks() {
+        let r = req("klr type=A2 nu=2i+j Lambda=2i ring=QQ");
+        let v = simplify(&r, "x_1^2 e(iij) + x_1 e(iji)");
+        assert_eq!(v["status"], "ok", "{v}");
+        assert_eq!(v["normal_form"], "x_1 e(iji)", "{v}");
+        assert_eq!(
+            v["provenance"]["strategy"],
+            "finite-dimensional linear algebra"
+        );
+        assert!(
+            v["provenance"]["notes"][0]
+                .as_str()
+                .unwrap()
+                .contains("cyclotomic quotient")
+        );
+        let one = "e(iij) + e(iji) + e(jii)".to_string();
+        let v = check(&r, "central", std::slice::from_ref(&one));
+        assert_eq!(v["holds"], true, "{v}");
+        let v = check(&r, "central", &["x_2 e(iij)".into()]);
+        assert_eq!(v["holds"], false, "{v}");
+        let v = check(&r, "primitive", &["e(iji)".into()]);
+        assert_eq!(v["holds"], true, "{v}");
+        let v = check(&r, "primitive", &["e(iij)".into()]);
+        assert_eq!(v["holds"], false, "{v}");
+        // a truncation states that it is one, and has no radical to test primitivity with
+        let r = req("klr type=A2 nu=2i+j degcap=2 ring=QQ");
+        let v = simplify(&r, "x_1 e(iij)");
+        assert!(
+            v["provenance"]["notes"].to_string().contains("truncated"),
+            "{v}"
+        );
+        let v = check(&r, "primitive", &["e(iji)".into()]);
+        assert_eq!(v["status"], "error", "{v}");
+        // central works in the algebra itself too
+        let v = check(
+            &req("nilhecke nu=2 ring=QQ"),
+            "central",
+            &["x_1 + x_2".into()],
+        );
+        assert_eq!(v["holds"], true, "{v}");
+    }
+
+    #[test]
+    fn solving() {
+        let src = "diagcalc-workspace/1
+context klr type=A2 nu=2i+j ring=QQ
+def e := c1 x_1 psi_1 e(iij) + c2 psi_1 x_2 e(iij)  # id=d1
+solve e = e(iij) for c1, c2  # id=s2
+solve e e - e = 0 for c1, c2  # id=s3
+solve c3 e(iij) = 0 for c1, c2  # id=s4
+";
+        let v = run_workspace(src, None);
+        assert_eq!(v["status"], "ok", "{v}");
+        let cells = v["cells"].as_array().unwrap();
+        // x_1 psi_1 = psi_1 x_2 + 1 on e(ii): linear, one solution
+        assert_eq!(cells[1]["tier"], 1);
+        assert_eq!(cells[1]["outcome"], "unique");
+        assert_eq!(cells[1]["solution"], json!({"c1": "1", "c2": "-1"}));
+        // e e = e: quadratic; four idempotents 0, x_1 psi_1, -psi_1 x_2, 1 on e(iij)
+        assert_eq!(cells[2]["tier"], 2);
+        assert_eq!(cells[2]["outcome"], "finite");
+        assert_eq!(cells[2]["distinct_solutions"], 4);
+        assert_eq!(cells[2]["all_found"], true);
+        assert_eq!(cells[2]["points"].as_array().unwrap().len(), 4);
+        // c3 is neither an unknown nor a scalar
+        assert_eq!(cells[3]["status"], "error");
+        // with no equation at all, every value solves
+        let src = "diagcalc-workspace/1
+context nilhecke nu=2 ring=QQ
+solve c1 x_1 - c1 x_1 = 0 for c1
+";
+        let v = run_workspace(src, None);
+        assert_eq!(v["cells"][0]["outcome"], "family", "{v}");
+        assert_eq!(v["cells"][0]["dimension"], 1, "{v}");
+    }
+
+    #[test]
     fn workspace_runs() {
         let src = "diagcalc-workspace/1
 context nilhecke nu=3 ring=QQ
@@ -611,7 +755,8 @@ solve a = 0 for c  # id=s5
         assert_eq!(cells[2]["holds"], true);
         assert_eq!(cells[3]["holds"], true);
         assert_eq!(cells[3]["provenance"]["method"], "nil-coxeter-basis");
-        assert_eq!(cells[4]["status"], "error");
+        // a is not zero, whatever c is
+        assert_eq!(cells[4]["outcome"], "none", "{v}");
     }
 
     #[test]

@@ -22,6 +22,11 @@
       "properties": {
         "strategy": { "enum": ["basis normal form", "faithful representation", "confluent rewriting", "finite-dimensional linear algebra", "bounded search"] },
         "method": { "type": "string" },
+        "notes": {
+          "description": "What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra).",
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "certificate": {
           "type": "object",
           "required": ["status", "reference", "hypotheses"],

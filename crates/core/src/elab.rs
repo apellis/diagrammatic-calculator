@@ -51,6 +51,11 @@ impl<R: Ring> Context<R> {
     /// object any of the trees names. Used for the two sides of an equation, so that `0` on one
     /// side ranges over the objects of the other.
     pub fn elaborate_together(&self, asts: &[Ast], scope: &Scope<R>) -> Result<Vec<CTerm<R>>> {
+        // An unknown name is an error even where the rest of the term vanishes, since errors at
+        // single objects are otherwise forgiven (a generator may not fit every object).
+        for ast in asts {
+            self.check_names(ast, scope)?;
+        }
         let mut candidates: Vec<Object> = self.objects.clone();
         if candidates.is_empty() {
             for ast in asts {
@@ -86,6 +91,47 @@ impl<R: Ring> Context<R> {
             out.push(total);
         }
         Ok(out)
+    }
+
+    fn check_names(&self, ast: &Ast, scope: &Scope<R>) -> Result<()> {
+        match ast {
+            Ast::Name {
+                name,
+                sub,
+                args: None,
+            } => {
+                let full = match sub {
+                    Some(s) => format!("{name}_{s}"),
+                    None => name.clone(),
+                };
+                let known = self.pres.generator(name).is_some()
+                    || (sub.is_none() && scope.defs.is_some_and(|d| d.contains_key(name)))
+                    || self.coeff.named(&full).is_some();
+                if !known {
+                    return Err(Error::invalid(format!("unknown name '{full}'")));
+                }
+            }
+            Ast::Name {
+                args: Some(args), ..
+            } => {
+                for a in args {
+                    self.check_names(a, scope)?;
+                }
+            }
+            Ast::Comp(xs) | Ast::Tensor(xs) => {
+                for x in xs {
+                    self.check_names(x, scope)?;
+                }
+            }
+            Ast::Sum(xs) => {
+                for (_, x) in xs {
+                    self.check_names(x, scope)?;
+                }
+            }
+            Ast::Pow(b, _) => self.check_names(b, scope)?,
+            _ => {}
+        }
+        Ok(())
     }
 
     fn collect_objects(&self, ast: &Ast, scope: &Scope<R>, out: &mut Vec<Object>) -> Result<()> {

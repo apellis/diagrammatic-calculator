@@ -3,8 +3,8 @@
 //!
 //! Everything works on a [`Graded`] algebra: an algebra whose graded pieces `A_d e(i)` have a
 //! basis of words and a normal form in that basis. The ambient algebra of a context with a basis
-//! strategy ([`Ambient`]) is one, with infinitely many degrees; a finite quotient or truncation
-//! ([`Quotient`]) is another. Operations that need the whole algebra (the radical, blocks,
+//! strategy ([`Ambient`]) is one: with infinitely many degrees for the algebra itself, or finitely
+//! many when the strategy is a finite quotient or truncation ([`Quotient`]). Operations that need the whole algebra (the radical, blocks,
 //! primitivity) check that it is finite-dimensional and not truncated, and say so otherwise.
 //! Each operation states its precondition in its documentation and returns
 //! [`Error::precondition`] when it fails.
@@ -33,7 +33,8 @@ pub trait Graded<R: Ring> {
     fn complete(&self) -> bool;
 }
 
-/// The ambient algebra of a context, through an evaluator that has a basis.
+/// The algebra a strategy computes in, through its basis: the context's algebra, or a quotient
+/// or truncation of it when the strategy is a [`Quotient`].
 pub struct Ambient<'a, R: Ring> {
     pub ctx: &'a Context<R>,
     pub eval: &'a dyn Evaluator<R>,
@@ -44,7 +45,10 @@ impl<R: Ring> Graded<R> for Ambient<'_, R> {
         self.ctx
     }
     fn window(&self, src: &Object) -> Result<(i64, i64)> {
-        Ok((self.eval.min_degree(src)?, i64::MAX))
+        Ok((
+            self.eval.min_degree(src)?,
+            self.eval.max_degree(src)?.unwrap_or(i64::MAX),
+        ))
     }
     fn piece_words(&self, src: &Object, d: i64) -> Result<Vec<Word>> {
         self.eval.graded_basis(src, d)
@@ -53,7 +57,7 @@ impl<R: Ring> Graded<R> for Ambient<'_, R> {
         self.eval.normal_form(t)
     }
     fn complete(&self) -> bool {
-        false
+        self.eval.complete()
     }
 }
 

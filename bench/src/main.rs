@@ -1,5 +1,5 @@
-//! The evaluation suite (specification, "Performance targets and the evaluation suite"): phase 1
-//! workloads B1–B3. Each workload checks its answers and times the engine; the results are
+//! The evaluation suite (specification, "Performance targets and the evaluation suite"):
+//! workloads B1–B10. Each workload checks its answers and times the engine; the results are
 //! printed as a table and written as JSON (`diagcalc-bench/1`).
 //!
 //! ```text
@@ -10,6 +10,8 @@
 //! one pass of each batch, for replay by the arithmetic spike (`bench/spike/`).
 //!
 //! Random inputs come from a fixed seed, so every run times the same terms.
+
+mod finite;
 
 use diagcalc_core::builtin;
 use diagcalc_core::context::{Context, ContextSpec};
@@ -603,6 +605,7 @@ impl Bench {
                 let c = format!("nilhecke n={n}");
                 self.random_words("B1", &c, 0xb1 + n as u64, words, 2 * n + 2);
                 self.idempotent("B1", &c, n);
+                self.graded_dimensions("B1", &c, 12);
             }
         }
         if self.wants("B2") {
@@ -625,6 +628,33 @@ impl Bench {
                 ("klr type=G2 nu=2i+j", 8),
             ] {
                 self.random_words("B3", c, 0xb3 + len as u64, words, len);
+                self.graded_dimensions("B3", c, 8);
+            }
+        }
+        if self.wants("B4") {
+            let mut cases = vec![
+                "klr type=A2 nu=2i+j Lambda=2i",
+                "klr type=A2 nu=2i+j Lambda=i+j",
+                "klr type=A3 nu=i+2j+k Lambda=j+k",
+                "klr type=B2 nu=i+2j Lambda=i",
+                "klr type=B2 nu=2i+2j Lambda=i",
+            ];
+            if !self.opts.quick {
+                cases.push("klr type=A2 nu=2i+2j Lambda=2i+j");
+            }
+            for c in cases {
+                self.cyclotomic(c);
+            }
+        }
+        if self.wants("B5") {
+            for k in [2, 4, 8] {
+                self.idempotent_search("klr type=A2 nu=2i+j", k);
+            }
+        }
+        if self.wants("B6") {
+            self.gram("klr type=A2 nu=2i+2j Lambda=2i+j", 50);
+            if !self.opts.quick {
+                self.gram("klr type=A2 nu=2i+2j Lambda=2i+2j", 200);
             }
         }
         if self.wants("B7") {

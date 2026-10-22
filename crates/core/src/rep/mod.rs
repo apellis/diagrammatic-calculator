@@ -96,6 +96,24 @@ pub trait Evaluator<R: Ring>: Sync {
         )))
     }
 
+    /// The highest degree computed for words from `src`, when the strategy computes only finitely
+    /// many degrees (a finite quotient or a truncation).
+    fn max_degree(&self, src: &Object) -> Result<Option<i64>> {
+        let _ = src;
+        Ok(None)
+    }
+
+    /// Whether every graded piece is known: a finite-dimensional algebra, not a truncation.
+    fn complete(&self) -> bool {
+        false
+    }
+
+    /// What a result computed by this strategy should say about it, such as the quotient and the
+    /// degrees computed.
+    fn notes(&self) -> Vec<String> {
+        vec![]
+    }
+
     /// The highest degree of a basis word starting at `src` with every dot exponent below `cap`;
     /// those words span the quotient by all `x_k^cap`.
     fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {

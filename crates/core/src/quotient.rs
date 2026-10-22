@@ -29,18 +29,32 @@ use crate::error::{Error, Result};
 use crate::linalg::Reducer;
 use crate::poly::{Poly, PolyRing};
 use crate::pool::par_map;
-use crate::rep::{Evaluator, basis_word};
+use crate::rep::{Evaluator, PolyVector, Provenance, Strategy, basis_word};
 use crate::ring::Ring;
 use crate::term::{Object, Word};
-use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
-type PieceMap<R> = HashMap<(Object, i64), Rc<Piece<R>>>;
-type Sandwiches<R> = Rc<Vec<(i64, CTerm<R>)>>;
+type PieceMap<R> = HashMap<(Object, i64), Arc<Piece<R>>>;
+type Sandwiches<R> = Arc<Vec<(i64, CTerm<R>)>>;
 type Summands<R> = Vec<(Word, Poly<<R as Ring>::Elem>)>;
 /// Reduced coordinates of a term, by source object and degree, with the piece they refer to.
-pub type Coordinates<R> = BTreeMap<(Object, i64), (Rc<Piece<R>>, Vec<Poly<<R as Ring>::Elem>>)>;
+pub type Coordinates<R> = BTreeMap<(Object, i64), (Arc<Piece<R>>, Vec<Poly<<R as Ring>::Elem>>)>;
+
+/// The strategy a session uses for a representation: the representation's own evaluator, or the
+/// finite quotient or truncation the context names (`Lambda`, `dotcap`, `degcap`) computed
+/// through it.
+pub fn for_context<'a, R: Ring + 'a>(
+    ctx: &'a Context<R>,
+    eval: Box<dyn Evaluator<R> + 'a>,
+) -> Result<Box<dyn Evaluator<R> + 'a>> {
+    let s = &ctx.spec;
+    if s.lambda.is_some() || s.dot_cap.is_some() || s.degree_cap.is_some() {
+        Ok(Box::new(Quotient::from_context(ctx, eval)?))
+    } else {
+        Ok(eval)
+    }
+}
 
 /// A homogeneous generator of the ideal, from `src` to `tgt`.
 #[derive(Clone, Debug)]
@@ -70,7 +84,8 @@ impl<R: Ring> Piece<R> {
 /// A finite-dimensional quotient or truncation of the algebra of a context.
 pub struct Quotient<'a, R: Ring> {
     pub ctx: &'a Context<R>,
-    pub eval: &'a dyn Evaluator<R>,
+    pub eval: Box<dyn Evaluator<R> + 'a>,
+    provenance: Provenance,
     pub gens: Vec<IdealGen<R>>,
     /// The highest degree computed, for each source object.
     caps: BTreeMap<Object, i64>,
@@ -78,12 +93,18 @@ pub struct Quotient<'a, R: Ring> {
     pub description: Vec<String>,
     /// True when the degree bound comes only from a user's truncation.
     pub truncated: bool,
-    pieces: RefCell<PieceMap<R>>,
+    /// For a cyclotomic quotient `R^Λ(ν)`, the degree `2(Λ, ν) − (ν, ν)` of its symmetrizing
+    /// trace. The quotient is then a graded symmetric algebra (Shan–Varagnolo–Vasserot), so
+    /// `dim e(t) A_d e(s) = dim e(s) A_{D−d} e(t)`: pieces above the middle degree stop reducing as
+    /// soon as the ideal reaches the dimension this predicts, and pieces predicted to vanish are
+    /// not reduced at all. Set to `None` to compute every piece in full.
+    pub symmetric: Option<i64>,
+    pieces: Mutex<PieceMap<R>>,
     /// The dot generator.
     dot: u16,
-    sandwiches: RefCell<HashMap<Object, Sandwiches<R>>>,
+    sandwiches: Mutex<HashMap<Object, Sandwiches<R>>>,
     /// `x_k ∘ w` (flag true) and `w ∘ x_k` in normal form.
-    dot_cache: RefCell<HashMap<(Word, usize, bool), CTerm<R>>>,
+    dot_cache: Mutex<HashMap<(Word, usize, bool), CTerm<R>>>,
 }
 
 fn dot_generator<R: Ring>(ctx: &Context<R>) -> Result<u16> {
@@ -113,43 +134,48 @@ fn dot_power<R: Ring>(
 
 impl<'a, R: Ring> Quotient<'a, R> {
     /// The quotient or truncation the context names (`Lambda`, `dotcap`, `degcap`).
-    pub fn from_context(ctx: &'a Context<R>, eval: &'a dyn Evaluator<R>) -> Result<Self> {
+    pub fn from_context(ctx: &'a Context<R>, eval: Box<dyn Evaluator<R> + 'a>) -> Result<Self> {
         let spec = &ctx.spec;
         if spec.lambda.is_none() && spec.dot_cap.is_none() && spec.degree_cap.is_none() {
             return Err(Error::precondition(
                 "the algebra is infinite-dimensional: give Lambda, dotcap or degcap",
             ));
         }
-        if !ctx.coeff.is_field() {
+        // The ideal's vectors have coefficients in the ground ring, so scalars may appear in the
+        // terms being reduced as long as the ground ring is a field.
+        if !ctx.base.is_field() {
             return Err(Error::precondition(format!(
-                "quotients are computed over a field; the coefficients here are {}{}",
-                spec.ring,
-                if spec.scalars.is_empty() {
-                    ""
-                } else {
-                    " with scalars"
-                }
+                "quotients are computed over a field; the ground ring here is {}",
+                spec.ring
             )));
         }
         if ctx.objects.is_empty() {
             return Err(Error::precondition("quotients need a weight nu"));
         }
+        let inner = eval.provenance();
+        let provenance = Provenance {
+            strategy: Strategy::FiniteLinearAlgebra,
+            method: format!("{} modulo the ideal", inner.method),
+            certificate: inner.certificate.clone(),
+        };
         let mut q = Quotient {
             ctx,
             eval,
+            provenance,
             gens: vec![],
             caps: BTreeMap::new(),
             description: vec![],
             truncated: false,
-            pieces: RefCell::new(HashMap::new()),
+            symmetric: None,
+            pieces: Mutex::new(HashMap::new()),
             dot: dot_generator(ctx)?,
-            sandwiches: RefCell::new(HashMap::new()),
-            dot_cache: RefCell::new(HashMap::new()),
+            sandwiches: Mutex::new(HashMap::new()),
+            dot_cache: Mutex::new(HashMap::new()),
         };
         let lo = ctx
             .objects
             .iter()
-            .map(|o| eval.min_degree(o))
+            .map(|o| q.eval.min_degree(o))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .min()
@@ -176,6 +202,9 @@ impl<'a, R: Ring> Quotient<'a, R> {
                         .sum();
                     let top = 2 * lam_nu - nu_nu - lo;
                     bound = Some(top);
+                    if spec.dot_cap.is_none() {
+                        q.symmetric = Some(2 * lam_nu - nu_nu);
+                    }
                     q.description.push(format!(
                 "cyclotomic quotient by x_1^<h_(i_1), Lambda> e(i), Lambda = {l}; degrees up to \
                  {top} = 2(Lambda, nu) - (nu, nu) - ({lo}), above which R^Lambda(nu) vanishes \
@@ -201,7 +230,7 @@ impl<'a, R: Ring> Quotient<'a, R> {
                 for k in 0..obj.len() {
                     q.push_gen(dot_power(ctx, dot, obj, k, cap)?)?;
                 }
-                let top = eval.max_degree_below_dot_cap(obj, cap)?;
+                let top = q.eval.max_degree_below_dot_cap(obj, cap)?;
                 let e = per_object.entry(obj.clone()).or_insert(top);
                 *e = (*e).min(top);
             }
@@ -274,11 +303,11 @@ impl<'a, R: Ring> Quotient<'a, R> {
     /// all crossing words `ψ_w` into `g`'s source and `ψ_u` out of its target, in normal form and
     /// with their degrees.
     fn sandwiches(&self, src: &Object) -> Result<Sandwiches<R>> {
-        if let Some(z) = self.sandwiches.borrow().get(src) {
+        if let Some(z) = self.sandwiches.lock().unwrap().get(src) {
             return Ok(z.clone());
         }
         let ctx = self.ctx;
-        let eval = self.eval;
+        let eval = self.eval.as_ref();
         let one = || ctx.coeff.one();
         let mut jobs = Vec::new();
         for g in &self.gens {
@@ -302,9 +331,10 @@ impl<'a, R: Ring> Quotient<'a, R> {
                 out.push((ctx.word_degree(w), t));
             }
         }
-        let out = Rc::new(out);
+        let out = Arc::new(out);
         self.sandwiches
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .insert(src.clone(), out.clone());
         Ok(out)
     }
@@ -318,7 +348,7 @@ impl<'a, R: Ring> Quotient<'a, R> {
     /// Normal forms of `x_k ∘ w` (`top`) or `w ∘ x_k` for the given words, cached.
     fn dot_images(&self, keys: &[(Word, usize, bool)]) -> Result<()> {
         let missing: Vec<(Word, usize, bool)> = {
-            let cache = self.dot_cache.borrow();
+            let cache = self.dot_cache.lock().unwrap();
             let mut m: Vec<_> = keys
                 .iter()
                 .filter(|k| !cache.contains_key(*k))
@@ -329,7 +359,7 @@ impl<'a, R: Ring> Quotient<'a, R> {
             m
         };
         let ctx = self.ctx;
-        let eval = self.eval;
+        let eval = self.eval.as_ref();
         let dot = self.dot;
         let done = par_map(&missing, 16, |(w, k, top)| -> Result<CTerm<R>> {
             let one = ctx.coeff.one();
@@ -341,7 +371,7 @@ impl<'a, R: Ring> Quotient<'a, R> {
             };
             eval.normal_form(&t)
         });
-        let mut cache = self.dot_cache.borrow_mut();
+        let mut cache = self.dot_cache.lock().unwrap();
         for (k, t) in missing.into_iter().zip(done) {
             cache.insert(k, t?);
         }
@@ -354,8 +384,8 @@ impl<'a, R: Ring> Quotient<'a, R> {
     /// `{x^a ψ_u}` and `{ψ_w x^b}` both span the algebra. So its degree-`d` part is spanned by the
     /// sandwiches `ψ_u g ψ_w` of degree `d` and the products `x_k I` and `I x_k` with lower parts
     /// `I` of the ideal, which this computes recursively from the lowest degree.
-    pub fn piece(&self, src: &Object, d: i64) -> Result<Rc<Piece<R>>> {
-        if let Some(p) = self.pieces.borrow().get(&(src.clone(), d)) {
+    pub fn piece(&self, src: &Object, d: i64) -> Result<Arc<Piece<R>>> {
+        if let Some(p) = self.pieces.lock().unwrap().get(&(src.clone(), d)) {
             return Ok(p.clone());
         }
         let (lo, hi) = self.window(src)?;
@@ -381,8 +411,32 @@ impl<'a, R: Ring> Quotient<'a, R> {
             ideal: Reducer::new(self.ctx.coeff.clone(), 0),
         };
         let mut ideal = Reducer::new(self.ctx.coeff.clone(), piece.basis.len());
-        if !piece.basis.is_empty() {
-            let full = |r: &Reducer<PolyRing<R>>| r.rank() == piece.basis.len();
+        // The quotient dimension graded symmetry predicts, above the middle degree.
+        let mut expected = None;
+        if let Some(sym) = self.symmetric
+            && 2 * d > sym
+            && !piece.basis.is_empty()
+        {
+            let mut n = 0;
+            for t in &self.ctx.objects {
+                let dual = self.piece(t, sym - d)?;
+                n += dual
+                    .quotient_basis()
+                    .into_iter()
+                    .filter(|&k| self.ctx.target(&dual.basis[k]) == *src)
+                    .count();
+            }
+            expected = Some(n.min(piece.basis.len()));
+        }
+        let goal = piece.basis.len() - expected.unwrap_or(0);
+        if goal == piece.basis.len() && expected.is_some() {
+            for k in 0..goal {
+                let mut v = vec![self.ctx.coeff.zero(); goal];
+                v[k] = self.ctx.coeff.one();
+                ideal.insert(v);
+            }
+        } else if !piece.basis.is_empty() {
+            let full = |r: &Reducer<PolyRing<R>>| r.rank() >= goal;
             for (deg, z) in self.sandwiches(src)?.iter() {
                 if *deg == d && !full(&ideal) {
                     ideal.insert(self.coords_in(&piece, z)?);
@@ -435,7 +489,7 @@ impl<'a, R: Ring> Quotient<'a, R> {
                     }
                 }
                 self.dot_images(&keys)?;
-                let cache = self.dot_cache.borrow();
+                let cache = self.dot_cache.lock().unwrap();
                 for (v, k, top) in wanted {
                     if full(&ideal) {
                         break;
@@ -456,10 +510,21 @@ impl<'a, R: Ring> Quotient<'a, R> {
                     ideal.insert(acc);
                 }
             }
+            if expected.is_some() && ideal.rank() < goal {
+                return Err(Error::invalid(format!(
+                    "internal: the quotient piece in degree {d} is larger than graded symmetry \
+                     allows ({} > {})",
+                    piece.basis.len() - ideal.rank(),
+                    expected.unwrap_or(0)
+                )));
+            }
         }
         piece.ideal = ideal;
-        let p = Rc::new(piece);
-        self.pieces.borrow_mut().insert((src.clone(), d), p.clone());
+        let p = Arc::new(piece);
+        self.pieces
+            .lock()
+            .unwrap()
+            .insert((src.clone(), d), p.clone());
         Ok(p)
     }
 
@@ -558,5 +623,58 @@ impl<'a, R: Ring> Quotient<'a, R> {
             }
         }
         Ok(out)
+    }
+}
+
+impl<R: Ring> Evaluator<R> for Quotient<'_, R> {
+    fn provenance(&self) -> &Provenance {
+        &self.provenance
+    }
+
+    fn normal_form(&self, t: &CTerm<R>) -> Result<CTerm<R>> {
+        self.reduce(t)
+    }
+
+    fn is_zero(&self, t: &CTerm<R>) -> Result<bool> {
+        Quotient::is_zero(self, t)
+    }
+
+    fn act(&self, _t: &CTerm<R>, _obj: &Object, _f: &Poly<R::Elem>) -> Result<PolyVector<R::Elem>> {
+        Err(Error::precondition(
+            "a quotient does not act on polynomials: the polynomial representation is of the \
+             ambient algebra",
+        ))
+    }
+
+    fn poly_ring(&self, n: usize) -> PolyRing<R> {
+        self.eval.poly_ring(n)
+    }
+
+    fn graded_basis(&self, src: &Object, degree: i64) -> Result<Vec<Word>> {
+        let p = self.piece(src, degree)?;
+        Ok(p.quotient_basis()
+            .into_iter()
+            .map(|k| p.basis[k].clone())
+            .collect())
+    }
+
+    fn min_degree(&self, src: &Object) -> Result<i64> {
+        self.eval.min_degree(src)
+    }
+
+    fn crossing_words(&self, src: &Object) -> Result<Vec<Word>> {
+        self.eval.crossing_words(src)
+    }
+
+    fn notes(&self) -> Vec<String> {
+        self.description.clone()
+    }
+
+    fn max_degree(&self, src: &Object) -> Result<Option<i64>> {
+        Ok(Some(self.window(src)?.1))
+    }
+
+    fn complete(&self) -> bool {
+        !self.truncated
     }
 }

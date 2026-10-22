@@ -16,7 +16,8 @@ fn ctx<R: Ring>(spec: &str, base: R) -> Context<R> {
 
 /// `dim_q e(t) R^Λ(ν) e(s) = q^{D/2} ⟨F_{t'} v_Λ, F_{s'} v_Λ⟩` with `D = 2(Λ, ν) − (ν, ν)` and
 /// `s'`, `t'` the reversed sequences (the leftmost strand is the first `F` applied), for every
-/// pair of objects, in every computed degree.
+/// pair of objects, in every computed degree. Each quotient is computed twice, with and without
+/// the graded-symmetry shortcut, so the shortcut is checked against the full reduction.
 fn check_against_shapovalov(spec: &str) -> usize {
     let c = ctx(spec, Rationals);
     let evs = rep::evaluators(&c).unwrap();
@@ -40,8 +41,16 @@ fn check_against_shapovalov(spec: &str) -> usize {
     assert_eq!(d_top % 2, 0);
     let mut sh = Shapovalov::new(&cartan, &lam);
     let mut total = 0;
-    for ev in &evs {
-        let q = Quotient::from_context(&c, ev.as_ref()).unwrap();
+    let both = evs
+        .into_iter()
+        .map(|e| (true, e))
+        .chain(rep::evaluators(&c).unwrap().into_iter().map(|e| (false, e)));
+    for (symmetric, ev) in both {
+        let mut q = Quotient::from_context(&c, ev).unwrap();
+        assert_eq!(q.symmetric, Some(d_top), "{spec}");
+        if !symmetric {
+            q.symmetric = None;
+        }
         for s in &c.objects {
             let s_rev: Vec<u16> = s.iter().rev().map(|l| l.colour).collect();
             for t in &c.objects {
@@ -61,7 +70,9 @@ fn check_against_shapovalov(spec: &str) -> usize {
                     c.fmt_object(t),
                     c.fmt_object(s)
                 );
-                total += got.values().sum::<usize>();
+                if symmetric {
+                    total += got.values().sum::<usize>();
+                }
             }
         }
     }
@@ -93,19 +104,19 @@ fn cyclotomic_types_b_g() {
 fn nilhecke_truncation_and_dot_cap() {
     let c = ctx("nilhecke nu=2 Lambda=2 degcap=6", Rationals);
     let evs = rep::evaluators(&c).unwrap();
-    for ev in &evs {
-        let q = Quotient::from_context(&c, ev.as_ref()).unwrap();
+    for ev in evs {
+        let q = Quotient::from_context(&c, ev).unwrap();
         let g = q.graded_dimension(&c.objects[0], None).unwrap();
         assert_eq!(g, BTreeMap::from([(-2, 1), (0, 2), (2, 1)]));
     }
     // without a Cartan datum, a cyclotomic quotient needs a degree cap
     let c = ctx("nilhecke nu=2 Lambda=2", Rationals);
-    let evs = rep::evaluators(&c).unwrap();
-    assert!(Quotient::from_context(&c, evs[0].as_ref()).is_err());
+    let mut evs = rep::evaluators(&c).unwrap();
+    assert!(Quotient::from_context(&c, evs.remove(0)).is_err());
     // x_k^2 = 0 on every strand: NH_2 / (x_1^2, x_2^2) has the words with exponents below 2
     let c = ctx("nilhecke nu=2 dotcap=2", Rationals);
-    let evs = rep::evaluators(&c).unwrap();
-    let q = Quotient::from_context(&c, evs[0].as_ref()).unwrap();
+    let mut evs = rep::evaluators(&c).unwrap();
+    let q = Quotient::from_context(&c, evs.remove(0)).unwrap();
     let g = q.graded_dimension(&c.objects[0], None).unwrap();
     eprintln!("{g:?}");
 }

@@ -121,7 +121,7 @@ fn cyclotomic_ranks() {
             let cap = a * (a - 1) + 2 * a * (n - a);
             let c = ctx(&format!("{spec} degcap={cap}"), Rationals);
             for ev in rep::evaluators(&c).unwrap() {
-                let q = Quotient::from_context(&c, ev.as_ref()).unwrap();
+                let q = Quotient::from_context(&c, ev).unwrap();
                 let total: usize = q
                     .graded_dimension(&c.objects[0], None)
                     .unwrap()
@@ -134,7 +134,7 @@ fn cyclotomic_ranks() {
             let src = object(&c, row["source_object"].as_str().unwrap());
             let tgt = object(&c, row["target_object"].as_str().unwrap());
             for ev in rep::evaluators(&c).unwrap() {
-                let q = Quotient::from_context(&c, ev.as_ref()).unwrap();
+                let q = Quotient::from_context(&c, ev).unwrap();
                 let total: usize = q.graded_dimension(&src, Some(&tgt)).unwrap().values().sum();
                 assert_eq!(total, rank, "{}", row["id"]);
             }

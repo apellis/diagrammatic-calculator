@@ -24,6 +24,15 @@
         "holds": { "description": "check: as in check.", "type": "boolean" },
         "witness": { "type": ["string", "null"] },
         "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "tier": { "description": "solve: 1 for a linear system, 2 for Gröbner bases.", "enum": [1, 2] },
+        "outcome": { "description": "solve: what the solution set is.", "enum": ["none", "unique", "finite", "family", "limit_reached"] },
+        "equations": { "description": "solve: the number of coefficient equations.", "type": "integer", "minimum": 0 },
+        "solution": { "description": "solve, tier 1 unique: a value for each unknown.", "type": "object", "additionalProperties": { "type": "string" } },
+        "particular": { "description": "solve, tier 1 family: one solution.", "type": "object", "additionalProperties": { "type": "string" } },
+        "directions": { "description": "solve, tier 1 family: a basis of the solutions of the homogeneous system.", "type": "array", "items": { "type": "object", "additionalProperties": { "type": "string" } } },
+        "dimension": { "description": "solve, family: the dimension of the solution set.", "type": "integer", "minimum": 0 },
+        "variables": { "description": "solve, tier 2: the unknowns, in the order of points.", "type": "array", "items": { "type": "string" } },
+        "points": { "description": "solve, tier 2 finite: the solutions in the ground field.", "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
         "error_kind": { "enum": ["syntax", "invalid", "precondition", "limit"] },
         "message": { "type": "string" }
       }
