@@ -374,3 +374,14 @@ fn rings_with_a_variable() {
     let pres = builtin::presentation("klr").unwrap();
     assert!(Context::new(pres, spec, PolyRing::new(Rationals, &["q"])).is_err());
 }
+
+#[test]
+fn a_generator_that_fits_nowhere_is_an_error_not_zero() {
+    let c = ctx("klr type=A2 nu=2i+j", Rationals);
+    let e = c.parse_term("x_7 e(iij)").unwrap_err();
+    assert!(e.to_string().contains("x_7 does not fit"), "{e}");
+    // forgiven where the term is nonzero elsewhere, or vanishes without an error
+    assert!(c.parse_term("x_3").is_ok());
+    assert!(c.parse_term("psi_1 e(ij)").is_ok());
+    assert!(c.parse_term("psi_2 e(iji) + x_1").is_ok());
+}

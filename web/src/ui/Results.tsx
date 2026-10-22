@@ -78,7 +78,7 @@ function SummandView(props: { s: Summand; cls?: string; first: boolean; onFocus?
 }
 
 /** A sum of diagrams, outlining summands that are new since the previous value and showing the vanished ones briefly. */
-export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey?: string; onFocus?: (word: string) => void }) {
+export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey?: string; onFocus?: (word: string) => void; source?: string }) {
   const prevSummands = () => (ok(props.previous) ? props.previous.summands ?? [] : []);
   const words = () => new Set((props.r.summands ?? []).map((s) => s.word));
   const prevWords = () => new Set(prevSummands().map((s) => s.word));
@@ -117,10 +117,18 @@ export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey
           </div>
         </details>
       </Show>
-      <Value class="textform" testid="textform" text={props.text} />
+      {/* the text form only when it says more than the cell's own text */}
+      <Show when={!props.source || same(props.source) !== same(props.text)}>
+        <div class="nf"><span class="hint">{props.source ? 'Normal form' : ''}</span>
+          <Value class="textform" testid="textform" text={props.text} />
+        </div>
+      </Show>
     </div>
   );
 }
+
+/** Text compared up to spacing. */
+const same = (t: string) => t.replace(/\s+/g, '');
 
 function CheckView(props: { r: Ok }) {
   return (
@@ -181,6 +189,8 @@ export function NoteView(props: { text: string; inline?: boolean }) {
 }
 
 export function ResultView(props: { s: CellState; onFocus?: (word?: string) => void }) {
+  /** The cell's own text after its kind word, which a definition's text form may just repeat. */
+  const source = () => props.s.text.replace(/^(def|watch)\s+/, '');
   const v = () => props.s.value;
   return (
     <Switch>
@@ -195,8 +205,8 @@ export function ResultView(props: { s: CellState; onFocus?: (word?: string) => v
             <div class={props.s.status === 'stale' ? 'result stale' : 'result'} data-testid="result">
               <Show when={props.s.status === 'stale'}><div class="hint">Stale: the inputs changed and the new value is being computed.</div></Show>
               <Switch>
-                <Match when={res.kind === 'watch'}><Sum r={res} previous={props.s.previous} text={res.normal_form ?? ''} valueKey={props.s.valueKey} onFocus={props.onFocus && (() => props.onFocus!())} /></Match>
-                <Match when={res.kind === 'def'}><Sum r={res} text={`${res.name} := ${res.term}`} valueKey={props.s.valueKey} onFocus={props.onFocus} /></Match>
+                <Match when={res.kind === 'watch'}><Sum r={res} previous={props.s.previous} text={res.normal_form ?? ''} valueKey={props.s.valueKey} onFocus={props.onFocus && (() => props.onFocus!())} source={source()} /></Match>
+                <Match when={res.kind === 'def'}><Sum r={res} text={`${res.name} := ${res.term}`} valueKey={props.s.valueKey} onFocus={props.onFocus} source={source()} /></Match>
                 <Match when={res.kind === 'check'}><CheckView r={res} /></Match>
                 <Match when={res.kind === 'solve'}><SolveView r={res} /></Match>
               </Switch>

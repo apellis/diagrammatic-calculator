@@ -261,8 +261,14 @@ font, so the fixed-width font always means plain text being entered or read exac
 turns the calculator's text into LaTeX for KaTeX token by token (the mapping is in
 docs/conventions.md, Display) and never changes what it says. A cell shows its text typeset; a
 click (or Enter on it, or a click on its head) opens it in the editor, and committing or leaving
-typesets it again. A result is typeset; a click shows its text in the fixed-width font, selected,
-to copy. Raw views of files and data (a version's `.dcw`, a snapshot's JSON, an AI tool call's
+typesets it again. An expanded cell shows its text once, in a framed box that is the place to
+edit it (the head then shows only the kind and the summary); a definition's or watch's text form
+appears below, labelled "Normal form", only when it differs from what was typed. Text is checked
+with `workspace.parse` as it is typed (after a pause) and on Enter: text that does not parse is
+never written to the document, and the editor stays open with the reason and "Esc keeps the
+previous text". Text that parses but cannot be elaborated (an unknown name, a generator that fits
+no object) is written and shows its error as the cell's result. A result is typeset; a click shows
+its text in the fixed-width font, selected, to copy. Raw views of files and data (a version's `.dcw`, a snapshot's JSON, an AI tool call's
 input) stay in the fixed-width font.
 
 **Branches (4b).** A branch is its own Yjs document, kept as an update in the main document's

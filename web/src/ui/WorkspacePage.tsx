@@ -363,6 +363,13 @@ function DocView(props: {
     while (used.has(`t${n}`)) n++;
     return `def t${n} := ${t}`;
   };
+  /** Why a cell's text does not parse, as the engine reads it; null when it does. */
+  const validate = async (text: string): Promise<string | null> => {
+    const t = normalize(text);
+    if (!t || t.startsWith('/') || !ev) return null;
+    const p = await ev.parse(t);
+    return 'error' in p ? p.error : null;
+  };
   const commitNew = (index: number, text: string) => {
     const t = normalize(text);
     setAdding(null);
@@ -520,7 +527,7 @@ function DocView(props: {
   const NewCell = (p: { index: number }) => (
     <Cell id="new" text="" expanded active isNew onToggle={() => setAdding(null)}
       onCommit={(t) => commitNew(p.index, t)} onCancel={() => setAdding(null)} onRemove={() => setAdding(null)}
-      onMove={() => {}} onPin={() => {}} onRerun={() => {}} onCopyTikz={() => {}} />
+      onMove={() => {}} onPin={() => {}} onRerun={() => {}} onCopyTikz={() => {}} validate={validate} />
   );
 
   return (
@@ -582,7 +589,7 @@ function DocView(props: {
                         onToggle={() => toggle(c.id)} onCommit={(t) => commit(c.id, t)} onCancel={() => setActive(null)}
                         onRemove={() => doc.removeCell(c.id)} onMove={(d) => doc.moveCell(c.id, i() + d)}
                         onPin={() => pin(c.id)} onRerun={() => ev?.rerun(c.id)} onCopyTikz={() => copyTikz(c.id)}
-                        onCanvas={(w) => openCanvas(c.id, w)} />
+                        onCanvas={(w) => openCanvas(c.id, w)} validate={validate} />
                     )}
                   </Show>
                 </>

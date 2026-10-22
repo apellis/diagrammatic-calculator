@@ -11,6 +11,8 @@ export interface EditorProps {
   onCommit: (text: string) => void;
   onCancel: () => void;
   onChange?: (text: string) => void;
+  /** The text does not parse: drawn with a warning border. */
+  invalid?: boolean;
   /** Focus left the cell (after committing any change). */
   onLeave?: () => void;
   /** Gives the parent a way to replace the text, e.g. from the cell-kind menu. */
@@ -76,5 +78,5 @@ export function Editor(props: EditorProps) {
     }
   });
   onCleanup(() => view?.destroy());
-  return <div class="editor" ref={host} />;
+  return <div class="editor" classList={{ invalid: !!props.invalid }} ref={host} />;
 }

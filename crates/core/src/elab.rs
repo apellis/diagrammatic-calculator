@@ -85,7 +85,9 @@ impl<R: Ring> Context<R> {
                     }
                 }
             }
-            if !ok {
+            // forgiven only where something else is left: a term that comes out zero while a
+            // generator fit nowhere it was asked for (x_7 e(iij)) is reported, not silently 0
+            if !ok || (total.terms.is_empty() && first_err.is_some()) {
                 return Err(first_err.unwrap());
             }
             out.push(total);

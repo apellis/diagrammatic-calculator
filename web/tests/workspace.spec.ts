@@ -32,7 +32,16 @@ test('solve and check cells, and parse errors', async ({ page }) => {
   await addCell(page, 'solve e e - e = 0 for c1, c2');
   await addCell(page, 'check idempotent(psi_1 psi_2 psi_1 e(iji))');
   await addCell(page, 'check idempotent(psi_1 e(iji))');
-  await addCell(page, 'watch psi_1 +');
+  // text that does not parse is not written: the editor stays open and says why
+  await page.getByTestId('add-cell').click();
+  await page.keyboard.type('watch psi_1 +');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('cell-problem')).toContainText('Esc');
+  await expect(page.locator('.editor.invalid')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(cell(page, 4)).toHaveCount(0);
+  // one that parses but names nothing known is written, and its error shown
+  await addCell(page, 'watch foo_1');
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('4 solutions');
   await expect(cell(page, 2).getByTestId('summary')).toHaveText('holds');
   await expect(cell(page, 3).getByTestId('summary')).toHaveText('fails');
@@ -184,16 +193,17 @@ test('cells and results are typeset; clicking a cell edits its text, clicking a 
   const shown = cell(page, 0).getByTestId('cell-display');
   await expect(shown.locator('.katex')).toHaveCount(1);
   await expect(shown.locator('.katex .msupsub').first()).toBeVisible();
-  await expect(cell(page, 0).locator('.head .text .katex')).toHaveCount(1);
+  // expanded, the text is shown once (not again in the head)
+  await expect(cell(page, 0).locator('.head .text .katex')).toHaveCount(0);
   // clicking it edits the plain text
   await shown.click();
   await expect(cell(page, 0).locator('.cm-content')).toBeFocused();
   await expect(cell(page, 0).locator('.cm-content')).toHaveText('def a := x_1^2 psi_1 e(iij)');
   await page.keyboard.press('End');
-  await page.keyboard.type(' + e(iij)');
+  await page.keyboard.type(' + e(iij) + e(iij)');
   await page.keyboard.press('Enter');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('2 terms');
-  await expect(cell(page, 0).getByTestId('cell-display')).toHaveAttribute('data-text', 'def a := x_1^2 psi_1 e(iij) + e(iij)');
+  await expect(cell(page, 0).getByTestId('cell-display')).toHaveAttribute('data-text', 'def a := x_1^2 psi_1 e(iij) + e(iij) + e(iij)');
   // a result is typeset; a click shows its text in the fixed-width font, selected
   const form = cell(page, 0).getByTestId('textform');
   await expect(form.locator('.katex')).toHaveCount(1);
@@ -201,4 +211,17 @@ test('cells and results are typeset; clicking a cell edits its text, clicking a 
   await expect(form).toHaveClass(/raw/);
   await expect(form).toHaveText(/^a := /);
   expect(await page.evaluate(() => window.getSelection()?.toString())).toMatch(/^a := /);
+});
+
+test('an expanded cell shows its text once; the normal form only when it differs', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await expect(cell(page, 0).getByTestId('cell-display')).toBeVisible();
+  await expect(cell(page, 0).getByTestId('textform')).toHaveCount(0);
+  await cell(page, 0).getByTestId('cell-display').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' + psi_1 e(iij)');
+  await page.keyboard.press('Enter');
+  await expect(cell(page, 0).getByTestId('textform')).toHaveAttribute('data-text', 'a := 2 psi_1 e(iij)');
 });

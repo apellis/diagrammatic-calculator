@@ -1,6 +1,6 @@
 // One cell: a one-line summary when collapsed; its text, result and tools when expanded. The text
 // is shown typeset; clicking it (or Enter) opens it for editing in the fixed-width font.
-import { createEffect, createSignal, For, on, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import type { CellState } from '../eval/evaluator';
 import { kindOf } from '../doc/model';
 import { Editor } from './Editor';
@@ -33,6 +33,8 @@ export interface CellProps {
   onCopyTikz: () => void;
   /** Opens the focus canvas, at a summand when one was double-clicked. */
   onCanvas?: (word?: string) => void;
+  /** Why a text cannot be a cell (it does not parse), or null when it can. */
+  validate?: (text: string) => Promise<string | null>;
 }
 
 export function Cell(props: CellProps) {
@@ -53,6 +55,30 @@ export function Cell(props: CellProps) {
     setEditing(true);
     queueMicrotask(() => editor?.focus());
   };
+  // the text is checked as it is typed (after a pause) and again on Enter: text that does not
+  // parse is never written to the document; the editor stays open with the reason under it
+  const [problem, setProblem] = createSignal('');
+  let checks = 0;
+  let pause: ReturnType<typeof setTimeout> | undefined;
+  const check = async (t: string) => {
+    const n = ++checks;
+    const why = props.validate && t.trim() && !t.trim().startsWith('/') ? await props.validate(t) : null;
+    if (n === checks) setProblem(why ?? '');
+    return why;
+  };
+  onCleanup(() => clearTimeout(pause));
+  const changed = (t: string) => {
+    setDraft(t);
+    clearTimeout(pause);
+    if (problem()) void check(t);
+    else pause = setTimeout(() => void check(t), 400);
+  };
+  const commit = async (t: string) => {
+    clearTimeout(pause);
+    if (await check(t)) return editor?.focus();
+    if (!props.isNew) setEditing(false);
+    props.onCommit(t);
+  };
   const canPin = () => props.state?.status === 'fresh' && props.state.value?.status === 'ok';
   const canTikz = () => canPin() && ['watch', 'def'].includes((props.state!.value as { kind: string }).kind);
 
@@ -64,11 +90,14 @@ export function Cell(props: CellProps) {
       }}>
         <span class={`dot ${props.state?.status ?? ''}`} />
         <span class="kind">{kind()}</span>
+        {/* expanded, the text is shown once, below, where it is edited */}
         <span class="text grow" data-text={head()}>
+          <Show when={!props.expanded}>
           <Show when={head()} fallback={<span class="muted">empty cell</span>}>
             <Show when={kind() === 'note' || kind() === 'comment'} fallback={<Typeset text={head()} />}>
               <NoteView text={head()} inline />
             </Show>
+          </Show>
           </Show>
         </span>
         <span class="summary" data-testid="summary">{props.state ? summary(props.state) : ''}</span>
@@ -80,18 +109,20 @@ export function Cell(props: CellProps) {
               text={props.text}
               autofocus={props.active || editing()}
               placeholder="Type a term to define it, or / for a cell kind"
-              onChange={setDraft}
-              onCommit={(t) => {
-                if (!props.isNew) setEditing(false);
-                props.onCommit(t);
-              }}
+              onChange={changed}
+              invalid={!!problem()}
+              onCommit={(t) => void commit(t)}
               onCancel={() => {
+                setProblem('');
                 if (!props.isNew) setEditing(false);
                 props.onCancel();
               }}
-              onLeave={() => !props.isNew && setEditing(false)}
+              onLeave={() => !props.isNew && !problem() && draft() === props.text && setEditing(false)}
               ref={(api) => (editor = api)}
             />
+          </Show>
+          <Show when={editing() && problem()}>
+            <div class="error small" data-testid="cell-problem">{problem()}. Fix it, or press Esc to {props.isNew ? 'discard it' : 'keep the previous text'}.</div>
           </Show>
           <Show when={slash()}>
             <div class="kindmenu">
