@@ -305,9 +305,9 @@ chat-completions protocol. The provider, model, effort and key are set on the se
 provider is set up); the panel itself only chats. "Check the connection" there makes the kind of call the chat
 makes (for OpenAI a Responses request of a few tokens to the chosen model; for Anthropic and a
 compatible server the model list), with a spinner while it waits and a 30-second limit, and
-reports the provider's own error message when it answers with one. The model is chosen from the
-provider's list
-(Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
+reports the provider's own error message when it answers with one (green with a tick when it
+passes). A compatible server has no default URL, and nothing is called or reported for it until
+one is entered. The model is chosen from the provider's list (Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
 server's as given), kept per provider in local storage and fetched again with ↻; "Other…" takes a
 typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay in session storage unless "Remember on this
 device" is ticked, and go only to the chosen provider. The first time the panel opens it says what

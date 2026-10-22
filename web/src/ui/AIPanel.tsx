@@ -5,7 +5,7 @@ import { createStore, produce } from 'solid-js/store';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Doc, TimelineEntry } from '../doc/model';
 import { run, userMessage, type AgentEvent } from '../ai/agent';
-import { ANTHROPIC_MODELS, loadKey, loadSettings, provider } from '../ai/providers';
+import { ANTHROPIC_MODELS, isSetUp, loadKey, loadSettings, provider } from '../ai/providers';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { isMac } from '../app';
 import { markdown } from './markdown';
@@ -37,7 +37,7 @@ export function AIPanel(props: AIPanelProps) {
   // the provider, model and key are set on the settings page; read afresh when used
   const settings = () => loadSettings();
   const key = () => loadKey(settings().provider).key;
-  const ready = () => !!key() || settings().provider === 'compatible';
+  const ready = () => isSetUp(settings(), key());
   const modelName = () => ANTHROPIC_MODELS.find((m) => m.id === settings().model)?.name ?? settings().model;
   const [noticeSeen, setNoticeSeen] = createSignal(seen());
   const [entries, setEntries] = createStore<Entry[]>([]);
@@ -68,7 +68,7 @@ export function AIPanel(props: AIPanelProps) {
 
   const send = async () => {
     const text = draft().trim();
-    if (!text || busy() || !key() && settings().provider !== 'compatible') return;
+    if (!text || busy() || !ready()) return;
     if (!noticeSeen()) return;
     const sel = attach() ? selection() : null;
     const doc = props.host.doc();

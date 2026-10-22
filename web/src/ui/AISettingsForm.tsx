@@ -10,6 +10,7 @@ import {
   saveKey,
   saveModels,
   saveSettings,
+  hasServerUrl,
   type AISettings,
   type ModelOption,
   type ProviderId,
@@ -65,6 +66,8 @@ export function AISettingsForm() {
   /** Fetches the provider's model list with the key entered, keeps it, and picks one if none is chosen. */
   const refreshModels = async () => {
     const s = settings();
+    // a compatible server is asked only once its URL is entered; until then there is nothing to say
+    if (s.provider === 'compatible' && !hasServerUrl(s)) return setListError('');
     if (!key() && s.provider !== 'compatible') return setListError('Enter the key first: the list comes from the provider.');
     setListing(true);
     setListError('');
@@ -100,7 +103,7 @@ export function AISettingsForm() {
         </select>
       </label>
       <Show when={settings().provider === 'compatible'}>
-        <label>Server URL <input value={settings().baseUrl} onInput={(e) => setSettings({ ...settings(), baseUrl: e.currentTarget.value })} onChange={showModels} /></label>
+        <label>Server URL <input value={settings().baseUrl} placeholder="https://my-server.example/v1" onInput={(e) => setSettings({ ...settings(), baseUrl: e.currentTarget.value })} onChange={showModels} aria-label="Server URL" /></label>
       </Show>
       <label>Model
         <span class="row model-pick">
@@ -129,7 +132,7 @@ export function AISettingsForm() {
           </select>
         </label>
       </Show>
-      <label>Key <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} onChange={() => key() && void refreshModels()} placeholder={settings().provider === 'compatible' ? 'none needed for a local server' : 'your API key'} aria-label="API key" autocomplete="off" /></label>
+      <label>Key <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} onChange={() => key() && void refreshModels()} placeholder={settings().provider === 'compatible' ? 'only if the server needs one' : 'your API key'} aria-label="API key" autocomplete="off" /></label>
       <label class="row hint"><input type="checkbox" checked={remember()} onChange={(e) => setRemember(e.currentTarget.checked)} /> Remember on this device (otherwise for this session only)</label>
       <div class="row">
         <button class="primary" onClick={saveAll} data-testid="ai-save">Save</button>
@@ -138,7 +141,14 @@ export function AISettingsForm() {
           <Show when={checking()} fallback="Check the connection"><span class="spinner" aria-hidden="true" /> Checking…</Show>
         </button>
       </div>
-      <Show when={check()}>{(c) => <div class={c().ok ? 'hint' : 'error'} data-testid="ai-check">{c().message}</div>}</Show>
+      <Show when={check()}>
+        {(c) => (
+          <div class="check-result" classList={{ ok: c().ok, bad: !c().ok }} role="status" data-testid="ai-check">
+            <span class="mark" aria-hidden="true">{c().ok ? '✓' : '!'}</span>
+            <span>{c().message}</span>
+          </div>
+        )}
+      </Show>
       <div class="hint">The key is sent only to the provider. Your calls are billed to it.</div>
     </div>
   );

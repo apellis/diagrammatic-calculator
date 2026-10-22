@@ -237,9 +237,19 @@ test('Cmd-L in the canvas asks about the selection, which travels with the messa
 });
 
 test('the browser check for an OpenAI-compatible server says whether this page can reach it', async ({ page }) => {
+  let calls = 0;
+  await page.route('http://localhost:11434/**', (route) => (calls++, route.abort('failed')));
   await openSettings(page);
   await page.getByLabel('Provider').selectOption('compatible');
-  await page.route('http://localhost:11434/**', (route) => route.abort('failed'));
+  // no URL yet: no default, nothing called, no error
+  await expect(page.getByLabel('Server URL')).toHaveValue('');
+  await expect(page.getByTestId('models-error')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Check the connection' }).click();
+  await expect(page.getByTestId('ai-check')).toContainText('Enter the server URL first');
+  expect(calls).toBe(0);
+  await page.getByLabel('Server URL').fill('http://localhost:11434/v1');
+  await page.getByLabel('Server URL').blur();
+  await expect(page.getByTestId('models-error')).toContainText('could not reach');
   await page.getByRole('button', { name: 'Check the connection' }).click();
   await expect(page.getByTestId('ai-check')).toContainText('refuses calls made from a browser');
   await expect(page.getByTestId('ai-check')).toContainText('MCP');
@@ -247,6 +257,7 @@ test('the browser check for an OpenAI-compatible server says whether this page c
   await page.route('http://localhost:11434/**', (route) => route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{"data":[]}' }));
   await page.getByRole('button', { name: 'Check the connection' }).click();
   await expect(page.getByTestId('ai-check')).toContainText('accepts calls from this page');
+  await expect(page.getByTestId('ai-check')).toHaveClass(/ok/);
 });
 
 test('the OpenAI check makes a small Responses call, showing a spinner while it waits', async ({ page }) => {
@@ -271,10 +282,10 @@ test('the OpenAI check makes a small Responses call, showing a spinner while it 
   await run.click();
   await expect(run).toContainText('Checking…');
   await expect(run).toBeDisabled();
-  await expect(page.getByTestId('ai-check')).toHaveText('OpenAI answered 404: The model gpt-test does not exist.');
+  await expect(page.getByTestId('ai-check')).toContainText('OpenAI answered 404: The model gpt-test does not exist.');
   await expect(run).toHaveText('Check the connection');
   await run.click();
-  await expect(page.getByTestId('ai-check')).toHaveText('OpenAI accepts calls from this page with gpt-test.');
+  await expect(page.getByTestId('ai-check')).toContainText('OpenAI accepts calls from this page with gpt-test.');
   expect(bodies[0]).toMatchObject({ model: 'gpt-test', max_output_tokens: 16, store: false });
 });
 

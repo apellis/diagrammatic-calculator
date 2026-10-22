@@ -26,7 +26,7 @@ export const ANTHROPIC_MODELS: { id: string; name: string }[] = [
   { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
 ];
 
-export const DEFAULT_SETTINGS: AISettings = { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', baseUrl: 'http://localhost:11434/v1' };
+export const DEFAULT_SETTINGS: AISettings = { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', baseUrl: '' };
 
 export interface TurnRequest {
   system: string;
@@ -103,7 +103,7 @@ export function anthropic(key: string, s: AISettings): Provider {
 /** A provider that refuses calls made from a browser page. */
 export class BrowserBlocked extends Error {}
 
-const base = (s: AISettings) => (s.provider === 'openai' ? 'https://api.openai.com/v1' : s.baseUrl.replace(/\/+$/, ''));
+const base = (s: AISettings) => (s.provider === 'openai' ? 'https://api.openai.com/v1' : s.baseUrl.trim().replace(/\/+$/, ''));
 const providerName = (s: AISettings) => (s.provider === 'anthropic' ? 'Anthropic' : s.provider === 'openai' ? 'OpenAI' : `the server at ${base(s)}`);
 
 /** How long the connection check waits for an answer. */
@@ -125,6 +125,7 @@ export async function checkProvider(key: string, s: AISettings): Promise<{ ok: b
       return { ok: false, message: explain(e, name) };
     }
   }
+  if (s.provider === 'compatible' && !hasServerUrl(s)) return { ok: false, message: 'Enter the server URL first (for example https://my-server.example/v1).' };
   if (s.provider === 'openai' && !s.model) return { ok: false, message: 'Choose a model first: the check sends it a one-word request.' };
   let res: Response;
   try {
@@ -423,13 +424,23 @@ export function saveKey(p: ProviderId, key: string, remember: boolean) {
   }
 }
 
+/** The server URL once offered by default; it was never chosen, so it is dropped when read. */
+const OLD_DEFAULT_URL = 'http://localhost:11434/v1';
+
 export function loadSettings(): AISettings {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('diagcalc.ai.settings') ?? '{}') };
+    const s: AISettings = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('diagcalc.ai.settings') ?? '{}') };
+    return s.baseUrl === OLD_DEFAULT_URL ? { ...s, baseUrl: '' } : s;
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
+
+/** Whether a server URL has been entered that can be called: http or https with a host. */
+export const hasServerUrl = (s: AISettings) => /^https?:\/\/[^\s/]+/.test(s.baseUrl.trim());
+
+/** Whether the AI can be used with these settings and key: a key, or for a compatible server its URL. */
+export const isSetUp = (s: AISettings, key: string) => (s.provider === 'compatible' ? hasServerUrl(s) : !!key);
 
 export function saveSettings(s: AISettings) {
   try {
