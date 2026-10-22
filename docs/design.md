@@ -69,6 +69,37 @@ use: show a quick result first from a faster method that may not be correct, mar
 pending reduction (a shimmer), and replace it with the normal form when that finishes. The quick
 result is never reported as decided. Not planned unless timings force it.
 
+### The KL basis normal form (`rep/kl`, representation kind `kl-basis`)
+
+A 2-morphism `f : s → t` of `U(g)` in the region `μ` is bent to `1_μ → *s t` with nested cups on
+the left. The evaluation `Φ` (KL III, arXiv:0807.3250, Lemma 3.9 and Theorem 1.2) writes such a
+morphism as one upward diagram with bubbles per term of a sorting decomposition of `1_{*s t}`.
+The decompositions come from the presentation's `decompose-*` and `mixed-*` relations. Each
+upward diagram is an element of `R(ν) ⊗ Π`: the KLR polynomial representation, with the
+clockwise bubbles of a reference region as extra variables. `Φ` is evaluated run by run:
+
+- A run of cups `1 → FE`, caps `EF → 1`, dots and crossings (type RL) takes right-sorted
+  coordinates to left-sorted ones. It straightens `q_k ≫ run ≫ p'_r` to an upward diagram and
+  closes the bent strands with right partial traces (curls, bubble slides).
+- A run of the opposite type (LR) goes back with left partial traces.
+
+Coordinate `k` is `coef_k · f ≫ p_k`, so `f = Σ v_k ≫ q_k`. Evaluation ends in the sorting the
+target already has, which avoids an expensive final decomposition.
+
+The basis of `HOM(s, t)` (KL III Proposition 3.11 with nondegeneracy) is drawn directly, one
+diagram per matching of the boundary:
+
+- caps closed at the bottom, each by moving the left end of the arc with the least span;
+- the through strands permuted by a reduced word;
+- cups opened at the top;
+- one dot exponent per arc, at its left end;
+- real bubbles of positive degree index at the bottom right.
+
+The normal form solves `Φ(f) = Σ a_k Φ(b_k)` by fraction-free elimination. The basis words are
+checked to be independent each time, and the target to lie in their span. Bubble slides assume
+the default `Q = klq2`; the strategy refuses any other `Q`. Bubble variables are allocated four
+per colour and doubled when an index overflows.
+
 ## Finite-dimensional quotients
 
 A strategy that writes terms in a basis of homogeneous words (`Evaluator::graded_basis`) makes

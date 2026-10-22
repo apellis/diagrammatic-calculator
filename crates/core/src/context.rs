@@ -516,7 +516,7 @@ impl<R: Ring> Context<R> {
             .ok_or_else(|| Error::invalid("Q(u,v) - Q(w,v) is not divisible by u - w"))
     }
 
-    fn default_param(&self, d: &str, a: usize, b: usize) -> Result<Poly<R::Elem>> {
+    pub(crate) fn default_param(&self, d: &str, a: usize, b: usize) -> Result<Poly<R::Elem>> {
         let r = &self.params_ring;
         match d {
             "klq2" => {
@@ -716,24 +716,47 @@ impl<R: Ring> Context<R> {
     // Canonical layering.
 
     /// Heights in the canonical layering: one more than the highest layer whose outputs it uses.
+    /// A generator without outputs (a cap) leaves its height in the gap it closes, so that a
+    /// layer reaching over that gap (an enclosing cap) sits higher.
     pub fn levels(&self, w: &Word) -> Vec<u32> {
         let mut floor: Vec<u32> = vec![0; w.source.len()];
+        // gap k lies left of strand k
+        let mut gaps: Vec<u32> = vec![0; w.source.len() + 1];
         let mut out = Vec::with_capacity(w.layers.len());
         for l in &w.layers {
             let p = l.pos as usize;
             let s = self.source_len(l.generator as usize);
             let t = self.target_len(l.generator as usize);
             let below = if s > 0 {
-                floor[p..p + s].iter().copied().max().unwrap_or(0)
+                let inner = gaps[p + 1..p + s].iter().copied().max().unwrap_or(0);
+                floor[p..p + s]
+                    .iter()
+                    .copied()
+                    .max()
+                    .unwrap_or(0)
+                    .max(inner)
             } else {
                 // A generator with no inputs sits above its neighbours, conservatively.
                 let left = if p > 0 { floor[p - 1] } else { 0 };
                 let right = floor.get(p).copied().unwrap_or(0);
-                left.max(right)
+                left.max(right).max(gaps[p])
             };
             let lev = below + 1;
             out.push(lev);
             floor.splice(p..p + s, std::iter::repeat_n(lev, t));
+            if t == 0 {
+                let merged = gaps[p].max(gaps[p + s]).max(lev);
+                gaps.splice(p..=p + s, [merged]);
+            } else if s == 0 {
+                // the gap splits around the new strands
+                let g = gaps[p];
+                let mut v = vec![g];
+                v.extend(std::iter::repeat_n(lev, t - 1));
+                v.push(g);
+                gaps.splice(p..=p, v);
+            } else {
+                gaps.splice(p + 1..p + s, std::iter::repeat_n(lev, t - 1));
+            }
         }
         out
     }
@@ -799,7 +822,26 @@ impl<R: Ring> Context<R> {
         self.canonical_impl(w, false)
     }
 
+    /// Sorts by levels until nothing moves: the level of a generator without inputs depends on
+    /// which neighbours precede it, so one pass need not reach a word that sorts to itself.
     fn canonical_impl(&self, w: &Word, track: bool) -> Reordered {
+        let mut acc = self.canonical_pass(w, track);
+        for _ in 0..w.layers.len() + 4 {
+            let next = self.canonical_pass(&acc.word, track);
+            if next.word == acc.word {
+                break;
+            }
+            acc = Reordered {
+                origin: next.origin.iter().map(|&i| acc.origin[i]).collect(),
+                sign: acc.sign ^ next.sign,
+                swaps: [acc.swaps, next.swaps].concat(),
+                word: next.word,
+            };
+        }
+        acc
+    }
+
+    fn canonical_pass(&self, w: &Word, track: bool) -> Reordered {
         let levels = self.levels(w);
         let mut items: Vec<(Layer, u32, usize)> = w
             .layers

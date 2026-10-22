@@ -262,6 +262,14 @@ when = "a != c or a = b"
 lhs = "psi_1 psi_2 psi_1 e(a b c)"
 rhs = "psi_2 psi_1 psi_2 e(a b c)"
 
+[[representations]]
+name = "basis"
+kind = "kl-basis"
+roles = { cap_ef = "cap", cap_fe = "capd", cup_ef = "cup", cup_fe = "cupd", psi = "psi", psid = "psid", x = "x", xd = "xd" }
+certificate.status = "literature"
+certificate.reference = "Khovanov-Lauda, arXiv:0807.3250, Proposition 3.11 and Theorem 1.2; categorification-lean: KL3.Diagram.canonicalBasis"
+certificate.hypotheses = "Q = klq2 (the default)"
+
 [lean]
 encoding = "kl3-dg"
 module = "Categorification.Diagrams.KL3.Rewriting Categorification.Diagrams.KL3.BubbleSlidesGen"

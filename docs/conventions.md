@@ -40,7 +40,10 @@ References of the form `Library: Declaration` point to the Lean libraries
   generators in it, mod 2.
 - **Canonical layering.** Words equal up to interchange are stored in one canonical layering:
   every generator as low as it can go, generators at the same height ordered left to right. The
-  Koszul sign of the moves is absorbed into the coefficient.
+  Koszul sign of the moves is absorbed into the coefficient. A generator without inputs (a cup)
+  sits above its neighbouring strands. A generator without outputs (a cap) leaves its height in
+  the gap it closes, so a cap enclosing it sits higher. Sorting repeats until the word sorts to
+  itself.
 
 ## Weights and regions
 

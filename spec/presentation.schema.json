@@ -324,23 +324,15 @@
           "enum": [
             "klr-polynomial",
             "nil-coxeter",
-            "odd-nil-coxeter"
+            "odd-nil-coxeter",
+            "kl-basis"
           ]
         },
         "roles": {
+          "description": "Generator names by role: dot and crossing for klr-polynomial and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis.",
           "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "dot",
-            "crossing"
-          ],
-          "properties": {
-            "dot": {
-              "type": "string"
-            },
-            "crossing": {
-              "type": "string"
-            }
+          "additionalProperties": {
+            "type": "string"
           }
         },
         "certificate": {

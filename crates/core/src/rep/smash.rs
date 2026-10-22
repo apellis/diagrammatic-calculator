@@ -31,23 +31,23 @@ use std::collections::BTreeMap;
 
 /// `num / Π_{a<b} (x_a − x_b)^{den[a·n+b]}`, with no factor of the denominator dividing `num`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Frac<E> {
-    num: Poly<E>,
-    den: Vec<u32>,
+pub(super) struct Frac<E> {
+    pub(super) num: Poly<E>,
+    pub(super) den: Vec<u32>,
 }
 
-type Value<E> = BTreeMap<(Object, Perm), Frac<E>>;
+pub(super) type Value<E> = BTreeMap<(Object, Perm), Frac<E>>;
 
 /// Arithmetic on `n` strands.
-struct Alg<R: Ring> {
-    n: usize,
-    ring: PolyRing<R>,
+pub(super) struct Alg<R: Ring> {
+    pub(super) n: usize,
+    pub(super) ring: PolyRing<R>,
     /// `x_a − x_b`, indexed by `a·n + b`.
-    diffs: Vec<Poly<R::Elem>>,
+    pub(super) diffs: Vec<Poly<R::Elem>>,
 }
 
 impl<R: Ring> Alg<R> {
-    fn new(ring: PolyRing<R>, n: usize) -> Self {
+    pub(super) fn new(ring: PolyRing<R>, n: usize) -> Self {
         let mut diffs = vec![ring.zero(); n * n];
         for a in 0..n {
             for b in a + 1..n {
@@ -57,7 +57,7 @@ impl<R: Ring> Alg<R> {
         Alg { n, ring, diffs }
     }
 
-    fn poly(&self, p: Poly<R::Elem>) -> Frac<R::Elem> {
+    pub(super) fn poly(&self, p: Poly<R::Elem>) -> Frac<R::Elem> {
         Frac {
             num: p,
             den: vec![0; self.n * self.n],
@@ -66,7 +66,11 @@ impl<R: Ring> Alg<R> {
 
     /// Cancels factors `x_a − x_b` of the denominator that divide the numerator, trying only
     /// the factors whose index `a·n + b` is in `ks`.
-    fn canon_at(&self, mut f: Frac<R::Elem>, ks: impl Iterator<Item = usize>) -> Frac<R::Elem> {
+    pub(super) fn canon_at(
+        &self,
+        mut f: Frac<R::Elem>,
+        ks: impl Iterator<Item = usize>,
+    ) -> Frac<R::Elem> {
         if self.ring.is_zero(&f.num) {
             f.den.iter_mut().for_each(|e| *e = 0);
             return f;
@@ -86,7 +90,7 @@ impl<R: Ring> Alg<R> {
         f
     }
 
-    fn canon(&self, f: Frac<R::Elem>) -> Frac<R::Elem> {
+    pub(super) fn canon(&self, f: Frac<R::Elem>) -> Frac<R::Elem> {
         let ks: Vec<usize> = (0..f.den.len()).filter(|&k| f.den[k] > 0).collect();
         self.canon_at(f, ks.into_iter())
     }
@@ -94,7 +98,7 @@ impl<R: Ring> Alg<R> {
     /// Both factors are in lowest terms. Over a domain `x_a − x_b` is prime, and a factor of one
     /// denominator cannot divide that numerator, so only the factors in exactly one of the
     /// denominators can cancel.
-    fn mul(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
+    pub(super) fn mul(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
         let num = self.ring.mul(&x.num, &y.num);
         let den: Vec<u32> = x.den.iter().zip(&y.den).map(|(a, b)| a + b).collect();
         if !self.ring.is_domain() {
@@ -107,7 +111,7 @@ impl<R: Ring> Alg<R> {
     /// Both summands are in lowest terms. Over a domain, on the common denominator, a factor
     /// with a higher power in one denominator divides the other lifted numerator but not this
     /// one, so only factors with equal positive powers can cancel.
-    fn add(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
+    pub(super) fn add(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
         let den: Vec<u32> = x.den.iter().zip(&y.den).map(|(a, b)| *a.max(b)).collect();
         let lift = |f: &Frac<R::Elem>| {
             let mut num = f.num.clone();
@@ -126,7 +130,7 @@ impl<R: Ring> Alg<R> {
         self.canon_at(Frac { num, den }, ks)
     }
 
-    fn neg(&self, x: &Frac<R::Elem>) -> Frac<R::Elem> {
+    pub(super) fn neg(&self, x: &Frac<R::Elem>) -> Frac<R::Elem> {
         Frac {
             num: self.ring.neg(&x.num),
             den: x.den.clone(),
@@ -134,7 +138,7 @@ impl<R: Ring> Alg<R> {
     }
 
     /// `w(p)`: `x_a ↦ x_{w(a)}`, scalars fixed.
-    fn act_poly(&self, w: &Perm, p: &Poly<R::Elem>) -> Poly<R::Elem> {
+    pub(super) fn act_poly(&self, w: &Perm, p: &Poly<R::Elem>) -> Poly<R::Elem> {
         if w.is_identity() {
             return p.clone();
         }
@@ -145,7 +149,7 @@ impl<R: Ring> Alg<R> {
         self.ring.permute_vars(p, &perm)
     }
 
-    fn act(&self, w: &Perm, f: &Frac<R::Elem>) -> Frac<R::Elem> {
+    pub(super) fn act(&self, w: &Perm, f: &Frac<R::Elem>) -> Frac<R::Elem> {
         if w.is_identity() {
             return f.clone();
         }
@@ -173,7 +177,11 @@ impl<R: Ring> Alg<R> {
     }
 
     /// `x / y`, which must be a polynomial.
-    fn div_to_poly(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Option<Poly<R::Elem>> {
+    pub(super) fn div_to_poly(
+        &self,
+        x: &Frac<R::Elem>,
+        y: &Frac<R::Elem>,
+    ) -> Option<Poly<R::Elem>> {
         // x / y = x.num · Π y.den / (y.num · Π x.den)
         let mut top = x.num.clone();
         for (k, &e) in y.den.iter().enumerate() {
@@ -189,7 +197,7 @@ impl<R: Ring> Alg<R> {
         f.den.iter().all(|&e| e == 0).then_some(f.num)
     }
 
-    fn val_add(&self, a: &mut Value<R::Elem>, b: &Value<R::Elem>) {
+    pub(super) fn val_add(&self, a: &mut Value<R::Elem>, b: &Value<R::Elem>) {
         for (k, f) in b {
             match a.get(k) {
                 Some(g) => {
@@ -208,7 +216,7 @@ impl<R: Ring> Alg<R> {
     }
 
     /// `top ∘ bottom`.
-    fn val_mul(&self, top: &Value<R::Elem>, bottom: &Value<R::Elem>) -> Value<R::Elem> {
+    pub(super) fn val_mul(&self, top: &Value<R::Elem>, bottom: &Value<R::Elem>) -> Value<R::Elem> {
         let mut out = Value::new();
         for ((j, v), s) in bottom {
             let t = permute_object(j, v);

@@ -110,7 +110,7 @@ pub struct Certificate {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RepresentationDecl {
     pub name: String,
-    /// Built-in action kind: `klr-polynomial`, `nil-coxeter`, `odd-nil-coxeter`.
+    /// Built-in action kind: `klr-polynomial`, `nil-coxeter`, `odd-nil-coxeter`, `kl-basis`.
     pub kind: String,
     /// Generator names by role (`dot`, `crossing`).
     pub roles: BTreeMap<String, String>,

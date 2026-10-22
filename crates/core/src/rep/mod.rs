@@ -4,6 +4,7 @@
 //! term of the same context), decide whether a term is zero, and compute the action on
 //! polynomials. The strategy and the certificate of its faithfulness travel with every result.
 
+pub mod kl;
 pub mod nilcoxeter;
 pub mod smash;
 
@@ -260,34 +261,39 @@ pub fn evaluator<'a, R: Ring + 'a>(
     ctx: &'a Context<R>,
     decl: &RepresentationDecl,
 ) -> Result<Box<dyn Evaluator<R> + 'a>> {
-    let dot = role(ctx, decl, "dot")?;
-    let crossing = role(ctx, decl, "crossing")?;
     let prov = |strategy| Provenance {
         strategy,
         method: decl.name.clone(),
         certificate: decl.certificate.clone(),
     };
+    let dot = || role(ctx, decl, "dot");
+    let crossing = || role(ctx, decl, "crossing");
     Ok(match decl.kind.as_str() {
         "klr-polynomial" => Box::new(smash::Smash::new(
             ctx,
-            dot,
-            crossing,
+            dot()?,
+            crossing()?,
             prov(Strategy::FaithfulRepresentation),
         )),
         "nil-coxeter" => Box::new(nilcoxeter::NilCoxeter::new(
             ctx,
-            dot,
-            crossing,
+            dot()?,
+            crossing()?,
             false,
             prov(Strategy::BasisNormalForm),
         )),
         "odd-nil-coxeter" => Box::new(nilcoxeter::NilCoxeter::new(
             ctx,
-            dot,
-            crossing,
+            dot()?,
+            crossing()?,
             true,
             prov(Strategy::BasisNormalForm),
         )),
+        "kl-basis" => Box::new(kl::KlBasis::new(
+            ctx,
+            decl,
+            prov(Strategy::BasisNormalForm),
+        )?),
         k => return Err(Error::invalid(format!("unknown representation kind '{k}'"))),
     })
 }
