@@ -17,9 +17,60 @@ use diagcalc_core::elab::CTerm;
 use diagcalc_core::poly::Monomial;
 use diagcalc_core::rep::{self, Evaluator};
 use diagcalc_core::ring::{Integers, Ring};
+use diagcalc_core::term::Letter;
 use serde_json::{Value, json};
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
+
+/// Counts live heap bytes and their peak, for B10.
+struct Counting;
+
+static LIVE: AtomicUsize = AtomicUsize::new(0);
+static PEAK: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
+        let p = unsafe { System.alloc(l) };
+        if !p.is_null() {
+            let now = LIVE.fetch_add(l.size(), Ordering::Relaxed) + l.size();
+            PEAK.fetch_max(now, Ordering::Relaxed);
+        }
+        p
+    }
+    unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
+        unsafe { System.dealloc(p, l) };
+        LIVE.fetch_sub(l.size(), Ordering::Relaxed);
+    }
+    unsafe fn realloc(&self, p: *mut u8, l: Layout, new: usize) -> *mut u8 {
+        let q = unsafe { System.realloc(p, l, new) };
+        if !q.is_null() {
+            if new > l.size() {
+                let now = LIVE.fetch_add(new - l.size(), Ordering::Relaxed) + new - l.size();
+                PEAK.fetch_max(now, Ordering::Relaxed);
+            } else {
+                LIVE.fetch_sub(l.size() - new, Ordering::Relaxed);
+            }
+        }
+        q
+    }
+}
+
+#[global_allocator]
+static ALLOC: Counting = Counting;
+
+/// Starts a new peak-memory window; returns the live bytes at its start.
+fn reset_peak() -> usize {
+    let live = LIVE.load(Ordering::Relaxed);
+    PEAK.store(live, Ordering::Relaxed);
+    live
+}
+
+/// Bytes allocated above `base` at the peak of the current window.
+fn peak_since(base: usize) -> usize {
+    PEAK.load(Ordering::Relaxed).saturating_sub(base)
+}
 
 thread_local! {
     /// The trace of the timed work, when `--trace` is given.
@@ -64,6 +115,8 @@ struct Bench {
     opts: Options,
     results: Vec<Value>,
     failed: usize,
+    /// Live bytes when the current workload's peak window started.
+    mem_base: usize,
 }
 
 /// One context with its first declared evaluator.
@@ -88,6 +141,9 @@ impl Setup {
             .unwrap_or_else(|e| panic!("{s}: {e}"))
     }
 }
+
+/// The memory ceiling of the smallest device class (a phone browser tab), for B10.
+const PHONE_CEILING: u64 = 256 << 20;
 
 /// Passes over each batch; the fastest is kept.
 const REPS: usize = 3;
@@ -138,6 +194,67 @@ fn random_layers(rng: &mut Rng, n: usize, len: usize, obj: &mut [char]) -> Vec<S
             }
         })
         .collect()
+}
+
+/// A random word for straightening: its running degree stays within ±6 where possible, and a
+/// crossing of two strands of one colour that would shorten the permutation comes only straight
+/// after a dot on one of them (as in `psi_1 x_1 psi_1 = psi_1`), so long words seldom vanish. Returns the layers, bottom first, and
+/// leaves the target object in `obj`.
+fn balanced_layers(
+    ctx: &Context<R>,
+    rng: &mut Rng,
+    len: usize,
+    obj: &mut Vec<Letter>,
+) -> Vec<String> {
+    let dot = ctx.pres.generator("x").expect("x");
+    let psi = ctx.pres.generator("psi").expect("psi");
+    let n = obj.len();
+    let mut strand: Vec<usize> = (0..n).collect();
+    let mut deg = 0i64;
+    let mut last_dot = None;
+    let mut out = Vec::with_capacity(len);
+    for _ in 0..len {
+        let mut cands = Vec::new();
+        for k in 0..n {
+            if let Some(l) = ctx.match_layer(dot, obj, k) {
+                cands.push((l, false));
+            }
+            if k + 1 >= n {
+                continue;
+            }
+            let up = strand[k] < strand[k + 1];
+            let mixed = obj[k].colour != obj[k + 1].colour;
+            let after_dot = matches!(last_dot, Some(j) if j == k || j == k + 1);
+            if (up || mixed || after_dot)
+                && let Some(l) = ctx.match_layer(psi, obj, k)
+            {
+                cands.push((l, true));
+            }
+        }
+        let within: Vec<usize> = (0..cands.len())
+            .filter(|&c| (-6..=6).contains(&(deg + ctx.layer_degree(&cands[c].0))))
+            .collect();
+        let pick = if within.is_empty() {
+            rng.below(cands.len())
+        } else {
+            within[rng.below(within.len())]
+        };
+        let (l, crossing) = cands.swap_remove(pick);
+        deg += ctx.layer_degree(&l);
+        let k = l.pos as usize;
+        if crossing {
+            // psi_k x psi_k on strands of one colour keeps the leading permutation
+            if strand[k] < strand[k + 1] || obj[k].colour != obj[k + 1].colour {
+                strand.swap(k, k + 1);
+            }
+            last_dot = None;
+        } else {
+            last_dot = Some(k);
+        }
+        *obj = ctx.apply(&l, obj);
+        out.push(format!("{}_{}", if crossing { "psi" } else { "x" }, k + 1));
+    }
+    out
 }
 
 fn text(layers: &[String], idem: Option<&[char]>) -> String {
@@ -216,9 +333,12 @@ impl Bench {
         if !ok {
             self.failed += 1;
         }
+        let peak = peak_since(self.mem_base);
+        self.mem_base = reset_peak();
         eprintln!(
-            "{id:<3} {context:<24} {op:<34} {count:>3} × {:>10.1} µs {terms:>7.1} terms  {}",
+            "{id:<3} {context:<24} {op:<34} {count:>3} × {:>10.1} µs {terms:>7.1} terms {:>8.1} MB  {}",
             secs / count as f64 * 1e6,
+            peak as f64 / 1e6,
             if ok { "ok" } else { "CHECK FAILED" }
         );
         self.results.push(json!({
@@ -229,6 +349,7 @@ impl Bench {
             "seconds": secs,
             "per_op_us": secs / count as f64 * 1e6,
             "mean_terms": terms,
+            "peak_bytes": peak,
             "check": ok,
         }));
     }
@@ -362,6 +483,118 @@ impl Bench {
         );
     }
 
+    /// B7: drawing sums of distinct basis diagrams as SVG and TikZ.
+    fn render(&mut self, context: &str, sizes: &[usize]) {
+        let s = Setup::new(context);
+        let ev = s.eval();
+        // distinct basis words, low degrees first, from every object
+        let mut words = Vec::new();
+        let mut d = -20;
+        while words.len() < *sizes.iter().max().unwrap() && d < 60 {
+            for o in &s.ctx.objects {
+                words.extend(ev.graded_basis(o, d).unwrap());
+            }
+            d += 1;
+        }
+        for &n in sizes {
+            let mut t = CTerm::<R>::zero();
+            for (k, w) in words.iter().take(n).enumerate() {
+                let c = s.ctx.coeff.int(k as i64 % 7 + 1);
+                t = s.ctx.add(&t, &s.ctx.monomial_term(w, c));
+            }
+            let ok = !t.is_zero();
+            for (fmt, f) in [
+                (
+                    "svg",
+                    diagcalc_core::render::svg::<R> as fn(&Context<R>, &CTerm<R>) -> String,
+                ),
+                ("tikz", diagcalc_core::render::tikz::<R>),
+            ] {
+                let mut out = 0;
+                let secs = time_batch(&[()], REPS, |_| out = f(&s.ctx, &t).len());
+                self.record(
+                    "B7",
+                    context,
+                    &format!("draw a sum of {} diagrams, {fmt}", t.len()),
+                    Timing {
+                        count: 1,
+                        secs,
+                        terms: t.len() as f64,
+                        ok: ok && out > 0,
+                    },
+                );
+            }
+        }
+    }
+
+    /// B8: what one interaction costs the engine: re-evaluating an edited cell, sliding a dot
+    /// through a crossing, and checking a relation. Each includes parsing and elaboration.
+    fn interactive(&mut self, context: &str, cases: &[(&str, &str, &str, bool)]) {
+        let s = Setup::new(context);
+        let session = diagcalc_core::ops::Session::new(&s.ctx, None).expect("session");
+        for &(op, a, b, expect) in cases {
+            let mut holds = None;
+            let secs = time_batch(&[()], REPS, |_| {
+                let ta = session.parse(a).unwrap();
+                let tb = session.parse(b).unwrap();
+                let v = session.check("equal", &[ta, tb]).unwrap();
+                holds = v["holds"].as_bool();
+            });
+            self.record(
+                "B8",
+                context,
+                op,
+                Timing {
+                    count: 1,
+                    secs,
+                    terms: 0.0,
+                    ok: holds == Some(expect),
+                },
+            );
+        }
+    }
+
+    /// B9: straightening long random words to normal form (by the representation until the
+    /// rewriting engine of phase 3), checked against the representation's action.
+    fn long_words(&mut self, context: &str, lens: &[usize], words: usize) {
+        let s = Setup::new(context);
+        let ev = s.eval();
+        let coloured = s.ctx.objects.len() > 1;
+        for &len in lens {
+            let mut rng = Rng(0xb9 + len as u64);
+            let mut ts = Vec::new();
+            let mut sources = Vec::new();
+            for _ in 0..words {
+                let o = rng.below(s.ctx.objects.len());
+                let start: Vec<char> = s.ctx.fmt_object(&s.ctx.objects[o]).chars().collect();
+                let mut obj = s.ctx.objects[o].clone();
+                let layers = balanced_layers(&s.ctx, &mut rng, len, &mut obj);
+                ts.push(s.term(&text(&layers, coloured.then_some(&start[..]))));
+                sources.push(o);
+            }
+            let ok = ts
+                .iter()
+                .zip(&sources)
+                .take(2)
+                .all(|(t, &o)| agrees(&s, ev.as_ref(), t, &[o]));
+            let secs = time_batch(&ts, 1, |t| {
+                ev.normal_form(t).unwrap();
+            });
+            let terms = mean_terms(ev.as_ref(), &ts);
+            self.record(
+                "B9",
+                context,
+                &format!("straighten random word, {len} layers"),
+                Timing {
+                    count: words,
+                    secs,
+                    terms,
+                    ok,
+                },
+            );
+        }
+    }
+
     fn run(&mut self) {
         let max_n = if self.opts.quick { 5 } else { 6 };
         let words = if self.opts.quick { 10 } else { 20 };
@@ -394,6 +627,102 @@ impl Bench {
                 self.random_words("B3", c, 0xb3 + len as u64, words, len);
             }
         }
+        if self.wants("B7") {
+            let sizes: &[usize] = if self.opts.quick {
+                &[10, 100]
+            } else {
+                &[10, 100, 1000]
+            };
+            self.render("klr type=A2 nu=2i+j", sizes);
+        }
+        if self.wants("B8") {
+            self.interactive(
+                "nilhecke n=3",
+                &[
+                    (
+                        "edit a watch: (x_1 psi_1)^2 psi_2",
+                        "x_1 psi_1 x_1 psi_1 psi_2",
+                        "x_1 psi_1 psi_2 x_1 + psi_1 psi_2",
+                        false,
+                    ),
+                    (
+                        "slide a dot through a crossing",
+                        "x_2 psi_1",
+                        "psi_1 x_1 + 1",
+                        false,
+                    ),
+                    (
+                        "apply the braid relation",
+                        "psi_1 psi_2 psi_1",
+                        "psi_2 psi_1 psi_2",
+                        true,
+                    ),
+                ],
+            );
+            self.interactive(
+                "klr type=A2 nu=2i+j",
+                &[
+                    (
+                        "edit a watch: psi_2 psi_1 x_1 psi_2",
+                        "psi_2 psi_1 x_1 psi_2 e(iij)",
+                        "psi_2 psi_1 psi_2 x_1 e(iij)",
+                        true,
+                    ),
+                    (
+                        "slide a dot through a crossing",
+                        "x_2 psi_1 e(iij)",
+                        "psi_1 x_1 e(iij) - e(iij)",
+                        true,
+                    ),
+                    (
+                        "apply the braid relation with correction",
+                        "psi_1 psi_2 psi_1 e(iji)",
+                        "psi_2 psi_1 psi_2 e(iji)",
+                        false,
+                    ),
+                ],
+            );
+        }
+        if self.wants("B9") {
+            let (lens, words): (&[usize], usize) = if self.opts.quick {
+                (&[10, 50, 100], 3)
+            } else {
+                (&[10, 50, 100, 200], 5)
+            };
+            self.long_words("nilhecke n=4", lens, words);
+            self.long_words("klr type=A2 nu=2i+j", lens, words);
+        }
+        if self.wants("B10") {
+            self.memory();
+        }
+    }
+
+    /// B10: the largest peak of heap memory over the workloads run so far, against the smallest
+    /// device class's ceiling (a phone browser tab).
+    fn memory(&mut self) {
+        let (peak, worst) = self
+            .results
+            .iter()
+            .map(|r| {
+                (
+                    r["peak_bytes"].as_u64().unwrap_or(0),
+                    format!("{} {} {}", r["id"], r["context"], r["op"]).replace('"', ""),
+                )
+            })
+            .max()
+            .unwrap_or((0, "nothing run".into()));
+        eprintln!("B10 largest peak {:.1} MB: {worst}", peak as f64 / 1e6);
+        self.record(
+            "B10",
+            "all workloads",
+            "peak heap of the largest workload",
+            Timing {
+                count: 1,
+                secs: 0.0,
+                terms: peak as f64,
+                ok: peak < PHONE_CEILING,
+            },
+        );
     }
 }
 
@@ -433,6 +762,7 @@ fn main() {
         opts,
         results: Vec::new(),
         failed: 0,
+        mem_base: reset_peak(),
     };
     if bench.opts.trace.is_some() {
         TRACE.with(|t| *t.borrow_mut() = Some(String::new()));

@@ -30,6 +30,13 @@ pub struct ContextSpec {
     pub scalars: Vec<String>,
     /// Parameter values, such as `Q_ij = "u^2 + v"`.
     pub params: BTreeMap<String, String>,
+    /// A cyclotomic quotient by `x_1^{⟨h_{i_1}, Λ⟩} e(i)`: the dominant weight `Λ`, written like
+    /// `ν` (`2i+j` is `2Λ_i + Λ_j`).
+    pub lambda: Option<String>,
+    /// A quotient by every `x_k^N e(i)`.
+    pub dot_cap: Option<u32>,
+    /// A truncation: only degrees up to this one are computed.
+    pub degree_cap: Option<i64>,
 }
 
 fn split_words(line: &str) -> Result<Vec<String>> {
@@ -85,6 +92,18 @@ impl ContextSpec {
                 "nu" | "n" => spec.weight = Some(v.into()),
                 "ring" => spec.ring = v.into(),
                 "scalars" => spec.scalars = list(v),
+                "Lambda" | "lambda" => spec.lambda = Some(v.into()),
+                "dotcap" => {
+                    spec.dot_cap = Some(v.parse().map_err(|_| {
+                        Error::invalid(format!("dotcap={v} should be a positive integer"))
+                    })?)
+                }
+                "degcap" => {
+                    spec.degree_cap =
+                        Some(v.parse().map_err(|_| {
+                            Error::invalid(format!("degcap={v} should be an integer"))
+                        })?)
+                }
                 k if k.contains('_') => {
                     spec.params.insert(k.into(), v.into());
                 }
@@ -119,6 +138,15 @@ impl ContextSpec {
         s.push_str(&format!(" ring={}", self.ring));
         if !self.scalars.is_empty() {
             s.push_str(&format!(" scalars={}", self.scalars.join(",")));
+        }
+        if let Some(l) = &self.lambda {
+            s.push_str(&format!(" Lambda={l}"));
+        }
+        if let Some(n) = self.dot_cap {
+            s.push_str(&format!(" dotcap={n}"));
+        }
+        if let Some(n) = self.degree_cap {
+            s.push_str(&format!(" degcap={n}"));
         }
         for (k, v) in &self.params {
             s.push_str(&format!(" {k}={}", q(v)));

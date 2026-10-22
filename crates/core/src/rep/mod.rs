@@ -10,6 +10,7 @@ pub mod smash;
 use crate::context::Context;
 use crate::elab::CTerm;
 use crate::error::{Error, Result};
+use crate::perm::Perm;
 use crate::poly::{Monomial, Poly, PolyRing};
 use crate::pres::{Certificate, RepresentationDecl};
 use crate::ring::Ring;
@@ -49,7 +50,7 @@ pub struct Provenance {
 pub type PolyVector<E> = Vec<(Object, Poly<E>)>;
 
 /// A strategy that evaluates terms of a context to canonical values.
-pub trait Evaluator<R: Ring> {
+pub trait Evaluator<R: Ring>: Sync {
     fn provenance(&self) -> &Provenance;
 
     /// The canonical form of a term, written as a term of the same context.
@@ -63,6 +64,147 @@ pub trait Evaluator<R: Ring> {
 
     /// The ring that `act` takes and returns polynomials in, for `n` strands.
     fn poly_ring(&self, n: usize) -> PolyRing<R>;
+
+    /// The words of the basis that normal forms are written in, starting at `src` (any target)
+    /// and of degree `degree`, in canonical layering. The coordinates of a term in this basis are
+    /// the coefficients of its normal form. Strategies without a basis report a precondition.
+    fn graded_basis(&self, src: &Object, degree: i64) -> Result<Vec<Word>> {
+        let _ = (src, degree);
+        Err(Error::precondition(format!(
+            "the strategy {} has no basis to enumerate",
+            self.provenance().method
+        )))
+    }
+
+    /// The lowest degree of a basis word starting at `src`.
+    fn min_degree(&self, src: &Object) -> Result<i64> {
+        let _ = src;
+        Err(Error::precondition(format!(
+            "the strategy {} has no basis to enumerate",
+            self.provenance().method
+        )))
+    }
+
+    /// The highest degree of a basis word starting at `src` with every dot exponent below `cap`;
+    /// those words span the quotient by all `x_k^cap`.
+    fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {
+        let _ = (src, cap);
+        Err(Error::precondition(format!(
+            "the strategy {} has no basis to enumerate",
+            self.provenance().method
+        )))
+    }
+}
+
+/// A permutation's reduced word, the degree of its crossings, and the degree of a dot on each
+/// strand.
+type Shape = (Vec<usize>, i64, Vec<i64>);
+
+/// A basis `{ψ_ŵ x^a e(src)}` (or `x^a ψ_ŵ e(src)`) indexed by permutations `w` with their
+/// canonical reduced words and exponent vectors `a`, as used by the polynomial and nilCoxeter
+/// strategies. Each dot must have positive degree, so every graded piece is finite.
+pub struct BasisShape<'c, R: Ring> {
+    pub ctx: &'c Context<R>,
+    pub dot: u16,
+    pub crossing: u16,
+    pub dots_on_top: bool,
+}
+
+impl<R: Ring> BasisShape<'_, R> {
+    /// For each permutation: its reduced word, the degree of `ψ_ŵ e(src)` and the degrees of a dot
+    /// on each strand (at the bottom, or at the top when dots are on top).
+    fn shapes(&self, src: &Object) -> Result<Vec<Shape>> {
+        let n = src.len();
+        let mut out = Vec::new();
+        for w in Perm::all(n) {
+            let word = w.reduced_word();
+            let zeros = vec![0; n];
+            let Ok(bw) = basis_word(
+                self.ctx,
+                src,
+                &word,
+                &zeros,
+                self.dot,
+                self.crossing,
+                self.dots_on_top,
+            ) else {
+                continue;
+            };
+            let deg = self.ctx.word_degree(&bw);
+            let at = if self.dots_on_top {
+                self.ctx.target(&bw)
+            } else {
+                src.clone()
+            };
+            let mut dots = Vec::with_capacity(n);
+            for k in 0..n {
+                let l = self
+                    .ctx
+                    .match_layer(self.dot as usize, &at, k)
+                    .ok_or_else(|| Error::invalid("a dot does not fit its strand"))?;
+                let d = self.ctx.layer_degree(&l);
+                if d <= 0 {
+                    return Err(Error::precondition(
+                        "graded pieces are infinite-dimensional: a dot has degree ≤ 0",
+                    ));
+                }
+                dots.push(d);
+            }
+            out.push((word, deg, dots));
+        }
+        Ok(out)
+    }
+
+    pub fn min_degree(&self, src: &Object) -> Result<i64> {
+        Ok(self.shapes(src)?.iter().map(|s| s.1).min().unwrap_or(0))
+    }
+
+    pub fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {
+        let below = cap.saturating_sub(1) as i64;
+        Ok(self
+            .shapes(src)?
+            .iter()
+            .map(|(_, deg, dots)| deg + below * dots.iter().sum::<i64>())
+            .max()
+            .unwrap_or(0))
+    }
+
+    pub fn graded_basis(&self, src: &Object, degree: i64) -> Result<Vec<Word>> {
+        fn exps(dots: &[i64], k: usize, left: i64, cur: &mut Vec<i32>, out: &mut Vec<Vec<i32>>) {
+            if k == dots.len() {
+                if left == 0 {
+                    out.push(cur.clone());
+                }
+                return;
+            }
+            let mut e = 0;
+            while e as i64 * dots[k] <= left {
+                cur.push(e);
+                exps(dots, k + 1, left - e as i64 * dots[k], cur, out);
+                cur.pop();
+                e += 1;
+            }
+        }
+        let mut out = Vec::new();
+        for (word, deg, dots) in self.shapes(src)? {
+            let mut all = Vec::new();
+            exps(&dots, 0, degree - deg, &mut Vec::new(), &mut all);
+            for a in all {
+                let bw = basis_word(
+                    self.ctx,
+                    src,
+                    &word,
+                    &a,
+                    self.dot,
+                    self.crossing,
+                    self.dots_on_top,
+                )?;
+                out.push(self.ctx.canonical(&bw).0);
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
 }
 
 /// Builds the evaluator a presentation file declares.

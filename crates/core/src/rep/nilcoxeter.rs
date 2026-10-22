@@ -14,8 +14,8 @@
 //! `∂`s anticommute and braid moves carry no sign; [`odd_word_sign`] compares reduced words.
 
 use super::{
-    Evaluator, PolyVector, Provenance, basis_word, lift_coeff, permute_object, split_monomial,
-    strand_ring,
+    BasisShape, Evaluator, PolyVector, Provenance, basis_word, lift_coeff, permute_object,
+    split_monomial, strand_ring,
 };
 use crate::context::Context;
 use crate::elab::CTerm;
@@ -175,6 +175,15 @@ impl<'a, R: Ring> NilCoxeter<'a, R> {
         }
     }
 
+    fn shape(&self) -> BasisShape<'_, R> {
+        BasisShape {
+            ctx: self.ctx,
+            dot: self.dot,
+            crossing: self.crossing,
+            dots_on_top: true,
+        }
+    }
+
     fn alg(&self, n: usize) -> Alg<R> {
         Alg {
             n,
@@ -292,5 +301,17 @@ impl<R: Ring> Evaluator<R> for NilCoxeter<'_, R> {
 
     fn poly_ring(&self, n: usize) -> PolyRing<R> {
         strand_ring(self.ctx, n, self.odd)
+    }
+
+    fn graded_basis(&self, src: &Object, degree: i64) -> Result<Vec<Word>> {
+        self.shape().graded_basis(src, degree)
+    }
+
+    fn min_degree(&self, src: &Object) -> Result<i64> {
+        self.shape().min_degree(src)
+    }
+
+    fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {
+        self.shape().max_degree_below_dot_cap(src, cap)
     }
 }

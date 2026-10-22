@@ -1,18 +1,19 @@
 name: Golden corpus
 
-# Computes the golden corpus in Lean (lean/golden/Golden.lean) and checks that the committed
-# tests/golden/actions.json matches. Run by hand with "update" to commit a regenerated file.
+# Computes the golden corpus (lean/golden/Golden.lean) and the Lean regression values
+# (lean/golden/LeanValues.lean) in Lean and checks that the committed tests/golden/actions.json and
+# tests/lean-values/values.json match. Run by hand with "update" to commit regenerated files.
 
 on:
   push:
     branches: [master]
-    paths: ["lean/golden/**", "tests/golden/**", ".github/workflows/golden.yml"]
+    paths: ["lean/golden/**", "tests/golden/**", "tests/lean-values/**", ".github/workflows/golden.yml"]
   pull_request:
-    paths: ["lean/golden/**", "tests/golden/**", ".github/workflows/golden.yml"]
+    paths: ["lean/golden/**", "tests/golden/**", "tests/lean-values/**", ".github/workflows/golden.yml"]
   workflow_dispatch:
     inputs:
       update:
-        description: "Commit the regenerated actions.json"
+        description: "Commit the regenerated files"
         type: boolean
         default: false
 
@@ -37,23 +38,31 @@ jobs:
         run: |
           lean --version
           lean --run lean/golden/Golden.lean tests/golden/cases.txt /tmp/actions.json
+      - name: Compute the Lean regression values
+        run: lean --run lean/golden/LeanValues.lean /tmp/values.json
       - name: Compare with the committed file
         if: ${{ !inputs.update }}
         run: |
           if [ ! -f tests/golden/actions.json ]; then echo "tests/golden/actions.json is missing"; exit 1; fi
           diff -u tests/golden/actions.json /tmp/actions.json
+          if [ ! -f tests/lean-values/values.json ]; then echo "tests/lean-values/values.json is missing"; exit 1; fi
+          diff -u tests/lean-values/values.json /tmp/values.json
       - name: Commit the regenerated file
         if: ${{ inputs.update }}
         run: |
           cp /tmp/actions.json tests/golden/actions.json
+          mkdir -p tests/lean-values
+          cp /tmp/values.json tests/lean-values/values.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tests/golden/actions.json
-          git diff --cached --quiet || git commit -m "Regenerate the golden corpus in Lean"
+          git add tests/golden/actions.json tests/lean-values/values.json
+          git diff --cached --quiet || git commit -m "Regenerate the golden corpus and Lean values in Lean"
           git push
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: golden-actions
-          path: /tmp/actions.json
+          path: |
+            /tmp/actions.json
+            /tmp/values.json
           if-no-files-found: ignore

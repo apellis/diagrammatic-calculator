@@ -1,7 +1,7 @@
 # Evaluation suite
 
-`diagcalc-bench` runs the phase 1 workloads of the specification's evaluation suite, checks their
-answers and times them:
+`diagcalc-bench` runs the workloads of the specification's evaluation suite, checks their answers
+and times them:
 
 - **B1** nilHecke `NH_n`, n = 3 to 6: simplifying random words, products of normal forms, and the
   watch `e² − e` for the idempotent `e = x^δ ψ_{w₀}`;
@@ -9,6 +9,13 @@ answers and times them:
   checks;
 - **B3** KLR algebras of types A₂ (ν = 2i+j), A₃ (ν = i+2j+k), B₂ and G₂ (ν = i+j, 2i+j): random
   words at random idempotents and products of normal forms.
+- **B7** drawing sums of 10, 100 and 1000 distinct diagrams as SVG and TikZ;
+- **B8** what one interaction costs the engine, parsing included: re-checking an edited watch,
+  sliding a dot through a crossing, checking a braid relation (target: under 150 ms);
+- **B9** straightening random words of 10 to 200 layers, checked against the representation's
+  action (by the representation until the rewriting engine of phase 3);
+- **B10** the largest heap peak of any workload run, against a phone tab's 256 MB. Every result
+  also records its own `peak_bytes`, counted by the bench's allocator.
 
 Random inputs come from fixed seeds. Every random word's normal form is checked to act like the
 word in the representation; each batch is timed three times and the fastest pass is kept.
