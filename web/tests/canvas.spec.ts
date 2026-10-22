@@ -313,3 +313,24 @@ test('the middle crossing of the idempotent of NH3 makes the braid move', async 
   await page.mouse.up();
   await expect(msg).toContainText('Applied braid');
 });
+
+test('a click on a strand sets the insertion point, and a palette click inserts there', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  // the third strand, about halfway up
+  const strands = frames(page).first().locator('.hit-strand');
+  await expect(strands).toHaveCount(3);
+  const boxes = [];
+  for (const el of await strands.all()) boxes.push((await el.boundingBox())!);
+  boxes.sort((a, b) => a.x - b.x);
+  const s3 = boxes[2];
+  await page.mouse.click(s3.x + s3.width / 2, s3.y + s3.height / 2);
+  await expect(canvas(page).getByTestId('mark')).toBeVisible();
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Insertion point set');
+  await canvas(page).locator('.palette-bar .gen', { hasText: 'x' }).first().click();
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Insert x');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_3 e(iij)');
+  await expect(canvas(page).getByTestId('mark')).toHaveCount(0);
+});

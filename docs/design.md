@@ -251,6 +251,11 @@ A selection of several pieces (box-select on empty space, or ⌘/Ctrl-click) is 
 `relations.match` (R), is removed in one step by Delete (`term.edit` remove with `layers`), and is
 what the AI panel receives (⌘L). A click on empty canvas clears the selection.
 
+A click on a strand sets the insertion point there (a green ring at the nearest row); the next
+palette click or I-then-digit inserts at it, by the same `dropTarget` rule as a palette drop, so a
+crossing takes the clicked strand and the one to its right (the left one at the right edge). With a
+single piece selected instead, an insert goes just above that piece on its leftmost strand.
+
 **Display and entry.** Text is entered in the fixed-width font and shown typeset in the reading
 font, so the fixed-width font always means plain text being entered or read exactly. `src/ui/tex.ts`
 turns the calculator's text into LaTeX for KaTeX token by token (the mapping is in

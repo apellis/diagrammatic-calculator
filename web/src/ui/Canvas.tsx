@@ -84,6 +84,8 @@ export function Canvas(props: CanvasProps) {
   const [ghost, setGhost] = createSignal<{ summand: number; layer: number; dx: number; dy: number } | null>(null);
   const [boxDrag, setBoxDrag] = createSignal<{ summand: number; a: [number, number]; b: [number, number] } | null>(null);
   const [drop, setDrop] = createSignal<{ summand: number; x: number; y: number; width: number } | null>(null);
+  /** Where a click on a strand put the insertion point: the next palette click or I-digit inserts there. */
+  const [mark, setMark] = createSignal<{ summand: number; x: number; y: number } | null>(null);
   /**
    * A dot being dragged, drawn where it is on its strand: the crossings it has passed (which fire
    * on release) and the one it is nearing, with how near (0 to 1). After release it stays where it
@@ -141,6 +143,7 @@ export function Canvas(props: CanvasProps) {
       }
       if (live()?.held) setLive(null);
       if (preview()?.held) setPreview(null);
+      setMark(null);
       if (firstSelect) {
         const k = summands.findIndex((l) => l.word === firstSelect);
         if (k >= 0) setSel({ summand: k, layers: [] });
@@ -295,7 +298,10 @@ export function Canvas(props: CanvasProps) {
   const insertGenerator = (g: Generator, k = sel().summand, at?: { below: number; position: number }) => {
     const l = layouts()[k];
     if (!l) return;
-    const target = at ?? insertAbove(l, sel().summand === k && sel().layers.length === 1 ? piece(l, sel().layers[0]) : undefined, Math.max(g.inputs, 1));
+    const width = Math.max(g.inputs, 1);
+    const m = mark();
+    const one = sel().summand === k && sel().layers.length === 1 ? piece(l, sel().layers[0]) : undefined;
+    const target = at ?? (m && m.summand === k && !one ? dropTarget(l, m.x, m.y, width) : insertAbove(l, one, width));
     if (!target) return say(`${g.name} does not fit there.`);
     void edit(k, { action: 'insert', generator: g.name, ...target }, `insert ${g.name}`);
   };
@@ -311,6 +317,8 @@ export function Canvas(props: CanvasProps) {
 
   let drag: {
     k: number; layer?: number; start: [number, number]; alt: boolean; moved: boolean; svg: SVGSVGElement; additive: boolean;
+    /** Pressed on a strand (not on a piece): a click there sets the insertion point. */
+    strand?: boolean;
     /** For a dot: the run of its strand and the crossings on it. */
     run?: Line[]; crossings?: Piece[];
     /** For another piece: up and down ('v') or sideways ('h'), fixed by the first movement. */
@@ -332,7 +340,8 @@ export function Canvas(props: CanvasProps) {
     }
     if (e.button !== 0) return;
     const t = (e.target as Element).closest('[data-layer]');
-    drag = { k, layer: t ? Number(t.getAttribute('data-layer')) : undefined, start: units(svg, e), alt: e.altKey, moved: false, svg, additive: mod(e as unknown as KeyboardEvent) };
+    drag = { k, layer: t ? Number(t.getAttribute('data-layer')) : undefined, start: units(svg, e), alt: e.altKey, moved: false, svg, additive: mod(e as unknown as KeyboardEvent),
+      strand: !t && !!(e.target as Element).closest('[data-strand]') };
     const l = layouts()[k];
     const pc = drag.layer !== undefined && l ? piece(l, drag.layer) : undefined;
     if (pc?.draw === 'dot' && !e.altKey) {
@@ -424,8 +433,14 @@ export function Canvas(props: CanvasProps) {
     if (d.layer === undefined) {
       if (!d.moved) {
         if (!d.additive) setSel({ summand: d.k, layers: [] });
+        if (d.strand && !d.additive) {
+          setMark({ summand: d.k, x: d.start[0], y: d.start[1] });
+          return say(`Insertion point set on this strand: click a generator in the palette, or press I and its number, to insert it here${props.generators.some((g) => g.inputs > 1) ? ' (a crossing takes this strand and the next one to the right)' : ''}.`);
+        }
+        setMark(null);
         return;
       }
+      setMark(null);
       const inside = piecesIn(l, d.start, p);
       const base = d.additive && sel().summand === d.k ? sel().layers : [];
       setSel({ summand: d.k, layers: [...new Set([...base, ...inside])] });
@@ -436,6 +451,7 @@ export function Canvas(props: CanvasProps) {
     const pc = piece(l, d.layer);
     if (!pc) return;
     if (!d.moved) {
+      setMark(null);
       const s = sel();
       if (d.additive && s.summand === d.k) {
         const has = s.layers.includes(d.layer);
@@ -651,6 +667,7 @@ export function Canvas(props: CanvasProps) {
       if (help()) return setHelp(false);
       if (menu()) return setMenu(null);
       if (inserting()) return setInserting(false);
+      if (mark()) return setMark(null);
       if (s.layers.length) return setSel({ summand: s.summand, layers: [] });
       return props.onClose();
     }
@@ -820,6 +837,14 @@ export function Canvas(props: CanvasProps) {
             </g>
           )}
         </Show>
+        <Show when={mark()?.summand === p.k && dropTarget(l(), mark()!.x, mark()!.y, 1)}>
+          {(t) => (
+            <g pointer-events="none" data-testid="mark">
+              <line x1={t().x - 0.35} x2={t().x + 0.35} y1={-t().y} y2={-t().y} stroke="var(--good)" stroke-width={0.03} stroke-dasharray="0.08 0.06" />
+              <circle cx={t().x} cy={-t().y} r={0.16} fill="var(--good-soft)" stroke="var(--good)" stroke-width={0.04} />
+            </g>
+          )}
+        </Show>
         <Show when={pull()?.summand === p.k && pull()}>
           {(pl) => (
             <g pointer-events="none" data-testid="pull">
@@ -932,7 +957,7 @@ export function Canvas(props: CanvasProps) {
         <div class="palette-bar" aria-label="Generators">
           <For each={props.generators}>
             {(g, i) => (
-              <button class="gen" draggable={true} title={`Drag onto a strand to insert ${g.name}; or select a piece and press I, then ${i() + 1}`}
+              <button class="gen" draggable={true} title={`Drag onto a strand to insert ${g.name}; or click a strand to set the insertion point, then click here (or press I, then ${i() + 1})`}
                 classList={{ on: inserting() }}
                 onDragStart={(e) => {
                   currentDrag = g.name;
@@ -1029,7 +1054,8 @@ const GESTURES: [string, string][] = [
   ['double-click a strand', 'select the whole strand'],
   ['R, right-click', 'relations that apply to the selection; 1–9 applies one'],
   ['drag from the palette', 'insert a generator on a strand'],
-  ['I, then 1–9', 'insert a generator above the selected piece'],
+  ['click a strand', 'set the insertion point there (a green ring); then click a generator in the palette, or I and its number'],
+  ['I, then 1–9', 'insert a generator at the insertion point, or above the selected piece'],
   ['Delete', 'remove the selected pieces'],
   ['↑ ↓', 'slide the selected dot through the next crossing'],
   [`${ALT}↑ ${ALT}↓`, 'interchange the selected piece one place'],
