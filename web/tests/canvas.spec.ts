@@ -242,3 +242,74 @@ test('interchanging odd dots shows the sign, box selection narrows relations, an
   await page.keyboard.press('r');
   await expect(canvas(page).locator('.relmenu')).toContainText('in the selection');
 });
+
+test('a click on empty canvas clears the selection; Delete removes every selected piece', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 x_3 psi_2 e(iji)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const dots = frames(page).first().locator('.hit-piece[data-draw="dot"]');
+  const selected = frames(page).first().locator('.hit-piece[stroke="var(--accent)"]');
+  await dots.first().click();
+  await expect(selected).toHaveCount(1);
+  // the empty board around the frames
+  const view = (await canvas(page).locator('.canvas-view').boundingBox())!;
+  await page.mouse.click(view.x + view.width - 20, view.y + view.height - 20);
+  await expect(selected).toHaveCount(0);
+  // two pieces selected, then Delete removes both in one step
+  await dots.first().click();
+  await dots.nth(1).click({ modifiers: ['ControlOrMeta'] });
+  await expect(selected).toHaveCount(2);
+  await page.keyboard.press('Delete');
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Remove 2 pieces');
+  await expect(frames(page).first().locator('.hit-piece')).toHaveCount(1);
+  await expect(frames(page).first().locator('.hit-piece[data-draw="crossing"]')).toHaveCount(1);
+});
+
+test('a crossing with no move to make still follows a sideways drag a little and says why', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_2 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const [c] = await crossings(page);
+  const [x, y] = [c.x + c.width / 2, c.y + c.height / 2];
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 40, y, { steps: 6 });
+  await expect(canvas(page).getByTestId('pull').locator('.pulled path')).toHaveCount(2);
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('No braid or square move here');
+  await page.mouse.up();
+  await expect(canvas(page).getByTestId('pull')).toHaveCount(0);
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('No braid or square move here');
+  // up or down, with nothing on other strands to pass, it gives a little and says so
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 40, { steps: 6 });
+  await expect(canvas(page).getByTestId('pull')).toHaveCount(1);
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('cannot change height');
+  await page.mouse.up();
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := psi_2 e(iij)');
+});
+
+test('the middle crossing of the idempotent of NH3 makes the braid move', async ({ page }) => {
+  await newDoc(page);
+  await page.getByTestId('context').click();
+  await page.getByLabel('Context').fill('nilhecke nu=3');
+  await page.getByLabel('Context').press('Enter');
+  await page.locator('.cm-content').click();
+  await typeCell(page, 'def e := x_1^2 x_2 psi_1 psi_2 psi_1');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const [, middle] = await crossings(page);
+  const [x, y] = [middle.x + middle.width / 2, middle.y + middle.height / 2];
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 8, y, { steps: 3 });
+  const msg = canvas(page).getByTestId('canvas-message');
+  await expect(msg).toContainText(/Pull (left|right) to apply braid/);
+  const way = (await msg.textContent())!.includes('left') ? -1 : 1;
+  await page.mouse.move(x + 40 * way, y, { steps: 6 });
+  await expect(msg).toContainText('Let go to apply braid');
+  await page.mouse.up();
+  await expect(msg).toContainText('Applied braid');
+});

@@ -1,6 +1,6 @@
 // The outline: every cell by name with its status, the pinned snapshots, and the version history.
 import { createSignal, For, Show } from 'solid-js';
-import type { CellData, Snapshot, Version } from '../doc/model';
+import { kindOf, type CellData, type Snapshot, type Version } from '../doc/model';
 import type { CellState } from '../eval/evaluator';
 import { NoteView, summary } from './Results';
 import { Typeset } from './Typeset';
@@ -11,13 +11,14 @@ export function label(c: CellData, s?: CellState): string {
   if (p?.kind === 'def') return `${p.defines} :=`;
   if (p?.kind === 'note') return (p.note ?? '').split('\n')[0] || 'note';
   if (p?.kind === 'check') return c.text.replace(/^check\s+/, '');
+  if (kindOf(c.text) === 'comment') return c.text.replace(/^\s*#\s?/, '');
   return c.text.replace(/^(watch|solve)\s+/, '');
 }
 
 /** A cell's label typeset; a note's first line as written. */
 function Label(props: { c: CellData; s?: CellState }) {
   return (
-    <Show when={props.s?.parsed?.kind === 'note'} fallback={<Typeset text={label(props.c, props.s)} />}>
+    <Show when={props.s?.parsed?.kind === 'note' || kindOf(props.c.text) === 'comment'} fallback={<Typeset text={label(props.c, props.s)} />}>
       <NoteView text={label(props.c, props.s)} inline />
     </Show>
   );

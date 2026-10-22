@@ -42,6 +42,7 @@ export function Cell(props: CellProps) {
   const head = () => {
     const p = props.state?.parsed;
     if (p?.kind === 'note') return (p.note ?? '').split('\n')[0];
+    if (kind() === 'comment') return props.text.replace(/^\s*#\s?/, '');
     return props.text.replace(/^(def|watch|solve|check)\s+/, '');
   };
   const slash = () => draft().startsWith('/');
@@ -65,7 +66,7 @@ export function Cell(props: CellProps) {
         <span class="kind">{kind()}</span>
         <span class="text grow" data-text={head()}>
           <Show when={head()} fallback={<span class="muted">empty cell</span>}>
-            <Show when={kind() === 'note'} fallback={<Typeset text={head()} />}>
+            <Show when={kind() === 'note' || kind() === 'comment'} fallback={<Typeset text={head()} />}>
               <NoteView text={head()} inline />
             </Show>
           </Show>
@@ -99,7 +100,7 @@ export function Cell(props: CellProps) {
               </For>
             </div>
           </Show>
-          <Show when={props.state && !props.isNew && (kind() !== 'note' || editing())}>
+          <Show when={props.state && !props.isNew && ((kind() !== 'note' && kind() !== 'comment') || editing())}>
             <ResultView s={props.state!} onFocus={props.onCanvas} />
           </Show>
           <div class="tools">
@@ -130,13 +131,13 @@ function CellText(props: { text: string; kind: string; onEdit: () => void }) {
   return (
     <div class="celltext" data-testid="cell-display" data-text={props.text} role="button" tabindex={0} title="Click to edit"
       onClick={(e) => (e.target as HTMLElement).closest('a') || props.onEdit()} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), props.onEdit())}>
-      <Show when={props.kind === 'note'} fallback={
+      <Show when={props.kind === 'note' || props.kind === 'comment'} fallback={
         <Show when={props.text.trim()} fallback={<span class="muted">empty cell</span>}>
           <Typeset text={first()} display />
           <For each={options()}>{(o) => <div class="opt"><Typeset text={o} tex={toTex(o.replace(/=/, ' = '))} /></div>}</For>
         </Show>
       }>
-        <NoteView text={note()} />
+        <NoteView text={props.kind === 'comment' ? props.text.replace(/^\s*#\s?/, '') : note()} />
       </Show>
     </div>
   );

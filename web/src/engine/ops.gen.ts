@@ -706,6 +706,10 @@ export interface TermEditRequest1 {
    * remove: the 1-based canonical layer.
    */
   layer?: number;
+  /**
+   * remove: several 1-based canonical layers, removed together (instead of 'layer').
+   */
+  layers?: number[];
 }
 export interface TermLayoutRequest1 {
   term: string;

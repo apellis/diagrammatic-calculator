@@ -378,6 +378,14 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "description": "remove: the 1-based canonical layer.",
           "type": "integer",
           "minimum": 1
+        },
+        "layers": {
+          "description": "remove: several 1-based canonical layers, removed together (instead of 'layer').",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
         }
       },
       "type": "object"

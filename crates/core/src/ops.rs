@@ -1070,6 +1070,15 @@ pub fn call(op: &str, input: &Value) -> Value {
                     index: uint("match", 0)?,
                     everywhere: input.get("everywhere").and_then(Value::as_bool) == Some(true),
                     layer: uint("layer", 0)?,
+                    layers: match input.get("layers") {
+                        None => Vec::new(),
+                        Some(v) => v
+                            .as_array()
+                            .and_then(|a| {
+                                a.iter().map(|x| x.as_u64().map(|n| n as usize)).collect()
+                            })
+                            .ok_or_else(|| Error::invalid("'layers' is a list of layer numbers"))?,
+                    },
                     direction: str_field("direction").unwrap_or_default(),
                     steps: uint("steps", 0)?,
                     orders: orders(input)?,

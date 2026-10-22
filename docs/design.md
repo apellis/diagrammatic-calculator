@@ -242,7 +242,14 @@ summand's relation matches for one whose matched pieces are all crossings and in
 preferring a triangle with it in the middle (a braid relation, armed by pulling the middle crossing
 towards the other two) over a stacked pair (a square relation, pulled apart either way). A copy of
 the crossing follows the pointer, the matched crossings glow and ring once the move is armed, and
-the move's result is shown; letting go applies that match.
+the move's result is shown; letting go applies that match. A drag that can do nothing (sideways
+with no such match, or up and down with nothing on other strands to pass) still moves the piece a
+little, easing off like a rubber band, and the bar says why nothing happens; it springs back on
+release.
+
+A selection of several pieces (box-select on empty space, or ⌘/Ctrl-click) is a rectangle for
+`relations.match` (R), is removed in one step by Delete (`term.edit` remove with `layers`), and is
+what the AI panel receives (⌘L). A click on empty canvas clears the selection.
 
 **Display and entry.** Text is entered in the fixed-width font and shown typeset in the reading
 font, so the fixed-width font always means plain text being entered or read exactly. `src/ui/tex.ts`

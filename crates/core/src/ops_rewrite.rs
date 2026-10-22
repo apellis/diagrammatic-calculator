@@ -36,6 +36,8 @@ pub struct RewriteRequest {
     pub everywhere: bool,
     /// 1-based layer (`interchange`: the lower of two; `slide`: the piece).
     pub layer: usize,
+    /// `term.edit` remove: several 1-based canonical layers, removed together (instead of `layer`).
+    pub layers: Vec<usize>,
     /// `slide`: `up` or `down`.
     pub direction: String,
     /// `slide`: how many crossings to pass at most (0: as many as there are).
@@ -283,17 +285,26 @@ impl RingVisitor for RewriteOp<'_> {
                         h + 1
                     }
                     "remove" => {
-                        let c = self
-                            .r
-                            .layer
-                            .checked_sub(1)
-                            .filter(|&c| c < w.layers.len())
-                            .ok_or_else(|| {
-                                Error::invalid(format!("there is no layer {}", self.r.layer))
-                            })?;
-                        let i = rank.iter().position(|&r| r == c).expect("permutation");
-                        layers.remove(i);
-                        i
+                        let asked = if self.r.layers.is_empty() {
+                            vec![self.r.layer]
+                        } else {
+                            self.r.layers.clone()
+                        };
+                        let mut drawn_at = Vec::new();
+                        for n in asked {
+                            let c = n
+                                .checked_sub(1)
+                                .filter(|&c| c < w.layers.len())
+                                .ok_or_else(|| Error::invalid(format!("there is no layer {n}")))?;
+                            drawn_at.push(rank.iter().position(|&r| r == c).expect("permutation"));
+                        }
+                        // from the top down, so the drawn positions still to remove stay put
+                        drawn_at.sort_unstable();
+                        drawn_at.dedup();
+                        for &i in drawn_at.iter().rev() {
+                            layers.remove(i);
+                        }
+                        drawn_at[0]
                     }
                     a => {
                         return Err(Error::invalid(format!(
@@ -855,5 +866,17 @@ mod tests {
                      "generator": "psi", "below": 0, "position": 2 }),
         );
         assert_eq!(v["kind"], "precondition", "{v}");
+        // Several pieces are removed together.
+        let v = call(
+            "term.edit",
+            &json!({ "context": "klr type=A2 nu=2i+j", "term": "x_1 x_3 psi_2 e(iji)", "action": "remove",
+                     "layers": [1, 3] }),
+        );
+        assert_eq!(v["term"], "psi_2 e(iji)", "{v}");
+        let v = call(
+            "term.edit",
+            &json!({ "context": "nilhecke nu=2", "term": "x_1", "action": "remove", "layers": [2] }),
+        );
+        assert_eq!(v["kind"], "invalid", "{v}");
     }
 }

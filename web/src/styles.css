@@ -97,7 +97,7 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .cell { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
 .cell.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
 .cell .head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; min-height: 34px; }
-.kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); width: 3.6em; flex: none; }
+.kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); min-width: 3.6em; flex: none; margin-right: 6px; }
 .cell .text { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell .summary { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
 .cell .body { border-top: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 10px; }

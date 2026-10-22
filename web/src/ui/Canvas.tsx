@@ -92,7 +92,7 @@ export function Canvas(props: CanvasProps) {
   /** A crossing being dragged up or down: its summand drawn with the order it would get. */
   const [preview, setPreview] = createSignal<{ summand: number; order: number[]; layout: Layout; held?: boolean } | null>(null);
   /** A crossing being dragged sideways: the crossings of the move it would make, and that move's result. */
-  const [pull, setPull] = createSignal<{ summand: number; layer: number; dx: number; layers: number[]; armed: boolean; result?: Layout[] } | null>(null);
+  const [pull, setPull] = createSignal<{ summand: number; layer: number; dx: number; dy?: number; layers: number[]; armed: boolean; result?: Layout[] } | null>(null);
   const [live, setLive] = createSignal<{ summand: number; layer: number; x: number; y: number; passed: number[]; near?: { layer: number; w: number }; held?: boolean } | null>(null);
   let root!: HTMLDivElement;
   let board!: HTMLDivElement;
@@ -271,7 +271,7 @@ export function Canvas(props: CanvasProps) {
       say(`Applied ${match.relation} (${match.direction})${match.sign === -1 ? ', with sign −1 from interchanges' : ''}; the term now has ${terms(r.term)}.`);
     });
 
-  const edit = (k: number, req: { action: 'insert'; generator: string; below: number; position: number } | { action: 'remove'; layer: number }, note: string) =>
+  const edit = (k: number, req: { action: 'insert'; generator: string; below: number; position: number } | { action: 'remove'; layers: number[] }, note: string) =>
     run(async () => {
       const l = layouts()[k];
       if (!l) return;
@@ -287,9 +287,10 @@ export function Canvas(props: CanvasProps) {
   const removeSelected = () => {
     const s = sel();
     const l = layouts()[s.summand];
-    if (!l || s.layers.length !== 1) return say('Select one piece to remove it.');
-    const p = piece(l, s.layers[0]);
-    void edit(s.summand, { action: 'remove', layer: s.layers[0] }, `remove ${p?.generator ?? 'a piece'}`);
+    if (!l || !s.layers.length) return say('Select pieces to remove them: click one, or drag a box on empty space.');
+    const n = s.layers.length;
+    const note = n === 1 ? `remove ${piece(l, s.layers[0])?.generator ?? 'a piece'}` : `remove ${n} pieces`;
+    void edit(s.summand, { action: 'remove', layers: s.layers }, note);
   };
   const insertGenerator = (g: Generator, k = sel().summand, at?: { below: number; position: number }) => {
     const l = layouts()[k];
@@ -378,9 +379,9 @@ export function Canvas(props: CanvasProps) {
       setGhost({ summand: drag.k, layer: drag.layer, dx: pc?.draw !== 'dot' ? dx : 0, dy });
     } else if (drag.layer !== undefined) {
       if (!drag.mode) {
-        // sideways only for a crossing with a move to make; wait for the matches before deciding
+        // sideways makes a move of crossings; wait for the matches before deciding
         if (Math.abs(dx) > Math.abs(dy) && drag.matches === undefined) return;
-        drag.mode = drag.move && Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+        drag.mode = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
       }
       if (drag.mode === 'h') pullSideways(drag, dx);
       else moveUpDown(drag, dy);
@@ -402,8 +403,9 @@ export function Canvas(props: CanvasProps) {
     const pulled = pull();
     setPull(null);
     if (d.mode === 'h') {
-      say('');
+      // a drag with no move keeps its explanation up
       if (pulled?.armed && d.move && d.matches) void applyMatch(d.k, d.matches[d.move.index], d.move.index);
+      else if (d.move) say('');
       return;
     }
     if (d.mode === 'v') {
@@ -411,7 +413,7 @@ export function Canvas(props: CanvasProps) {
       const l0 = layouts()[d.k];
       if (!pv || pv.summand !== d.k || !l0 || sameOrder(pv.order, l0.order)) {
         setPreview(null);
-        return say('');
+        return;
       }
       setPreview({ ...pv, held: true });
       return void reorder(d.k, pv.order, 'interchange').finally(() => setTimeout(() => preview()?.held && setPreview(null), 1500));
@@ -427,7 +429,8 @@ export function Canvas(props: CanvasProps) {
       const inside = piecesIn(l, d.start, p);
       const base = d.additive && sel().summand === d.k ? sel().layers : [];
       setSel({ summand: d.k, layers: [...new Set([...base, ...inside])] });
-      if (inside.length) say(`Selected ${inside.length} piece${inside.length > 1 ? 's' : ''}; press R for the relations that apply.`);
+      const n = sel().layers.length;
+      say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; ${K}L: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
       return;
     }
     const pc = piece(l, d.layer);
@@ -467,8 +470,14 @@ export function Canvas(props: CanvasProps) {
     if (sameOrder(order, l.order)) {
       d.asked = undefined;
       setPreview(null);
-      return say('Drag past a piece on other strands to interchange heights.');
+      // nothing to pass: the piece gives a little and springs back on release
+      setPull({ summand: d.k, layer: pc.layer, dx: 0, dy: rubber(dy, 0.3), layers: [], armed: false });
+      const others = l.pieces.some((q) => q !== pc && !q.inputs.some((x) => pc.inputs.includes(x) || pc.outputs.includes(x)) && !q.outputs.some((x) => pc.inputs.includes(x) || pc.outputs.includes(x)));
+      return say(others
+        ? 'Drag past a piece on other strands to interchange heights.'
+        : `Every other piece shares a strand with this one, so it cannot change height${pc.draw === 'crossing' ? '; drag it sideways for a braid or square move' : ''}.`);
     }
+    setPull(null);
     if (d.asked && sameOrder(d.asked, order)) return;
     d.asked = order;
     void props.engine.call('term.layout', { context: props.context, term: props.term!, summands: d.k + 1, orders: { [d.k + 1]: order } }, { lane: 'interactive' }).then((o) => {
@@ -483,7 +492,15 @@ export function Canvas(props: CanvasProps) {
 
   /** A crossing dragged sideways: arms its braid or square move once pulled far enough the right way. */
   const pullSideways = (d: NonNullable<typeof drag>, dx: number) => {
-    const mv = d.move!;
+    const mv = d.move;
+    if (!mv) {
+      // no move to make: the piece gives a little, says why, and springs back on release
+      const pc = piece(layouts()[d.k], d.layer!);
+      setPull({ summand: d.k, layer: d.layer!, dx: rubber(dx, 0.25), layers: [], armed: false });
+      return say(pc?.draw === 'crossing'
+        ? 'No braid or square move here: pull the middle crossing of a triangle of crossings towards the other two, or either crossing of a stacked pair apart.'
+        : `Sideways drags move crossings. Drag this piece up or down to interchange heights, or ${ALT}drag to move it for looks.`);
+    }
     const m = d.matches![mv.index];
     const right = mv.side === 0 || Math.sign(dx) === mv.side;
     const shift = Math.max(-0.8, Math.min(0.8, dx)) * (right ? 1 : 0.25);
@@ -534,6 +551,15 @@ export function Canvas(props: CanvasProps) {
   };
   onCleanup(() => clearTimeout(holdTimer));
 
+  /** A click on the canvas outside the diagrams clears the selection (on a frame, it picks that summand). */
+  const onBackground = (e: PointerEvent) => {
+    const t = e.target as Element;
+    if (e.button !== 0 || t.closest('svg.diagram, .relmenu, .pullresult, button, input, label, a')) return;
+    root.focus({ preventScroll: true });
+    const frame = t.closest<HTMLElement>('.frame[data-summand]');
+    setMenu(null);
+    setSel({ summand: frame ? Number(frame.dataset.summand) - 1 : sel().summand, layers: [] });
+  };
   const onDblClick = (k: number, e: MouseEvent) => {
     const t = (e.target as Element).closest('[data-strand]');
     if (!t) return;
@@ -729,6 +755,11 @@ export function Canvas(props: CanvasProps) {
       const lv = live();
       return !!lv && lv.summand === p.k && lv.layer === layer;
     };
+    /** The piece whose copy a sideways or blocked drag is carrying: drawn faintly where it was. */
+    const pulled = (layer?: number) => {
+      const pl = pull();
+      return !!pl && pl.summand === p.k && pl.layer === layer;
+    };
     const lineEl = (line: Line) => {
       const o = () => (isLive(line.layer) ? [0, 0] as [number, number] : off(line.layer));
       const hot = () => line.layer !== undefined && selected().has(line.layer);
@@ -736,7 +767,7 @@ export function Canvas(props: CanvasProps) {
       switch (line.kind) {
         case 'strand':
         case 'turn':
-          return <path d={path(line, o())} stroke={strandColour(line.strand)} stroke-dasharray={strandDash(line.strand)} stroke-width={hot() || strandHot() ? 0.09 : 0.055} fill="none" />;
+          return <path d={path(line, o())} stroke={strandColour(line.strand)} stroke-dasharray={strandDash(line.strand)} stroke-width={hot() || strandHot() ? 0.09 : 0.055} fill="none" opacity={pulled(line.layer) ? 0.3 : undefined} />;
         case 'dot':
           return <circle cx={line.x! + o()[0]} cy={-(line.y! + o()[1])} r={hot() ? 0.15 : 0.11} fill={hot() ? 'var(--accent)' : strandColour(line.strand)} visibility={isLive(line.layer) ? 'hidden' : undefined} />;
         case 'box':
@@ -793,9 +824,13 @@ export function Canvas(props: CanvasProps) {
           {(pl) => (
             <g pointer-events="none" data-testid="pull">
               {/* the crossing being pulled, carried along by the pointer; the drawing itself stays */}
-              <g class="pulled" transform={`translate(${pl().dx} 0)`}>
-                <For each={l().lines.filter((x) => x.kind === 'strand' && x.layer === pl().layer)}>
-                  {(line) => <path d={path(line)} stroke={strandColour(line.strand)} stroke-width={0.07} fill="none" />}
+              <g class="pulled" transform={`translate(${pl().dx} ${-(pl().dy ?? 0)})`}>
+                <For each={l().lines.filter((x) => x.layer === pl().layer)}>
+                  {(line) =>
+                    line.kind === 'strand' ? <path d={path(line)} stroke={strandColour(line.strand)} stroke-width={0.07} fill="none" />
+                    : line.kind === 'dot' ? <circle cx={line.x} cy={-line.y!} r={0.13} fill={strandColour(line.strand)} />
+                    : line.kind === 'box' ? <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="var(--panel)" stroke="currentColor" stroke-width={0.04} />
+                    : null}
                 </For>
               </g>
               <For each={pl().layers}>
@@ -915,7 +950,7 @@ export function Canvas(props: CanvasProps) {
             )}
           </For>
         </div>
-        <div class="canvas-view" onWheel={onWheel}>
+        <div class="canvas-view" onWheel={onWheel} onPointerDown={onBackground}>
           <Show when={props.term !== null} fallback={<div class="hint" style={{ padding: '20px' }}>Computing the term…</div>}>
             <Show when={!error()} fallback={<div class="error" style={{ margin: '20px' }}>{error()}</div>}>
               <div class="canvas-board" ref={board} style={{ transform: `translate(${view().x}px, ${view().y}px) scale(${view().z})` }}>
@@ -979,6 +1014,8 @@ export function Canvas(props: CanvasProps) {
 const REACH = 0.75;
 /** How far (in units) a crossing must be pulled sideways to arm its move. */
 const PULL = 0.45;
+/** A drag that can do nothing moves the piece this far at most, easing off: a rubber band. */
+const rubber = (v: number, max: number) => max * Math.tanh(v / max);
 
 const ALT = isMac ? '⌥' : 'Alt+';
 const GESTURES: [string, string][] = [
@@ -986,13 +1023,14 @@ const GESTURES: [string, string][] = [
   ['drag a piece up or down', 'interchange its height with pieces on other strands; the drawing follows as you drag, and a −1 badge shows when two odd pieces swap'],
   ['drag a crossing sideways', 'the middle crossing of a braid triangle, towards the other two: the braid relation; either crossing of a stacked pair: pull them apart by the square relation. The crossings glow, ring when armed, and the result shows'],
   [`${ALT}drag`, 'move a piece for looks only (a layout hint)'],
-  ['drag on empty space', 'box-select'],
+  ['drag on empty space', 'box-select; then R lists the relations inside the box, Delete removes the selected pieces, ' + K + 'L asks the AI about them'],
+  ['click empty space', 'clear the selection'],
   [`click, ${K}click`, 'select, add or remove from the selection'],
   ['double-click a strand', 'select the whole strand'],
   ['R, right-click', 'relations that apply to the selection; 1–9 applies one'],
   ['drag from the palette', 'insert a generator on a strand'],
   ['I, then 1–9', 'insert a generator above the selected piece'],
-  ['Delete', 'remove the selected piece'],
+  ['Delete', 'remove the selected pieces'],
   ['↑ ↓', 'slide the selected dot through the next crossing'],
   [`${ALT}↑ ${ALT}↓`, 'interchange the selected piece one place'],
   ['Tab, ⇧Tab', 'move between pieces; ← → move between summands'],
