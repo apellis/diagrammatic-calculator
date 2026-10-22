@@ -533,9 +533,22 @@ function DocView(props: {
   return (
     <>
       <header class="topbar">
-        <button class="ghost" title="All documents" onClick={() => (location.hash = '#/')}>←</button>
+        {/* inside a canvas, back means the document; from the document, the list of documents */}
+        <Show when={canvas()} fallback={<button class="ghost" title="All documents" onClick={() => (location.hash = '#/')}>←</button>}>
+          {(c) => <button class="ghost" title="Back to the document (Esc)" data-testid="back-to-doc" onClick={() => { const id = c().id; setCanvas(null); focusCell(id); }}>←</button>}
+        </Show>
         <button class="ghost" title="Show or hide the outline" onClick={() => setOutline(!outline())}>☰</button>
-        <span class="name" title="Rename" onClick={() => { const n = prompt('Rename document', name()); if (n) doc.rename(n); }}>{name()}</span>
+        <Show when={canvas()} fallback={
+          <span class="name" title="Rename" onClick={() => { const n = prompt('Rename document', name()); if (n) doc.rename(n); }}>{name()}</span>
+        }>
+          {(c) => (
+            <span class="crumbs" data-testid="crumbs">
+              <button class="ghost name" title="Back to the document (Esc)" onClick={() => { const id = c().id; setCanvas(null); focusCell(id); }}>{name()}</button>
+              <span class="hint">›</span>
+              <span class="crumb">{canvasTitle(c().id)}</span>
+            </span>
+          )}
+        </Show>
         <ContextChip context={context()} scalars={scalars()} onSet={(c) => doc.setContext(c)} />
         <Show when={props.branching.current} fallback={
           <Show when={props.branching.list.length}>

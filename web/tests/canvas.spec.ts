@@ -334,3 +334,22 @@ test('a click on a strand sets the insertion point, and a palette click inserts 
   await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_3 e(iij)');
   await expect(canvas(page).getByTestId('mark')).toHaveCount(0);
 });
+
+test('from the canvas, the back button and the breadcrumb return to the document, not the list', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  await expect(page.getByTestId('crumbs')).toContainText('def a');
+  await page.getByTestId('back-to-doc').click();
+  await expect(canvas(page)).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/doc\//);
+  await expect(cell(page, 0)).toBeVisible();
+  await openCanvas(page, false);
+  await page.getByTestId('canvas-back').click();
+  await expect(canvas(page)).toHaveCount(0);
+  await openCanvas(page, false);
+  await page.getByTestId('crumbs').getByRole('button').click();
+  await expect(canvas(page)).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/doc\//);
+});

@@ -227,6 +227,10 @@ order and look-only offsets) are part of the undo scope but never of the term. E
 key: Tab between pieces, arrows slide a dot, ⌥-arrows interchange, R lists relations and 1–9 applies
 one, I then a digit inserts, Delete removes, F fits; `?` lists them.
 
+Inside the canvas, the top bar's ← and the breadcrumb (document name › cell) go back to the
+document, as do the canvas's own "← Back to the document" button and Esc; from the document, ←
+goes to the list of documents.
+
 A dragged dot is drawn where it is at every moment: it follows the drawn curve of its strand
 (`track` joins the strand's segments end to end through the dot, `along` finds the point of that
 run at the pointer's height), a crossing on the strand glows as the dot nears it and rings once

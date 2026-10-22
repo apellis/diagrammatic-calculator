@@ -933,6 +933,7 @@ export function Canvas(props: CanvasProps) {
   return (
     <div class="canvas" ref={root} tabindex={0} data-keeps-focus role="application" aria-label={`Canvas for ${props.title}`} onKeyDown={onKey} onKeyUp={onKeyUp}>
       <div class="canvas-bar">
+        <button onClick={() => props.onClose()} title="Close the canvas and go back to the document (Esc)" data-testid="canvas-back">← Back to the document</button>
         <strong>{props.title}</strong>
         <span class="hint">{total() > layouts().length ? `${layouts().length} of ${total()} summands` : `${total()} ${total() === 1 ? 'summand' : 'summands'}`}</span>
         <Show when={busy()}><span class="light busy" /></Show>
@@ -948,7 +949,6 @@ export function Canvas(props: CanvasProps) {
           }} /> patterns
         </label>
         <button class="ghost" onClick={() => setHelp(!help())} title="Gestures and keys (?)">?</button>
-        <button onClick={() => props.onClose()} title="Close the canvas (Esc)">Close</button>
       </div>
       <Show when={props.expanded}>
         <div class="banner">This term uses definitions; it is shown written out, and a gesture writes it out in full in the cell.</div>
