@@ -70,6 +70,29 @@ Nothing in it is specific to KLR algebras: a new family needs only an evaluator 
 basis, and a cyclotomic quotient needs a generator in the role `dot`. Every result names the
 quotient and the degrees computed.
 
+A quotient is itself an `Evaluator`, so a context with `Lambda`, `dotcap` or `degcap` runs every
+operation in the quotient and its provenance says so. The ideal's degree-`d` part is spanned by the
+sandwiches `ψ_u g ψ_w` of degree `d` and dot multiples of lower parts, which needs only that the
+words `x^a ψ_w` and `ψ_w x^a` both span. A cyclotomic quotient `R^Λ(ν)` is graded symmetric with
+trace degree `D = 2(Λ, ν) − (ν, ν)`, so pieces above `D/2` stop reducing at the dimension of the
+dual piece and vanishing pieces are skipped; a piece larger than that is an internal error, and the
+tests compute every case both ways.
+
+## Linear algebra toolkit and solving
+
+`linalg.rs` does exact linear algebra over any field, ranks over domains, Hermite and Smith forms
+over ℤ, word-size elimination over 𝔽_p and multimodular elimination over ℚ. `toolkit.rs` works on
+any `Graded` algebra (a truncated ambient algebra or a quotient): bases, multiplication and Gram
+matrices, the centre, the radical by the trace form, the semisimple quotient, blocks, idempotent
+lifting and the primitivity test, each refusing inputs that break its preconditions (for example
+the trace-form radical needs characteristic 0 and a complete finite algebra).
+
+`solve.rs` solves `lhs = rhs` for unknown scalars: the coefficients of the normal form of
+`lhs − rhs` are the equations. Linear systems are solved exactly (tier 1); others go to
+`groebner.rs` (tier 2), whose basis-size, degree and step limits make running out of budget an
+answer rather than a hang. Over ℚ the step count bounds operations but not coefficient growth, so
+wall time is not bounded there; prime fields do not have this problem.
+
 ## Worker pool
 
 `pool::par_map` splits independent work (products for an ideal, entries of a Gram matrix) across

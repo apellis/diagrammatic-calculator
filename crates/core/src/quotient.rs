@@ -430,11 +430,7 @@ impl<'a, R: Ring> Quotient<'a, R> {
         }
         let goal = piece.basis.len() - expected.unwrap_or(0);
         if goal == piece.basis.len() && expected.is_some() {
-            for k in 0..goal {
-                let mut v = vec![self.ctx.coeff.zero(); goal];
-                v[k] = self.ctx.coeff.one();
-                ideal.insert(v);
-            }
+            ideal = Reducer::full(self.ctx.coeff.clone(), goal);
         } else if !piece.basis.is_empty() {
             let full = |r: &Reducer<PolyRing<R>>| r.rank() >= goal;
             for (deg, z) in self.sandwiches(src)?.iter() {
@@ -465,24 +461,16 @@ impl<'a, R: Ring> Quotient<'a, R> {
                 }
                 let mut keys = Vec::new();
                 let mut wanted = Vec::new();
-                for v in lower.ideal.basis() {
-                    let tgt = {
-                        let j = v
-                            .iter()
-                            .position(|c| !self.ctx.coeff.is_zero(c))
-                            .expect("nonzero row");
-                        self.ctx.target(&lower.basis[j])
-                    };
+                for v in lower.ideal.sparse_basis() {
+                    let tgt = self.ctx.target(&lower.basis[v[0].0]);
                     for k in 0..n {
                         for top in [false, true] {
                             let obj = if top { &tgt } else { src };
                             if self.dot_degree(obj, k)? != d - e {
                                 continue;
                             }
-                            for (j, c) in v.iter().enumerate() {
-                                if !self.ctx.coeff.is_zero(c) {
-                                    keys.push((lower.basis[j].clone(), k, top));
-                                }
+                            for (j, _) in v {
+                                keys.push((lower.basis[*j].clone(), k, top));
                             }
                             wanted.push((v, k, top));
                         }
@@ -495,11 +483,8 @@ impl<'a, R: Ring> Quotient<'a, R> {
                         break;
                     }
                     let mut acc = vec![self.ctx.coeff.zero(); piece.basis.len()];
-                    for (j, c) in v.iter().enumerate() {
-                        if self.ctx.coeff.is_zero(c) {
-                            continue;
-                        }
-                        let img = &cache[&(lower.basis[j].clone(), k, top)];
+                    for (j, c) in v {
+                        let img = &cache[&(lower.basis[*j].clone(), k, top)];
                         for (w, a) in &img.terms {
                             let i = *piece.index.get(w).ok_or_else(|| {
                                 Error::invalid("a normal-form word is not in the graded basis")

@@ -8,7 +8,14 @@ and times them:
 - **B2** odd nilHecke `ONH_n`, n = 3 to 6: the same, with `e = ±x^δ ψ_{w₀}`, plus Koszul sign
   checks;
 - **B3** KLR algebras of types A₂ (ν = 2i+j), A₃ (ν = i+2j+k), B₂ and G₂ (ν = i+j, 2i+j): random
-  words at random idempotents and products of normal forms.
+  words at random idempotents and products of normal forms, and graded dimensions (B1 too);
+- **B4** cyclotomic quotients `R^Λ(ν)` of types A₂, A₃ and B₂: the basis and every corner's graded
+  dimension, checked against `q^{D/2}` times the q-Shapovalov form;
+- **B5** solving `e e = e` with 2, 4 and 8 unknown coefficients in KLR A₂, ν = 2i+j; each outcome
+  (finite set or family) is checked;
+- **B6** Gram matrices of the pairing `A_d × A_{D−d}` of a cyclotomic quotient under a generic
+  functional on the top degree, about 50 × 50 (quick) and 200 × 200 (full): the rank over ℚ and
+  over 𝔽_p must both equal `dim A_d`, which graded symmetry predicts;
 - **B7** drawing sums of 10, 100 and 1000 distinct diagrams as SVG and TikZ;
 - **B8** what one interaction costs the engine, parsing included: re-checking an edited watch,
   sliding a dot through a crossing, checking a braid relation (target: under 150 ms);

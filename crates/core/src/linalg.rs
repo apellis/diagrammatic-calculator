@@ -708,11 +708,16 @@ pub fn inverse<R: Ring>(ring: &R, a: &Mat<R::Elem>) -> Result<Option<Mat<R::Elem
 pub struct Reducer<R: Ring> {
     ring: R,
     ncols: usize,
-    /// Basis vectors, sorted by pivot.
-    rows: Vec<Vec<R::Elem>>,
+    /// Basis vectors, sorted by pivot, stored sparsely: `(column, entry)` with increasing
+    /// columns and no zero entries. Reduced rows vanish in every other pivot column, so a row
+    /// has at most one more entry than there are free columns.
+    rows: Vec<SparseRow<R::Elem>>,
     /// Pivot columns, increasing.
     pivots: Vec<usize>,
 }
+
+/// A sparse vector: `(column, entry)` pairs with increasing columns and nonzero entries.
+pub type SparseRow<E> = Vec<(usize, E)>;
 
 impl<R: Ring> Reducer<R> {
     /// The zero span in a space of `ncols`-component vectors. Over a field anything may be
@@ -727,12 +732,28 @@ impl<R: Ring> Reducer<R> {
         }
     }
 
+    /// The whole space of `ncols`-component vectors, spanned by the standard basis.
+    pub fn full(ring: R, ncols: usize) -> Self {
+        let rows = (0..ncols).map(|k| vec![(k, ring.one())]).collect();
+        Reducer {
+            ring,
+            ncols,
+            rows,
+            pivots: (0..ncols).collect(),
+        }
+    }
+
     /// The span of the rows of a matrix (computed with [`rref`], so the fast paths apply).
     pub fn from_matrix(ring: R, a: &Mat<R::Elem>) -> Result<Self> {
         let e = rref(&ring, a)?;
+        let rows = e
+            .row_space()
+            .into_iter()
+            .map(|r| sparse(&ring, r))
+            .collect();
         Ok(Reducer {
             ncols: a.cols,
-            rows: e.row_space(),
+            rows,
             pivots: e.pivots,
             ring,
         })
@@ -762,8 +783,22 @@ impl<R: Ring> Reducer<R> {
         free_columns(&self.pivots, self.ncols)
     }
 
-    /// The reduced echelon basis, sorted by pivot.
-    pub fn basis(&self) -> &[Vec<R::Elem>] {
+    /// The reduced echelon basis, sorted by pivot, as dense vectors.
+    pub fn basis(&self) -> Vec<Vec<R::Elem>> {
+        self.rows
+            .iter()
+            .map(|r| {
+                let mut v = vec![self.ring.zero(); self.ncols];
+                for (j, x) in r {
+                    v[*j] = x.clone();
+                }
+                v
+            })
+            .collect()
+    }
+
+    /// The reduced echelon basis, sorted by pivot, as sparse rows.
+    pub fn sparse_basis(&self) -> &[SparseRow<R::Elem>] {
         &self.rows
     }
 
@@ -782,10 +817,8 @@ impl<R: Ring> Reducer<R> {
                 continue;
             }
             let f = w[p].clone();
-            for (x, y) in w[p..].iter_mut().zip(&row[p..]) {
-                if !ring.is_zero(y) {
-                    *x = ring.sub(x, &ring.mul(&f, y));
-                }
+            for (j, y) in row {
+                w[*j] = ring.sub(&w[*j], &ring.mul(&f, y));
             }
         }
         w
@@ -809,7 +842,10 @@ impl<R: Ring> Reducer<R> {
     /// Adds a vector to the span; returns true if the rank grew. Panics if the length is not
     /// `ncols`.
     pub fn insert(&mut self, v: Vec<R::Elem>) -> bool {
-        let mut w = self.reduce(&v);
+        if self.pivots.len() == self.ncols {
+            return false;
+        }
+        let w = self.reduce(&v);
         let ring = &self.ring;
         let Some(c) = w.iter().position(|x| !ring.is_zero(x)) else {
             return false;
@@ -817,28 +853,64 @@ impl<R: Ring> Reducer<R> {
         let inv = ring
             .inv(&w[c])
             .expect("the pivot of an inserted vector must be a unit");
-        for x in &mut w[c..] {
-            if !ring.is_zero(x) {
-                *x = ring.mul(x, &inv);
-            }
-        }
+        let w: SparseRow<R::Elem> = w
+            .into_iter()
+            .enumerate()
+            .skip(c)
+            .filter(|(_, x)| !ring.is_zero(x))
+            .map(|(j, x)| (j, ring.mul(&x, &inv)))
+            .collect();
         // Clear the new pivot column from the other basis vectors.
         for row in &mut self.rows {
-            if ring.is_zero(&row[c]) {
+            let Ok(at) = row.binary_search_by_key(&c, |(j, _)| *j) else {
                 continue;
-            }
-            let f = row[c].clone();
-            for (x, y) in row[c..].iter_mut().zip(&w[c..]) {
-                if !ring.is_zero(y) {
-                    *x = ring.sub(x, &ring.mul(&f, y));
-                }
-            }
+            };
+            let f = row[at].1.clone();
+            *row = axpy(ring, row, &f, &w);
         }
         let at = self.pivots.partition_point(|&p| p < c);
         self.pivots.insert(at, c);
         self.rows.insert(at, w);
         true
     }
+}
+
+/// The nonzero entries of a dense vector.
+fn sparse<R: Ring>(ring: &R, v: Vec<R::Elem>) -> SparseRow<R::Elem> {
+    v.into_iter()
+        .enumerate()
+        .filter(|(_, x)| !ring.is_zero(x))
+        .collect()
+}
+
+/// `a − f·b` for sparse rows.
+fn axpy<R: Ring>(
+    ring: &R,
+    a: &[(usize, R::Elem)],
+    f: &R::Elem,
+    b: &[(usize, R::Elem)],
+) -> SparseRow<R::Elem> {
+    let mut out = Vec::with_capacity(a.len() + b.len());
+    let (mut i, mut k) = (0, 0);
+    while i < a.len() || k < b.len() {
+        let ja = a.get(i).map_or(usize::MAX, |e| e.0);
+        let jb = b.get(k).map_or(usize::MAX, |e| e.0);
+        if ja < jb {
+            out.push(a[i].clone());
+            i += 1;
+        } else if jb < ja {
+            out.push((jb, ring.neg(&ring.mul(f, &b[k].1))));
+            k += 1;
+        } else {
+            let x = ring.sub(&a[i].1, &ring.mul(f, &b[k].1));
+            if !ring.is_zero(&x) {
+                out.push((ja, x));
+            }
+            i += 1;
+            k += 1;
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2194,7 +2266,7 @@ mod tests {
         assert!(red.insert(v(&[0, 0, 1, 0])));
         assert_eq!(red.pivots(), vec![0, 1, 2]);
         assert_eq!(red.basis()[0], v(&[1, 0, 0, -1]));
-        let basis = Mat::from_rows(4, red.basis().to_vec()).unwrap();
+        let basis = Mat::from_rows(4, red.basis()).unwrap();
         let from = Reducer::from_matrix(q.clone(), &basis).unwrap();
         assert_eq!(from.basis(), red.basis());
         // Over 𝔽_5.
