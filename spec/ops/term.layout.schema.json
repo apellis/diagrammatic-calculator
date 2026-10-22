@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/term.layout.schema.json",
+  "title": "term.layout: each summand drawn for an interactive canvas",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        }
+      ],
+      "required": [
+        "term"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "summands": {
+          "description": "Lay out only the first so many summands.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "orders": {
+          "description": "For some summands (keys are summand numbers from 1), the order to draw their layers in. The coefficient shown changes by the Koszul sign of the interchanges.",
+          "type": "object",
+          "additionalProperties": {
+            "description": "Layers (1-based, canonical layering) from the bottom up, in the order to draw them; it must be reachable by interchanges.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "terms",
+            "summands"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "terms": {
+              "type": "integer"
+            },
+            "summands": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/layout"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    },
+    "layout": {
+      "description": "One summand. Coordinates are in diagram units, y upwards from 0 at the bottom; strands sit at whole x at the heights in 'boundaries'.",
+      "type": "object",
+      "required": [
+        "text",
+        "word",
+        "degree",
+        "source",
+        "target",
+        "negative",
+        "coefficient",
+        "sign",
+        "order",
+        "width",
+        "height",
+        "pieces",
+        "strands",
+        "lines",
+        "boundaries"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "word": {
+          "type": "string"
+        },
+        "degree": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "negative": {
+          "description": "The sign that goes with the drawing.",
+          "type": "boolean"
+        },
+        "coefficient": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sign": {
+          "description": "The Koszul sign of the interchanges from the canonical layering to the drawn order.",
+          "enum": [
+            1,
+            -1
+          ]
+        },
+        "order": {
+          "description": "The drawn order, as canonical layers.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "pieces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "layer",
+              "generator",
+              "draw",
+              "odd",
+              "degree",
+              "box",
+              "bottom",
+              "top",
+              "pos",
+              "width",
+              "inputs",
+              "outputs"
+            ],
+            "properties": {
+              "layer": {
+                "description": "1-based layer in the canonical layering.",
+                "type": "integer"
+              },
+              "generator": {
+                "type": "string"
+              },
+              "draw": {
+                "type": "string"
+              },
+              "odd": {
+                "type": "boolean"
+              },
+              "degree": {
+                "type": "integer"
+              },
+              "box": {
+                "description": "x0, y0, x1, y1.",
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "bottom": {
+                "description": "0-based position of its first input in the drawn object below it.",
+                "type": "integer"
+              },
+              "top": {
+                "description": "0-based position of its first output in the drawn object above it.",
+                "type": "integer"
+              },
+              "pos": {
+                "description": "0-based position in the canonical layering.",
+                "type": "integer"
+              },
+              "width": {
+                "description": "How many strands it spans.",
+                "type": "integer"
+              },
+              "inputs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "outputs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "strands": {
+          "description": "Strands numbered from 0, with the colour and orientation where each starts.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "colour",
+              "up"
+            ],
+            "properties": {
+              "colour": {
+                "type": "string"
+              },
+              "up": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "lines": {
+          "description": "Drawing primitives; 'layer' names the piece a primitive draws and 'strand' the strand it is part of.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "strand",
+                  "turn",
+                  "dot",
+                  "box",
+                  "label"
+                ]
+              },
+              "layer": {
+                "type": "integer"
+              },
+              "strand": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "boundaries": {
+          "description": "Heights between rows of pieces, bottom to top, with how many drawn layers lie below and the object there.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "y",
+              "below",
+              "object"
+            ],
+            "properties": {
+              "y": {
+                "type": "number"
+              },
+              "below": {
+                "type": "integer"
+              },
+              "object": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

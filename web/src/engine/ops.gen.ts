@@ -240,6 +240,41 @@ export type StraightenResponse =
   | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "TermEditRequest".
+ */
+export type TermEditRequest = TermRequest & TermEditRequest1;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "TermEditResponse".
+ */
+export type TermEditResponse =
+  | {
+      status: 'ok';
+      term: string;
+      /**
+       * The edited summand's word.
+       */
+      word: string;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "TermLayoutRequest".
+ */
+export type TermLayoutRequest = TermRequest & TermLayoutRequest1;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "TermLayoutResponse".
+ */
+export type TermLayoutResponse =
+  | {
+      status: 'ok';
+      terms: number;
+      summands: TermLayoutLayout[];
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "TermRenderRequest".
  */
 export type TermRenderRequest = TermRequest & TermRenderRequest1;
@@ -329,6 +364,11 @@ export interface Operations {
   SlideResponse?: SlideResponse;
   StraightenRequest?: StraightenRequest;
   StraightenResponse?: StraightenResponse;
+  TermEditRequest?: TermEditRequest;
+  TermEditResponse?: TermEditResponse;
+  TermLayoutRequest?: TermLayoutRequest;
+  TermLayoutResponse?: TermLayoutResponse;
+  TermLayoutLayout?: TermLayoutLayout;
   TermRenderRequest?: TermRenderRequest;
   TermRenderResponse?: TermRenderResponse;
   WorkspaceParseRequest?: WorkspaceParseRequest;
@@ -625,10 +665,141 @@ export interface SlideRequest1 {
    */
   layer: number;
   direction: 'up' | 'down';
+  /**
+   * Pass at most this many crossings (all of them by default).
+   */
+  steps?: number;
 }
 export interface StraightenRequest1 {
   term: string;
   max_steps?: number;
+}
+export interface TermEditRequest1 {
+  term: string;
+  summand?: number;
+  action: 'insert' | 'remove';
+  /**
+   * The order the summand is drawn in (as in term.layout); 'below' counts drawn layers.
+   */
+  order?: number[];
+  /**
+   * insert: the generator's name.
+   */
+  generator?: string;
+  /**
+   * insert: how many drawn layers lie below the new one.
+   */
+  below?: number;
+  /**
+   * insert: the 1-based position of its leftmost input strand at that height.
+   */
+  position?: number;
+  /**
+   * remove: the 1-based canonical layer.
+   */
+  layer?: number;
+}
+export interface TermLayoutRequest1 {
+  term: string;
+  /**
+   * Lay out only the first so many summands.
+   */
+  summands?: number;
+  /**
+   * For some summands (keys are summand numbers from 1), the order to draw their layers in. The coefficient shown changes by the Koszul sign of the interchanges.
+   */
+  orders?: {
+    /**
+     * Layers (1-based, canonical layering) from the bottom up, in the order to draw them; it must be reachable by interchanges.
+     */
+    [k: string]: number[];
+  };
+}
+/**
+ * One summand. Coordinates are in diagram units, y upwards from 0 at the bottom; strands sit at whole x at the heights in 'boundaries'.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "TermLayoutLayout".
+ */
+export interface TermLayoutLayout {
+  text: string;
+  word: string;
+  degree: number;
+  source: string;
+  target: string;
+  /**
+   * The sign that goes with the drawing.
+   */
+  negative: boolean;
+  coefficient: string | null;
+  /**
+   * The Koszul sign of the interchanges from the canonical layering to the drawn order.
+   */
+  sign: 1 | -1;
+  /**
+   * The drawn order, as canonical layers.
+   */
+  order: number[];
+  width: number;
+  height: number;
+  pieces: {
+    /**
+     * 1-based layer in the canonical layering.
+     */
+    layer: number;
+    generator: string;
+    draw: string;
+    odd: boolean;
+    degree: number;
+    /**
+     * x0, y0, x1, y1.
+     *
+     * @minItems 4
+     * @maxItems 4
+     */
+    box: [number, number, number, number];
+    /**
+     * 0-based position of its first input in the drawn object below it.
+     */
+    bottom: number;
+    /**
+     * 0-based position of its first output in the drawn object above it.
+     */
+    top: number;
+    /**
+     * 0-based position in the canonical layering.
+     */
+    pos: number;
+    /**
+     * How many strands it spans.
+     */
+    width: number;
+    inputs: number[];
+    outputs: number[];
+  }[];
+  /**
+   * Strands numbered from 0, with the colour and orientation where each starts.
+   */
+  strands: {
+    colour: string;
+    up: boolean;
+  }[];
+  /**
+   * Drawing primitives; 'layer' names the piece a primitive draws and 'strand' the strand it is part of.
+   */
+  lines: {
+    kind: 'strand' | 'turn' | 'dot' | 'box' | 'label';
+    layer?: number;
+    strand?: number;
+  }[];
+  /**
+   * Heights between rows of pieces, bottom to top, with how many drawn layers lie below and the object there.
+   */
+  boundaries: {
+    y: number;
+    below: number;
+    object: string[];
+  }[];
 }
 export interface TermRenderRequest1 {
   term: string;
@@ -794,6 +965,8 @@ export interface OpTypes {
   'simplify': { request: SimplifyRequest; response: SimplifyResponse };
   'slide': { request: SlideRequest; response: SlideResponse };
   'straighten': { request: StraightenRequest; response: StraightenResponse };
+  'term.edit': { request: TermEditRequest; response: TermEditResponse };
+  'term.layout': { request: TermLayoutRequest; response: TermLayoutResponse };
   'term.render': { request: TermRenderRequest; response: TermRenderResponse };
   'workspace.parse': { request: WorkspaceParseRequest; response: WorkspaceParseResponse };
   'workspace.run': { request: WorkspaceRunRequest; response: WorkspaceRunResponse };

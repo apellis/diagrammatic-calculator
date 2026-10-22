@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/term.edit.schema.json",
+  "title": "term.edit: insert a generator into a summand, or remove one; the result is a different element",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        }
+      ],
+      "required": [
+        "term",
+        "action"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "summand": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "action": {
+          "enum": [
+            "insert",
+            "remove"
+          ]
+        },
+        "order": {
+          "description": "The order the summand is drawn in (as in term.layout); 'below' counts drawn layers.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "generator": {
+          "description": "insert: the generator's name.",
+          "type": "string"
+        },
+        "below": {
+          "description": "insert: how many drawn layers lie below the new one.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "position": {
+          "description": "insert: the 1-based position of its leftmost input strand at that height.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "layer": {
+          "description": "remove: the 1-based canonical layer.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "term",
+            "word"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "term": {
+              "type": "string"
+            },
+            "word": {
+              "description": "The edited summand's word.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

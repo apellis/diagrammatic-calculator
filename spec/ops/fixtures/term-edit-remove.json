@@ -1,0 +1,13 @@
+{
+  "op": "term.edit",
+  "request": {
+    "context": "klr type=A2 nu=2i+j",
+    "term": "psi_2 psi_1 e(iij)",
+    "action": "remove",
+    "layer": 1
+  },
+  "expect": {
+    "status": "ok",
+    "term": "psi_2 e(iij)"
+  }
+}

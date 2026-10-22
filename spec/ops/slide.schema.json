@@ -31,6 +31,11 @@
             "up",
             "down"
           ]
+        },
+        "steps": {
+          "description": "Pass at most this many crossings (all of them by default).",
+          "type": "integer",
+          "minimum": 1
         }
       }
     },

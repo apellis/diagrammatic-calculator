@@ -1,0 +1,17 @@
+{
+  "op": "term.edit",
+  "request": {
+    "context": "klr type=A2 nu=2i+j",
+    "term": "psi_1 e(iij) + 3 e(iji)",
+    "summand": 1,
+    "action": "insert",
+    "generator": "psi",
+    "below": 1,
+    "position": 2
+  },
+  "expect": {
+    "status": "ok",
+    "term": "psi_2 psi_1 e(iij) + 3 e(iji)",
+    "word": "psi_2 psi_1 e(iij)"
+  }
+}

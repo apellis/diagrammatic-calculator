@@ -1,5 +1,6 @@
 //! The rewriting operations: `relations.match`, `relation.apply`, `interchange`, `slide`,
-//! `straighten`, `chain.find` and `export.lean`. Schemas in `spec/ops/`.
+//! `straighten`, `chain.find` and `export.lean`, and the canvas operations `term.layout` and
+//! `term.edit`. Schemas in `spec/ops/`.
 //!
 //! Locations: a term's summands are numbered from 1 in printed order; a summand's layers are
 //! numbered from 1 at the bottom of its canonical layering, strands from 1 at the left.
@@ -9,6 +10,7 @@ use crate::elab::CTerm;
 use crate::error::{Error, Result};
 use crate::lean;
 use crate::ops::{Request, RingVisitor, load_presentation, ring_of, with_ring, with_status};
+use crate::poly::Poly;
 use crate::rep::{self, Evaluator};
 use crate::rewrite::{self, Chain, Layout, Match, Rect, Rule, Step};
 use crate::ring::Ring;
@@ -36,6 +38,20 @@ pub struct RewriteRequest {
     pub layer: usize,
     /// `slide`: `up` or `down`.
     pub direction: String,
+    /// `slide`: how many crossings to pass at most (0: as many as there are).
+    pub steps: usize,
+    /// `term.layout`: for some summands (1-based), the order to draw their layers in, as
+    /// 1-based canonical layers from the bottom; `term.edit`: the same for the edited summand.
+    pub orders: std::collections::BTreeMap<usize, Vec<usize>>,
+    /// `term.layout`: how many summands to lay out (0: all).
+    pub shown: usize,
+    /// `term.edit`: `insert` or `remove`.
+    pub action: String,
+    /// `term.edit` insert: the generator's name, how many drawn layers lie below the new one,
+    /// and the 1-based position of its leftmost input strand.
+    pub generator: String,
+    pub below: usize,
+    pub position: usize,
     pub max_steps: usize,
     /// `export.lean`: the theorem's name and docstring.
     pub name: String,
@@ -143,7 +159,15 @@ impl RingVisitor for RewriteOp<'_> {
                     "down" => false,
                     d => return Err(Error::invalid(format!("direction '{d}': use up or down"))),
                 };
-                let chain = slide(&ctx, &rules, &layout, &t, &w, self.r.layer, up)?;
+                let chain = slide(
+                    &ctx,
+                    &rules,
+                    &layout,
+                    &t,
+                    &w,
+                    self.r.layer,
+                    (up, self.r.steps),
+                )?;
                 Ok(chain_json(&ctx, &chain))
             }
             "straighten" => {
@@ -198,11 +222,307 @@ impl RingVisitor for RewriteOp<'_> {
                 )?;
                 Ok(json!({ "theorem": name, "steps": steps, "lean": text }))
             }
+            "term.layout" => {
+                let shown = if self.r.shown == 0 {
+                    t.terms.len()
+                } else {
+                    self.r.shown
+                };
+                let mut items = Vec::new();
+                for (k, (w, c)) in t.terms.iter().enumerate().take(shown) {
+                    let order = self.r.orders.get(&(k + 1)).map(Vec::as_slice);
+                    items.push(layout_json(&ctx, w, c, order)?);
+                }
+                Ok(json!({ "terms": t.terms.len(), "summands": items }))
+            }
+            "term.edit" => {
+                let k = self.r.summand;
+                let w = summand(&ctx, &t, k)?;
+                let c = t.terms[k - 1].1.clone();
+                let order = self.r.orders.get(&k).map(Vec::as_slice);
+                let (drawn, flip, rank) = reorder(&ctx, &w, order)?;
+                let mut layers = drawn.layers.clone();
+                let cut = match self.r.action.as_str() {
+                    "insert" => {
+                        let h = self.r.below;
+                        if h > layers.len() {
+                            return Err(Error::invalid(format!(
+                                "the summand has {} layers: none can go above {h}",
+                                layers.len()
+                            )));
+                        }
+                        let g = ctx
+                            .pres
+                            .generators
+                            .iter()
+                            .position(|g| g.name == self.r.generator)
+                            .ok_or_else(|| {
+                                Error::invalid(format!(
+                                    "there is no generator '{}'",
+                                    self.r.generator
+                                ))
+                            })?;
+                        let mut obj = drawn.source.clone();
+                        for l in &layers[..h] {
+                            obj = ctx.apply(l, &obj);
+                        }
+                        let pos = self
+                            .r
+                            .position
+                            .checked_sub(1)
+                            .ok_or_else(|| Error::invalid("positions are numbered from 1"))?;
+                        let l = ctx.match_layer(g, &obj, pos).ok_or_else(|| {
+                            Error::precondition(format!(
+                                "{} does not fit on {} at position {}",
+                                self.r.generator,
+                                ctx.fmt_object(&obj),
+                                pos + 1
+                            ))
+                        })?;
+                        layers.insert(h, l);
+                        h + 1
+                    }
+                    "remove" => {
+                        let c = self
+                            .r
+                            .layer
+                            .checked_sub(1)
+                            .filter(|&c| c < w.layers.len())
+                            .ok_or_else(|| {
+                                Error::invalid(format!("there is no layer {}", self.r.layer))
+                            })?;
+                        let i = rank.iter().position(|&r| r == c).expect("permutation");
+                        layers.remove(i);
+                        i
+                    }
+                    a => {
+                        return Err(Error::invalid(format!(
+                            "action '{a}': use insert or remove"
+                        )));
+                    }
+                };
+                // the layers above the edit see a new object: their colours are read again
+                let mut obj = drawn.source.clone();
+                for l in &layers[..cut] {
+                    obj = ctx.apply(l, &obj);
+                }
+                for l in layers.iter_mut().skip(cut) {
+                    let name = &ctx.pres.generators[l.generator as usize].name;
+                    *l = ctx
+                        .match_layer(l.generator as usize, &obj, l.pos as usize)
+                        .ok_or_else(|| {
+                            Error::precondition(format!(
+                                "after this edit, {name} at position {} no longer fits",
+                                l.pos + 1
+                            ))
+                        })?;
+                    obj = ctx.apply(l, &obj);
+                }
+                let (canon, neg) = ctx.canonical(&Word {
+                    source: drawn.source.clone(),
+                    layers,
+                });
+                let mut c2 = c.clone();
+                if flip != neg {
+                    c2 = ctx.coeff.neg(&c2);
+                }
+                let removed = ctx.neg(&ctx.monomial_term(&w, c));
+                let added = ctx.monomial_term(&canon, c2);
+                let out = ctx.add(&ctx.add(&t, &removed), &added);
+                Ok(json!({ "term": ctx.fmt_term(&out), "word": ctx.fmt_word(&canon) }))
+            }
             op => Err(Error::invalid(format!(
                 "unknown rewriting operation '{op}'"
             ))),
         }
     }
+}
+
+/// The canonical word `w` with its layers in `order` (1-based canonical layers, bottom to
+/// top), reached by interchanges: the reordered word, whether the Koszul signs of the moves
+/// multiply to −1, and each layer's canonical index. Without an order, `w` itself.
+fn reorder<R: Ring>(
+    ctx: &Context<R>,
+    w: &Word,
+    order: Option<&[usize]>,
+) -> Result<(Word, bool, Vec<usize>)> {
+    let n = w.layers.len();
+    let Some(order) = order else {
+        return Ok((w.clone(), false, (0..n).collect()));
+    };
+    let mut seen = vec![false; n];
+    let mut target = vec![0; n]; // canonical index -> place in the order
+    if order.len() != n {
+        return Err(Error::invalid(format!(
+            "the order names {} layers; the summand has {n}",
+            order.len()
+        )));
+    }
+    for (place, &l) in order.iter().enumerate() {
+        let c = l
+            .checked_sub(1)
+            .filter(|&c| c < n && !seen[c])
+            .ok_or_else(|| Error::invalid("the order must list each layer once, from 1"))?;
+        seen[c] = true;
+        target[c] = place;
+    }
+    let mut layers = w.layers.clone();
+    let mut rank: Vec<usize> = (0..n).collect();
+    let mut sign = false;
+    loop {
+        let mut moved = false;
+        for i in 0..n.saturating_sub(1) {
+            if target[rank[i]] > target[rank[i + 1]] {
+                let (lo, up, odd) =
+                    ctx.swap_adjacent(&layers[i], &layers[i + 1])
+                        .ok_or_else(|| {
+                            Error::precondition(format!(
+                                "layers {} and {} share strands: one cannot pass the other",
+                                rank[i] + 1,
+                                rank[i + 1] + 1
+                            ))
+                        })?;
+                layers[i] = lo;
+                layers[i + 1] = up;
+                rank.swap(i, i + 1);
+                sign ^= odd;
+                moved = true;
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+    Ok((
+        Word {
+            source: w.source.clone(),
+            layers,
+        },
+        sign,
+        rank,
+    ))
+}
+
+/// One summand drawn for an interactive canvas: its pieces, strands and lines, and the
+/// objects between rows, with the coefficient that goes with the drawing.
+fn layout_json<R: Ring>(
+    ctx: &Context<R>,
+    w: &Word,
+    c: &Poly<R::Elem>,
+    order: Option<&[usize]>,
+) -> Result<Value> {
+    use crate::render::Prim;
+    let (drawn, flip, rank) = reorder(ctx, w, order)?;
+    let pic = crate::render::picture_ranked(ctx, &drawn, order.map(|_| rank.as_slice()));
+    let mut coeff = c.clone();
+    if flip {
+        coeff = ctx.coeff.neg(&coeff);
+    }
+    let neg = ctx.coeff.is_negative(&coeff);
+    let abs = if neg { ctx.coeff.neg(&coeff) } else { coeff };
+    let coefficient = (!ctx.coeff.is_one(&abs)).then(|| {
+        let cs = ctx.coeff.fmt_elem(&abs);
+        if ctx.coeff.needs_parens(&abs) {
+            format!("({cs})")
+        } else {
+            cs
+        }
+    });
+    let colour = |c: u16| ctx.colours[c as usize].name.clone();
+    let lines: Vec<Value> = pic
+        .prims
+        .iter()
+        .zip(&pic.tags)
+        .map(|(p, tag)| {
+            let mut v = match p {
+                Prim::Strand { x0, y0, x1, y1 } => {
+                    json!({ "kind": "strand", "x0": x0, "y0": y0, "x1": x1, "y1": y1 })
+                }
+                Prim::Turn { x0, x1, y, up } => {
+                    json!({ "kind": "turn", "x0": x0, "x1": x1, "y": y, "up": up })
+                }
+                Prim::Dot { x, y } => json!({ "kind": "dot", "x": x, "y": y }),
+                Prim::Box {
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    label,
+                } => {
+                    json!({ "kind": "box", "x0": x0, "y0": y0, "x1": x1, "y1": y1, "label": label })
+                }
+                Prim::Label { x, y, text } => {
+                    json!({ "kind": "label", "x": x, "y": y, "text": text })
+                }
+            };
+            if let Some(l) = tag.layer {
+                v["layer"] = json!(rank[l] + 1);
+            }
+            if let Some(s) = tag.strand {
+                v["strand"] = json!(s);
+            }
+            v
+        })
+        .collect();
+    let pieces: Vec<Value> = pic
+        .pieces
+        .iter()
+        .map(|pc| {
+            let l = &drawn.layers[pc.layer];
+            let g = &ctx.pres.generators[l.generator as usize];
+            let canon = &w.layers[rank[pc.layer]];
+            json!({
+                "layer": rank[pc.layer] + 1,
+                "generator": g.name,
+                "draw": g.draw,
+                "odd": ctx.layer_odd(l),
+                "degree": ctx.layer_degree(l),
+                "box": [pc.x0, pc.y0, pc.x1, pc.y1],
+                "bottom": pc.bottom,
+                "top": pc.top,
+                "pos": canon.pos,
+                "width": g.source.len().max(g.target.len()),
+                "inputs": pc.inputs,
+                "outputs": pc.outputs,
+            })
+        })
+        .collect();
+    let strands: Vec<Value> = pic
+        .strands
+        .iter()
+        .map(|s| json!({ "colour": colour(s.colour), "up": s.up }))
+        .collect();
+    let boundaries: Vec<Value> = pic
+        .boundaries
+        .iter()
+        .map(|b| {
+            json!({
+                "y": b.y,
+                "below": b.below,
+                "object": b.object.iter().map(|l| if l.up { colour(l.colour) } else { format!("{}*", colour(l.colour)) }).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let single = crate::term::Term {
+        terms: vec![(w.clone(), c.clone())],
+    };
+    Ok(json!({
+        "text": ctx.fmt_term(&single),
+        "word": ctx.fmt_word(w),
+        "degree": ctx.word_degree(w),
+        "source": ctx.fmt_object(&w.source),
+        "target": ctx.fmt_object(&ctx.target(w)),
+        "negative": neg,
+        "coefficient": coefficient,
+        "sign": if flip { -1 } else { 1 },
+        "order": rank.iter().map(|r| r + 1).collect::<Vec<_>>(),
+        "width": pic.width,
+        "height": pic.height,
+        "pieces": pieces,
+        "strands": strands,
+        "lines": lines,
+        "boundaries": boundaries,
+    }))
 }
 
 fn summand<R: Ring>(ctx: &Context<R>, t: &CTerm<R>, k: usize) -> Result<Word> {
@@ -340,7 +660,8 @@ fn straighten<'c, R: Ring>(
 }
 
 /// Slides the dot at `layer` of `w` through the crossings above (or below) it, one dot-slide
-/// relation at a time; the correction terms stay where they appear.
+/// relation at a time, at most `steps` of them (0: all); the correction terms stay where they
+/// appear.
 fn slide<R: Ring>(
     ctx: &Context<R>,
     rules: &[Rule<R>],
@@ -348,7 +669,7 @@ fn slide<R: Ring>(
     t: &CTerm<R>,
     w: &Word,
     layer: usize,
-    up: bool,
+    (up, steps): (bool, usize),
 ) -> Result<Chain<R>> {
     let mut dot = layer
         .checked_sub(1)
@@ -359,7 +680,12 @@ fn slide<R: Ring>(
     }
     let mut chain = Chain::new(t.clone());
     let mut cur = w.clone();
-    for _ in 0..cur.layers.len() + 1 {
+    let limit = if steps == 0 {
+        cur.layers.len() + 1
+    } else {
+        steps
+    };
+    for _ in 0..limit {
         let next = rewrite::neighbour(ctx, &cur, dot, up)
             .filter(|&c| cur.layers[c].generator == layout.crossing);
         let Some(c) = next else {
@@ -447,5 +773,87 @@ mod tests {
                      "rhs": "x_1^2 e(ij) + x_1 x_2 e(ij)", "name": "t" }),
         );
         assert!(v["lean"].as_str().unwrap().contains("theorem t "), "{v}");
+    }
+
+    #[test]
+    fn canvas_operations() {
+        // Two odd dots drawn in the other order: the drawing's coefficient changes sign.
+        let v = call(
+            "term.layout",
+            &json!({ "context": "odd-nilhecke nu=2", "term": "x_1 x_2" }),
+        );
+        let s = &v["summands"][0];
+        assert_eq!(
+            (&s["negative"], &s["sign"]),
+            (&json!(true), &json!(1)),
+            "{v}"
+        );
+        let v = call(
+            "term.layout",
+            &json!({ "context": "odd-nilhecke nu=2", "term": "x_1 x_2", "orders": { "1": [2, 1] } }),
+        );
+        let s = &v["summands"][0];
+        assert_eq!(
+            (&s["negative"], &s["sign"]),
+            (&json!(false), &json!(-1)),
+            "{v}"
+        );
+        assert_eq!(s["order"], json!([2, 1]), "{v}");
+        // A dot moved above a distant crossing is drawn above it.
+        let v = call(
+            "term.layout",
+            &json!({ "context": "nilhecke nu=3", "term": "psi_1 psi_1 x_3", "orders": { "1": [1, 3, 2] } }),
+        );
+        let s = &v["summands"][0];
+        let dot = s["pieces"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["draw"] == "dot")
+            .unwrap();
+        assert_eq!(dot["box"][1], json!(2.25), "{v}");
+        // Strands keep their numbers through crossings and dots.
+        let v = call(
+            "term.layout",
+            &json!({ "context": "klr type=A2 nu=2i+j", "term": "x_2 psi_1 e(iij)" }),
+        );
+        let s = &v["summands"][0];
+        let p = s["pieces"].as_array().unwrap();
+        assert_eq!(
+            (&p[0]["outputs"], &p[1]["inputs"]),
+            (&json!([1, 0]), &json!([0])),
+            "{v}"
+        );
+        // Pieces that share strands cannot pass each other.
+        let v = call(
+            "term.layout",
+            &json!({ "context": "nilhecke nu=2", "term": "x_1 psi_1", "orders": { "1": [2, 1] } }),
+        );
+        assert_eq!(v["kind"], "precondition", "{v}");
+        // Inserting a crossing reads the colours above it again; removing does too.
+        let v = call(
+            "term.edit",
+            &json!({ "context": "klr type=A2 nu=2i+j", "term": "x_3 e(iji)", "action": "insert",
+                     "generator": "psi", "below": 0, "position": 2 }),
+        );
+        assert_eq!(v["term"], "x_3 psi_2 e(iji)", "{v}");
+        let v = call(
+            "term.edit",
+            &json!({ "context": "klr type=A2 nu=2i+j", "term": "x_1 e(iij)", "action": "insert",
+                     "generator": "x", "below": 1, "position": 3 }),
+        );
+        assert_eq!(v["term"], "x_1 x_3 e(iij)", "{v}");
+        let v = call(
+            "term.edit",
+            &json!({ "context": "odd-nilhecke nu=2", "term": "x_1 x_2", "order": [2, 1], "action": "insert",
+                     "generator": "x", "below": 2, "position": 1 }),
+        );
+        assert_eq!(v["term"], "x_1^2 x_2", "{v}");
+        let v = call(
+            "term.edit",
+            &json!({ "context": "nilhecke nu=2", "term": "x_1", "action": "insert",
+                     "generator": "psi", "below": 0, "position": 2 }),
+        );
+        assert_eq!(v["kind"], "precondition", "{v}");
     }
 }

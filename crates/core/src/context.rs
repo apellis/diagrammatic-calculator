@@ -535,7 +535,7 @@ impl<R: Ring> Context<R> {
     }
 
     /// Whether `upper` (directly above `lower`) is entirely left of it, entirely right, or neither.
-    fn relative(&self, lower: &Layer, upper: &Layer) -> Option<bool> {
+    pub fn relative(&self, lower: &Layer, upper: &Layer) -> Option<bool> {
         let (pl, tl) = (
             lower.pos as usize,
             self.target_len(lower.generator as usize),

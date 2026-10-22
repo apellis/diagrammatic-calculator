@@ -853,7 +853,7 @@ pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 14] = [
+pub const OPERATIONS: [&str; 16] = [
     "simplify",
     "check",
     "term.render",
@@ -868,10 +868,12 @@ pub const OPERATIONS: [&str; 14] = [
     "straighten",
     "chain.find",
     "export.lean",
+    "term.layout",
+    "term.edit",
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 14] = [
+pub const SCHEMAS: [(&str, &str); 16] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -922,10 +924,45 @@ pub const SCHEMAS: [(&str, &str); 14] = [
         "export.lean",
         include_str!("../../../spec/ops/export.lean.schema.json"),
     ),
+    (
+        "term.layout",
+        include_str!("../../../spec/ops/term.layout.schema.json"),
+    ),
+    (
+        "term.edit",
+        include_str!("../../../spec/ops/term.edit.schema.json"),
+    ),
 ];
 pub const COMMON_SCHEMA: &str = include_str!("../../../spec/ops/common.schema.json");
 
 /// Runs an operation from its JSON request (see `spec/ops/`), returning its JSON response.
+/// The drawing orders of a canvas request: `orders` maps summands to orders for
+/// `term.layout`; `order` is the edited summand's order for `term.edit`.
+fn orders(input: &Value) -> Result<std::collections::BTreeMap<usize, Vec<usize>>> {
+    let list = |v: &Value| -> Result<Vec<usize>> {
+        v.as_array()
+            .and_then(|a| a.iter().map(|x| x.as_u64().map(|n| n as usize)).collect())
+            .ok_or_else(|| Error::invalid("an order is a list of layer numbers"))
+    };
+    let mut out = std::collections::BTreeMap::new();
+    if let Some(m) = input.get("orders") {
+        let m = m
+            .as_object()
+            .ok_or_else(|| Error::invalid("'orders' maps summand numbers to orders"))?;
+        for (k, v) in m {
+            let k: usize = k
+                .parse()
+                .map_err(|_| Error::invalid(format!("'{k}' is not a summand number")))?;
+            out.insert(k, list(v)?);
+        }
+    }
+    if let Some(v) = input.get("order") {
+        let k = input.get("summand").and_then(Value::as_u64).unwrap_or(1) as usize;
+        out.insert(k, list(v)?);
+    }
+    Ok(out)
+}
+
 pub fn call(op: &str, input: &Value) -> Value {
     let str_field = |k: &str| input.get(k).and_then(Value::as_str).map(String::from);
     let req = || -> Result<Request> {
@@ -991,7 +1028,7 @@ pub fn call(op: &str, input: &Value) -> Value {
                 describe_context(&need("context")?, str_field("presentation").as_deref())
             }
             "relations.match" | "relation.apply" | "interchange" | "slide" | "straighten"
-            | "chain.find" | "export.lean" => {
+            | "chain.find" | "export.lean" | "term.layout" | "term.edit" => {
                 let uint = |k: &str, d: usize| -> Result<usize> {
                     match input.get(k) {
                         None => Ok(d),
@@ -1026,6 +1063,13 @@ pub fn call(op: &str, input: &Value) -> Value {
                     everywhere: input.get("everywhere").and_then(Value::as_bool) == Some(true),
                     layer: uint("layer", 0)?,
                     direction: str_field("direction").unwrap_or_default(),
+                    steps: uint("steps", 0)?,
+                    orders: orders(input)?,
+                    shown: uint("summands", 0)?,
+                    action: str_field("action").unwrap_or_default(),
+                    generator: str_field("generator").unwrap_or_default(),
+                    below: uint("below", 0)?,
+                    position: uint("position", 0)?,
                     max_steps: uint("max_steps", 0)?,
                     name: str_field("name").unwrap_or_default(),
                     doc: str_field("doc").unwrap_or_default(),

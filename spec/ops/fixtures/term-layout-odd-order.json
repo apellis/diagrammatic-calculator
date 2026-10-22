@@ -1,0 +1,17 @@
+{
+  "op": "term.layout",
+  "request": {
+    "context": "odd-nilhecke nu=2",
+    "term": "x_1 x_2",
+    "orders": {
+      "1": [
+        2,
+        1
+      ]
+    }
+  },
+  "expect": {
+    "status": "ok",
+    "terms": 1
+  }
+}

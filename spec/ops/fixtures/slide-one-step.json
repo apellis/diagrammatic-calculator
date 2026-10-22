@@ -1,0 +1,14 @@
+{
+  "op": "slide",
+  "request": {
+    "context": "nilhecke nu=3",
+    "term": "x_1 psi_1 psi_2 psi_1",
+    "layer": 4,
+    "direction": "down",
+    "steps": 1
+  },
+  "expect": {
+    "status": "ok",
+    "term": "psi_2 psi_1 + psi_1 x_2 psi_2 psi_1"
+  }
+}
