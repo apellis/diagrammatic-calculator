@@ -63,10 +63,11 @@ export function Badge(props: { p?: Provenance }) {
   );
 }
 
-function SummandView(props: { s: Summand; cls?: string; first: boolean }) {
+function SummandView(props: { s: Summand; cls?: string; first: boolean; onFocus?: (word: string) => void }) {
   const lead = () => (props.s.negative ? '− ' : props.first ? '' : '+ ') + (props.s.coefficient ?? '');
   return (
-    <span class={`summand ${props.cls ?? ''}`} title={props.s.text} data-word={props.s.word}>
+    <span class={`summand ${props.cls ?? ''}`} title={props.onFocus ? `${props.s.text}\n(double-click to open the canvas)` : props.s.text} data-word={props.s.word}
+      onDblClick={() => props.onFocus?.(props.s.word)}>
       <Show when={lead()}><span class="c">{lead()}</span></Show>
       <span innerHTML={props.s.svg} />
     </span>
@@ -74,7 +75,7 @@ function SummandView(props: { s: Summand; cls?: string; first: boolean }) {
 }
 
 /** A sum of diagrams, outlining summands that are new since the previous value and showing the vanished ones briefly. */
-export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey?: string }) {
+export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey?: string; onFocus?: (word: string) => void }) {
   const prevSummands = () => (ok(props.previous) ? props.previous.summands ?? [] : []);
   const words = () => new Set((props.r.summands ?? []).map((s) => s.word));
   const prevWords = () => new Set(prevSummands().map((s) => s.word));
@@ -94,7 +95,7 @@ export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey
     <div class="result">
       <div class="sum" role="img" aria-label={props.text}>
         <Show when={terms() > 0} fallback={<span class="summand"><span class="c">0</span></span>}>
-          <For each={props.r.summands}>{(s, i) => <SummandView s={s} first={i() === 0} cls={added().has(s.word) ? 'new' : ''} />}</For>
+          <For each={props.r.summands}>{(s, i) => <SummandView s={s} first={i() === 0} cls={added().has(s.word) ? 'new' : ''} onFocus={props.onFocus} />}</For>
         </Show>
         <Show when={fading()}>
           <For each={gone()}>{(s) => <SummandView s={s} first={false} cls="gone" />}</For>
@@ -170,7 +171,7 @@ export function NoteView(props: { text: string }) {
   return <div class="note" innerHTML={html()} />;
 }
 
-export function ResultView(props: { s: CellState }) {
+export function ResultView(props: { s: CellState; onFocus?: (word?: string) => void }) {
   const v = () => props.s.value;
   return (
     <Switch>
@@ -185,8 +186,8 @@ export function ResultView(props: { s: CellState }) {
             <div class={props.s.status === 'stale' ? 'result stale' : 'result'} data-testid="result">
               <Show when={props.s.status === 'stale'}><div class="hint">Stale: the inputs changed and the new value is being computed.</div></Show>
               <Switch>
-                <Match when={res.kind === 'watch'}><Sum r={res} previous={props.s.previous} text={res.normal_form ?? ''} valueKey={props.s.valueKey} /></Match>
-                <Match when={res.kind === 'def'}><Sum r={res} text={`${res.name} := ${res.term}`} valueKey={props.s.valueKey} /></Match>
+                <Match when={res.kind === 'watch'}><Sum r={res} previous={props.s.previous} text={res.normal_form ?? ''} valueKey={props.s.valueKey} onFocus={props.onFocus && (() => props.onFocus!())} /></Match>
+                <Match when={res.kind === 'def'}><Sum r={res} text={`${res.name} := ${res.term}`} valueKey={props.s.valueKey} onFocus={props.onFocus} /></Match>
                 <Match when={res.kind === 'check'}><CheckView r={res} /></Match>
                 <Match when={res.kind === 'solve'}><SolveView r={res} /></Match>
               </Switch>

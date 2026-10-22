@@ -36,6 +36,12 @@ export interface Snapshot {
   time: number;
 }
 
+/** How a summand of a cell is drawn: an order of its layers (reached by interchanges) and offsets of pieces moved for looks. Hints never change a term. */
+export interface Hint {
+  order?: number[];
+  offsets?: Record<string, [number, number]>;
+}
+
 export interface CellData {
   id: string;
   text: string;
@@ -56,6 +62,8 @@ export class Doc {
   readonly cells: Y.Array<Y.Map<string>>;
   readonly history: Y.Array<Version>;
   readonly snapshots: Y.Array<Snapshot>;
+  /** Layout hints, keyed by cell ID and summand word. */
+  readonly hints: Y.Map<Hint>;
   /** Counters that undo leaves alone, so a cell ID is never reused. */
   private readonly counters: Y.Map<number>;
   readonly undoManager: Y.UndoManager;
@@ -67,15 +75,16 @@ export class Doc {
     this.cells = ydoc.getArray('cells');
     this.history = ydoc.getArray('history');
     this.snapshots = ydoc.getArray('snapshots');
+    this.hints = ydoc.getMap('hints');
     this.counters = ydoc.getMap('counters');
-    this.undoManager = new Y.UndoManager([this.cells, this.meta], {
+    this.undoManager = new Y.UndoManager([this.cells, this.meta, this.hints], {
       trackedOrigins: new Set([LOCAL]),
       captureTimeout: 0,
     });
     ydoc.on('afterTransaction', (tr: Y.Transaction) => {
       if (tr.origin === HISTORY || !(tr.origin === LOCAL || tr.origin === this.undoManager)) return;
       const changed = tr.changedParentTypes as Map<unknown, unknown>;
-      if (!changed.has(this.cells) && !changed.has(this.meta)) return;
+      if (!changed.has(this.cells) && !changed.has(this.meta) && !changed.has(this.hints)) return;
       const note = tr.origin === this.undoManager ? (this.undoManager.undoing ? 'undo' : 'redo') : (this.pendingNote ?? 'edit');
       this.pendingNote = null;
       queueMicrotask(() => this.record(note));
@@ -136,10 +145,20 @@ export class Doc {
   }
 
   /** `cell.update` */
-  updateCell(id: string, text: string) {
+  updateCell(id: string, text: string, note = `edit ${id}`) {
     const i = this.index(id);
     if (i < 0 || this.cells.get(i).get('text') === text) return;
-    this.step(`edit ${id}`, () => this.cells.get(i).set('text', text));
+    this.step(note, () => this.cells.get(i).set('text', text));
+  }
+
+  hint(cellId: string, word: string): Hint | undefined {
+    return this.hints.get(`${cellId} ${word}`);
+  }
+
+  /** `layout.hint`: sets or clears how a summand is drawn. */
+  setHint(cellId: string, word: string, hint: Hint | null, note: string) {
+    const key = `${cellId} ${word}`;
+    this.step(note, () => (hint && (hint.order || Object.keys(hint.offsets ?? {}).length) ? this.hints.set(key, hint) : this.hints.delete(key)));
   }
 
   /** `cell.remove` */

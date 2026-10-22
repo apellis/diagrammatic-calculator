@@ -11,6 +11,7 @@ import { Outline } from './Outline';
 import { ContextChip } from './ContextChip';
 import { Palette, type Command } from './Palette';
 import { importText } from './DocList';
+import { Canvas, type Generator, type Selection } from './Canvas';
 
 export function WorkspacePage(props: { id: string }) {
   const [od] = createResource(() => props.id, openDoc);
@@ -40,6 +41,9 @@ function Workspace(props: { o: OpenDoc }) {
   const [modal, setModal] = createSignal<null | 'palette' | 'keys' | { version: number } | { snapshot: number }>(null);
   const [linked, setLinked] = createSignal<FileSystemFileHandle | null>(null);
   const [message, setMessage] = createSignal('');
+  const [canvas, setCanvas] = createSignal<{ id: string; word?: string } | null>(null);
+  const [hintsVersion, setHintsVersion] = createSignal(0);
+  const [, setSelection] = createSignal<Selection | null>(null);
 
   // cell states, one signal per cell so only changed cells re-render
   const states = new Map<string, Signal<CellState | undefined>>();
@@ -50,6 +54,16 @@ function Workspace(props: { o: OpenDoc }) {
   };
   const stateOf = (id: string) => slot(id)[0]();
   const scalars = () => [...new Set(cells().flatMap((c) => stateOf(c.id)?.parsed?.unknowns ?? []))].sort();
+  /** The context with the workspace's scalars, for operations on a single term. */
+  const termContext = () => {
+    const sc = scalars();
+    return sc.length && !/\bscalars=/.test(context()) ? `${context()} scalars=${sc.join(',')}` : context();
+  };
+  const [described] = createResource(context, async (c) => {
+    const o = await engine.call('context.describe', { context: c }, { lane: 'interactive' });
+    if (o.status !== 'done' || o.response.status !== 'ok') return { generators: [] as Generator[], colours: [] as string[] };
+    return { generators: o.response.generators, colours: o.response.colours.map((x) => x.name) };
+  });
 
   let ev: Evaluator | undefined;
   const refresh = () => {
@@ -65,10 +79,12 @@ function Workspace(props: { o: OpenDoc }) {
   };
   const onHistory = () => setVersions(doc.versions());
   const onSnapshots = () => setSnapshots(doc.snapshots.toArray());
+  const onHints = () => setHintsVersion(hintsVersion() + 1);
   doc.cells.observeDeep(refresh);
   doc.meta.observe(refresh);
   doc.history.observe(onHistory);
   doc.snapshots.observe(onSnapshots);
+  doc.hints.observe(onHints);
   engine.onLoad = setJobs;
   engineId.then((id) => {
     ev = new Evaluator(engine, cache, { engineId: id }, (s) => slot(s.id)[1](s));
@@ -149,13 +165,41 @@ function Workspace(props: { o: OpenDoc }) {
     const v = stateOf(id)?.value as { kind: string; normal_form?: string; term?: string } | undefined;
     const term = v?.kind === 'watch' ? v.normal_form : v?.term;
     if (!term) return;
-    const sc = scalars();
-    const ctx = sc.length && !/\bscalars=/.test(context()) ? `${context()} scalars=${sc.join(',')}` : context();
-    const o = await engine.call('term.render', { context: ctx, term, format: 'tikz' }, { lane: 'interactive' });
+    const o = await engine.call('term.render', { context: termContext(), term, format: 'tikz' }, { lane: 'interactive' });
     if (o.status === 'done' && o.response.status === 'ok') {
       await navigator.clipboard?.writeText(o.response.output);
       setMessage('TikZ copied.');
     }
+  };
+
+  // the focus canvas edits a definition's or watch's term as written; a term that uses
+  // definitions is drawn written out, and a gesture writes it out in the cell
+  const canvasable = (id: string) => ['def', 'watch'].includes(stateOf(id)?.parsed?.kind ?? '');
+  const openCanvas = (id: string, word?: string) => {
+    if (!canvasable(id)) return setMessage('The canvas opens on a definition or a watch.');
+    setActive(id);
+    setCanvas({ id, word });
+  };
+  const usesDefinitions = (id: string) => {
+    const defined = new Set(cells().map((c) => stateOf(c.id)?.parsed?.defines).filter(Boolean));
+    return (stateOf(id)?.parsed?.uses ?? []).some((u) => defined.has(u));
+  };
+  const canvasTerm = (id: string): string | null => {
+    const s = stateOf(id);
+    if (!s?.parsed?.term) return null;
+    if (!usesDefinitions(id)) return s.parsed.term;
+    const v = s.value as { status: string; term?: string } | undefined;
+    return s.status === 'fresh' && v?.status === 'ok' && v.term ? v.term : null;
+  };
+  const canvasTitle = (id: string) => {
+    const p = stateOf(id)?.parsed;
+    return p?.kind === 'def' ? `def ${p.defines}` : `watch (${id})`;
+  };
+  const writeCanvas = (id: string, term: string, note: string) => {
+    const p = stateOf(id)?.parsed;
+    if (!p) return;
+    const head = p.kind === 'def' ? `def ${p.defines} := ${term}` : `watch ${term}`;
+    doc.updateCell(id, head + Object.entries(p.options).map(([k, v]) => `  ${k}=${v}`).join(''), `${note} in ${p.defines ?? id}`);
   };
 
   const exportFile = async () => {
@@ -188,6 +232,7 @@ function Workspace(props: { o: OpenDoc }) {
     { name: 'Cancel running computations', run: () => ev?.cancelAll() },
     { name: 'Clear the result cache', run: () => void cache.clear() },
     { name: 'Show or hide the outline', run: () => setOutline(!outline()) },
+    { name: 'Open the active cell in the canvas', keys: 'F', run: () => active() && openCanvas(active()!) },
     { name: 'Keyboard shortcuts', keys: '?', run: () => setModal('keys') },
     { name: 'All documents', run: () => (location.hash = '#/') },
   ];
@@ -201,7 +246,8 @@ function Workspace(props: { o: OpenDoc }) {
     if (mod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doc.redo() : doc.undo(); return; }
     if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); doc.redo(); return; }
     if (e.key === '?') setModal('keys');
-    if (e.key === 'Escape') { setModal(null); setActive(null); }
+    if ((e.key === 'f' || e.key === 'F') && !mod(e) && active() && !canvas()) { e.preventDefault(); openCanvas(active()!); return; }
+    if (e.key === 'Escape') { setModal(null); if (!canvas()) setActive(null); }
   };
   onMount(() => window.addEventListener('keydown', onKey));
   const um = doc.undoManager;
@@ -214,6 +260,7 @@ function Workspace(props: { o: OpenDoc }) {
     doc.meta.unobserve(refresh);
     doc.history.unobserve(onHistory);
     doc.snapshots.unobserve(onSnapshots);
+    doc.hints.unobserve(onHints);
     um.off('stack-item-added', onStack);
     um.off('stack-item-popped', onStack);
     ev?.cancelAll();
@@ -253,6 +300,7 @@ function Workspace(props: { o: OpenDoc }) {
           <Outline cells={cells()} state={stateOf} active={active()} versions={versions()} snapshots={snapshots()}
             onSelect={focusCell} onVersion={(n) => setModal({ version: n })} onSnapshot={(i) => setModal({ snapshot: i })} />
         </Show>
+        <div class="stage">
         <main class="main">
           <div class="cells">
             <Show when={reminder()}>
@@ -268,7 +316,8 @@ function Workspace(props: { o: OpenDoc }) {
                       <Cell id={c.id} text={text} state={stateOf(c.id)} expanded={expanded().has(c.id)} active={active() === c.id}
                         onToggle={() => toggle(c.id)} onCommit={(t) => commit(c.id, t)} onCancel={() => setActive(null)}
                         onRemove={() => doc.removeCell(c.id)} onMove={(d) => doc.moveCell(c.id, i() + d)}
-                        onPin={() => pin(c.id)} onRerun={() => ev?.rerun(c.id)} onCopyTikz={() => copyTikz(c.id)} />
+                        onPin={() => pin(c.id)} onRerun={() => ev?.rerun(c.id)} onCopyTikz={() => copyTikz(c.id)}
+                        onCanvas={(w) => openCanvas(c.id, w)} />
                     )}
                   </Show>
                 </>
@@ -281,6 +330,16 @@ function Workspace(props: { o: OpenDoc }) {
             </div>
           </div>
         </main>
+        <Show when={canvas()?.id} keyed>
+          {(id) => (
+            <Canvas doc={doc} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
+              term={canvasTerm(id)} expanded={usesDefinitions(id)} generators={described()?.generators ?? []}
+              colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word}
+              onWrite={(t, note) => writeCanvas(id, t, note)} onSelection={setSelection}
+              onClose={() => { setCanvas(null); focusCell(id); }} />
+          )}
+        </Show>
+        </div>
       </div>
       <Show when={modal() === 'palette'}><Palette commands={commands()} onClose={() => setModal(null)} /></Show>
       <Show when={modal() === 'keys'}><Keys onClose={() => setModal(null)} /></Show>
@@ -349,6 +408,7 @@ function Keys(props: { onClose: () => void }) {
     ['Esc', 'Stop editing, close a dialog'],
     [`${K}O, ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, 'Import a workspace, export this one'],
     ['/', 'At the start of a new cell: choose its kind'],
+    ['F', 'Open the active definition or watch in the focus canvas (? there lists its gestures)'],
     ['?', 'This sheet'],
   ];
   return (

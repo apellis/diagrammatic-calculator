@@ -28,6 +28,8 @@ export interface CellProps {
   onPin: () => void;
   onRerun: () => void;
   onCopyTikz: () => void;
+  /** Opens the focus canvas, at a summand when one was double-clicked. */
+  onCanvas?: (word?: string) => void;
 }
 
 export function Cell(props: CellProps) {
@@ -70,7 +72,7 @@ export function Cell(props: CellProps) {
             </div>
           </Show>
           <Show when={props.state && !props.isNew}>
-            <ResultView s={props.state!} />
+            <ResultView s={props.state!} onFocus={props.onCanvas} />
           </Show>
           <div class="tools">
             <button class="ghost" title="Move up" onClick={() => props.onMove(-1)}>↑</button>
@@ -78,6 +80,9 @@ export function Cell(props: CellProps) {
             <button class="ghost" onClick={props.onRerun} disabled={!props.state?.key}>Recompute</button>
             <button class="ghost" onClick={props.onPin} disabled={!canPin()}>Pin result</button>
             <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
+            <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>
+              <button class="ghost" onClick={() => props.onCanvas?.()} title="Open the focus canvas (F)" data-testid="open-canvas">Canvas</button>
+            </Show>
             <div class="grow" />
             <span class="hint">{props.id}</span>
             <button class="ghost" onClick={props.onRemove}>Delete</button>

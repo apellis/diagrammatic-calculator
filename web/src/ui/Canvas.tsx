@@ -1,0 +1,785 @@
+// The focus canvas: one cell's term drawn full size, edited by gestures.
+//
+// The canvas edits the term of a definition or watch as written. Rewrites by relations, slides
+// and interchanges are equalities, so the cell's value stays the same while its text changes;
+// inserting or removing a piece changes the value. Every gesture is one undoable step of the
+// document, and positions moved only for looks are layout hints, never part of the term.
+import { batch, createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from 'solid-js';
+import type { Doc, Hint } from '../doc/model';
+import type { Calls } from '../eval/evaluator';
+import type { RelationsMatchResponse } from '../engine/ops.gen';
+import { isMac, mod } from '../app';
+import {
+  bounds, centre, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand, offsetFor,
+  onStrand, path, piece, piecesIn, rectangle, sameOrder, type Layout, type Line, type Piece, type Rect,
+} from '../canvas/geometry';
+
+export interface Generator {
+  name: string;
+  draw: string;
+  inputs: number;
+  outputs: number;
+}
+
+/** What is selected, as the AI receives it: references resolved when a message is sent. */
+export interface Selection {
+  cellId: string;
+  summand: number;
+  word: string;
+  text: string;
+  layers: number[];
+  rectangle?: Rect;
+}
+
+export interface CanvasProps {
+  doc: Doc;
+  engine: Calls;
+  cellId: string;
+  title: string;
+  /** The context, with the workspace's scalars. */
+  context: string;
+  /** The term drawn; null while it is being computed. */
+  term: string | null;
+  /** The term uses definitions: a gesture writes it out in full. */
+  expanded: boolean;
+  generators: Generator[];
+  colours: string[];
+  hintsVersion: number;
+  initialWord?: string;
+  onWrite: (term: string, note: string) => void;
+  onClose: () => void;
+  onSelection?: (s: Selection | null) => void;
+  onAsk?: () => void;
+}
+
+type Match = Extract<RelationsMatchResponse, { status: 'ok' }>['matches'][number];
+
+const U = 44; // pixels per unit
+const SHOWN = 60;
+const PALETTE = ['#2f6fdf', '#d9822b', '#2c9a5a', '#b04ac0', '#c0392b', '#8a7a20', '#1f9bb0', '#7a7a80'];
+const DASHES = ['', '0.18 0.1', '0.05 0.1', '0.3 0.08 0.06 0.08', '0.12 0.12', '0.4 0.1'];
+const K = isMac ? '⌘' : 'Ctrl+';
+
+let patternsPref = false;
+try {
+  patternsPref = localStorage.getItem('diagcalc.patterns') === '1';
+} catch {
+  /* storage unavailable */
+}
+
+export function Canvas(props: CanvasProps) {
+  const [layouts, setLayouts] = createSignal<Layout[]>([]);
+  const [total, setTotal] = createSignal(0);
+  const [error, setError] = createSignal('');
+  const [message, setMessage] = createSignal('');
+  const [busy, setBusy] = createSignal(false);
+  const [sel, setSel] = createSignal<{ summand: number; layers: number[]; strand?: number }>({ summand: 0, layers: [] });
+  const [fresh, setFresh] = createSignal(new Set<string>());
+  const [menu, setMenu] = createSignal<{ summand: number; rect?: Rect; matches: Match[]; previews: (Layout[] | null)[] } | null>(null);
+  const [inserting, setInserting] = createSignal(false);
+  const [help, setHelp] = createSignal(false);
+  const [patterns, setPatterns] = createSignal(patternsPref);
+  const [view, setView] = createSignal({ x: 24, y: 16, z: 1 });
+  const [ghost, setGhost] = createSignal<{ summand: number; layer: number; dx: number; dy: number } | null>(null);
+  const [boxDrag, setBoxDrag] = createSignal<{ summand: number; a: [number, number]; b: [number, number] } | null>(null);
+  const [drop, setDrop] = createSignal<{ summand: number; x: number; y: number; width: number } | null>(null);
+  let root!: HTMLDivElement;
+  let board!: HTMLDivElement;
+  let space = false;
+  /** The summands before a gesture's write, to outline the ones it adds once the new term arrives. */
+  let pending: { term: string | null; words: Set<string> } | null = null;
+  let firstSelect = props.initialWord;
+
+  // laying out the term, with the stored orders of its summands
+  let generation = 0;
+  const term = createMemo(() => props.term);
+  const context = createMemo(() => props.context);
+  const hintsVersion = createMemo(() => props.hintsVersion);
+  createEffect(on(() => [term(), context(), hintsVersion()] as const, async ([term, context]) => {
+    const gen = ++generation;
+    if (term === null) return;
+    const first = await props.engine.call('term.layout', { context, term, summands: SHOWN }, { lane: 'interactive' });
+    if (gen !== generation || first.status !== 'done') return;
+    const r = first.response;
+    if (r.status !== 'ok') {
+      setError(r.message);
+      setLayouts([]);
+      return;
+    }
+    let summands = r.summands;
+    const orders: Record<string, number[]> = {};
+    summands.forEach((l, k) => {
+      const o = props.doc.hint(props.cellId, l.word)?.order;
+      if (o && o.length === l.order.length) orders[k + 1] = o;
+    });
+    if (Object.keys(orders).length) {
+      const again = await props.engine.call('term.layout', { context, term, summands: SHOWN, orders }, { lane: 'interactive' });
+      if (gen !== generation) return;
+      if (again.status === 'done' && again.response.status === 'ok') summands = again.response.summands;
+    }
+    batch(() => {
+      setError('');
+      setTotal(r.terms);
+      setLayouts(summands);
+      if (pending && pending.term !== term) {
+        const before = pending.words;
+        const added = new Set(summands.map((l) => l.word).filter((w) => !before.has(w)));
+        pending = null;
+        setFresh(added);
+        setTimeout(() => setFresh(new Set<string>()), 2000);
+      }
+      if (firstSelect) {
+        const k = summands.findIndex((l) => l.word === firstSelect);
+        if (k >= 0) setSel({ summand: k, layers: [] });
+        firstSelect = undefined;
+      }
+      if (sel().summand >= summands.length) setSel({ summand: 0, layers: [] });
+    });
+  }));
+
+  createEffect(() => {
+    const s = sel();
+    const l = layouts()[s.summand];
+    props.onSelection?.(l ? { cellId: props.cellId, summand: s.summand + 1, word: l.word, text: l.text, layers: s.layers, rectangle: rectangle(l, s.layers) } : null);
+  });
+  onCleanup(() => props.onSelection?.(null));
+
+  const colourOf = (name: string) => {
+    const i = props.colours.indexOf(name.replace(/\*$/, ''));
+    return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+  };
+  const dashOf = (name: string) => {
+    if (!patterns()) return undefined;
+    const i = props.colours.indexOf(name.replace(/\*$/, ''));
+    return DASHES[(i < 0 ? 0 : i) % DASHES.length] || undefined;
+  };
+  const hintOf = (l: Layout): Hint | undefined => props.doc.hint(props.cellId, l.word);
+
+  // gestures --------------------------------------------------------------------------------
+
+  const say = (m: string) => setMessage(m);
+  const run = async <T,>(f: () => Promise<T>) => {
+    setBusy(true);
+    try {
+      return await f();
+    } finally {
+      setBusy(false);
+    }
+  };
+  /** Writes a new term to the cell as one step, outlining the summands it adds. */
+  const write = (term: string, note: string) => {
+    pending = { term: props.term, words: new Set(layouts().map((l) => l.word)) };
+    setSel({ summand: sel().summand, layers: [] });
+    props.onWrite(term, note);
+  };
+  const terms = (t: string) => {
+    const n = t === '0' ? 0 : t.split(/ [+-] /).length;
+    return `${n} ${n === 1 ? 'summand' : 'summands'}`;
+  };
+
+  const slide = (k: number, dot: Piece, direction: 'up' | 'down', steps: number) =>
+    run(async () => {
+      const o = await props.engine.call('slide', { context: props.context, term: props.term!, summand: k + 1, layer: dot.layer, direction, steps }, { lane: 'interactive' });
+      if (o.status !== 'done') return;
+      const r = o.response;
+      if (r.status !== 'ok') return say(r.message);
+      if (!r.steps.length) return say('Nothing to slide through there.');
+      write(r.term, `slide a dot ${direction} through ${r.steps.length} crossing${r.steps.length > 1 ? 's' : ''}`);
+      say(`Slid the dot ${direction} through ${r.steps.length} crossing${r.steps.length > 1 ? 's' : ''} by ${[...new Set(r.steps.map((s) => s.relation))].join(', ')}; the term now has ${terms(r.term)}.`);
+    });
+
+  const reorder = (k: number, order: number[], note: string) =>
+    run(async () => {
+      const l = layouts()[k];
+      if (!l || sameOrder(order, l.order)) return;
+      const o = await props.engine.call('term.layout', { context: props.context, term: props.term!, summands: k + 1, orders: { [k + 1]: order } }, { lane: 'interactive' });
+      if (o.status !== 'done') return;
+      const r = o.response;
+      if (r.status !== 'ok') return say(r.message);
+      const moved = r.summands[k];
+      const h = hintOf(l) ?? {};
+      const canonical = order.every((x, i) => x === i + 1);
+      props.doc.setHint(props.cellId, l.word, { ...h, order: canonical ? undefined : order }, note);
+      say(moved.sign !== l.sign ? 'Interchange of two odd pieces: the coefficient of this summand changes sign (−1).' : 'Interchanged; the coefficient is unchanged.');
+    });
+
+  const lookMove = (k: number, layer: number, d: [number, number]) => {
+    const l = layouts()[k];
+    const p = l && piece(l, layer);
+    if (!p) return;
+    const h = hintOf(l) ?? {};
+    const old = h.offsets?.[layer] ?? [0, 0];
+    const next = offsetFor(p, [old[0] + d[0], old[1] + d[1]]);
+    const offsets = { ...(h.offsets ?? {}) };
+    if (Math.abs(next[0]) < 0.02 && Math.abs(next[1]) < 0.02) delete offsets[layer];
+    else offsets[layer] = next;
+    props.doc.setHint(props.cellId, l.word, { ...h, offsets }, 'move a piece for looks');
+  };
+
+  const openMenu = (k: number) =>
+    run(async () => {
+      const l = layouts()[k];
+      if (!l) return;
+      const rect = sel().summand === k ? rectangle(l, sel().layers) : undefined;
+      const o = await props.engine.call('relations.match', { context: props.context, term: props.term!, summand: k + 1, ...(rect ? { rectangle: rect } : {}) }, { lane: 'interactive' });
+      if (o.status !== 'done') return;
+      const r = o.response;
+      if (r.status !== 'ok') return say(r.message);
+      if (!r.matches.length) return say(rect ? 'No relation applies to the selection.' : 'No relation applies to this summand.');
+      setMenu({ summand: k, rect, matches: r.matches, previews: r.matches.map(() => null) });
+      // thumbnails of the results, nine at most
+      r.matches.slice(0, 9).forEach(async (m, i) => {
+        if (!m.preview) return;
+        const p = await props.engine.call('term.layout', { context: props.context, term: m.preview, summands: 4 }, { lane: 'interactive' });
+        const cur = menu();
+        if (!cur || cur.matches !== r.matches || p.status !== 'done' || p.response.status !== 'ok') return;
+        const previews = [...cur.previews];
+        previews[i] = p.response.summands;
+        setMenu({ ...cur, previews });
+      });
+    });
+
+  const apply = (i: number) =>
+    run(async () => {
+      const m = menu();
+      if (!m || !m.matches[i]) return;
+      setMenu(null);
+      const match = m.matches[i];
+      const o = await props.engine.call('relation.apply', { context: props.context, term: props.term!, summand: m.summand + 1, ...(m.rect ? { rectangle: m.rect } : {}), match: i }, { lane: 'interactive' });
+      if (o.status !== 'done') return;
+      const r = o.response;
+      if (r.status !== 'ok') return say(r.message);
+      write(r.term, `apply ${match.relation}`);
+      say(`Applied ${match.relation} (${match.direction})${match.sign === -1 ? ', with sign −1 from interchanges' : ''}; the term now has ${terms(r.term)}.`);
+    });
+
+  const edit = (k: number, req: { action: 'insert'; generator: string; below: number; position: number } | { action: 'remove'; layer: number }, note: string) =>
+    run(async () => {
+      const l = layouts()[k];
+      if (!l) return;
+      const order = hintOf(l)?.order;
+      const o = await props.engine.call('term.edit', { context: props.context, term: props.term!, summand: k + 1, ...(order ? { order } : {}), ...req }, { lane: 'interactive' });
+      if (o.status !== 'done') return;
+      const r = o.response;
+      if (r.status !== 'ok') return say(r.message);
+      write(r.term, note);
+      say(`${note[0].toUpperCase()}${note.slice(1)}: this changes the element, unlike a rewrite.`);
+    });
+
+  const removeSelected = () => {
+    const s = sel();
+    const l = layouts()[s.summand];
+    if (!l || s.layers.length !== 1) return say('Select one piece to remove it.');
+    const p = piece(l, s.layers[0]);
+    void edit(s.summand, { action: 'remove', layer: s.layers[0] }, `remove ${p?.generator ?? 'a piece'}`);
+  };
+  const insertGenerator = (g: Generator, k = sel().summand, at?: { below: number; position: number }) => {
+    const l = layouts()[k];
+    if (!l) return;
+    const target = at ?? insertAbove(l, sel().summand === k && sel().layers.length === 1 ? piece(l, sel().layers[0]) : undefined, Math.max(g.inputs, 1));
+    if (!target) return say(`${g.name} does not fit there.`);
+    void edit(k, { action: 'insert', generator: g.name, ...target }, `insert ${g.name}`);
+  };
+
+  // pointer input ---------------------------------------------------------------------------
+
+  const units = (svg: SVGSVGElement, e: { clientX: number; clientY: number }): [number, number] => {
+    const m = svg.getScreenCTM();
+    if (!m) return [0, 0];
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+    return [p.x, -p.y];
+  };
+
+  let drag: { k: number; layer?: number; start: [number, number]; alt: boolean; moved: boolean; svg: SVGSVGElement; additive: boolean } | null = null;
+  let pan: { x: number; y: number; vx: number; vy: number } | null = null;
+
+  const onDown = (k: number, e: PointerEvent) => {
+    root.focus({ preventScroll: true });
+    const svg = e.currentTarget as SVGSVGElement;
+    if (e.button === 1 || space) {
+      pan = { x: e.clientX, y: e.clientY, vx: view().x, vy: view().y };
+      svg.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (e.button !== 0) return;
+    const t = (e.target as Element).closest('[data-layer]');
+    drag = { k, layer: t ? Number(t.getAttribute('data-layer')) : undefined, start: units(svg, e), alt: e.altKey, moved: false, svg, additive: mod(e as unknown as KeyboardEvent) };
+    svg.setPointerCapture(e.pointerId);
+    setMenu(null);
+  };
+  const onMove = (e: PointerEvent) => {
+    if (pan) {
+      setView({ ...view(), x: pan.vx + e.clientX - pan.x, y: pan.vy + e.clientY - pan.y });
+      return;
+    }
+    if (!drag) return;
+    const p = units(drag.svg, e);
+    const [dx, dy] = [p[0] - drag.start[0], p[1] - drag.start[1]];
+    if (!drag.moved && Math.hypot(dx, dy) < 0.12) return;
+    drag.moved = true;
+    if (drag.layer !== undefined) {
+      const l = layouts()[drag.k];
+      const pc = piece(l, drag.layer);
+      setGhost({ summand: drag.k, layer: drag.layer, dx: drag.alt && pc?.draw !== 'dot' ? dx : 0, dy });
+    } else {
+      setBoxDrag({ summand: drag.k, a: drag.start, b: p });
+    }
+  };
+  const onUp = (e: PointerEvent) => {
+    if (pan) {
+      pan = null;
+      return;
+    }
+    const d = drag;
+    drag = null;
+    setGhost(null);
+    setBoxDrag(null);
+    if (!d) return;
+    const l = layouts()[d.k];
+    if (!l) return;
+    const p = units(d.svg, e);
+    if (d.layer === undefined) {
+      if (!d.moved) {
+        if (!d.additive) setSel({ summand: d.k, layers: [] });
+        return;
+      }
+      const inside = piecesIn(l, d.start, p);
+      const base = d.additive && sel().summand === d.k ? sel().layers : [];
+      setSel({ summand: d.k, layers: [...new Set([...base, ...inside])] });
+      if (inside.length) say(`Selected ${inside.length} piece${inside.length > 1 ? 's' : ''}; press R for the relations that apply.`);
+      return;
+    }
+    const pc = piece(l, d.layer);
+    if (!pc) return;
+    if (!d.moved) {
+      const s = sel();
+      if (d.additive && s.summand === d.k) {
+        const has = s.layers.includes(d.layer);
+        setSel({ summand: d.k, layers: has ? s.layers.filter((x) => x !== d.layer) : [...s.layers, d.layer] });
+      } else setSel({ summand: d.k, layers: [d.layer] });
+      return;
+    }
+    const [dx, dy] = [p[0] - d.start[0], p[1] - d.start[1]];
+    if (d.alt) return lookMove(d.k, d.layer, [pc.draw === 'dot' ? 0 : dx, dy]);
+    const y = centre(pc)[1] + dy;
+    if (pc.draw === 'dot') {
+      const { direction, steps } = crossingsPassed(l, pc, y);
+      if (steps > 0) return void slide(d.k, pc, direction, steps);
+    }
+    void reorder(d.k, moveTo(l, d.layer, y), 'interchange');
+  };
+
+  const onDblClick = (k: number, e: MouseEvent) => {
+    const t = (e.target as Element).closest('[data-strand]');
+    if (!t) return;
+    const s = Number(t.getAttribute('data-strand'));
+    const l = layouts()[k];
+    setSel({ summand: k, layers: onStrand(l, s), strand: s });
+  };
+  const onContext = (k: number, e: MouseEvent) => {
+    e.preventDefault();
+    const t = (e.target as Element).closest('[data-layer]');
+    if (t) {
+      const layer = Number(t.getAttribute('data-layer'));
+      if (sel().summand !== k || !sel().layers.includes(layer)) setSel({ summand: k, layers: [layer] });
+    } else if (sel().summand !== k) setSel({ summand: k, layers: [] });
+    void openMenu(k);
+  };
+
+  // drops from the palette
+  const dragged = (e: DragEvent): Generator | undefined => {
+    const name = e.dataTransfer?.getData('text/x-diagcalc-generator') || currentDrag;
+    return props.generators.find((g) => g.name === name);
+  };
+  let currentDrag = '';
+  const onDragOver = (k: number, e: DragEvent) => {
+    const g = dragged(e);
+    if (!g) return;
+    e.preventDefault();
+    const [x, y] = units(e.currentTarget as SVGSVGElement, e);
+    const width = Math.max(g.inputs, 1);
+    const t = dropTarget(layouts()[k], x, y, width);
+    setDrop(t ? { summand: k, x: t.x, y: t.y, width } : null);
+  };
+  const onDrop = (k: number, e: DragEvent) => {
+    const g = dragged(e);
+    setDrop(null);
+    if (!g) return;
+    e.preventDefault();
+    const [x, y] = units(e.currentTarget as SVGSVGElement, e);
+    const t = dropTarget(layouts()[k], x, y, Math.max(g.inputs, 1));
+    if (!t) return say(`${g.name} does not fit there.`);
+    insertGenerator(g, k, t);
+  };
+
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const v = view();
+    if (e.ctrlKey || e.metaKey) {
+      const r = root.getBoundingClientRect();
+      const [cx, cy] = [e.clientX - r.left, e.clientY - r.top];
+      const z = Math.max(0.3, Math.min(4, v.z * Math.exp(-e.deltaY * 0.01)));
+      setView({ x: cx - ((cx - v.x) * z) / v.z, y: cy - ((cy - v.y) * z) / v.z, z });
+    } else setView({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY });
+  };
+
+  // keyboard paths --------------------------------------------------------------------------
+
+  const allPieces = () => layouts().flatMap((l, k) => l.order.map((layer) => ({ k, layer })));
+  const focusMove = (by: number) => {
+    const list = allPieces();
+    if (!list.length) return;
+    const s = sel();
+    const cur = s.layers.length ? list.findIndex((x) => x.k === s.summand && x.layer === s.layers[s.layers.length - 1]) : -1;
+    const next = list[(cur + by + list.length) % list.length];
+    setSel({ summand: next.k, layers: [next.layer] });
+  };
+  const fit = () => {
+    const frame = board.querySelector<HTMLElement>(`[data-summand="${sel().summand + 1}"]`);
+    if (!frame) return setView({ x: 24, y: 16, z: 1 });
+    const r = root.getBoundingClientRect();
+    const z = Math.max(0.5, Math.min(3, Math.min((r.width - 60) / frame.offsetWidth, (r.height - 120) / frame.offsetHeight)));
+    setView({ x: (r.width - frame.offsetWidth * z) / 2 - frame.offsetLeft * z, y: 50 - frame.offsetTop * z, z });
+  };
+
+  const onKey = (e: KeyboardEvent) => {
+    if ((e.target as HTMLElement).closest('input, textarea, .cm-editor')) return;
+    const s = sel();
+    const l = layouts()[s.summand];
+    const one = l && s.layers.length === 1 ? piece(l, s.layers[0]) : undefined;
+    const handled = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    if (e.key === ' ') {
+      space = true;
+      return handled();
+    }
+    if (e.key === 'Escape') {
+      handled();
+      if (help()) return setHelp(false);
+      if (menu()) return setMenu(null);
+      if (inserting()) return setInserting(false);
+      if (s.layers.length) return setSel({ summand: s.summand, layers: [] });
+      return props.onClose();
+    }
+    if (menu() && /^[1-9]$/.test(e.key)) {
+      handled();
+      return void apply(Number(e.key) - 1);
+    }
+    if (inserting() && /^[1-9]$/.test(e.key)) {
+      handled();
+      setInserting(false);
+      const g = props.generators[Number(e.key) - 1];
+      if (g) insertGenerator(g);
+      return;
+    }
+    if (mod(e) && e.key.toLowerCase() === 'a') {
+      handled();
+      if (l) setSel({ summand: s.summand, layers: [...l.order] });
+      return;
+    }
+    if (mod(e) && e.key.toLowerCase() === 'l') {
+      handled();
+      return props.onAsk?.();
+    }
+    if (mod(e)) return;
+    switch (e.key) {
+      case 'Tab':
+        handled();
+        return focusMove(e.shiftKey ? -1 : 1);
+      case 'r':
+      case 'R':
+        handled();
+        return void openMenu(s.summand);
+      case 'i':
+      case 'I':
+        handled();
+        return setInserting(!inserting());
+      case 'f':
+      case 'F':
+        handled();
+        return fit();
+      case '0':
+        handled();
+        return setView({ x: 24, y: 16, z: 1 });
+      case '?':
+        handled();
+        return setHelp(!help());
+      case 'Delete':
+      case 'Backspace':
+        handled();
+        return removeSelected();
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        handled();
+        return setSel({ summand: Math.max(0, Math.min(layouts().length - 1, s.summand + (e.key === 'ArrowLeft' ? -1 : 1))), layers: [] });
+      case 'ArrowUp':
+      case 'ArrowDown': {
+        handled();
+        if (!one) return say('Select one piece first (click it, or Tab to it).');
+        const up = e.key === 'ArrowUp';
+        if (e.altKey) return void reorder(s.summand, moveBy(l.order, one.layer, up ? 1 : -1), 'interchange');
+        if (one.draw !== 'dot') return say(`Arrow keys slide a dot; ${e.altKey ? '' : `${isMac ? '⌥' : 'Alt+'}arrows interchange other pieces.`}`);
+        const next = nextOnStrand(l, one, up);
+        if (next?.draw !== 'crossing') return say(`No crossing ${up ? 'above' : 'below'} this dot on its strand.`);
+        return void slide(s.summand, one, up ? 'up' : 'down', 1);
+      }
+    }
+  };
+  const onKeyUp = (e: KeyboardEvent) => {
+    if (e.key === ' ') space = false;
+  };
+
+  onMount(() => root.focus({ preventScroll: true }));
+
+  // drawing ---------------------------------------------------------------------------------
+
+  const lead = (l: Layout, k: number) => (l.negative ? '− ' : k === 0 ? '' : '+ ') + (l.coefficient ?? '');
+
+  const Diagram = (p: { l: Layout; k: number }) => {
+    const l = () => p.l;
+    const pad = 0.7;
+    const selected = () => (sel().summand === p.k ? new Set(sel().layers) : new Set<number>());
+    const offsets = () => hintOf(l())?.offsets ?? {};
+    const off = (layer?: number): [number, number] => {
+      if (layer === undefined) return [0, 0];
+      const pc = piece(l(), layer);
+      const base = offsetFor(pc, offsets()[layer]);
+      const g = ghost();
+      if (g && g.summand === p.k && g.layer === layer) return [base[0] + g.dx, base[1] + g.dy];
+      return base;
+    };
+    const strandColour = (s?: number) => (s === undefined ? 'currentColor' : colourOf(l().strands[s]?.colour ?? ''));
+    const strandDash = (s?: number) => (s === undefined ? undefined : dashOf(l().strands[s]?.colour ?? ''));
+    const vb = () => `${-pad} ${-(l().height + pad)} ${l().width + 2 * pad} ${l().height + 2 * pad + 0.5}`;
+    const snapped = () => (selected().size ? bounds(l(), [...selected()]) : undefined);
+    const lineEl = (line: Line) => {
+      const o = off(line.layer);
+      const hot = line.layer !== undefined && selected().has(line.layer);
+      const strandHot = sel().summand === p.k && sel().strand !== undefined && line.strand === sel().strand;
+      switch (line.kind) {
+        case 'strand':
+        case 'turn':
+          return <path d={path(line, o)} stroke={strandColour(line.strand)} stroke-dasharray={strandDash(line.strand)} stroke-width={hot || strandHot ? 0.09 : 0.055} fill="none" />;
+        case 'dot': {
+          const y = line.y! + o[1];
+          return <circle cx={line.x! + o[0]} cy={-y} r={hot ? 0.15 : 0.11} fill={hot ? 'var(--accent)' : strandColour(line.strand)} />;
+        }
+        case 'box':
+          return (
+            <g transform={`translate(${o[0]} ${-o[1]})`}>
+              <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="var(--panel)" stroke={hot ? 'var(--accent)' : 'currentColor'} stroke-width={0.04} />
+              <text x={(line.x0! + line.x1!) / 2} y={-(line.y0! + line.y1!) / 2 + 0.13} font-size="0.36" text-anchor="middle" fill="currentColor">{line.label}</text>
+            </g>
+          );
+        case 'label':
+          return <text x={line.x} y={0.55} font-size="0.36" font-style="italic" text-anchor="middle" fill={strandColour(line.strand)}>{line.text}</text>;
+      }
+    };
+    return (
+      <svg class="diagram" viewBox={vb()} width={(l().width + 2 * pad) * U} height={(l().height + 2 * pad + 0.5) * U}
+        role="img" aria-label={l().text} data-summand={p.k + 1}
+        onPointerDown={(e) => onDown(p.k, e)} onPointerMove={onMove} onPointerUp={onUp}
+        onDblClick={(e) => onDblClick(p.k, e)} onContextMenu={(e) => onContext(p.k, e)}
+        onDragOver={(e) => onDragOver(p.k, e)} onDragLeave={() => setDrop(null)} onDrop={(e) => onDrop(p.k, e)}>
+        <rect x={-pad} y={-(l().height + pad)} width={l().width + 2 * pad} height={l().height + 2 * pad + 0.5} fill="transparent" />
+        <For each={l().lines}>{(line) => lineEl(line)}</For>
+        {/* hit targets: strands under pieces */}
+        <For each={l().lines.filter((x) => x.kind === 'strand' || x.kind === 'turn')}>
+          {(line) => <path d={path(line, off(line.layer))} stroke="transparent" stroke-width={0.3} fill="none" data-strand={line.strand} class="hit-strand" />}
+        </For>
+        <For each={l().pieces}>
+          {(pc) => {
+            const o = () => off(pc.layer);
+            return (
+              <rect class="hit-piece" data-layer={pc.layer} data-draw={pc.draw}
+                x={pc.box[0] - 0.08 + o()[0]} y={-(pc.box[3] + 0.08 + o()[1])} width={pc.box[2] - pc.box[0] + 0.16} height={pc.box[3] - pc.box[1] + 0.16}
+                rx={0.08} fill={selected().has(pc.layer) ? 'var(--accent-soft)' : 'transparent'} fill-opacity={0.55}
+                stroke={selected().has(pc.layer) ? 'var(--accent)' : 'none'} stroke-width={0.03}>
+                <title>{pc.generator} (layer {pc.layer}{pc.odd ? ', odd' : ''}, degree {pc.degree})</title>
+              </rect>
+            );
+          }}
+        </For>
+        <Show when={snapped()}>
+          {(b) => <rect x={b()[0] - 0.15} y={-(b()[3] + 0.15)} width={b()[2] - b()[0] + 0.3} height={b()[3] - b()[1] + 0.3} fill="none" stroke="var(--accent)" stroke-width={0.025} stroke-dasharray="0.1 0.07" pointer-events="none" />}
+        </Show>
+        <Show when={boxDrag()?.summand === p.k && boxDrag()}>
+          {(b) => <rect x={Math.min(b().a[0], b().b[0])} y={-Math.max(b().a[1], b().b[1])} width={Math.abs(b().a[0] - b().b[0])} height={Math.abs(b().a[1] - b().b[1])} fill="var(--accent-soft)" fill-opacity={0.4} stroke="var(--accent)" stroke-width={0.02} pointer-events="none" />}
+        </Show>
+        <Show when={drop()?.summand === p.k && drop()}>
+          {(d) => (
+            <g pointer-events="none">
+              <line x1={-pad / 2} x2={l().width + pad / 2} y1={-d().y} y2={-d().y} stroke="var(--good)" stroke-width={0.03} stroke-dasharray="0.08 0.06" />
+              <rect x={d().x - 0.2} y={-d().y - 0.2} width={d().width - 1 + 0.4} height={0.4} rx={0.1} fill="var(--good-soft)" stroke="var(--good)" stroke-width={0.03} />
+            </g>
+          )}
+        </Show>
+      </svg>
+    );
+  };
+
+  const Mini = (p: { ls: Layout[] }) => (
+    <span class="mini">
+      <For each={p.ls}>
+        {(l, k) => (
+          <span class="summand">
+            <Show when={lead(l, k())}><span class="c">{lead(l, k())}</span></Show>
+            <svg viewBox={`-0.5 ${-(l.height + 0.5)} ${l.width + 1} ${l.height + 1.3}`} width={(l.width + 1) * 16} height={(l.height + 1.3) * 16}>
+              <For each={l.lines}>
+                {(line) =>
+                  line.kind === 'strand' || line.kind === 'turn' ? <path d={path(line)} stroke={colourOf(l.strands[line.strand ?? 0]?.colour ?? '')} stroke-width={0.08} fill="none" />
+                  : line.kind === 'dot' ? <circle cx={line.x} cy={-line.y!} r={0.15} fill="currentColor" />
+                  : line.kind === 'box' ? <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="none" stroke="currentColor" stroke-width={0.06} />
+                  : null}
+              </For>
+            </svg>
+          </span>
+        )}
+      </For>
+    </span>
+  );
+
+  const PaletteIcon = (p: { g: Generator }) => {
+    const w = Math.max(p.g.inputs, p.g.outputs, 1);
+    return (
+      <svg viewBox={`-0.4 -1.2 ${w - 1 + 0.8} 1.4`} width={(w - 1 + 0.8) * 22} height={1.4 * 22} aria-hidden="true">
+        {p.g.draw === 'dot' ? (
+          <>
+            <path d="M 0 0 L 0 -1" stroke="currentColor" stroke-width={0.07} />
+            <circle cx={0} cy={-0.5} r={0.13} fill="currentColor" />
+          </>
+        ) : p.g.draw === 'crossing' ? (
+          <>
+            <path d={path({ kind: 'strand', x0: 0, y0: 0, x1: 1, y1: 1 })} stroke="currentColor" stroke-width={0.07} fill="none" />
+            <path d={path({ kind: 'strand', x0: 1, y0: 0, x1: 0, y1: 1 })} stroke="currentColor" stroke-width={0.07} fill="none" />
+          </>
+        ) : (
+          <rect x={-0.3} y={-0.8} width={w - 1 + 0.6} height={0.6} fill="none" stroke="currentColor" stroke-width={0.06} />
+        )}
+      </svg>
+    );
+  };
+
+  return (
+    <div class="canvas" ref={root} tabindex={0} data-keeps-focus role="application" aria-label={`Canvas for ${props.title}`} onKeyDown={onKey} onKeyUp={onKeyUp}>
+      <div class="canvas-bar">
+        <strong>{props.title}</strong>
+        <span class="hint">{total() > layouts().length ? `${layouts().length} of ${total()} summands` : `${total()} ${total() === 1 ? 'summand' : 'summands'}`}</span>
+        <Show when={busy()}><span class="light busy" /></Show>
+        <span class="hint grow canvas-msg" data-testid="canvas-message">{message()}</span>
+        <label class="hint row" title="Strand patterns, so colours are not the only cue">
+          <input type="checkbox" checked={patterns()} onChange={(e) => {
+            setPatterns(e.currentTarget.checked);
+            try {
+              localStorage.setItem('diagcalc.patterns', e.currentTarget.checked ? '1' : '0');
+            } catch {
+              /* storage unavailable */
+            }
+          }} /> patterns
+        </label>
+        <button class="ghost" onClick={() => setHelp(!help())} title="Gestures and keys (?)">?</button>
+        <button onClick={() => props.onClose()} title="Close the canvas (Esc)">Close</button>
+      </div>
+      <Show when={props.expanded}>
+        <div class="banner">This term uses definitions; it is shown written out, and a gesture writes it out in full in the cell.</div>
+      </Show>
+      <div class="canvas-body">
+        <div class="palette-bar" aria-label="Generators">
+          <For each={props.generators}>
+            {(g, i) => (
+              <button class="gen" draggable={true} title={`Drag onto a strand to insert ${g.name}; or select a piece and press I, then ${i() + 1}`}
+                classList={{ on: inserting() }}
+                onDragStart={(e) => {
+                  currentDrag = g.name;
+                  e.dataTransfer?.setData('text/x-diagcalc-generator', g.name);
+                  e.dataTransfer && (e.dataTransfer.effectAllowed = 'copy');
+                }}
+                onDragEnd={() => {
+                  currentDrag = '';
+                  setDrop(null);
+                }}
+                onClick={() => insertGenerator(g)}>
+                <PaletteIcon g={g} />
+                <span>{inserting() ? `${i() + 1} ` : ''}{g.name}</span>
+              </button>
+            )}
+          </For>
+        </div>
+        <div class="canvas-view" onWheel={onWheel}>
+          <Show when={props.term !== null} fallback={<div class="hint" style={{ padding: '20px' }}>Computing the term…</div>}>
+            <Show when={!error()} fallback={<div class="error" style={{ margin: '20px' }}>{error()}</div>}>
+              <div class="canvas-board" ref={board} style={{ transform: `translate(${view().x}px, ${view().y}px) scale(${view().z})` }}>
+                <Show when={layouts().length} fallback={<div class="frame"><span class="c">0</span></div>}>
+                  <For each={layouts()}>
+                    {(l, k) => (
+                      <div class="frame" data-summand={k() + 1} data-word={l.word}
+                        classList={{ on: sel().summand === k(), new: fresh().has(l.word) }}>
+                        <div class="row frame-head">
+                          <span class="c">{lead(l, k()) || '+'}</span>
+                          <Show when={l.sign === -1}><span class="badge warn" title="This drawing's layers are in an order that costs a Koszul sign">−1 from interchange</span></Show>
+                          <span class="hint">degree {l.degree}</span>
+                        </div>
+                        <Diagram l={l} k={k()} />
+                      </div>
+                    )}
+                  </For>
+                </Show>
+              </div>
+            </Show>
+          </Show>
+          <Show when={menu()}>
+            {(m) => (
+              <div class="relmenu" role="dialog" aria-label="Relations that apply">
+                <div class="row"><strong class="grow">Relations{m().rect ? ' in the selection' : ''}</strong><button class="ghost" onClick={() => setMenu(null)}>×</button></div>
+                <For each={m().matches.slice(0, 9)}>
+                  {(x, i) => (
+                    <button class="relitem" onClick={() => void apply(i())} data-relation={x.relation}>
+                      <kbd>{i() + 1}</kbd>
+                      <span class="grow">
+                        <span class="mono">{x.relation}</span> <span class="hint">{x.direction}{x.sign === -1 ? ', sign −1' : ''}</span>
+                        <Show when={m().previews[i()]} fallback={<div class="hint mono">{x.preview}</div>}>
+                          {(ls) => <div><Mini ls={ls()} /></div>}
+                        </Show>
+                      </span>
+                    </button>
+                  )}
+                </For>
+                <Show when={m().matches.length > 9}><div class="hint">{m().matches.length - 9} more; select a smaller region to narrow them.</div></Show>
+              </div>
+            )}
+          </Show>
+          <Show when={help()}>
+            <div class="relmenu" role="dialog" aria-label="Gestures">
+              <div class="row"><strong class="grow">Gestures and keys</strong><button class="ghost" onClick={() => setHelp(false)}>×</button></div>
+              <table class="kv"><tbody>
+                <For each={GESTURES}>{([k, v]) => <tr><td><kbd>{k}</kbd></td><td>{v}</td></tr>}</For>
+              </tbody></table>
+            </div>
+          </Show>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const ALT = isMac ? '⌥' : 'Alt+';
+const GESTURES: [string, string][] = [
+  ['drag a dot', 'slide it along its strand; crossings it passes fire the dot-slide relation'],
+  ['drag a piece', 'interchange it with distant pieces; a −1 badge shows when two odd pieces swap'],
+  [`${ALT}drag`, 'move a piece for looks only (a layout hint)'],
+  ['drag on empty space', 'box-select'],
+  [`click, ${K}click`, 'select, add or remove from the selection'],
+  ['double-click a strand', 'select the whole strand'],
+  ['R, right-click', 'relations that apply to the selection; 1–9 applies one'],
+  ['drag from the palette', 'insert a generator on a strand'],
+  ['I, then 1–9', 'insert a generator above the selected piece'],
+  ['Delete', 'remove the selected piece'],
+  ['↑ ↓', 'slide the selected dot through the next crossing'],
+  [`${ALT}↑ ${ALT}↓`, 'interchange the selected piece one place'],
+  ['Tab, ⇧Tab', 'move between pieces; ← → move between summands'],
+  [`${K}A, Esc`, 'select all, clear the selection (Esc again closes)'],
+  [`${K}L`, 'ask the AI about the selection'],
+  ['space-drag, scroll', `pan; ${K}scroll or pinch zooms; F fits the selected summand, 0 resets`],
+];

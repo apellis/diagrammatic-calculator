@@ -6,47 +6,145 @@
     "request": {
       "type": "object",
       "properties": {
-        "workspace": { "description": "The text of a .dcw file. Cells without an ID get one.", "type": "string" },
-        "cell": { "description": "The text of one cell, as one entry of a .dcw file (several lines only for a note).", "type": "string" }
+        "workspace": {
+          "description": "The text of a .dcw file. Cells without an ID get one.",
+          "type": "string"
+        },
+        "cell": {
+          "description": "The text of one cell, as one entry of a .dcw file (several lines only for a note).",
+          "type": "string"
+        }
       },
-      "oneOf": [{ "required": ["workspace"] }, { "required": ["cell"] }]
+      "oneOf": [
+        {
+          "required": [
+            "workspace"
+          ]
+        },
+        {
+          "required": [
+            "cell"
+          ]
+        }
+      ]
     },
     "cell": {
       "type": "object",
-      "required": ["id", "kind", "text", "options", "uses"],
+      "required": [
+        "id",
+        "kind",
+        "text",
+        "options",
+        "uses"
+      ],
       "properties": {
-        "id": { "type": ["string", "null"] },
-        "kind": { "enum": ["def", "watch", "solve", "check", "note", "comment", "blank"] },
-        "text": { "description": "The cell in canonical form, without options or ID.", "type": "string" },
-        "options": { "type": "object", "additionalProperties": { "type": "string" } },
-        "uses": { "description": "Bare names the cell's terms mention (definitions, unknowns, scalars), sorted.", "type": "array", "items": { "type": "string" } },
-        "defines": { "description": "def: the name defined.", "type": "string" },
-        "unknowns": { "description": "solve: the unknowns, which become scalars of the context for every cell.", "type": "array", "items": { "type": "string" } },
-        "check": { "description": "check: the check's name.", "type": "string" },
-        "note": { "description": "note: the text.", "type": "string" }
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "def",
+            "watch",
+            "solve",
+            "check",
+            "note",
+            "comment",
+            "blank"
+          ]
+        },
+        "text": {
+          "description": "The cell in canonical form, without options or ID.",
+          "type": "string"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "uses": {
+          "description": "Bare names the cell's terms mention (definitions, unknowns, scalars), sorted.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defines": {
+          "description": "def: the name defined.",
+          "type": "string"
+        },
+        "unknowns": {
+          "description": "solve: the unknowns, which become scalars of the context for every cell.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "check": {
+          "description": "check: the check's name.",
+          "type": "string"
+        },
+        "note": {
+          "description": "note: the text.",
+          "type": "string"
+        },
+        "term": {
+          "description": "def and watch: the term, as written in canonical form.",
+          "type": "string"
+        }
       }
     },
     "response": {
       "oneOf": [
         {
           "type": "object",
-          "required": ["status", "context", "cells", "canonical"],
+          "required": [
+            "status",
+            "context",
+            "cells",
+            "canonical"
+          ],
           "properties": {
-            "status": { "const": "ok" },
-            "context": { "description": "The context line in canonical form, without the word 'context'.", "type": "string" },
-            "cells": { "type": "array", "items": { "$ref": "#/$defs/cell" } },
-            "canonical": { "description": "The whole file in canonical form.", "type": "string" }
+            "status": {
+              "const": "ok"
+            },
+            "context": {
+              "description": "The context line in canonical form, without the word 'context'.",
+              "type": "string"
+            },
+            "cells": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/cell"
+              }
+            },
+            "canonical": {
+              "description": "The whole file in canonical form.",
+              "type": "string"
+            }
           }
         },
         {
           "type": "object",
-          "required": ["status", "cell"],
+          "required": [
+            "status",
+            "cell"
+          ],
           "properties": {
-            "status": { "const": "ok" },
-            "cell": { "$ref": "#/$defs/cell" }
+            "status": {
+              "const": "ok"
+            },
+            "cell": {
+              "$ref": "#/$defs/cell"
+            }
           }
         },
-        { "$ref": "common.schema.json#/$defs/error" }
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
       ]
     }
   }

@@ -247,6 +247,36 @@
               },
               "strand": {
                 "type": "integer"
+              },
+              "x0": {
+                "type": "number"
+              },
+              "y0": {
+                "type": "number"
+              },
+              "x1": {
+                "type": "number"
+              },
+              "y1": {
+                "type": "number"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "up": {
+                "description": "turn: a cup (true) or a cap.",
+                "type": "boolean"
+              },
+              "label": {
+                "description": "box: the generator's name.",
+                "type": "string"
+              },
+              "text": {
+                "description": "label: the colour under a strand.",
+                "type": "string"
               }
             }
           }

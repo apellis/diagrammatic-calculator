@@ -66,7 +66,8 @@ export function Editor(props: EditorProps) {
       },
       focus: () => view.focus(),
     });
-    if (props.autofocus) {
+    // a cell rebuilt by a canvas gesture or the AI leaves the focus where it is
+    if (props.autofocus && !document.activeElement?.closest('[data-keeps-focus]')) {
       view.focus();
       view.dispatch({ selection: { anchor: view.state.doc.length } });
     }

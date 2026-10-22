@@ -686,7 +686,11 @@ impl RingVisitor for RunWorkspace<'_> {
                     "watch",
                     sc.bind(ws, &deps, i)
                         .and_then(|_| sc.s.term(term))
-                        .and_then(|t| sc.s.simplify_shown(&t, self.shown)),
+                        .and_then(|t| {
+                            let mut v = sc.s.simplify_shown(&t, self.shown)?;
+                            v["term"] = json!(ctx.fmt_term(&t));
+                            Ok(v)
+                        }),
                 ),
                 CellBody::Check { name, args } => (
                     "check",
@@ -783,7 +787,11 @@ fn cell_json(c: &Cell) -> Value {
         "uses": c.names_used(),
     });
     match &c.body {
-        CellBody::Def { name, .. } => v["defines"] = json!(name),
+        CellBody::Def { name, term } => {
+            v["defines"] = json!(name);
+            v["term"] = json!(crate::text::print(term));
+        }
+        CellBody::Watch { term } => v["term"] = json!(crate::text::print(term)),
         CellBody::Solve { unknowns, .. } => v["unknowns"] = json!(unknowns),
         CellBody::Check { name, .. } => v["check"] = json!(name),
         CellBody::Note { text } => v["note"] = json!(text),
@@ -830,7 +838,7 @@ impl RingVisitor for Describe<'_> {
             "ring": ctx.spec.ring,
             "colours": ctx.colours.iter().map(|c| json!({ "name": c.name, "odd": c.odd, "oriented": c.oriented })).collect::<Vec<_>>(),
             "objects": ctx.objects.iter().map(|o| ctx.fmt_object(o)).collect::<Vec<_>>(),
-            "generators": ctx.pres.generators.iter().map(|g| json!({ "name": g.name, "draw": g.draw })).collect::<Vec<_>>(),
+            "generators": ctx.pres.generators.iter().map(|g| json!({ "name": g.name, "draw": g.draw, "inputs": g.source.len(), "outputs": g.target.len() })).collect::<Vec<_>>(),
             "relations": ctx.pres.relations.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
             "representations": ctx.pres.representations.iter().map(|d| json!({
                 "name": d.name,

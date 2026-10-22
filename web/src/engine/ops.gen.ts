@@ -65,6 +65,14 @@ export type ContextDescribeResponse =
       generators: {
         name: string;
         draw: string;
+        /**
+         * How many strands enter it.
+         */
+        inputs: number;
+        /**
+         * How many strands leave it.
+         */
+        outputs: number;
       }[];
       relations: string[];
       representations: {
@@ -791,6 +799,24 @@ export interface TermLayoutLayout {
     kind: 'strand' | 'turn' | 'dot' | 'box' | 'label';
     layer?: number;
     strand?: number;
+    x0?: number;
+    y0?: number;
+    x1?: number;
+    y1?: number;
+    x?: number;
+    y?: number;
+    /**
+     * turn: a cup (true) or a cap.
+     */
+    up?: boolean;
+    /**
+     * box: the generator's name.
+     */
+    label?: string;
+    /**
+     * label: the colour under a strand.
+     */
+    text?: string;
   }[];
   /**
    * Heights between rows of pieces, bottom to top, with how many drawn layers lie below and the object there.
@@ -849,6 +875,10 @@ export interface WorkspaceParseCell {
    * note: the text.
    */
   note?: string;
+  /**
+   * def and watch: the term, as written in canonical form.
+   */
+  term?: string;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -885,7 +915,7 @@ export interface WorkspaceRunCell {
    */
   name?: string;
   /**
-   * def: the elaborated term.
+   * def: the elaborated term; watch: the watched term with definitions substituted, before simplifying.
    */
   term?: string;
   /**
