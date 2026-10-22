@@ -85,6 +85,17 @@ pub trait Evaluator<R: Ring>: Sync {
         )))
     }
 
+    /// The words `ψ_ŵ e(src)`, one for each permutation `w` (its canonical reduced word), with no
+    /// dots. Together with the dots they generate the algebra: `x^a ψ_ŵ e(src)` and
+    /// `ψ_ŵ x^a e(src)` both span.
+    fn crossing_words(&self, src: &Object) -> Result<Vec<Word>> {
+        let _ = src;
+        Err(Error::precondition(format!(
+            "the strategy {} has no basis to enumerate",
+            self.provenance().method
+        )))
+    }
+
     /// The highest degree of a basis word starting at `src` with every dot exponent below `cap`;
     /// those words span the quotient by all `x_k^cap`.
     fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {
@@ -153,6 +164,25 @@ impl<R: Ring> BasisShape<'_, R> {
             out.push((word, deg, dots));
         }
         Ok(out)
+    }
+
+    pub fn crossing_words(&self, src: &Object) -> Result<Vec<Word>> {
+        let zeros = vec![0; src.len()];
+        self.shapes(src)?
+            .into_iter()
+            .map(|(word, _, _)| {
+                let w = basis_word(
+                    self.ctx,
+                    src,
+                    &word,
+                    &zeros,
+                    self.dot,
+                    self.crossing,
+                    self.dots_on_top,
+                )?;
+                Ok(self.ctx.canonical(&w).0)
+            })
+            .collect()
     }
 
     pub fn min_degree(&self, src: &Object) -> Result<i64> {

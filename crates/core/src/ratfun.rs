@@ -110,10 +110,11 @@ impl<F: Ring> RationalFunctions<F> {
     /// Monic greatest common divisor.
     fn p_gcd(&self, a: &[F::Elem], b: &[F::Elem]) -> Vec<F::Elem> {
         let (mut x, mut y) = (a.to_vec(), b.to_vec());
+        // Monic remainders keep coefficient growth over Q in check.
         while !y.is_empty() {
             let r = self.p_divrem(&x, &y).1;
             x = y;
-            y = r;
+            y = if r.is_empty() { r } else { self.monic(&r) };
         }
         self.monic(&x)
     }
@@ -299,5 +300,47 @@ mod tests {
         let cube = k.pow(&tm1, 3);
         assert_eq!(k.sub(&k.pow(&t, 3), &k.one()), cube);
         assert_eq!(k.div_exact(&cube, &k.mul(&tm1, &tm1)).unwrap(), tm1);
+    }
+
+    /// Plain Gauss-Jordan on a 5 x 5 matrix of degree-4 polynomials: unrelated denominators.
+    #[test]
+    fn elimination_stays_small() {
+        let k = RationalFunctions::new(Rationals, "q");
+        let q = k.named("q").unwrap();
+        let mut m: Vec<Vec<RatFun<crate::num::Rat>>> = (0..5)
+            .map(|i| {
+                (0..5)
+                    .map(|j| {
+                        let mut p = k.zero();
+                        for e in 0..5u32 {
+                            let c = k.int(((i * 7 + j * 3 + e as i64 * 5) % 11) - 5);
+                            p = k.add(&p, &k.mul(&c, &k.pow(&q, e)));
+                        }
+                        p
+                    })
+                    .collect()
+            })
+            .collect();
+        let start = std::time::Instant::now();
+        for c in 0..5 {
+            let Some(p) = (c..5).find(|&r| !k.is_zero(&m[r][c])) else {
+                continue;
+            };
+            m.swap(c, p);
+            let inv = k.inv(&m[c][c]).unwrap();
+            m[c] = m[c].iter().map(|x| k.mul(x, &inv)).collect();
+            for r in 0..5 {
+                if r != c && !k.is_zero(&m[r][c]) {
+                    let f = m[r][c].clone();
+                    let row_c = m[c].clone();
+                    m[r] = m[r]
+                        .iter()
+                        .zip(&row_c)
+                        .map(|(x, y)| k.sub(x, &k.mul(&f, y)))
+                        .collect();
+                }
+            }
+        }
+        assert!(start.elapsed().as_secs() < 5, "{:?}", start.elapsed());
     }
 }

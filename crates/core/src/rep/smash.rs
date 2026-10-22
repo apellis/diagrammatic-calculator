@@ -465,6 +465,10 @@ impl<R: Ring> Evaluator<R> for Smash<'_, R> {
         self.shape().min_degree(src)
     }
 
+    fn crossing_words(&self, src: &Object) -> Result<Vec<Word>> {
+        self.shape().crossing_words(src)
+    }
+
     fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {
         self.shape().max_degree_below_dot_cap(src, cap)
     }

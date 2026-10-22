@@ -142,7 +142,7 @@ def sourceJson (s : Source) : String :=
   s!"\{\"repo\": \"{s.repo}\", \"commit\": \"{s.commit}\", \"file\": \"{s.file}\", \"declaration\": \"{s.decl}\"}"
 
 def dimsJson (lo hi : Int) (f : Int → Nat) : String :=
-  let ds := (List.range (hi - lo + 1).toNat).map fun k => lo + k
+  let ds := (List.range (hi - lo + 1).toNat).map fun (k : Nat) => lo + (k : Int)
   "{" ++ ", ".intercalate (ds.map fun d => s!"\"{d}\": {f d}") ++ "}"
 
 /-- One graded-dimension row. -/
