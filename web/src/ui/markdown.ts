@@ -16,16 +16,13 @@ function math(tex: string, display: boolean): string {
 function inline(src: string): string {
   // code and mathematics first, so nothing inside them is read as emphasis
   const token = /`([^`]+)`|\\\[([\s\S]+?)\\\]|\$\$([\s\S]+?)\$\$|\\\(([\s\S]+?)\\\)|\$([^\s$](?:[^$]*[^\s$])?)\$(?!\d)/g;
-  let out = '';
-  let last = 0;
-  for (let m; (m = token.exec(src)); ) {
-    out += emphasis(escape(src.slice(last, m.index)));
-    if (m[1] !== undefined) out += `<code>${escape(m[1])}</code>`;
-    else if (m[2] !== undefined || m[3] !== undefined) out += math(m[2] ?? m[3], true);
-    else out += math(m[4] ?? m[5], false);
-    last = m.index + m[0].length;
-  }
-  return out + emphasis(escape(src.slice(last)));
+  // they are set aside as placeholders, so emphasis may span them (**A is `a`**)
+  const held: string[] = [];
+  const text = src.replace(/\u0001/g, '').replace(token, (_m, code, d1, d2, i1, i2) => {
+    held.push(code !== undefined ? `<code>${escape(code)}</code>` : d1 !== undefined || d2 !== undefined ? math(d1 ?? d2, true) : math(i1 ?? i2, false));
+    return `\u0001${held.length - 1}\u0001`;
+  });
+  return emphasis(escape(text)).replace(/\u0001(\d+)\u0001/g, (_m, i) => held[Number(i)]);
 }
 
 function emphasis(s: string): string {

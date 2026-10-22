@@ -33,4 +33,11 @@ describe('markdown', () => {
     expect(markdown('\\(\\frac{1}\\)')).toContain('<code>\\frac{1}</code>');
     expect(markdown('so\n\\[\na = b')).toContain('<p>so\n\\[\na = b</p>');
   });
+
+  it('reads emphasis around code and mathematics', () => {
+    const html = markdown('In the workspace, **A is `a` and B is `b`**: and *\\(x\\) here*.');
+    expect(html).toContain('<strong>A is <code>a</code> and B is <code>b</code></strong>');
+    expect(html).toMatch(/<em><span class="katex">.*<\/span> here<\/em>/);
+    expect(html).not.toContain('**');
+  });
 });
