@@ -3,7 +3,7 @@ name: Deploy web app
 # Every push to master deploys the web app to Cloudflare Pages (project "diagcalc"), where
 # Cloudflare Access keeps it private until the public release. The job does nothing until the
 # repository has the secrets CLOUDFLARE_API_TOKEN (a token with Cloudflare Pages: Edit) and
-# CLOUDFLARE_ACCOUNT_ID.
+# CLOUDFLARE_ACCOUNT_ID. The first run creates the Pages project.
 
 on:
   push:
@@ -55,6 +55,15 @@ jobs:
           npm ci
           npm run wasm
           npm run build
+      - name: Create the Pages project if it does not exist
+        if: env.CONFIGURED == 'true'
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: pages project create diagcalc --production-branch=master
       - name: Deploy to Cloudflare Pages
         if: env.CONFIGURED == 'true'
         uses: cloudflare/wrangler-action@v3
