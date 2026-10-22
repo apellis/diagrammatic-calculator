@@ -45,7 +45,7 @@ jobs:
         run: |
           if [ ! -f tests/golden/actions.json ]; then echo "tests/golden/actions.json is missing"; exit 1; fi
           diff -u tests/golden/actions.json /tmp/actions.json
-          if [ ! -f tests/lean-values/values.json ]; then echo "tests/lean-values/values.json is missing"; exit 1; fi
+          if [ ! -f tests/lean-values/values.json ]; then echo "tests/lean-values/values.json is missing; computed:"; cat /tmp/values.json; exit 1; fi
           diff -u tests/lean-values/values.json /tmp/values.json
       - name: Commit the regenerated file
         if: ${{ inputs.update }}
