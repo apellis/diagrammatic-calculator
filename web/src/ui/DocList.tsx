@@ -201,6 +201,13 @@ export function DocList() {
         <div class="grow" />
         <input placeholder="Search" value={query()} onInput={(e) => setQuery(e.currentTarget.value)} aria-label="Search documents" />
         <AccountBar />
+        <a class="button icon" href="#/about" data-testid="open-about" title="About" aria-label="About">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9.5" />
+            <path d="M12 11v6" />
+            <circle cx="12" cy="7.5" r="0.6" fill="currentColor" />
+          </svg>
+        </a>
         <a class="button icon" href="#/settings" data-testid="open-settings" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3" />

@@ -546,3 +546,6 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .value-changes td:first-child { white-space: nowrap; }
 .brief { display: inline-flex; align-items: baseline; gap: 4px; max-width: 52ch; overflow-x: auto; white-space: nowrap; }
 .brief .value { display: inline; }
+.about-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 16px 0; }
+.about-facts dt { color: var(--muted); }
+.about-facts dd { margin: 0; }

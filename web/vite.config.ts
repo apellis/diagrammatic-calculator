@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import solid from 'vite-plugin-solid';
 
 /** The headers public/_headers gives every file (its `/*` rule), as Cloudflare Pages serves them. */
@@ -24,8 +25,66 @@ const headers = pagesHeaders();
 // than the policy allows. `vite preview` (and so the browser tests) serves all of them.
 const isolation = { 'Cross-Origin-Opener-Policy': headers['Cross-Origin-Opener-Policy'], 'Cross-Origin-Embedder-Policy': headers['Cross-Origin-Embedder-Policy'] };
 
+/** The short hash of the commit being built (GitHub's on CI), shown on the About page. */
+function commit(): string {
+  const sha = process.env.GITHUB_SHA;
+  if (sha) return sha.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * `/privacy`: the repository's PRIVACY.md as a static page, so the policy has an address on this
+ * site of its own. Only a title and plain paragraphs are read; anything else stops the build, so the
+ * page never shows the policy differently from the file.
+ */
+export function privacyPage(): string {
+  const src = readFileSync(new URL('../PRIVACY.md', import.meta.url), 'utf8');
+  const blocks = src.trim().split(/\n\s*\n/);
+  const body = blocks.map((b, i) => {
+    const text = b.replace(/\s*\n\s*/g, ' ').trim();
+    if (i === 0 && text.startsWith('# ')) return `<h1>${escapeHtml(text.slice(2))}</h1>`;
+    if (/^[#>*\-+|`\d]|\[|\]\(|[*_`]/.test(text)) throw new Error(`PRIVACY.md: unsupported Markdown in "${text.slice(0, 40)}"`);
+    return `<p>${escapeHtml(text)}</p>`;
+  });
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · diagrammatic-calculator</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root { color-scheme: light dark; }
+body { max-width: 640px; margin: 0 auto; padding: 32px 18px; font: 16px/1.55 system-ui, sans-serif; background: Canvas; color: CanvasText; }
+h1 { font-size: 24px; }
+</style>
+</head>
+<body>
+${body.join('\n')}
+<p><a href="/">diagrammatic-calculator</a></p>
+</body>
+</html>
+`;
+}
+
+function privacy(): Plugin {
+  return {
+    name: 'privacy-page',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'privacy.html', source: privacyPage() });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [solid()],
+  plugins: [solid(), privacy()],
+  define: { __COMMIT__: JSON.stringify(commit()) },
   server: { headers: isolation, fs: { allow: ['..'] } },
   preview: { headers },
   worker: { format: 'es' },

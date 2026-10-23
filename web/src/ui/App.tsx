@@ -1,20 +1,23 @@
 import { createSignal, Match, onCleanup, Switch } from 'solid-js';
 import { DocList } from './DocList';
 import { SettingsPage } from './SettingsPage';
+import { AboutPage } from './AboutPage';
 import { WorkspacePage } from './WorkspacePage';
 import { OpenShared } from './Account';
 import { loadAccount } from '../account/account';
 
 /**
- * Routes: `#/` the document list, `#/doc/<id>` a document, `#/settings` the settings, and
+ * Routes: `#/` the document list, `#/doc/<id>` a document, `#/settings` the settings, `#/about`
+ * about the calculator, and
  * `#/s/<id>` or `#/s/<id>/<link token>` a document from an account.
  */
 export function App() {
   const [hash, setHash] = createSignal(location.hash);
-  // the route before the settings were opened, for their Back button
+  // the route before the settings or the About page were opened, for their Back button
   let from = '';
   const on = () => {
-    if (location.hash === '#/settings' && hash() !== '#/settings') from = hash();
+    const side = (h: string) => h === '#/settings' || h === '#/about';
+    if (side(location.hash) && !side(hash())) from = hash();
     setHash(location.hash);
   };
   window.addEventListener('hashchange', on);
@@ -30,6 +33,9 @@ export function App() {
     <Switch fallback={<DocList />}>
       <Match when={hash() === '#/settings'}>
         <SettingsPage from={from} />
+      </Match>
+      <Match when={hash() === '#/about'}>
+        <AboutPage from={from} />
       </Match>
       <Match when={docId()} keyed>
         {(id) => <WorkspacePage id={id} />}
