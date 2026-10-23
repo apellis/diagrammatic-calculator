@@ -188,6 +188,7 @@ impl<'a, R: Ring> Up<'a, R> {
     }
 
     /// Whether variable `v` is a dot, a bubble or a scalar.
+    #[cfg(test)]
     fn is_dot(&self, v: usize) -> bool {
         v < self.nx
     }
@@ -487,10 +488,8 @@ impl<'a, R: Ring> Up<'a, R> {
         out
     }
 
-    /// `p · v`: a polynomial in the dots at the top of `v`, the bubbles and the scalars,
-    /// multiplied on top, its monomials read as products in variable order (the first variable
-    /// highest).
-    pub fn mul_top(&self, cols: &[u16], v: &Val<R::Elem>, p: &P<R>) -> Val<R::Elem> {
+    #[cfg(test)]
+    fn mul_top_eager(&self, cols: &[u16], v: &Val<R::Elem>, p: &P<R>) -> Val<R::Elem> {
         let mut out = Val::new();
         let nv = self.plain.nvars();
         for (m, c) in &p.terms {
@@ -521,6 +520,47 @@ impl<'a, R: Ring> Up<'a, R> {
                         }
                     }
                     cur = next;
+                }
+            }
+            self.add_into(cols, &mut out, &cur, false);
+        }
+        out
+    }
+
+    /// `p · v`: a polynomial in the dots at the top of `v`, the bubbles and the scalars,
+    /// multiplied on top, its monomials read as products in variable order (the first variable
+    /// highest).
+    pub fn mul_top(&self, cols: &[u16], v: &Val<R::Elem>, p: &P<R>) -> Val<R::Elem> {
+        let r = self.ring(cols);
+        // Group only by the dot prefix: bubble/scalar factors are applied first,
+        // keeping their original order and their sign across each permutation.
+        let mut groups: BTreeMap<Exps, Val<R::Elem>> = BTreeMap::new();
+        for (m, c) in &p.terms {
+            let dots = Exps::from_slice(&m.0[..self.nx]);
+            let mut tail = m.clone();
+            tail.0[..self.nx].fill(0);
+            let odd = self.mono_odd(cols, &tail);
+            let z = r.monomial(tail, c.clone());
+            let cur = groups.entry(dots).or_default();
+            for (w, f) in v {
+                let mut g = r.mul(&z, f);
+                if odd && self.perm_odd(cols, w) {
+                    g = r.neg(&g);
+                }
+                match cur.get_mut(w) {
+                    Some(h) => r.add_assign(h, &g),
+                    None => {
+                        cur.insert(w.clone(), g);
+                    }
+                }
+            }
+        }
+        let mut out = Val::new();
+        for (dots, mut cur) in groups {
+            cur.retain(|_, f| !r.is_zero(f));
+            for (var, &e) in dots.iter().enumerate().rev() {
+                for _ in 0..e {
+                    cur = self.dot(cols, &cur, var);
                 }
             }
             self.add_into(cols, &mut out, &cur, false);
@@ -1328,6 +1368,86 @@ mod tests {
                     let theirs = canon(&c, theirs.terms);
                     assert_eq!(mine, theirs, "{spec} {cols:?} {word:?}");
                 }
+            }
+        }
+    }
+    #[test]
+    fn grouped_mul_top_matches_eager() {
+        for spec in ["be2 type=A2", "be2 type=B2 odd=j", "be2 type=A1xA1 odd=i,j"] {
+            let c = ctx(spec);
+            let up = Up::new(&c, 3, 3).unwrap();
+            for cols in [vec![0, 1, 0], vec![1, 1, 0], vec![1, 0, 1]] {
+                let r = up.ring(&cols);
+                let mut v = up.word(&cols, &[0, 1, 0]);
+                up.add_into(&cols, &mut v, &up.ident(3), false);
+                for degree in 0..4 {
+                    let mut p = r.zero();
+                    for dot in 0..3 {
+                        for var in up.nx..r.nvars() {
+                            let mut m = Monomial::one(r.nvars());
+                            m.0[dot] = degree;
+                            m.0[var] = 1;
+                            r.add_assign(
+                                &mut p,
+                                &r.monomial(m, r.base.int(if var % 2 == 0 { 2 } else { -3 })),
+                            );
+                        }
+                    }
+                    // Mixed tail products exercise two odd bubbles; multiplying the
+                    // value by an odd bubble also exercises its exterior square.
+                    let tail = r.mul(&r.var(up.doff()), &r.var(up.doff() + 1));
+                    r.add_assign(&mut p, &r.mul(&up.x(0), &tail));
+                    let v = up.mul_bottom(&cols, &v, &r.add(&r.one(), &r.var(up.doff())));
+                    assert_eq!(
+                        up.mul_top(&cols, &v, &p),
+                        up.mul_top_eager(&cols, &v, &p),
+                        "{spec} {cols:?} {degree}"
+                    );
+                }
+            }
+        }
+    }
+    #[test]
+    #[ignore = "paired arithmetic timing; run release with --nocapture"]
+    fn arithmetic_timing() {
+        for spec in ["be2 type=A2", "be2 type=A1xA1 odd=i,j"] {
+            let c = ctx(spec);
+            let up = Up::new(&c, 3, 4).unwrap();
+            let cols = [0, 1, 0];
+            let r = up.ring(&cols);
+            let v = up.word(&cols, &[0, 1, 0]);
+            for dense in [false, true] {
+                let mut p = r.zero();
+                for dot in 0..3 {
+                    for var in up.nx..if dense { r.nvars() } else { up.nx + 1 } {
+                        let mut m = Monomial::one(r.nvars());
+                        m.0[dot] = 3;
+                        m.0[var] = 1;
+                        r.add_assign(&mut p, &r.monomial(m, r.base.one()));
+                    }
+                }
+                assert_eq!(up.mul_top(&cols, &v, &p), up.mul_top_eager(&cols, &v, &p));
+                let mut samples = [Vec::new(), Vec::new()];
+                for pass in 0..9 {
+                    for which in [pass % 2, 1 - pass % 2] {
+                        let start = std::time::Instant::now();
+                        for _ in 0..100 {
+                            std::hint::black_box(if which == 0 {
+                                up.mul_top_eager(&cols, &v, &p)
+                            } else {
+                                up.mul_top(&cols, &v, &p)
+                            });
+                        }
+                        samples[which].push(start.elapsed().as_secs_f64() * 1e4);
+                    }
+                }
+                for s in &mut samples {
+                    s.sort_by(f64::total_cmp);
+                }
+                println!(
+                    "mul_top {spec} dense={dense} eager_us={} candidate_us={} samples={samples:?}",
+                    samples[0][4], samples[1][4]
+                );
             }
         }
     }

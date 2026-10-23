@@ -268,6 +268,48 @@ impl<R: Ring> Alg<R> {
         }
     }
 
+    #[cfg(test)]
+    fn val_mul_lazy(&self, top: &Value<R::Elem>, bottom: &Value<R::Elem>) -> Value<R::Elem> {
+        let mut out: Value<R::Elem> = Value::new();
+        for ((j, v), s) in bottom {
+            let t = permute_object(j, v);
+            for ((i, w), r) in top.range((t.clone(), Perm::identity(0))..) {
+                if *i != t {
+                    break;
+                }
+                // These intermediates need not be in lowest terms. In particular do not
+                // use add_assign's cancellation shortcut until the whole sum is complete.
+                let s = self.act(w, s);
+                let f = Frac {
+                    num: self.ring.mul(&r.num, &s.num),
+                    den: r.den.iter().zip(&s.den).map(|(a, b)| a + b).collect(),
+                };
+                let key = (j.clone(), w.compose(v));
+                if let Some(g) = out.get_mut(&key) {
+                    let mut num = f.num;
+                    for k in 0..g.den.len() {
+                        for _ in g.den[k]..f.den[k] {
+                            g.num = self.ring.mul(&g.num, &self.diffs[k]);
+                        }
+                        for _ in f.den[k]..g.den[k] {
+                            num = self.ring.mul(&num, &self.diffs[k]);
+                        }
+                        g.den[k] = g.den[k].max(f.den[k]);
+                    }
+                    self.ring.add_assign(&mut g.num, &num);
+                } else {
+                    out.insert(key, f);
+                }
+            }
+        }
+        out.into_iter()
+            .filter_map(|(key, f)| {
+                let f = self.canon(f);
+                (!self.ring.is_zero(&f.num)).then_some((key, f))
+            })
+            .collect()
+    }
+
     /// `top ∘ bottom`.
     pub(super) fn val_mul(&self, top: &Value<R::Elem>, bottom: &Value<R::Elem>) -> Value<R::Elem> {
         let mut out = Value::new();
@@ -540,5 +582,111 @@ impl<R: Ring> Evaluator<R> for Smash<'_, R> {
 
     fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {
         self.shape().max_degree_below_dot_cap(src, cap)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ring::Integers;
+    use crate::term::Letter;
+
+    #[test]
+    fn val_mul_matches_eager_with_cancellation() {
+        let alg = Alg::new(PolyRing::new(Integers, &["x", "y", "z"]), 3);
+        let obj = vec![
+            Letter {
+                colour: 0,
+                up: true
+            };
+            3
+        ];
+        for seed in 0..24 {
+            let mut a = Value::new();
+            let mut b = Value::new();
+            for (idx, w) in [Perm::identity(3), Perm::simple(3, 0), Perm::simple(3, 1)]
+                .into_iter()
+                .enumerate()
+            {
+                let mut den: Den = smallvec![0; 9];
+                den[1] = (seed % 3) as u32;
+                den[5] = (idx % 2) as u32;
+                let num = alg.ring.add(
+                    &alg.ring.pow(&alg.ring.var(idx), 2),
+                    &alg.ring.int(seed - 12),
+                );
+                let f = alg.canon(Frac { num, den });
+                a.insert((obj.clone(), w.clone()), f.clone());
+                b.insert((obj.clone(), w), if idx % 2 == 0 { f } else { alg.neg(&f) });
+            }
+            assert_eq!(alg.val_mul(&a, &b), alg.val_mul_lazy(&a, &b));
+        }
+        let mut d: Den = smallvec![0; 9];
+        d[1] = 1;
+        let inv = Frac {
+            num: alg.ring.one(),
+            den: d,
+        };
+        let dd = Value::from([
+            ((obj.clone(), Perm::identity(3)), inv.clone()),
+            ((obj, Perm::simple(3, 0)), alg.neg(&inv)),
+        ]);
+        assert!(alg.val_mul(&dd, &dd).is_empty());
+    }
+    #[test]
+    #[ignore = "paired arithmetic timing; run release with --nocapture"]
+    fn arithmetic_timing() {
+        let alg = Alg::new(PolyRing::new(Integers, &["x", "y", "z"]), 3);
+        let obj = vec![
+            Letter {
+                colour: 0,
+                up: true
+            };
+            3
+        ];
+        let mut d: Den = smallvec![0; 9];
+        d[1] = 1;
+        let inv = Frac {
+            num: alg.ring.one(),
+            den: d,
+        };
+        let dd = Value::from([
+            ((obj.clone(), Perm::identity(3)), inv.clone()),
+            ((obj.clone(), Perm::simple(3, 0)), alg.neg(&inv)),
+        ]);
+        let poly = Value::from([(
+            (obj, Perm::identity(3)),
+            alg.poly(
+                alg.ring
+                    .pow(&alg.ring.add(&alg.ring.var(0), &alg.ring.var(2)), 5),
+            ),
+        )]);
+        for (label, a, b) in [
+            ("divided-difference-square", &dd, &dd),
+            ("dot-polynomial", &dd, &poly),
+        ] {
+            assert_eq!(alg.val_mul(a, b), alg.val_mul_lazy(a, b));
+            let mut samples = [Vec::new(), Vec::new()];
+            for pass in 0..9 {
+                for which in [pass % 2, 1 - pass % 2] {
+                    let start = std::time::Instant::now();
+                    for _ in 0..1000 {
+                        std::hint::black_box(if which == 0 {
+                            alg.val_mul(a, b)
+                        } else {
+                            alg.val_mul_lazy(a, b)
+                        });
+                    }
+                    samples[which].push(start.elapsed().as_secs_f64() * 1e3);
+                }
+            }
+            for s in &mut samples {
+                s.sort_by(f64::total_cmp);
+            }
+            println!(
+                "val_mul {label} eager_us={} candidate_us={} samples={samples:?}",
+                samples[0][4], samples[1][4]
+            );
+        }
     }
 }
