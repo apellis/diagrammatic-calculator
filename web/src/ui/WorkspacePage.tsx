@@ -10,7 +10,7 @@ import { Cell, TEMPLATES } from './Cell';
 import { Outline } from './Outline';
 import { ContextChip, ContextText } from './ContextChip';
 import { Typeset } from './Typeset';
-import { ResultView } from './Results';
+import { ResultView, Brief } from './Results';
 import { Dialog } from './Dialog';
 import { Palette, type Command } from './Palette';
 import { importText } from './DocList';
@@ -40,6 +40,8 @@ export interface Branching {
   create: (name?: string, inputs?: Inputs) => string;
   open: (id: string | null) => void;
   compare: () => Comparison | null;
+  /** The document now and as accepting the branch would make it, with the comparison. */
+  preview: () => { before: Inputs; after: Inputs; comparison: Comparison } | null;
   accept: () => Comparison | null;
   discard: () => void;
 }
@@ -119,6 +121,10 @@ function Workspace(props: { o: OpenDoc }) {
     compare: () => {
       const c = current();
       return c ? main.compareBranch(c.id, c.doc) : null;
+    },
+    preview: () => {
+      const c = current();
+      return c ? main.previewBranch(c.id, c.doc) : null;
     },
     accept: () => {
       const c = current();
@@ -766,9 +772,9 @@ function DocView(props: {
         {(id) => <ShareDialog cloudId={id()} name={name()} role={props.sync!.role ?? 'viewer'} onClose={() => setModal(null)}
           onCleanCopy={async () => { setModal(null); location.hash = `#/doc/${await createCleanCopy(main, `${name()} (clean copy)`)}`; }} />}
       </Show>
-      <Show when={modal() === 'branch' && props.branching.compare()} keyed>
-        {(cmp) => (
-          <BranchView name={props.branching.current?.name ?? ''} cmp={cmp} onClose={() => setModal(null)}
+      <Show when={modal() === 'branch' && props.branching.preview()} keyed>
+        {(pv) => (
+          <BranchView name={props.branching.current?.name ?? ''} cmp={pv.comparison} before={pv.before} after={pv.after} onClose={() => setModal(null)}
             onAccept={() => { setModal(null); const r = props.branching.accept(); if (r) setMessage(`Accepted: ${describe(r)}.`); }}
             onDiscard={() => { setModal(null); discardBranch(); }} />
         )}
@@ -854,7 +860,7 @@ function describe(c: Comparison): string {
   return parts.length ? parts.join(', ') : 'no changes';
 }
 
-function BranchView(props: { name: string; cmp: Comparison; onClose: () => void; onAccept: () => void; onDiscard: () => void }) {
+function BranchView(props: { name: string; cmp: Comparison; before: Inputs; after: Inputs; onClose: () => void; onAccept: () => void; onDiscard: () => void }) {
   const c = () => props.cmp;
   return (
     <Dialog label={`Branch ${props.name}`} onClose={props.onClose}>
@@ -870,6 +876,7 @@ function BranchView(props: { name: string; cmp: Comparison; onClose: () => void;
           ...c().removed.map((x) => `− ${x.text}`),
           ...(c().hints ? [`${c().hints} drawing ${c().hints === 1 ? 'hint' : 'hints'}`] : []),
         ].join('\n') || 'The branch changes nothing.'}</pre>
+        <ValueChanges before={props.before} after={props.after} />
         <div class="row" style={{ 'margin-top': '10px' }}>
           <button class="primary" onClick={props.onAccept}>Accept</button>
           <button onClick={props.onClose}>Keep working on the branch</button>
@@ -877,6 +884,102 @@ function BranchView(props: { name: string; cmp: Comparison; onClose: () => void;
           <button onClick={props.onDiscard}>Discard the branch</button>
         </div>
     </Dialog>
+  );
+}
+
+/** Cell states of some inputs, computed by an evaluator of their own (mostly from the result cache) while shown. */
+function useStates(inputs: Inputs): () => Map<string, CellState> {
+  const [states, setStates] = createSignal(new Map<string, CellState>(), { equals: false });
+  let ev: Evaluator | undefined;
+  let alive = true;
+  void engineId.then((id) => {
+    if (!alive) return;
+    ev = new Evaluator(engine, cache, { engineId: id }, (s) => {
+      if (!alive) return;
+      const m = states();
+      m.set(s.id, s);
+      setStates(m);
+    });
+    void ev.update(inputs.context, inputs.cells);
+  });
+  onCleanup(() => {
+    alive = false;
+    ev?.cancelAll();
+  });
+  return states;
+}
+
+/** A value as text, to tell whether two values differ. */
+function valueText(s?: CellState): string | null {
+  if (!s || s.status === 'running' || s.status === 'stale') return null;
+  if (s.parseError) return `parse error ${s.parseError}`;
+  const v = s.value;
+  if (!v) return '';
+  if (v.status !== 'ok') return `${v.status} ${v.message}`;
+  switch (v.kind) {
+    case 'watch': return `watch ${v.normal_form}`;
+    case 'def': return `def ${v.term}`;
+    case 'check': return `check ${v.holds}`;
+    default: return JSON.stringify({ ...v, provenance: undefined });
+  }
+}
+
+/**
+ * How accepting a branch changes the values of the document's cells: for each cell whose value
+ * would change, the value now and the value after, typeset.
+ */
+function ValueChanges(props: { before: Inputs; after: Inputs }) {
+  const before = useStates(props.before);
+  const after = useStates(props.after);
+  const computes = (s?: CellState) => !!s && s.status !== 'static' && !!s.parsed && !['note', 'comment', 'blank'].includes(s.parsed.kind);
+  const rows = () => {
+    const [b, a] = [before(), after()];
+    const out: { id: string; kind: string; old?: CellState; now?: CellState; what: 'changed' | 'added' | 'removed' }[] = [];
+    const ids = new Set(props.before.cells.map((c) => c.id));
+    for (const c of props.after.cells) {
+      const now = a.get(c.id);
+      const old = ids.has(c.id) ? b.get(c.id) : undefined;
+      if (!computes(now) && !computes(old)) continue;
+      if (ids.has(c.id)) {
+        if (old?.key && now?.key && old.key === now.key) continue;
+        const [x, y] = [valueText(old), valueText(now)];
+        if (x !== null && y !== null && x === y) continue;
+      }
+      out.push({ id: c.id, kind: (now ?? old)?.parsed?.kind ?? '', old, now, what: ids.has(c.id) ? 'changed' : 'added' });
+    }
+    const kept = new Set(props.after.cells.map((c) => c.id));
+    for (const c of props.before.cells) {
+      const old = b.get(c.id);
+      if (!kept.has(c.id) && computes(old)) out.push({ id: c.id, kind: old!.parsed!.kind, old, what: 'removed' });
+    }
+    return out;
+  };
+  const pending = () => [...before().values(), ...after().values()].some((s) => s.status === 'running' || s.status === 'stale');
+  return (
+    <div class="value-changes" data-testid="value-changes">
+      <h4>Values</h4>
+      <Show when={rows().length} fallback={<p class="hint">{pending() ? 'Computing the values…' : 'No value of a cell changes.'}</p>}>
+        <table class="kv">
+          <tbody>
+            <For each={rows()}>
+              {(r) => (
+                <tr data-cell={r.id}>
+                  <td><span class="kind">{r.kind}</span> {r.id}</td>
+                  <td>
+                    <span class="row" style={{ 'flex-wrap': 'wrap', gap: '6px' }}>
+                      <Show when={r.what !== 'added'} fallback={<span class="hint">new cell</span>}><Brief s={r.old} /></Show>
+                      <span class="hint" aria-label="becomes">→</span>
+                      <Show when={r.what !== 'removed'} fallback={<span class="hint">removed</span>}><Brief s={r.now} /></Show>
+                    </span>
+                  </td>
+                </tr>
+              )}
+            </For>
+          </tbody>
+        </table>
+        <Show when={pending()}><p class="hint">Computing the other values…</p></Show>
+      </Show>
+    </div>
   );
 }
 

@@ -34,6 +34,13 @@ test('a scratch branch: try a change, leave it, come back, accept it, undo the a
   await expect(text(page, 0)).toHaveAttribute('data-text', 'a := x_1 e(iji) + x_3 e(iji)');
   await page.getByRole('button', { name: 'Accept…' }).click();
   await expect(page.getByTestId('branch-diff')).toContainText('→ def a := x_1 e(iji) + x_3 e(iji)');
+  // and how each value would change: the definition's term and the watch's normal form
+  const values = page.getByTestId('value-changes');
+  await expect(values.locator('tr')).toHaveCount(2);
+  await expect(values.locator('tr').nth(1)).toContainText('watch');
+  await expect(values.locator('tr').nth(1).getByTestId('brief').first()).toContainText('(1 term, degree 4)');
+  await expect(values.locator('tr').nth(1).getByTestId('brief').last()).toContainText('(3 terms, degree 4)');
+  await expect(values.locator('.katex').first()).toBeVisible();
   await page.getByRole('button', { name: 'Accept', exact: true }).click();
   await expect(page.getByTestId('branch')).toHaveCount(0);
   await expect(page.getByLabel('Branches')).toHaveCount(0);

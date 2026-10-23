@@ -519,6 +519,20 @@ export class Doc {
   }
 
   /**
+   * What accepting the branch would make the document, without changing anything: the merged
+   * inputs and the comparison. A cell the branch added whose ID the document has since used gets a
+   * temporary ID here (accepting gives it a fresh one).
+   */
+  previewBranch(id: string, d: Doc): { before: Inputs; after: Inputs; comparison: Comparison } {
+    const b = this.branch(id);
+    if (!b) throw new Error(`no branch ${id}`);
+    const before = this.inputs();
+    let n = 0;
+    const { result, comparison } = merge(b.base, before, d.inputs(), () => `preview${++n}`);
+    return { before, after: result, comparison };
+  }
+
+  /**
    * `branch.accept`: merges the branch's changes into the document as one step and removes the
    * branch. Changes made to the document since the branch was made are kept, except in cells the
    * branch also changed, where the branch's text wins (listed as conflicts).

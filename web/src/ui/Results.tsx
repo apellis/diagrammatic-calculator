@@ -349,6 +349,32 @@ function SolveView(props: { r: Ok }) {
   );
 }
 
+/** A value in brief, on one line where it fits: for lists such as the value changes a branch makes. */
+export function Brief(props: { s?: CellState }) {
+  const v = () => props.s?.value;
+  const r = () => (ok(v()) ? (v() as Ok) : null);
+  return (
+    <span class="brief" data-testid="brief">
+      <Switch fallback={<span class="hint">computing…</span>}>
+        <Match when={props.s?.parseError}><span class="error">does not parse</span></Match>
+        <Match when={props.s?.status === 'running' || props.s?.status === 'stale'}><span class="hint">computing…</span></Match>
+        <Match when={v()?.status === 'error'}><span class="error">{(v() as { message: string }).message === 'cancelled' ? 'cancelled' : 'error'}</span></Match>
+        <Match when={v()?.status === 'exploded'}><span class="error">stopped at the time limit</span></Match>
+        <Match when={r()?.kind === 'watch' && r()}>
+          {(x) => <><Typeset text={x().normal_form ?? ''} /> <span class="hint">({summary(props.s!)})</span></>}
+        </Match>
+        <Match when={r()?.kind === 'def' && r()}>{(x) => <Typeset text={x().term ?? ''} />}</Match>
+        <Match when={r()?.kind === 'check' && r()}>
+          {(x) => <span class={`badge ${x().holds ? 'good' : 'bad'}`}>{x().holds ? 'holds' : 'fails'}</span>}
+        </Match>
+        <Match when={r()?.kind === 'solve' && r()}>
+          {(x) => <>{solveSummary(x())}<Show when={x().solution}>{(m) => <>: <Value text={assignments(m())} /></>}</Show></>}
+        </Match>
+      </Switch>
+    </span>
+  );
+}
+
 /** A note's text, with $…$ and $$…$$ as mathematics; `inline` for one line in a cell's head. */
 export function NoteView(props: { text: string; inline?: boolean }) {
   const part = (part: string) => {

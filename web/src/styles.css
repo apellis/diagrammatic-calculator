@@ -542,3 +542,7 @@ svg path.k15 { stroke: var(--strand-7); } svg :is(circle, polygon, text).k15 { f
 pre.diff > div { white-space: pre-wrap; }
 pre.diff > .add { background: var(--good-soft); color: var(--good); }
 pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
+.value-changes h4 { margin: 12px 0 4px; font-size: 13px; }
+.value-changes td:first-child { white-space: nowrap; }
+.brief { display: inline-flex; align-items: baseline; gap: 4px; max-width: 52ch; overflow-x: auto; white-space: nowrap; }
+.brief .value { display: inline; }
