@@ -20,7 +20,7 @@ ZONE=ape.computer
 DMARC_NAME=_dmarc.send.ape.computer
 DMARC_VALUE='v=DMARC1; p=quarantine; adkim=s; aspf=s'
 
-summary() { echo "$1" >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"; }
+summary() { echo "$1"; [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
 cf() { # method url [json]
   if [ $# -ge 3 ]; then
     curl -sS -X "$1" "$2" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
