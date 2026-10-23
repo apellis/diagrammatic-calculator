@@ -28,9 +28,10 @@ debug = 1
 [profile.bench]
 debug = 1
 
-# The browser build: small and fast, without debug information.
+# The browser build: small and fast, without debug information or symbol names.
 [profile.web]
 inherits = "release"
 debug = false
+strip = true
 lto = true
 codegen-units = 1
