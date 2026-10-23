@@ -401,7 +401,7 @@
           }
         },
         "even_only": {
-          "description": "For kind translation: the translation holds only when every colour is even.",
+          "description": "The representation holds only when every colour is even; in a context with an odd colour it does not apply.",
           "type": "boolean"
         },
         "roles": {

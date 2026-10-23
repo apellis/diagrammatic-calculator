@@ -143,6 +143,12 @@ E_a F_b`; `mixed-ef`, `mixed-fe` (`downupEF`, `downupFE`); the KLR relations on 
 (`klr`), with `Q_ab = u^{d_ab} + v^{d_ba}` by default. Relations whose terms involve `h(a)` hold for
 every weight of the rightmost region; the calculator instantiates them per region.
 
+**Normal forms** are written in the basis of KL III Proposition 3.11 (drawn as `design.md`
+describes). The first representation, `basis`, computes them with the BE2 evaluation
+(`skm-basis`, for even colours and the default `Q`); the second, `kl-evaluation`, with KL's own
+evaluation. Both write exactly the same normal forms; the tests check this for every relation in
+types A1, A2, B2 and G2 at the conformance checker's weights.
+
 ## The super Kac–Moody 2-category
 
 `presentations/be2.pres.toml` is the super Kac–Moody 2-category `U(g)` of Brundan–Ellis (Super
@@ -192,13 +198,16 @@ representation, `kl-translation` (chosen with `--strategy kl-translation`), carr
 | `lcross` | `cap_1 psi_2 cup_{3,a}` |
 
 Its normal forms are KL's (below), written back in `be2`'s names; a leftward crossing comes back as
-the rotated crossing. They coincide with those of `skm-basis` (the tests check this for every
-relation), and the conformance checker checks every relation of `be2` through both. With an odd
-colour the translation does not apply. The basis of `skm-basis` is KL's, drawn in `be2`'s names:
-caps `cap` (clockwise end on the right) or `capl`, cups `cup` or `cupl`, sideways crossings `lcross`, one dot exponent per arc at its left end, and real
-bubbles at the bottom right, clockwise when `⟨i, μ⟩ ≥ 0` and counterclockwise otherwise, with
-their dots on the upward leg. For an odd colour the bubbles of the basis are those of even
-degree index and at most one `δ` (index 1). The third, `quiver-hecke-basis`, remains for upward
+the rotated crossing. With every colour even they are exactly those of `skm-basis` (the tests check
+this for every relation), and the conformance checker checks every relation of `be2` through both.
+With an odd colour the translation does not apply. The basis of `skm-basis` is KL's, drawn in
+`be2`'s names: caps `cap` (clockwise end on the right) or `capl`, cups `cup` or `cupl`, sideways
+crossings as the rotated upward crossing (as `kl` draws them), one dot exponent per arc at its left
+end, and real bubbles at the bottom right, clockwise when `⟨i, μ⟩ ≥ 0` and counterclockwise
+otherwise. With every colour even a bubble's dots sit where KL's basis puts them (on the leg right
+of its cup); with an odd colour they sit on the upward leg, since an odd colour's downward dot is
+not the rotated upward one. For an odd colour the bubbles of the basis are those of even degree
+index and at most one `δ` (index 1). The third, `quiver-hecke-basis`, remains for upward
 diagrams.
 
 ## nilHecke and odd nilHecke algebras

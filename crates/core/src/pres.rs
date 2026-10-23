@@ -121,7 +121,8 @@ pub struct RepresentationDecl {
     /// Every generator of the target's normal forms must be the image of exactly one generator.
     pub target: String,
     pub images: BTreeMap<String, String>,
-    /// For kind `translation`: the translation holds only when every colour is even.
+    /// The representation holds only when every colour is even (a translation into an even
+    /// presentation, an even evaluation); elsewhere it does not apply.
     pub even_only: bool,
     pub certificate: Certificate,
     /// The certificate in a context whose colours are all even, when it is stronger there (the

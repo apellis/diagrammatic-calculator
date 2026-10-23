@@ -70,21 +70,7 @@ impl<'a, R: Ring> KlBasis<'a, R> {
                 "the KL normal form needs a Cartan datum",
             ));
         }
-        let nc = ctx.colours.len();
-        let q = ctx.params.get("Q");
-        for a in 0..nc {
-            for b in 0..nc {
-                if a == b {
-                    continue;
-                }
-                let want = ctx.default_param("klq2", a, b)?;
-                if q.and_then(|t| t.get(&(a as u16, b as u16))) != Some(&want) {
-                    return Err(Error::precondition(
-                        "the KL normal form needs the default Q = klq2 (its bubble slides assume it)",
-                    ));
-                }
-            }
-        }
+        super::require_klq2(ctx)?;
         Ok(KlBasis {
             ctx,
             roles,
@@ -324,7 +310,12 @@ mod tests {
     }
 
     fn strategy(c: &Context<Rationals>) -> KlBasis<'_, Rationals> {
-        let decl = &c.pres.representations[0];
+        let decl = c
+            .pres
+            .representations
+            .iter()
+            .find(|d| d.kind == "kl-basis")
+            .unwrap();
         let prov = Provenance {
             strategy: super::super::Strategy::BasisNormalForm,
             method: decl.name.clone(),
@@ -414,6 +405,124 @@ mod tests {
                     assert_eq!(kl.normal_form(&nl).unwrap(), nl, "{spec}: {}", rel.name);
                 }
             }
+        }
+    }
+
+    /// The session's representation of `kl`, the BE2 evaluation (`skm-basis`).
+    fn skm(c: &Context<Rationals>) -> Box<dyn Evaluator<Rationals> + '_> {
+        let decl = &c.pres.representations[0];
+        assert_eq!(decl.kind, "skm-basis");
+        crate::rep::evaluator(c, decl).unwrap()
+    }
+
+    /// The BE2 evaluation gives exactly this module's normal forms: both sides of every relation
+    /// in types A1, A2, B2 and G2 at the conformance checker's weights.
+    #[test]
+    fn the_skm_evaluation_agrees_on_every_relation() {
+        let mut checked = 0;
+        for spec in [
+            "kl type=A1 mu=-3",
+            "kl type=A1 mu=-2",
+            "kl type=A1 mu=-1",
+            "kl type=A1 mu=0",
+            "kl type=A1 mu=1",
+            "kl type=A1 mu=2",
+            "kl type=A1 mu=3",
+            "kl type=A2 mu=0",
+            "kl type=A2 mu=i",
+            "kl type=A2 mu=-j",
+            "kl type=A2 mu=2i-j",
+            "kl type=A2 mu=-i-2j",
+            "kl type=B2 mu=0",
+            "kl type=B2 mu=i-j",
+            "kl type=B2 mu=-2j",
+            "kl type=G2 mu=0",
+            "kl type=G2 mu=i",
+            "kl type=G2 mu=-j",
+        ] {
+            let mut c = ctx(spec);
+            c.objects.clear();
+            c.weight = None;
+            let kl = strategy(&c);
+            let skm = skm(&c);
+            for rel in &c.pres.relations {
+                for b in instances(&c, rel).unwrap() {
+                    let (l, r) = instance_terms(&c, rel, &b).unwrap();
+                    for t in [&l, &r] {
+                        assert_eq!(
+                            c.fmt_term(&skm.normal_form(t).unwrap()),
+                            c.fmt_term(&kl.normal_form(t).unwrap()),
+                            "{spec}: {} ({})",
+                            rel.name,
+                            c.fmt_term(t)
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked > 1000, "only {checked} relation sides");
+    }
+
+    /// The same on every basis word of up to three strands, and on composites that need the
+    /// bubble slides and the sorting decompositions.
+    #[test]
+    fn the_skm_evaluation_agrees_on_basis_words_and_composites() {
+        for spec in [
+            "kl type=A1 mu=-1",
+            "kl type=A1 mu=0",
+            "kl type=A1 mu=2",
+            "kl type=A2 mu=i",
+            "kl type=B2 mu=i-j",
+            "kl type=G2 mu=-j",
+        ] {
+            let c = ctx(spec);
+            let kl = strategy(&c);
+            let skm = skm(&c);
+            let mut n = 0;
+            for s in objects(c.colours.len(), 2) {
+                for t in objects(c.colours.len(), 2) {
+                    if s.len() + t.len() > 3 {
+                        continue;
+                    }
+                    for degree in -2..=4 {
+                        for w in basis::basis_between(&c, &kl.roles, &s, &t, degree).unwrap() {
+                            let b = c.monomial_term(&w, c.coeff.one());
+                            assert_eq!(
+                                skm.normal_form(&b).unwrap(),
+                                b,
+                                "{spec}: {}",
+                                c.fmt_term(&b)
+                            );
+                            n += 1;
+                        }
+                    }
+                }
+            }
+            assert!(n > 20, "{spec}: only {n} words");
+        }
+        for (spec, t) in [
+            ("kl type=A1 mu=0", "x_1 psi_2 e(i* i i)"),
+            ("kl type=A1 mu=1", "cap_1 x_2 psi_2 cup_{1,i*} e(i)"),
+            (
+                "kl type=A1 mu=1",
+                "cap_1 x_1^2 cup_{1,i} cap_1 x_1^3 cup_{1,i} e()",
+            ),
+            ("kl type=A1 mu=-2", "cap_1 x_2 psi_2 cup_{1,i*} e(i)"),
+            ("kl type=A1 mu=-1", "x_1^2 e(i* i)"),
+            ("kl type=A2 mu=0", "cap_1 psi_2 cup_{3,j} e(j* i)"),
+            ("kl type=B2 mu=i-j", "psi_2 x_3 e(i* j i)"),
+        ] {
+            let c = ctx(spec);
+            let kl = strategy(&c);
+            let skm = skm(&c);
+            let t = c.parse_term(t).unwrap();
+            assert_eq!(
+                c.fmt_term(&skm.normal_form(&t).unwrap()),
+                c.fmt_term(&kl.normal_form(&t).unwrap()),
+                "{spec}: {}",
+                c.fmt_term(&t)
+            );
         }
     }
 }

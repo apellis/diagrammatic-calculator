@@ -114,6 +114,9 @@ crossings also against odd-lean by the Lean export.
 
 ### The KL basis normal form (`rep/kl`, representation kind `kl-basis`)
 
+This is `kl`'s second representation, `kl-evaluation`; the first computes the same normal forms
+with the BE2 evaluation (see the BE2 section below).
+
 A 2-morphism `f : s → t` of `U(g)` in the region `μ` is bent to `1_μ → *s t` with nested cups on
 the left. The evaluation `Φ` (KL III, arXiv:0807.3250, Lemma 3.9 and Theorem 1.2) writes such a
 morphism as one upward diagram with bubbles per term of a sorting decomposition of `1_{*s t}`.
@@ -166,7 +169,7 @@ that the cache is missed, and check that a hit gives the same normal form as no 
 ### The BE2 basis normal form (`rep/skm`, representation kind `skm-basis`)
 
 The super version of the KL evaluation, for `be2` with any parities (Brundan–Ellis,
-arXiv:1701.04133v2). The structure is the KL one: bend, evaluate run by run into upward diagrams
+arXiv:1701.04133v2), and for `kl`. The structure is the KL one: bend, evaluate run by run into upward diagrams
 with bubbles, solve against the basis of reduced matchings. What changes:
 
 - **Upward diagrams.** Values live in the quiver Hecke superalgebra (`ψ_ŵ x^a`, odd dots for odd
@@ -202,8 +205,21 @@ so the representation declares a second certificate, `even_certificate`, with st
 results in such a context carry it: this is the session's representation for even data. The tests
 check every relation in types A1, A2, B2 and G2 at the conformance checker's weights, plain and
 next to a strand of each colour and orientation, against the translation into `kl`: both sides'
-normal forms are identical to KL's, written in `be2`'s names, and each strategy fixes the other's
-normal form; so does every basis word of up to three strands in several weights. Basis evaluations are
+normal forms are identical to KL's, written in `be2`'s names (with every colour even a bubble's
+dots are drawn where KL's basis puts them), and each strategy fixes the other's normal form; so
+does every basis word of up to three strands in several weights.
+
+The same evaluation computes `kl`'s normal forms: `kl`'s first representation, `basis`, has kind
+`skm-basis` with `kl`'s generators in the same roles (no sideways crossing generator; `kl` draws
+it as the rotated upward crossing), declared `even_only`, and refuses a `Q` other than the default
+`klq2` as KL's evaluation does. Under the renaming of the roles the two presentations agree for
+even colours and these scalars (Brundan, arXiv:1501.00350), so the certificate is KL's. KL's own
+evaluation stays as the second representation, `kl-evaluation`; the tests check that the two give
+exactly the same normal forms on both sides of every relation of `kl` in types A1, A2, B2 and G2 at
+the conformance checker's weights, on every basis word of up to three strands, and on composites
+with curls and bubbles. The BE2 evaluation is several times faster: its upward diagrams are sums
+`Σ ψ_ŵ f` straightened by the quiver Hecke relations, where KL's are operators on polynomials
+whose products divide by `x_a − x_b` at every step. Basis evaluations are
 kept across calls as for KL, and bubble series are cached per strand list; a diagram with three
 strands, one of them downward, takes seconds, and that cost grows quickly with the width.
 

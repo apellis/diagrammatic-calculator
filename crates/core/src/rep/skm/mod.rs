@@ -9,6 +9,11 @@
 //! the basis is one (so that distinct normal forms differ) is the Nondegeneracy Conjecture,
 //! open for odd colours; a failure of spanning or independence in a degree is reported as an
 //! error.
+//!
+//! For even colours the same evaluation computes the Khovanov–Lauda normal form: `kl` declares
+//! it (without the sideways crossing, which `kl` draws as the rotated upward one), since with
+//! `Q = klq2` the two presentations agree under the renaming of the roles (Brundan,
+//! arXiv:1501.00350), and it is faster than [`crate::rep::kl`]'s evaluation.
 
 mod basis;
 mod eval;
@@ -65,7 +70,12 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
             cup_fe: r("cup_fe")?,
             cap_ef: r("cap_ef")?,
             cap_fe: r("cap_fe")?,
-            lcross: r("lcross")?,
+            lcross: if decl.roles.contains_key("lcross") {
+                Some(r("lcross")?)
+            } else {
+                None
+            },
+            kl_bubbles: ctx.colours.iter().all(|c| !c.odd),
         };
         if ctx.cartan.is_none() {
             return Err(Error::precondition(
@@ -77,6 +87,7 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
                 "the BE2 normal form needs the region weight mu=",
             ));
         }
+        super::require_klq2(ctx)?;
         Ok(SkmBasis {
             ctx,
             roles,
@@ -109,7 +120,7 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
                 });
             } else if g == ro.cap_ef || g == ro.cap_fe {
                 out.push(Ev::Cap { pos, bub: None });
-            } else if g == ro.lcross {
+            } else if Some(g) == ro.lcross {
                 let (a, b) = (obj[pos].colour, obj[pos + 1].colour);
                 let h = region(&cartan.a, &mu, &obj, pos + 2);
                 let odd = |c: u16| self.ctx.colours[c as usize].odd;

@@ -30,12 +30,6 @@ pub struct Translation<'a, R: Ring> {
 
 impl<'a, R: Ring> Translation<'a, R> {
     pub fn new(ctx: &'a Context<R>, decl: &RepresentationDecl, prov: Provenance) -> Result<Self> {
-        if decl.even_only && ctx.colours.iter().any(|c| c.odd) {
-            return Err(Error::precondition(format!(
-                "the translation {} holds for even colours only",
-                decl.name
-            )));
-        }
         let pres = crate::builtin::presentation(&decl.target)?;
         if ctx.mu.is_none() && crate::conformance::uses_weights(&pres) {
             return Err(Error::precondition(format!(

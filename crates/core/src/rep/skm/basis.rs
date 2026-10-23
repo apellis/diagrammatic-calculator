@@ -32,8 +32,14 @@ pub(super) struct Roles {
     pub cap_ef: u16,
     /// `F E → 1` (`ε'`).
     pub cap_fe: u16,
-    /// The sideways crossing `F E → E F`.
-    pub lcross: u16,
+    /// The sideways crossing `F E → E F`, when the presentation has it as a generator (`be2`;
+    /// in `kl` it is the rotated upward crossing).
+    pub lcross: Option<u16>,
+    /// Draw a bubble's dots as KL's basis does (`crate::rep::kl::basis`: on the leg right of
+    /// the cup, a downward dot on a clockwise bubble), so that with every colour even the normal
+    /// forms are exactly KL's. With an odd colour they sit on the upward leg, where an odd colour
+    /// needs them (its downward dot is not the rotated upward one).
+    pub kl_bubbles: bool,
 }
 
 fn layer(g: u16, pos: usize, binding: Vec<u16>) -> Layer {
@@ -123,7 +129,7 @@ pub(super) fn matchings(w: &[Letter]) -> Vec<Vec<usize>> {
 
 /// A bubble of colour `c` and degree index `k ≥ 1` in the region `μ` of the empty object: real,
 /// clockwise (`[η', x^m on E, ε]`) when `⟨c, μ⟩ ≥ 0` and counterclockwise (`[η, x^m on E, ε']`)
-/// otherwise.
+/// otherwise; with [`Roles::kl_bubbles`] the dots are on the right leg instead, as in KL's basis.
 pub(super) fn bubble(roles: &Roles, mu: &[i64], c: u16, k: i64) -> Vec<Layer> {
     let h = mu[c as usize];
     let up = Letter {
@@ -136,7 +142,11 @@ pub(super) fn bubble(roles: &Roles, mu: &[i64], c: u16, k: i64) -> Vec<Layer> {
         (flip(up), k - 1 - h, 1)
     };
     let mut out = vec![roles.cup(l, 0)];
-    out.extend((0..m).map(|_| roles.dot(up, e)));
+    if roles.kl_bubbles {
+        out.extend((0..m).map(|_| roles.dot(flip(l), 1)));
+    } else {
+        out.extend((0..m).map(|_| roles.dot(up, e)));
+    }
     out.push(roles.cap(l, 0));
     out
 }

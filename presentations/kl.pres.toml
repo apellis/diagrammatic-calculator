@@ -264,6 +264,15 @@ rhs = "psi_2 psi_1 psi_2 e(a b c)"
 
 [[representations]]
 name = "basis"
+kind = "skm-basis"
+roles = { cap_ef = "cap", cap_fe = "capd", cup_ef = "cup", cup_fe = "cupd", psi = "psi", psid = "psid", x = "x", xd = "xd" }
+even_only = true
+certificate.status = "literature"
+certificate.reference = "Khovanov-Lauda, arXiv:0807.3250, Proposition 3.11 and Theorem 1.2; categorification-lean: KL3.Diagram.canonicalBasis. The evaluation is the one of the Brundan-Ellis basis normal form (arXiv:1701.04133v2, t_ij = 1, s_ij^pq = 0), which for even colours presents this 2-category (Brundan, arXiv:1501.00350, main theorem)"
+certificate.hypotheses = "Q = klq2 (the default); every colour even. Each relation of this presentation is checked through it by the conformance checker, and the tests check that it gives the same normal forms as kl-evaluation"
+
+[[representations]]
+name = "kl-evaluation"
 kind = "kl-basis"
 roles = { cap_ef = "cap", cap_fe = "capd", cup_ef = "cup", cup_fe = "cupd", psi = "psi", psid = "psid", x = "x", xd = "xd" }
 certificate.status = "literature"

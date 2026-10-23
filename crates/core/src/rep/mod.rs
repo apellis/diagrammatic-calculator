@@ -272,6 +272,12 @@ pub fn evaluator<'a, R: Ring + 'a>(
     ctx: &'a Context<R>,
     decl: &RepresentationDecl,
 ) -> Result<Box<dyn Evaluator<R> + 'a>> {
+    if decl.even_only && ctx.colours.iter().any(|c| c.odd) {
+        return Err(Error::precondition(format!(
+            "the representation {} holds for even colours only",
+            decl.name
+        )));
+    }
     let prov = |strategy| Provenance {
         strategy,
         method: decl.name.clone(),
@@ -395,6 +401,30 @@ fn role<R: Ring>(ctx: &Context<R>, decl: &RepresentationDecl, r: &str) -> Result
             decl.name
         ))
     })
+}
+
+/// The bubble slides of the KL and BE2 evaluations hold for `Q = klq2` (`t_ij = 1`,
+/// `s_ij^pq = 0`): in a presentation with the parameter `Q`, every entry must be the default.
+fn require_klq2<R: Ring>(ctx: &Context<R>) -> Result<()> {
+    if !ctx.pres.parameters.iter().any(|p| p.name == "Q") {
+        return Ok(());
+    }
+    let nc = ctx.colours.len();
+    let q = ctx.params.get("Q");
+    for a in 0..nc {
+        for b in 0..nc {
+            if a == b {
+                continue;
+            }
+            let want = ctx.default_param("klq2", a, b)?;
+            if q.and_then(|t| t.get(&(a as u16, b as u16))) != Some(&want) {
+                return Err(Error::precondition(
+                    "the KL normal form needs the default Q = klq2 (its bubble slides assume it)",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The ring `x_1, …, x_n` followed by the context's scalars; the `x` are odd if `odd`.
