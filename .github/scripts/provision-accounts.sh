@@ -73,6 +73,8 @@ elif printf '%s' "$r" | jq -e '[.errors[]?.code] | index(10006)' >/dev/null 2>&1
   else
     summary "R2: could not create the bucket ($(printf '%s' "$r" | errors)). If R2 is not yet enabled, enable it once under R2 in the dashboard."
   fi
+elif printf '%s' "$r" | jq -e '[.errors[]?.code] | index(10042)' >/dev/null 2>&1; then
+  summary "R2: not enabled on the account; open R2 in the dashboard once and enable it."
 else
   summary "R2: not available ($(printf '%s' "$r" | errors)). Add the account permission Workers R2 Storage: Edit, and enable R2 in the dashboard if it never was."
 fi
