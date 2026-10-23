@@ -6,7 +6,7 @@ import * as sync from 'y-protocols/sync';
 import { Doc } from '../src/doc/model';
 import { stageUpdate } from '../live/validation';
 import { MockAccounts, type User } from './mockapi';
-import { cell } from './helpers';
+import { cell, expectReadOnlyCanvas } from './helpers';
 
 const ID = 'live000000000001';
 function fixture() {
@@ -198,6 +198,50 @@ test('viewer receives live commits but has no editable cell or enabled add contr
     await text(v.page, 0, 'x_1^2 e(iji)');
     expect(mock.log.some((l) => l.who === viewer.email && l.method === 'PUT')).toBe(false);
   } finally { await a.context.close(); await v.context.close(); mock.dispose(); }
+});
+
+test('a viewer definition canvas is read-only, without editing gestures or affordances', async ({ browser }) => {
+  const { mock, ada, viewer } = fixture();
+  const a = await device(browser, mock, ada);
+  const v = await device(browser, mock, viewer);
+  try {
+    await connected(mock, 2);
+    await edit(a.page, 0, 'def a := psi_1 x_1 e(iij)');
+    await text(v.page, 0, 'a := psi_1 x_1 e(iij)');
+    await cell(v.page, 0).locator('.head').click();
+    await cell(v.page, 0).getByTestId('open-canvas').click();
+    await expectReadOnlyCanvas(v.page);
+    expect(new Doc(mock.room(ID).doc).list()[0].text).toBe('def a := psi_1 x_1 e(iij)');
+  } finally { await a.context.close(); await v.context.close(); mock.dispose(); }
+});
+
+test('changing a definition to a watch cancels an in-flight canvas gesture', async ({ browser }) => {
+  const { mock, ada, bob } = fixture();
+  const a = await device(browser, mock, ada), b = await device(browser, mock, bob);
+  try {
+    await connected(mock, 2);
+    await edit(a.page, 0, 'def a := psi_1 x_1 e(iij)');
+    await text(b.page, 0, 'a := psi_1 x_1 e(iij)');
+    await cell(b.page, 0).locator('.head').click();
+    await cell(b.page, 0).getByTestId('open-canvas').click();
+    const canvas = b.page.locator('.canvas');
+    const dot = canvas.locator('.hit-piece[data-draw="dot"]').first();
+    await expect(dot).toBeVisible();
+    const box = (await dot.boundingBox())!;
+    await b.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await b.page.mouse.down();
+    await b.page.mouse.move(box.x + box.width / 2, box.y - 18, { steps: 3 });
+    await expect(canvas.getByTestId('live')).toBeVisible();
+    await cell(a.page, 0).getByTestId('cell-display').click();
+    await cell(a.page, 0).locator('.cm-content').fill('watch psi_1 x_1 e(iij)');
+    await cell(a.page, 0).locator('.cm-content').press('Enter');
+    await expect(canvas.getByText('Read only', { exact: true })).toBeVisible();
+    await expect(canvas.getByTestId('live')).toHaveCount(0);
+    await expect(canvas.locator('.palette-bar')).toHaveCount(0);
+    await b.page.mouse.up();
+    await expectReadOnlyCanvas(b.page);
+    expect(new Doc(mock.room(ID).doc).list()[0].text).toBe('watch psi_1 x_1 e(iij)');
+  } finally { await a.context.close(); await b.context.close(); mock.dispose(); }
 });
 
 test('offline edits remain local and converge after reconnect without a reload', async ({ browser }) => {

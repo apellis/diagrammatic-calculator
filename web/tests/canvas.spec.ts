@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { addCell, cell, newDoc, setContext, typeCell } from './helpers';
+import { addCell, cell, expectReadOnlyCanvas, newDoc, setContext, typeCell } from './helpers';
 
 const canvas = (page: Page) => page.locator('.canvas');
 const frames = (page: Page) => canvas(page).locator('.frame');
@@ -13,6 +13,24 @@ async function openCanvas(page: Page, key = true) {
   await expect(canvas(page)).toBeVisible();
   await expect(frames(page).first().locator('svg.diagram')).toBeVisible();
 }
+
+test('watch canvases are read-only, without editing gestures or affordances', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'watch psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).not.toHaveText('');
+  await openCanvas(page, false);
+  await expectReadOnlyCanvas(page);
+  await canvas(page).getByTestId('canvas-back').click();
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'psi_1 x_1 e(iij)');
+  await addCell(page, 'def a := psi_1 x_1 e(iij)');
+  await addCell(page, 'watch a');
+  await cell(page, 2).getByTestId('open-canvas').click();
+  await expect(canvas(page).locator('.banner')).toContainText('uses definitions');
+  await expect(canvas(page).locator('.banner')).not.toContainText(/gesture|writes/);
+  await expectReadOnlyCanvas(page);
+  await canvas(page).getByTestId('canvas-back').click();
+  await expect(cell(page, 2).locator('.head .text')).toHaveAttribute('data-text', 'a');
+});
 
 test('dragging a dot through a crossing slides it, and undo restores the term', async ({ page }) => {
   await newDoc(page);
@@ -202,7 +220,7 @@ test('inserting from the palette and removing with Delete change the element', a
   await expect(frames(page).first().locator('.hit-piece')).toHaveCount(1);
 });
 
-test('interchanging odd dots shows the sign, box selection narrows relations, and a watch of definitions is written out', async ({ page }) => {
+test('interchanging odd dots shows the sign, box selection narrows relations, and a definition using another is written out', async ({ page }) => {
   await newDoc(page);
   await setContext(page, 'odd-nilhecke nu=2');
   await typeCell(page, 'def d := x_1 x_2');
@@ -230,8 +248,8 @@ test('interchanging odd dots shows the sign, box selection narrows relations, an
   await page.keyboard.press('Escape');
   await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'd := x_1 x_2');
 
-  // a watch that uses a definition opens written out
-  await addCell(page, 'watch d psi_1');
+  // an editable definition that uses another definition opens written out
+  await addCell(page, 'def f := d psi_1');
   await cell(page, 1).getByTestId('open-canvas').click();
   await expect(canvas(page).locator('.banner')).toContainText('uses definitions');
   await expect(frames(page)).toHaveCount(1);

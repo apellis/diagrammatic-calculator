@@ -36,6 +36,43 @@ export async function addCell(page: Page, text: string) {
 
 export const cell = (page: Page, n: number) => page.locator('.cell[data-cell]:not([data-cell="new"])').nth(n);
 
+/** Read-only diagrams can be inspected, but never preview or advertise an edit. */
+export async function expectReadOnlyCanvas(page: Page) {
+  const canvas = page.locator('.canvas');
+  const dot = canvas.locator('.hit-piece[data-draw="dot"]').first();
+  await expect(dot).toBeVisible();
+  const originalY = await dot.getAttribute('y');
+  const before = (await dot.boundingBox())!;
+  await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(before.x + before.width / 2, before.y - 70, { steps: 6 });
+  await expect(canvas.getByTestId('live')).toHaveCount(0);
+  await expect(canvas.getByTestId('pull')).toHaveCount(0);
+  await page.mouse.up();
+  expect((await dot.boundingBox())!.y).toBeCloseTo(before.y, 1);
+  await expect(dot).toHaveCSS('cursor', 'default');
+  await expect(canvas.locator('.hit-strand').first()).toHaveCSS('cursor', 'default');
+  await expect(canvas.locator('.palette-bar')).toHaveCount(0);
+  await expect(canvas.getByText('Read only', { exact: true })).toBeVisible();
+
+  // Selection remains useful for inspection and AI questions, not editing.
+  await dot.click();
+  await expect(dot).toHaveAttribute('stroke', 'var(--accent)');
+  for (const key of ['ArrowUp', 'Alt+ArrowUp', 'Alt+Shift+ArrowUp', 'Delete', 'Backspace', 'r', 'i', '1']) await page.keyboard.press(key);
+  await dot.click({ button: 'right' });
+  await expect(canvas.getByRole('dialog', { name: 'Relations that apply' })).toHaveCount(0);
+  await expect(canvas.getByTestId('mark')).toHaveCount(0);
+  await expect(canvas.getByTestId('canvas-message')).not.toContainText(/insert|slide|interchang|remove|appl|let go/i);
+  // Selection adds an outline; compare SVG geometry rather than its stroked screen bounds.
+  await expect(dot).toHaveAttribute('y', originalY!);
+
+  await canvas.getByRole('button', { name: 'Gestures and keys', exact: true }).click();
+  const help = canvas.getByRole('dialog', { name: 'Gestures and keys', exact: true });
+  await expect(help).not.toContainText(/Slide a dot|Interchange a piece|Braid relation|Relations that apply|insertion point|Insert a generator|Remove the selected|Move a piece for looks/);
+  await expect(help).toContainText('Zoom');
+  await help.getByRole('button', { name: 'Close the gestures' }).click();
+}
+
 /**
  * Milliseconds from the person's input (the first `input` event that `act` causes: a click or a
  * key) until the summary of cell `n` reads `want`, measured in the page with the event's own time

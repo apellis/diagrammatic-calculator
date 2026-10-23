@@ -654,8 +654,8 @@ function DocView(props: {
     }
   };
 
-  // the focus canvas edits a definition's or watch's term as written; a term that uses
-  // definitions is drawn written out, and a gesture writes it out in the cell
+  // The focus canvas edits definitions as written; watches are inspection-only.
+  // A term using definitions is expanded, and an editable canvas can write that expansion.
   const canvasable = (id: string) => ['def', 'watch'].includes(stateOf(id)?.parsed?.kind ?? '');
   const openCanvas = (id: string, word?: string) => {
     if (!canvasable(id)) return setMessage('The canvas opens on a definition or a watch.');
@@ -679,8 +679,8 @@ function DocView(props: {
   };
   const writeCanvas = (id: string, term: string, note: string, ids?: (fresh: (letter: string) => string) => Record<string, string[]>) => {
     const p = stateOf(id)?.parsed;
-    if (!p) return;
-    const head = p.kind === 'def' ? `def ${p.defines} := ${term}` : `watch ${term}`;
+    if (readOnly() || p?.kind !== 'def') return;
+    const head = `def ${p.defines} := ${term}`;
     doc.updateCell(id, head + Object.entries(p.options).map(([k, v]) => `  ${k}=${v}`).join(''), `${note} in ${p.defines ?? id}`, ids);
   };
 
@@ -999,7 +999,7 @@ function DocView(props: {
         <Show when={canvas()?.id} keyed>
           {(id) => {
             const key = keyOf(id)!;
-            return <Canvas doc={doc} readOnly={readOnly()} remoteSelections={canvasPresence()} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
+            return <Canvas doc={doc} readOnly={readOnly() || stateOf(id)?.parsed?.kind !== 'def'} remoteSelections={canvasPresence()} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
               term={canvasTerm(id)} expanded={usesDefinitions(id)} generators={described()?.generators ?? []}
               colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word} value={stateOf(id)?.value}
               onWrite={(t, note, ids) => { const current = idOf(key); if (!readOnly() && current) writeCanvas(current, t, note, ids); }} onSelection={(s) => { props.onSelection(s); if (!onBranch()) props.sync?.updatePresence({ selection: s }); }} onAsk={props.onAsk}

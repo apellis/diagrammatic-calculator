@@ -1,7 +1,8 @@
 // The focus canvas: one cell's term drawn full size, edited by gestures.
 //
-// The canvas edits the term of a definition or watch as written. Rewrites by relations, slides
-// and interchanges are equalities, so the cell's value stays the same while its text changes;
+// The canvas edits a definition as written; watches and viewer canvases are inspection-only.
+// Rewrites by relations, slides and interchanges are equalities, so the cell's value stays
+// the same while its text changes;
 // inserting or removing a piece changes the value. Every gesture is one undoable step of the
 // document, and positions moved only for looks are layout hints, never part of the term.
 import { batch, createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from 'solid-js';
@@ -283,6 +284,7 @@ export function Canvas(props: CanvasProps) {
 
   const say = (m: string) => setMessage(m);
   const run = async <T,>(f: () => Promise<T>) => {
+    if (props.readOnly) return;
     setBusy(true);
     try {
       return await f();
@@ -295,7 +297,7 @@ export function Canvas(props: CanvasProps) {
    * carries the occurrence IDs of the summands drawn now to the new summands.
    */
   const write = (term: string, note: string, provenance?: ProvenanceSummand[]) => {
-    if (props.readOnly) { say('View only. Make a personal branch to edit.'); return; }
+    if (props.readOnly) return;
     changed = true;
     const before = layouts();
     pending = { term: props.term, words: new Set(before.map((l) => l.word)) };
@@ -316,7 +318,7 @@ export function Canvas(props: CanvasProps) {
   const slide = (k: number, dot: Piece, direction: 'up' | 'down', steps: number) =>
     run(async () => {
       const o = await props.engine.call('slide', { context: props.context, term: props.term!, summand: k + 1, layer: dot.layer, direction, steps }, { lane: 'interactive' });
-      if (o.status !== 'done') return;
+      if (props.readOnly || o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
       if (!r.steps.length) return say('Nothing to slide through there.');
@@ -329,7 +331,7 @@ export function Canvas(props: CanvasProps) {
       const l = layouts()[k];
       if (!l || sameOrder(order, l.order)) return;
       const o = await props.engine.call('term.layout', { context: props.context, term: props.term!, summands: k + 1, orders: { [k + 1]: order } }, { lane: 'interactive' });
-      if (o.status !== 'done') return;
+      if (props.readOnly || o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
       const moved = r.summands[k];
@@ -341,6 +343,7 @@ export function Canvas(props: CanvasProps) {
     });
 
   const lookMove = (k: number, layer: number, d: [number, number]) => {
+    if (props.readOnly) return;
     const l = layouts()[k];
     const p = l && piece(l, layer);
     if (!p) return;
@@ -359,7 +362,7 @@ export function Canvas(props: CanvasProps) {
       if (!l) return;
       const rect = sel().summand === k ? rectangle(l, sel().layers) : undefined;
       const o = await props.engine.call('relations.match', { context: props.context, term: props.term!, summand: k + 1, ...(rect ? { rectangle: rect } : {}) }, { lane: 'interactive' });
-      if (o.status !== 'done') return;
+      if (props.readOnly || o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
       if (!r.matches.length) return say(rect ? 'No relation applies to the selection.' : 'No relation applies to this summand.');
@@ -386,7 +389,7 @@ export function Canvas(props: CanvasProps) {
   const applyMatch = (k: number, match: Match, i: number, rect?: Rect) =>
     run(async () => {
       const o = await props.engine.call('relation.apply', { context: props.context, term: props.term!, summand: k + 1, ...(rect ? { rectangle: rect } : {}), match: i }, { lane: 'interactive' });
-      if (o.status !== 'done') return;
+      if (props.readOnly || o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
       write(r.term, `apply ${match.relation}`, r.provenance);
@@ -399,7 +402,7 @@ export function Canvas(props: CanvasProps) {
       if (!l) return;
       const order = hintOf(l)?.order;
       const o = await props.engine.call('term.edit', { context: props.context, term: props.term!, summand: k + 1, ...(order ? { order } : {}), ...req }, { lane: 'interactive' });
-      if (o.status !== 'done') return;
+      if (props.readOnly || o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
       write(r.term, note, r.provenance);
@@ -451,6 +454,22 @@ export function Canvas(props: CanvasProps) {
   } | null = null;
   let pan: { x: number; y: number; vx: number; vy: number } | null = null;
 
+  // Permission or cell-kind changes also cancel an in-flight editing gesture.
+  createEffect(on(() => props.readOnly, (readOnly) => {
+    if (!readOnly) return;
+    drag = null;
+    setGhost(null);
+    setLive(null);
+    setPreview(null);
+    setPull(null);
+    setDrop(null);
+    setMark(null);
+    setBoxDrag(null);
+    setMenu(null);
+    setInserting(false);
+    say('');
+  }));
+
   const onDown = (k: number, e: PointerEvent) => {
     root.focus({ preventScroll: true });
     const svg = e.currentTarget as SVGSVGElement;
@@ -465,10 +484,10 @@ export function Canvas(props: CanvasProps) {
       strand: !t && !!(e.target as Element).closest('[data-strand]') };
     const l = layouts()[k];
     const pc = drag.layer !== undefined && l ? piece(l, drag.layer) : undefined;
-    if (pc?.draw === 'dot' && !e.altKey) {
+    if (!props.readOnly && pc?.draw === 'dot' && !e.altKey) {
       drag.run = track(l, pc);
       drag.crossings = crossingsOn(l, pc);
-    } else if (pc && !e.altKey) {
+    } else if (!props.readOnly && pc && !e.altKey) {
       const d = drag;
       void props.engine.call('relations.match', { context: props.context, term: props.term!, summand: k + 1 }, { lane: 'interactive' }).then((o) => {
         if (o.status !== 'done' || o.response.status !== 'ok') return;
@@ -497,6 +516,7 @@ export function Canvas(props: CanvasProps) {
     const [dx, dy] = [p[0] - drag.start[0], p[1] - drag.start[1]];
     if (!drag.moved && Math.hypot(dx, dy) < 0.12) return;
     drag.moved = true;
+    if (props.readOnly && drag.layer !== undefined) return;
     if (drag.layer !== undefined && drag.run?.length) {
       const l = layouts()[drag.k];
       const pc = piece(l, drag.layer)!;
@@ -538,6 +558,7 @@ export function Canvas(props: CanvasProps) {
     setGhost(null);
     setBoxDrag(null);
     if (!d) return;
+    if (props.readOnly && d.layer !== undefined && d.moved) return;
     if (!d.moved && live()) setLive(null);
     const pulled = pull();
     setPull(null);
@@ -563,7 +584,7 @@ export function Canvas(props: CanvasProps) {
     if (d.layer === undefined) {
       if (!d.moved) {
         if (!d.additive) setSel({ summand: d.k, layers: [] });
-        if (d.strand && !d.additive) {
+        if (!props.readOnly && d.strand && !d.additive) {
           setMark({ summand: d.k, x: d.start[0], y: d.start[1] });
           return say(`Insertion point set on this strand: click a generator in the palette, or press I and its number, to insert it here${props.generators.some((g) => g.inputs > 1) ? ' (a crossing takes this strand and the next one to the right)' : ''}.`);
         }
@@ -575,7 +596,7 @@ export function Canvas(props: CanvasProps) {
       const base = d.additive && sel().summand === d.k ? sel().layers : [];
       setSel({ summand: d.k, layers: [...new Set([...base, ...inside])], kept: true });
       const n = sel().layers.length;
-      say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; ${keysOf('ask')}: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
+      say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. ${props.readOnly ? '' : `R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; `}${keysOf('ask')}: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
       return;
     }
     const pc = piece(l, d.layer);
@@ -716,6 +737,7 @@ export function Canvas(props: CanvasProps) {
     setSel({ summand: k, layers: onStrand(l, s), strand: s });
   };
   const onContext = (k: number, e: MouseEvent) => {
+    if (props.readOnly) return;
     e.preventDefault();
     const t = (e.target as Element).closest('[data-layer]');
     if (t) {
@@ -732,6 +754,7 @@ export function Canvas(props: CanvasProps) {
   };
   let currentDrag = '';
   const onDragOver = (k: number, e: DragEvent) => {
+    if (props.readOnly) return;
     const g = dragged(e);
     if (!g) return;
     e.preventDefault();
@@ -741,6 +764,7 @@ export function Canvas(props: CanvasProps) {
     setDrop(t ? { summand: k, x: t.x, y: t.y, width } : null);
   };
   const onDrop = (k: number, e: DragEvent) => {
+    if (props.readOnly) return;
     const g = dragged(e);
     setDrop(null);
     if (!g) return;
@@ -876,6 +900,10 @@ export function Canvas(props: CanvasProps) {
       e.preventDefault();
       e.stopPropagation();
     };
+    if (props.readOnly && !mod(e) && (
+      ['r', 'i', 'delete', 'backspace'].includes(e.key.toLowerCase()) ||
+      (e.key.startsWith('Arrow') && (e.altKey || !e.shiftKey && ['ArrowUp', 'ArrowDown'].includes(e.key)))
+    )) return handled();
     if (e.key === 'Tab' && (e.target as HTMLElement).closest('.canvas-bar, .palette-bar')) {
       // the toolbar and the palette take Tab as usual; forward from the last generator comes back to the pieces
       const gens = [...root.querySelectorAll<HTMLElement>('.palette-bar .gen')];
@@ -1313,10 +1341,11 @@ export function Canvas(props: CanvasProps) {
   };
 
   return (
-    <div class="canvas" ref={root} tabindex={0} data-keeps-focus role="application" aria-label={`Canvas for ${props.title}`} onKeyDown={onKey} onKeyUp={onKeyUp}>
+    <div class="canvas" classList={{ readonly: !!props.readOnly }} ref={root} tabindex={0} data-keeps-focus role="application" aria-label={`Canvas for ${props.title}`} onKeyDown={onKey} onKeyUp={onKeyUp}>
       <div class="canvas-bar">
         <button onClick={() => props.onClose()} title="Close the canvas and go back to the document (Esc)" data-testid="canvas-back">← Back to the document</button>
         <strong>{props.title}</strong>
+        <Show when={props.readOnly}><span class="hint">Read only</span></Show>
         <span class="hint">{total() > layouts().length ? `${layouts().length} of ${total()} summands` : `${total()} ${total() === 1 ? 'summand' : 'summands'}`}</span>
         <Show when={busy()}><span class="light busy" /></Show>
         <Show when={props.value?.status === 'ok' && props.value}>
@@ -1328,10 +1357,10 @@ export function Canvas(props: CanvasProps) {
         <button class="ghost" onClick={() => setHelp(!help())} title="Gestures and keys (?)" aria-label="Gestures and keys">?</button>
       </div>
       <Show when={props.expanded}>
-        <div class="banner">This term uses definitions; it is shown written out, and a gesture writes it out in full in the cell.</div>
+        <div class="banner">{props.readOnly ? 'This term uses definitions and is shown written out.' : 'This term uses definitions; it is shown written out, and a gesture writes it out in full in the cell.'}</div>
       </Show>
       <div class="canvas-body">
-        <div class="palette-bar" aria-label="Generators">
+        <Show when={!props.readOnly}><div class="palette-bar" aria-label="Generators">
           <For each={props.generators}>
             {(g, i) => (
               <button class="gen" disabled={props.readOnly} draggable={!props.readOnly} data-generator={g.name} aria-label={describeGenerator(g)}
@@ -1352,7 +1381,7 @@ export function Canvas(props: CanvasProps) {
               </button>
             )}
           </For>
-        </div>
+        </div></Show>
         <div class="canvas-view" ref={viewport} onWheel={onWheel} onPointerDown={onBackground}>
           <Show when={props.term !== null} fallback={<div class="hint" style={{ padding: '20px' }}>Computing the term…</div>}>
             <Show when={!error()} fallback={<div class="error" style={{ margin: '20px' }}>{error()}</div>}>
@@ -1378,7 +1407,7 @@ export function Canvas(props: CanvasProps) {
           <Show when={pull()?.armed && pull()?.result}>
             {(ls) => <div class="pullresult" data-testid="pull-result"><span class="hint">Becomes</span> <Mini ls={ls()} /></div>}
           </Show>
-          <Show when={menu()}>
+          <Show when={!props.readOnly && menu()}>
             {(m) => (
               <div class="relmenu" role="dialog" aria-label="Relations that apply">
                 <div class="row"><strong class="grow">Relations{m().rect ? ' in the selection' : ''}</strong><button class="ghost" onClick={() => setMenu(null)} aria-label="Close the relations">×</button></div>
@@ -1405,7 +1434,7 @@ export function Canvas(props: CanvasProps) {
               <table class="kv keys gestures">
                 <thead><tr><th>Action</th><th>Pointer</th><th>Keys</th></tr></thead>
                 <tbody>
-                  <For each={GESTURES}>{([a, p, k]) => <tr><td>{a}</td><td>{p || '—'}</td><td>{k}</td></tr>}</For>
+                  <For each={GESTURES.filter(([, , , edits]) => !props.readOnly || !edits)}>{([a, p, k]) => <tr><td>{a}</td><td>{p || '—'}</td><td>{k}</td></tr>}</For>
                 </tbody>
               </table>
             </div>
@@ -1431,24 +1460,24 @@ const rubber = (v: number, max: number) => max * Math.tanh(v / max);
 
 const ALT = isMac ? '⌥' : 'Alt+';
 /** The canvas's actions, each with its pointer gesture and its keys. */
-const GESTURES: [string, string, string][] = [
-  ['Slide a dot through the next crossing on its strand (dot-slide relation)', 'drag the dot; a crossing glows as it nears and rings once passed', '↑ ↓ on a selected dot'],
-  ['Interchange a piece with pieces on other strands; a −1 badge shows when two odd pieces swap', 'drag it up or down', `${ALT}↑ ${ALT}↓`],
-  ['Braid relation (middle crossing of a triangle) or square relation (a stacked pair)', 'drag the crossing sideways; the result shows before you let go', 'R, then the relation’s number'],
-  ['Relations that apply to the selection, or inside a box', 'right-click', 'R, then 1–9 applies one'],
+const GESTURES: [action: string, pointer: string, keys: string, edits?: boolean][] = [
+  ['Slide a dot through the next crossing on its strand (dot-slide relation)', 'drag the dot; a crossing glows as it nears and rings once passed', '↑ ↓ on a selected dot', true],
+  ['Interchange a piece with pieces on other strands; a −1 badge shows when two odd pieces swap', 'drag it up or down', `${ALT}↑ ${ALT}↓`, true],
+  ['Braid relation (middle crossing of a triangle) or square relation (a stacked pair)', 'drag the crossing sideways; the result shows before you let go', 'R, then the relation’s number', true],
+  ['Relations that apply to the selection, or inside a box', 'right-click', 'R, then 1–9 applies one', true],
   ['Select a piece; add or remove one', `click; ${K}click`, 'Tab, ⇧Tab'],
   ['Select a whole strand', 'double-click the strand', 'S, ⇧S (next, previous strand)'],
   ['Select several pieces', `drag a box on empty space; ${K}click adds or removes one`, `Tab to a piece, X keeps it; Tab on, X adds (or removes) the piece at the dashed ring; ${K}A selects all`],
   ['Clear the selection', 'click empty space', 'Esc'],
-  ['Set the insertion point (a green ring)', 'click a strand', 'I, then the arrows'],
-  ['Insert a generator', 'drag it from the palette, or click it after setting the insertion point', 'I, then 1–9; or Tab to the palette and Enter'],
-  ['Remove the selected pieces', '', 'Delete'],
-  ['Move a piece for looks only (a layout hint)', `${ALT}drag`, `${ALT}⇧ arrows`],
+  ['Set the insertion point (a green ring)', 'click a strand', 'I, then the arrows', true],
+  ['Insert a generator', 'drag it from the palette, or click it after setting the insertion point', 'I, then 1–9; or Tab to the palette and Enter', true],
+  ['Remove the selected pieces', '', 'Delete', true],
+  ['Move a piece for looks only (a layout hint)', `${ALT}drag`, `${ALT}⇧ arrows`, true],
   ['Move between summands', 'click a summand', '← →'],
   ['Pan', 'space-drag, scroll', '⇧ arrows'],
   ['Zoom', `${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
   ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, b bubble, g other piece, s strand: numbered through the document in the order they were made, kept through rewrites and edits)', 'hover a piece; IDs', 'L'],
   ['Ask the AI about the selection', '', keysOf('ask')],
-  ['Leave the canvas for the toolbar and palette', 'click', '⇧Tab from the first piece'],
+  ['Leave the canvas for its controls', 'click', '⇧Tab from the first piece'],
   ['Back to the document', '← Back', 'Esc (after clearing the selection)'],
 ];

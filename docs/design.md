@@ -446,8 +446,10 @@ example, and latency. On the development container a computed edit shows its new
 60 ms and cached undo and redo in at most about 70 ms, against the 150 ms target.
 
 **Focus canvas (4b).** `src/ui/Canvas.tsx` with the geometry in `src/canvas/geometry.ts`. It
-edits a definition's or watch's term as written; a term that uses definitions is drawn written
-out, and a gesture writes it out in full. The drawing comes from `term.layout`: one frame per
+edits a definition's term as written; a term that uses definitions is drawn written
+out, and a gesture writes it out in full. Watches and viewer canvases are read-only: no editing
+gestures, previews, insertion palette, editing cursors or editing help. Selection for inspection
+and AI questions, pan and zoom remain available. The drawing comes from `term.layout`: one frame per
 summand, with pieces (layer, generator, box, strand positions), strands with colours and
 directions, lines to draw and the heights between rows. Layers are drawn at the lowest height
 their dependencies allow, two consecutive layers sharing a height only when the earlier is left of

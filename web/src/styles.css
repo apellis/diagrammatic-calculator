@@ -390,6 +390,7 @@ a.button.icon:hover { color: var(--text); }
 @keyframes pop { 0% { transform: scale(0.5); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .xing.near, .xing.passed { animation: none; } }
 .hit-strand { cursor: pointer; }
+.canvas.readonly .hit-piece, .canvas.readonly .hit-strand { cursor: default; }
 .relmenu {
   position: absolute; right: 12px; top: 12px; z-index: 6; width: min(420px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto;
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: 10px;
