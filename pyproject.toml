@@ -1,0 +1,44 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "diagcalc"
+dynamic = ["version"]
+description = "Exact, deterministic calculator for diagrammatic algebra"
+readme = "docs/python.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+keywords = ["diagrammatic-algebra", "nilhecke", "klr", "exact-arithmetic"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Repository = "https://github.com/apellis/diagrammatic-calculator"
+Documentation = "https://github.com/apellis/diagrammatic-calculator/blob/master/docs/python.md"
+Issues = "https://github.com/apellis/diagrammatic-calculator/issues"
+
+[tool.maturin]
+manifest-path = "crates/py/Cargo.toml"
+module-name = "diagcalc"
+bindings = "pyo3"
+strip = true
+include = [
+  { path = "presentations/*.pres.toml", format = "sdist" },
+  { path = "spec/ops/*.schema.json", format = "sdist" },
+  { path = "docs/python.md", format = "sdist" },
+  { path = "crates/py/tests/*.py", format = "sdist" },
+  { path = "crates/py/package.py", format = "sdist" },
+]
+
+# Automatic Rust SBOMs contain absolute local Cargo package IDs. Disable at the
+# producer instead of editing signed/hashed wheel members after packaging.
+[tool.maturin.sbom]
+rust = false
+auditwheel = false
