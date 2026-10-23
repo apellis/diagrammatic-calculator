@@ -22,8 +22,9 @@ that need a person, done once.
    permission DNS: Edit for it, for the DMARC record. If R2 was never used on the account, open R2 in the
    dashboard once and enable it.
 2. Google Cloud console, Google Auth Platform: create the consent screen (external audience, app
-   name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only)
-   and publish it. Then Clients: create an OAuth client of type Web application with the authorized
+   name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only).
+   While Access is on, leave it in Testing and add the allowed people as test users; publishing
+   needs a homepage and privacy policy on a verified domain and waits for the public release. Then Clients: create an OAuth client of type Web application with the authorized
    redirect URI `https://diagcalc.pages.dev/api/auth/callback` (the redirect URI is derived from the
    host the app is served from; add `https://diagcalc.ape.computer/api/auth/callback` when the
    custom domain moves over).
