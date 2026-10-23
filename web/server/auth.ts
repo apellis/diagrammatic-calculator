@@ -1,12 +1,21 @@
 // Sign-in with Google (authorization code flow with PKCE), sessions and CSRF protection.
-import type { Deps, ReadyEnv } from './env';
+import { appOrigin, type Deps, type ReadyEnv } from './env';
 import { equal, pkceChallenge, randomToken, seal, sha256, sign, unseal, verify } from './crypto';
 import { clearCookie, cookies, redirect, setCookie } from './http';
 import { GOOGLE_AUTH, GOOGLE_TOKEN, verifyIdToken } from './oidc';
 
 export const SESSION_COOKIE = '__Host-dc_session';
 export const FLOW_COOKIE = '__Host-dc_signin';
+/** A session ends 30 days after sign-in at the latest, */
 const SESSION_SECONDS = 30 * 86400;
+/** or after 7 days without a request. */
+export const IDLE_MS = 7 * 86400_000;
+/** The last-seen time is written at most this often, not on every request. */
+const TOUCH_MS = 3600_000;
+/** /api/me replaces a session ID older than this with a fresh one (same expiry). */
+export const ROTATE_MS = 86400_000;
+/** How long a replaced session ID keeps working, for requests already on their way. */
+const ROTATE_GRACE_MS = 60_000;
 const FLOW_SECONDS = 600;
 
 export interface User {
@@ -19,6 +28,8 @@ export interface Session {
   /** The random session ID from the cookie (never stored; the database has its hash). */
   id: string;
   user: User;
+  created: number;
+  expires: number;
 }
 
 /** What the browser keeps, sealed, between leaving for Google and coming back. */
@@ -36,7 +47,7 @@ export function safeReturn(ret: string | null): string {
   return ret;
 }
 
-export const redirectUri = (req: Request) => new URL('/api/auth/callback', req.url).toString();
+export const redirectUri = (env: ReadyEnv, req: Request) => `${appOrigin(env, req)}/api/auth/callback`;
 
 /** GET /api/auth/login?return=<path>: off to Google, with fresh state, nonce and PKCE verifier. */
 export async function login(req: Request, env: ReadyEnv, deps: Deps): Promise<Response> {
@@ -50,7 +61,7 @@ export async function login(req: Request, env: ReadyEnv, deps: Deps): Promise<Re
   const url = new URL(GOOGLE_AUTH);
   url.search = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID,
-    redirect_uri: redirectUri(req),
+    redirect_uri: redirectUri(env, req),
     response_type: 'code',
     scope: 'openid email profile',
     state: flow.state,
@@ -80,7 +91,7 @@ export async function callback(req: Request, env: ReadyEnv, deps: Deps): Promise
       code,
       client_id: env.GOOGLE_CLIENT_ID,
       client_secret: env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: redirectUri(req),
+      redirect_uri: redirectUri(env, req),
       grant_type: 'authorization_code',
       code_verifier: flow.verifier,
     }).toString(),
@@ -106,25 +117,55 @@ export async function callback(req: Request, env: ReadyEnv, deps: Deps): Promise
   const id = randomToken();
   await env.DB.batch([
     env.DB.prepare('DELETE FROM sessions WHERE expires < ?').bind(now),
-    env.DB.prepare('INSERT INTO sessions (id_hash, user_id, created, expires) VALUES (?, ?, ?, ?)').bind(await sha256(id), user!.id, now, now + SESSION_SECONDS * 1000),
+    env.DB.prepare('INSERT INTO sessions (id_hash, user_id, created, expires, last_seen) VALUES (?, ?, ?, ?, ?)').bind(await sha256(id), user!.id, now, now + SESSION_SECONDS * 1000, now),
   ]);
-  const value = `${id}.${await sign(env.SESSION_SECRET, 'session', id)}`;
-  return redirect(flow.ret, [setCookie(SESSION_COOKIE, value, SESSION_SECONDS), clearCookie(FLOW_COOKIE)]);
+  return redirect(flow.ret, [await sessionCookie(env, id, SESSION_SECONDS), clearCookie(FLOW_COOKIE)]);
 }
 
-/** The session of a request, if its cookie is genuine and unexpired. */
+async function sessionCookie(env: ReadyEnv, id: string, seconds: number): Promise<string> {
+  return setCookie(SESSION_COOKIE, `${id}.${await sign(env.SESSION_SECRET, 'session', id)}`, Math.max(0, Math.floor(seconds)));
+}
+
+/**
+ * The session of a request, if its cookie is genuine, unexpired and not idle for longer than
+ * IDLE_MS. Marks the session as seen (at most once per TOUCH_MS).
+ */
 export async function currentSession(req: Request, env: ReadyEnv, deps: Deps): Promise<Session | null> {
   const value = cookies(req)[SESSION_COOKIE];
   if (!value) return null;
   const [id, sig] = value.split('.');
   if (!id || !sig || !(await verify(env.SESSION_SECRET, 'session', id, sig))) return null;
+  const hash = await sha256(id);
   const row = await env.DB.prepare(
-    'SELECT u.id, u.email, u.name, s.expires FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?',
+    'SELECT u.id, u.email, u.name, s.created, s.expires, s.last_seen FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?',
   )
-    .bind(await sha256(id))
-    .first<User & { expires: number }>();
-  if (!row || row.expires < deps.now()) return null;
-  return { id, user: { id: row.id, email: row.email, name: row.name } };
+    .bind(hash)
+    .first<User & { created: number; expires: number; last_seen: number }>();
+  const now = deps.now();
+  if (!row || row.expires < now) return null;
+  if (now - (row.last_seen || row.created) > IDLE_MS) {
+    await env.DB.prepare('DELETE FROM sessions WHERE id_hash = ?').bind(hash).run();
+    return null;
+  }
+  if (now - row.last_seen > TOUCH_MS) await env.DB.prepare('UPDATE sessions SET last_seen = ? WHERE id_hash = ?').bind(now, hash).run();
+  return { id, user: { id: row.id, email: row.email, name: row.name }, created: row.created, expires: row.expires };
+}
+
+/**
+ * Replaces a session ID older than ROTATE_MS with a fresh one that keeps the same expiry; the old
+ * ID keeps working for ROTATE_GRACE_MS so requests already sent with it still pass. Returns the
+ * session to use from now on and the cookie to set, if any. Called from GET /api/me, which is
+ * where the page reads the CSRF token that goes with the session.
+ */
+export async function rotate(env: ReadyEnv, s: Session, deps: Deps): Promise<{ s: Session; cookies: string[] }> {
+  const now = deps.now();
+  if (now - s.created < ROTATE_MS) return { s, cookies: [] };
+  const id = randomToken();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO sessions (id_hash, user_id, created, expires, last_seen) VALUES (?, ?, ?, ?, ?)').bind(await sha256(id), s.user.id, now, s.expires, now),
+    env.DB.prepare('UPDATE sessions SET expires = MIN(expires, ?) WHERE id_hash = ?').bind(now + ROTATE_GRACE_MS, await sha256(s.id)),
+  ]);
+  return { s: { ...s, id, created: now }, cookies: [await sessionCookie(env, id, (s.expires - now) / 1000)] };
 }
 
 /** The CSRF token of a session: the page reads it from /api/me and sends it as X-CSRF-Token. */
@@ -136,7 +177,7 @@ export const csrfToken = (env: ReadyEnv, s: Session) => sign(env.SESSION_SECRET,
  */
 export async function csrfOk(req: Request, env: ReadyEnv, s: Session): Promise<boolean> {
   const origin = req.headers.get('origin');
-  if (origin !== null && origin !== new URL(req.url).origin) return false;
+  if (origin !== null && origin !== appOrigin(env, req)) return false;
   const site = req.headers.get('sec-fetch-site');
   if (site !== null && site !== 'same-origin') return false;
   const token = req.headers.get('x-csrf-token');
@@ -146,5 +187,11 @@ export async function csrfOk(req: Request, env: ReadyEnv, s: Session): Promise<b
 /** POST /api/auth/logout: ends the session here and in the database. */
 export async function logout(env: ReadyEnv, s: Session | null): Promise<string[]> {
   if (s) await env.DB.prepare('DELETE FROM sessions WHERE id_hash = ?').bind(await sha256(s.id)).run();
+  return [clearCookie(SESSION_COOKIE)];
+}
+
+/** POST /api/auth/logout-all: ends every session of the account, in every browser. */
+export async function logoutEverywhere(env: ReadyEnv, s: Session): Promise<string[]> {
+  await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(s.user.id).run();
   return [clearCookie(SESSION_COOKIE)];
 }

@@ -1,9 +1,9 @@
 // Documents saved to accounts: metadata in D1, content in R2, and who may do what.
-import type { Deps, ReadyEnv } from './env';
+import { appOrigin, type Deps, type ReadyEnv } from './env';
 import type { Session } from './auth';
 import { equal, randomToken } from './crypto';
-import { binary, empty, HttpError, json, readJson } from './http';
-import { sendShareMail } from './mail';
+import { binary, empty, HttpError, json, readBody, readJson } from './http';
+import { recipientKey, sendShareMail } from './mail';
 
 export type Role = 'owner' | 'editor' | 'viewer';
 const RANK: Record<Role, number> = { viewer: 1, editor: 2, owner: 3 };
@@ -12,9 +12,20 @@ const RANK: Record<Role, number> = { viewer: 1, editor: 2, owner: 3 };
 export const LIMITS = {
   snapshotBytes: 16 * 1024 * 1024,
   fileBytes: 16 * 1024 * 1024,
+  /** Exported files kept with one document. */
+  filesPerDoc: 50,
+  /** Snapshots and files of all of an owner's documents, whoever wrote them. */
+  ownerBytes: 2 * 1024 * 1024 * 1024,
   docsPerOwner: 1000,
   sharesPerDoc: 100,
-  mailsPerDay: 50,
+  /** Share notifications per sender, per recipient and in all, in any 24 hours. */
+  mailsPerDay: 20,
+  mailsPerRecipientPerDay: 3,
+  mailsGlobalPerDay: 100,
+  /** How old an account must be before its shares send e-mail. */
+  mailAccountAgeMs: 86400_000,
+  /** R2 list-and-delete rounds one request spends on finishing deletions. */
+  deleteRounds: 20,
   nameLength: 200,
 };
 
@@ -33,6 +44,7 @@ interface DocRow {
   snapshot_key: string | null;
   link_role: 'viewer' | 'editor' | null;
   link_token: string | null;
+  files_size: number;
   owner_email: string;
   owner_name: string;
 }
@@ -40,8 +52,10 @@ interface DocRow {
 export interface Access {
   doc: DocRow;
   role: Role;
-  /** Whether the role comes only from the document's link. */
+  /** Whether the role comes from the document's link (it is higher than any role of the caller's own). */
   viaLink: boolean;
+  /** The caller's role without the link: as owner or by a share; null for a link holder only. */
+  direct: Role | null;
 }
 
 const notFound = () => new HttpError(404, 'no such document');
@@ -49,7 +63,8 @@ const notFound = () => new HttpError(404, 'no such document');
 /**
  * The caller's role on a document: owner, a share to their e-mail address, or the document's link
  * (whose token comes in X-Link-Token). Anyone without a role gets 404, so a document's existence
- * is not revealed.
+ * is not revealed. A share is bound to the first account that uses it: later, another account
+ * presenting the same address (a reassigned work address, say) does not get it.
  */
 export async function access(env: ReadyEnv, id: string, s: Session | null, linkToken: string | null): Promise<Access> {
   if (!DOC_ID.test(id)) throw notFound();
@@ -63,15 +78,21 @@ export async function access(env: ReadyEnv, id: string, s: Session | null, linkT
   let viaLink = false;
   if (s && doc.owner_id === s.user.id) role = 'owner';
   else if (s) {
-    const share = await env.DB.prepare('SELECT role FROM shares WHERE doc_id = ? AND email = ?').bind(id, s.user.email).first<{ role: Role }>();
-    role = share?.role ?? null;
+    const shares = await env.DB.prepare('SELECT email, role, user_id FROM shares WHERE doc_id = ? AND (user_id = ? OR (user_id IS NULL AND email = ?))')
+      .bind(id, s.user.id, s.user.email)
+      .all<{ email: string; role: Role; user_id: string | null }>();
+    for (const sh of shares.results) {
+      if (!role || RANK[sh.role] > RANK[role]) role = sh.role;
+      if (!sh.user_id) await env.DB.prepare('UPDATE shares SET user_id = ? WHERE doc_id = ? AND email = ? AND user_id IS NULL').bind(s.user.id, id, sh.email).run();
+    }
   }
+  const direct = role;
   if (linkToken && doc.link_token && doc.link_role && equal(linkToken, doc.link_token) && (!role || RANK[doc.link_role] > RANK[role])) {
     role = doc.link_role;
     viaLink = true;
   }
   if (!role) throw notFound();
-  return { doc, role, viaLink };
+  return { doc, role, viaLink, direct };
 }
 
 function need(a: Access, role: Role, s: Session | null) {
@@ -95,7 +116,8 @@ function meta(a: Access) {
     version: d.version,
     size: d.size,
     role: a.role,
-    owner: { email: d.owner_email, name: d.owner_name },
+    // someone who has the document only through its link sees the owner's name, not their address
+    owner: a.direct ? { email: d.owner_email, name: d.owner_name } : { name: d.owner_name },
     ...(a.role === 'owner' ? { link: d.link_role ? { role: d.link_role, token: d.link_token } : null } : {}),
   };
 }
@@ -106,15 +128,36 @@ function cleanName(v: unknown): string {
   return n || 'Untitled';
 }
 
-/** Deletes every R2 object under a prefix. */
-async function deletePrefix(env: ReadyEnv, prefix: string) {
-  let cursor: string | undefined;
-  do {
-    const page = await env.FILES.list({ prefix, cursor });
-    if (page.objects.length) await env.FILES.delete(page.objects.map((o) => o.key));
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
+/**
+ * Works off pending deletions of stored objects (documents already gone from the database) in at
+ * most `rounds` list-and-delete rounds, so no request exceeds its subrequest allowance; what is
+ * left is finished by later requests. Never throws: a failure leaves the work for later.
+ */
+export async function sweep(env: ReadyEnv, rounds = LIMITS.deleteRounds): Promise<boolean> {
+  try {
+    const pending = await env.DB.prepare('SELECT prefix FROM pending_deletes ORDER BY created LIMIT 20').all<{ prefix: string }>();
+    for (const { prefix } of pending.results) {
+      for (;;) {
+        if (rounds-- <= 0) return false;
+        const page = await env.FILES.list({ prefix });
+        if (page.objects.length) await env.FILES.delete(page.objects.map((o) => o.key));
+        if (!page.truncated) break;
+      }
+      await env.DB.prepare('DELETE FROM pending_deletes WHERE prefix = ?').bind(prefix).run();
+    }
+    return pending.results.length < 20;
+  } catch {
+    return false;
+  }
 }
+
+/** Bytes stored for an owner's documents other than `except`. */
+async function ownerBytes(env: ReadyEnv, ownerId: string, except: string): Promise<number> {
+  const r = await env.DB.prepare('SELECT COALESCE(SUM(size + files_size), 0) AS n FROM documents WHERE owner_id = ? AND id != ?').bind(ownerId, except).first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
+const overQuota = () => new HttpError(413, "the owner's storage is full");
 
 // --- routes ---------------------------------------------------------------------------------
 
@@ -126,16 +169,21 @@ export async function listDocs(env: ReadyEnv, s: Session | null): Promise<Respon
   )
     .bind(me.user.id)
     .all();
+  // shares sent to this address and not yet used by another account become this account's
+  await env.DB.prepare('UPDATE shares SET user_id = ? WHERE email = ? AND user_id IS NULL').bind(me.user.id, me.user.email).run();
   const shared = await env.DB.prepare(
     `SELECT d.id, d.name, d.created, d.edited, d.version, d.size, s.role, u.email AS owner_email, u.name AS owner_name
      FROM shares s JOIN documents d ON d.id = s.doc_id JOIN users u ON u.id = d.owner_id
-     WHERE s.email = ? AND d.owner_id != ? ORDER BY d.edited DESC`,
+     WHERE s.user_id = ? AND d.owner_id != ? ORDER BY d.edited DESC`,
   )
-    .bind(me.user.email, me.user.id)
-    .all<Record<string, unknown>>();
+    .bind(me.user.id, me.user.id)
+    .all<Record<string, unknown> & { id: string; role: Role }>();
+  // one entry per document, with the highest role (two addresses of the account may be invited)
+  const best = new Map<string, Record<string, unknown> & { id: string; role: Role }>();
+  for (const r of shared.results) if (!best.has(r.id) || RANK[r.role] > RANK[best.get(r.id)!.role]) best.set(r.id, r);
   return json({
     owned: owned.results.map((r) => ({ ...r, role: 'owner' })),
-    shared: shared.results.map(({ owner_email, owner_name, ...r }) => ({ ...r, owner: { email: owner_email, name: owner_name } })),
+    shared: [...best.values()].map(({ owner_email, owner_name, ...r }) => ({ ...r, owner: { email: owner_email, name: owner_name } })),
   });
 }
 
@@ -146,6 +194,7 @@ export async function createDoc(req: Request, env: ReadyEnv, s: Session | null, 
   const name = cleanName(body.name ?? 'Untitled');
   const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM documents WHERE owner_id = ?').bind(me.user.id).first<{ n: number }>();
   if ((count?.n ?? 0) >= LIMITS.docsPerOwner) throw new HttpError(409, 'too many documents');
+  await sweep(env, 2);
   const id = randomToken(12);
   const now = deps.now();
   await env.DB.prepare('INSERT INTO documents (id, owner_id, name, created, edited) VALUES (?, ?, ?, ?, ?)').bind(id, me.user.id, name, now, now).run();
@@ -175,21 +224,34 @@ export async function patchDoc(req: Request, env: ReadyEnv, a: Access, s: Sessio
   return json(meta(await access(env, a.doc.id, s, null)));
 }
 
-/** DELETE /api/docs/:id: the owner deletes the document, its shares and its stored files. */
-export async function deleteDoc(env: ReadyEnv, a: Access, s: Session | null): Promise<Response> {
+/**
+ * DELETE /api/docs/:id: the owner deletes the document and its shares at once, and its stored
+ * objects in bounded batches (finished by later requests if there are too many for this one).
+ */
+export async function deleteDoc(env: ReadyEnv, a: Access, s: Session | null, deps: Deps): Promise<Response> {
   need(a, 'owner', s);
-  await env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(a.doc.id).run();
-  await deletePrefix(env, `docs/${a.doc.id}/`);
+  await env.DB.batch([
+    env.DB.prepare('INSERT OR IGNORE INTO pending_deletes (prefix, created) VALUES (?, ?)').bind(`docs/${a.doc.id}/`, deps.now()),
+    env.DB.prepare('DELETE FROM documents WHERE id = ?').bind(a.doc.id),
+  ]);
+  await sweep(env);
   return empty();
 }
 
 /** GET /api/docs/:id/snapshot: the document's content, a Yjs update. */
 export async function getSnapshot(env: ReadyEnv, a: Access): Promise<Response> {
-  const headers = { 'content-type': 'application/octet-stream', 'x-doc-version': String(a.doc.version), 'x-doc-role': a.role };
-  if (!a.doc.snapshot_key) return binary(new ArrayBuffer(0), headers);
-  const obj = await env.FILES.get(a.doc.snapshot_key);
-  if (!obj) throw new HttpError(500, 'snapshot missing');
-  return binary(await obj.arrayBuffer(), headers);
+  let { version, snapshot_key: key } = a.doc;
+  for (let attempt = 0; ; attempt++) {
+    const headers = { 'content-type': 'application/octet-stream', 'x-doc-version': String(version), 'x-doc-role': a.role };
+    if (!key) return binary(new ArrayBuffer(0), headers);
+    const obj = await env.FILES.get(key);
+    if (obj) return binary(await obj.arrayBuffer(), headers);
+    // a save replaced the snapshot between reading the row and the object: read both again
+    const cur = await env.DB.prepare('SELECT version, snapshot_key FROM documents WHERE id = ?').bind(a.doc.id).first<{ version: number; snapshot_key: string | null }>();
+    if (!cur) throw notFound();
+    if (attempt === 1 || cur.snapshot_key === key) throw new HttpError(500, 'snapshot missing');
+    ({ version, snapshot_key: key } = cur);
+  }
 }
 
 /**
@@ -202,9 +264,11 @@ export async function putSnapshot(req: Request, env: ReadyEnv, a: Access, s: Ses
   need(a, 'editor', s);
   const expected = Number((req.headers.get('if-match') ?? '').replace(/^W\//, '').replace(/"/g, ''));
   if (!req.headers.get('if-match') || !Number.isInteger(expected) || expected < 0) throw new HttpError(428, 'If-Match with the version is required');
-  const body = await req.arrayBuffer();
+  const body = await readBody(req, LIMITS.snapshotBytes).catch((e: unknown) => {
+    throw e instanceof HttpError && e.status === 413 ? new HttpError(413, 'document too large to save') : e;
+  });
   if (body.byteLength === 0) throw new HttpError(400, 'empty snapshot');
-  if (body.byteLength > LIMITS.snapshotBytes) throw new HttpError(413, 'document too large to save');
+  if ((await ownerBytes(env, a.doc.owner_id, a.doc.id)) + a.doc.files_size + body.byteLength > LIMITS.ownerBytes) throw overQuota();
   let name: string | null = null;
   const rawName = req.headers.get('x-doc-name');
   if (rawName) {
@@ -216,27 +280,52 @@ export async function putSnapshot(req: Request, env: ReadyEnv, a: Access, s: Ses
   }
   const key = `docs/${a.doc.id}/snapshots/${randomToken(12)}`;
   await env.FILES.put(key, body, { httpMetadata: { contentType: 'application/octet-stream' } });
-  const r = await env.DB.prepare(
-    `UPDATE documents SET version = version + 1, edited = ?, size = ?, snapshot_key = ?, name = COALESCE(?, name)
-     WHERE id = ? AND version = ?`,
-  )
-    .bind(deps.now(), body.byteLength, key, name, a.doc.id, expected)
-    .run();
+  // one transaction: the key replaced is the one of exactly the version this save succeeds on
+  const [prev, r] = await env.DB.batch([
+    env.DB.prepare('SELECT snapshot_key FROM documents WHERE id = ? AND version = ?').bind(a.doc.id, expected),
+    env.DB.prepare(
+      `UPDATE documents SET version = version + 1, edited = ?, size = ?, snapshot_key = ?, name = COALESCE(?, name)
+       WHERE id = ? AND version = ?`,
+    ).bind(deps.now(), body.byteLength, key, name, a.doc.id, expected),
+  ]);
   if (r.meta.changes !== 1) {
     await env.FILES.delete(key);
     const cur = await env.DB.prepare('SELECT version FROM documents WHERE id = ?').bind(a.doc.id).first<{ version: number }>();
     if (!cur) throw notFound();
     throw new HttpError(409, 'the document changed; merge and try again', { version: cur.version });
   }
-  if (a.doc.snapshot_key && a.doc.version === expected) await env.FILES.delete(a.doc.snapshot_key);
+  const old = (prev.results[0] as { snapshot_key?: string | null } | undefined)?.snapshot_key;
+  if (old) await env.FILES.delete(old);
+  // now and then, remove snapshots left behind by saves interrupted between storing and recording
+  if ((expected + 1) % 32 === 0) await sweepSnapshots(env, a.doc.id, key, deps.now());
   return json({ version: expected + 1 });
 }
 
-/** GET /api/docs/:id/shares: who has access (owner and editors may look). */
+/** Deletes a document's stored snapshots other than `keep` that are older than ten minutes. */
+async function sweepSnapshots(env: ReadyEnv, id: string, keep: string, now: number) {
+  const page = await env.FILES.list({ prefix: `docs/${id}/snapshots/` });
+  const stale = page.objects.filter((o) => o.key !== keep && now - o.uploaded.getTime() > 600_000).map((o) => o.key);
+  if (stale.length) await env.FILES.delete(stale);
+}
+
+/**
+ * GET /api/docs/:id/shares: who has access. The owner and the editors the document is shared with
+ * may look (not someone who has it only through its link). Each share says which account has
+ * used it, if any.
+ */
 export async function listShares(env: ReadyEnv, a: Access, s: Session | null): Promise<Response> {
   need(a, 'editor', s);
-  const rows = await env.DB.prepare('SELECT email, role, created FROM shares WHERE doc_id = ? ORDER BY created').bind(a.doc.id).all();
-  return json({ owner: { email: a.doc.owner_email, name: a.doc.owner_name }, shares: rows.results });
+  if (!a.direct || RANK[a.direct] < RANK.editor) throw new HttpError(403, 'only the owner and the editors it is shared with can see this');
+  const rows = await env.DB.prepare(
+    `SELECT s.email, s.role, s.created, u.name AS account_name, u.email AS account_email
+     FROM shares s LEFT JOIN users u ON u.id = s.user_id WHERE s.doc_id = ? ORDER BY s.created`,
+  )
+    .bind(a.doc.id)
+    .all<{ email: string; role: Role; created: number; account_name: string | null; account_email: string | null }>();
+  return json({
+    owner: { email: a.doc.owner_email, name: a.doc.owner_name },
+    shares: rows.results.map(({ account_name, account_email, ...r }) => ({ ...r, account: account_email === null ? null : { name: account_name ?? '', email: account_email } })),
+  });
 }
 
 /** PUT /api/docs/:id/shares {email, role, notify}: the owner shares the document with someone. */
@@ -261,16 +350,55 @@ export async function putShare(req: Request, env: ReadyEnv, a: Access, s: Sessio
     .bind(a.doc.id, email, body.role, now, me.user.id)
     .run();
 
-  let notified = false;
-  if (!existing && body.notify !== false && env.RESEND_API_KEY && env.EMAIL_FROM) {
-    const sent = await env.DB.prepare('SELECT COUNT(*) AS n FROM sent_mail WHERE sender_id = ? AND created > ?').bind(me.user.id, now - 86400_000).first<{ n: number }>();
-    if ((sent?.n ?? 0) < LIMITS.mailsPerDay) {
-      const url = new URL(`/#/s/${a.doc.id}`, req.url).toString();
-      notified = await sendShareMail(env, deps, { to: email, inviter: me.user.name || me.user.email, docName: a.doc.name, role: body.role, url });
-      if (notified) await env.DB.prepare('INSERT INTO sent_mail (sender_id, created) VALUES (?, ?)').bind(me.user.id, now).run();
-    }
+  let mail: MailOutcome | null = null;
+  if (!existing && body.notify !== false) mail = await notify(req, env, deps, me, email, a.doc, body.role);
+  return json({ email, role: body.role, notified: mail === 'sent', ...(mail && mail !== 'sent' ? { mail } : {}) });
+}
+
+/** What happened to a share notification, when one was asked for. */
+export type MailOutcome = 'sent' | 'unavailable' | 'new-account' | 'opted-out' | 'limit' | 'failed';
+
+/**
+ * Sends a share notification within the limits: the sender's account must be old enough, the
+ * recipient must not have opted out, and the per-sender, per-recipient and global daily counts
+ * must allow it. The count is reserved before sending (one transaction with the check), so
+ * concurrent shares cannot pass the limit together, and released if sending fails.
+ */
+async function notify(req: Request, env: ReadyEnv, deps: Deps, me: Session, to: string, doc: DocRow, role: 'viewer' | 'editor'): Promise<MailOutcome> {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return 'unavailable';
+  const now = deps.now();
+  const sender = await env.DB.prepare('SELECT created FROM users WHERE id = ?').bind(me.user.id).first<{ created: number }>();
+  if (!sender || now - sender.created < LIMITS.mailAccountAgeMs) return 'new-account';
+  const rcpt = await recipientKey(env, to);
+  if (await env.DB.prepare('SELECT 1 AS x FROM mail_optout WHERE recipient = ?').bind(rcpt).first()) return 'opted-out';
+  const since = now - 86400_000;
+  const [ins, counts] = await env.DB.batch([
+    env.DB.prepare('INSERT INTO sent_mail (sender_id, created, recipient) VALUES (?, ?, ?) RETURNING id').bind(me.user.id, now, rcpt),
+    env.DB.prepare(
+      `SELECT (SELECT COUNT(*) FROM sent_mail WHERE sender_id = ? AND created > ?) AS mine,
+              (SELECT COUNT(*) FROM sent_mail WHERE recipient = ? AND created > ?) AS theirs,
+              (SELECT COUNT(*) FROM sent_mail WHERE created > ?) AS everyone`,
+    ).bind(me.user.id, since, rcpt, since, since),
+  ]);
+  const reservation = (ins.results[0] as { id: number }).id;
+  const release = () => env.DB.prepare('DELETE FROM sent_mail WHERE id = ?').bind(reservation).run();
+  const c = counts.results[0] as { mine: number; theirs: number; everyone: number };
+  if (c.mine > LIMITS.mailsPerDay || c.theirs > LIMITS.mailsPerRecipientPerDay || c.everyone > LIMITS.mailsGlobalPerDay) {
+    await release();
+    return 'limit';
   }
-  return json({ email, role: body.role, notified });
+  const origin = appOrigin(env, req);
+  const sent = await sendShareMail(env, deps, {
+    to,
+    inviterName: me.user.name,
+    inviterEmail: me.user.email,
+    docName: doc.name,
+    role,
+    url: `${origin}/#/s/${doc.id}`,
+    unsubscribeUrl: `${origin}/api/mail/unsubscribe?r=${rcpt}`,
+  });
+  if (!sent) await release();
+  return sent ? 'sent' : 'failed';
 }
 
 /** DELETE /api/docs/:id/shares/:email: the owner removes someone, or someone removes themselves. */
@@ -293,10 +421,18 @@ export async function listFiles(env: ReadyEnv, a: Access): Promise<Response> {
 export async function putFile(req: Request, env: ReadyEnv, a: Access, s: Session | null, name: string): Promise<Response> {
   need(a, 'editor', s);
   if (!FILE_NAME.test(name)) throw new HttpError(400, 'file names end in .dcw or .dch');
-  const body = await req.arrayBuffer();
-  if (body.byteLength > LIMITS.fileBytes) throw new HttpError(413, 'file too large');
+  const body = await readBody(req, LIMITS.fileBytes).catch((e: unknown) => {
+    throw e instanceof HttpError && e.status === 413 ? new HttpError(413, 'file too large') : e;
+  });
+  const prefix = `docs/${a.doc.id}/files/`;
+  const page = await env.FILES.list({ prefix });
+  const others = page.objects.filter((o) => o.key !== prefix + name);
+  if (page.truncated || others.length >= LIMITS.filesPerDoc) throw new HttpError(409, 'too many files kept with this document');
+  const filesSize = others.reduce((n, o) => n + o.size, 0) + body.byteLength;
+  if ((await ownerBytes(env, a.doc.owner_id, a.doc.id)) + a.doc.size + filesSize > LIMITS.ownerBytes) throw overQuota();
   const type = name.endsWith('.dch') ? 'application/json' : 'text/plain; charset=utf-8';
-  await env.FILES.put(`docs/${a.doc.id}/files/${name}`, body, { httpMetadata: { contentType: type } });
+  await env.FILES.put(prefix + name, body, { httpMetadata: { contentType: type } });
+  await env.DB.prepare('UPDATE documents SET files_size = ? WHERE id = ?').bind(filesSize, a.doc.id).run();
   return json({ name, size: body.byteLength }, 201);
 }
 
@@ -310,12 +446,15 @@ export async function getFile(env: ReadyEnv, a: Access, name: string): Promise<R
   });
 }
 
-/** DELETE /api/me: deletes the account, its documents and their files, and shares to it. */
-export async function deleteAccount(env: ReadyEnv, s: Session): Promise<void> {
-  const owned = await env.DB.prepare('SELECT id FROM documents WHERE owner_id = ?').bind(s.user.id).all<{ id: string }>();
-  for (const d of owned.results) await deletePrefix(env, `docs/${d.id}/`);
+/**
+ * DELETE /api/me: deletes the account, its documents and shares to it at once (one transaction),
+ * and the documents' stored objects in bounded batches, finished by later requests if need be.
+ */
+export async function deleteAccount(env: ReadyEnv, s: Session, deps: Deps): Promise<void> {
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM shares WHERE email = ?').bind(s.user.email),
+    env.DB.prepare("INSERT OR IGNORE INTO pending_deletes (prefix, created) SELECT 'docs/' || id || '/', ? FROM documents WHERE owner_id = ?").bind(deps.now(), s.user.id),
+    env.DB.prepare('DELETE FROM shares WHERE email = ? OR user_id = ?').bind(s.user.email, s.user.id),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(s.user.id),
   ]);
+  await sweep(env);
 }

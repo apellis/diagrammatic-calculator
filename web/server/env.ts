@@ -53,6 +53,24 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** The sender of share notifications, for example `Name <share@send.example.org>`. */
   EMAIL_FROM?: string;
+  /**
+   * The site's origin, for example `https://diagcalc.pages.dev`. When set, the sign-in redirect
+   * and the links in e-mails use it, and the API refuses requests that reach it under any other
+   * host (an old deployment's own address, a preview). Unset, the request's own origin is used.
+   */
+  APP_ORIGIN?: string;
+}
+
+/** The origin links and redirects point to: APP_ORIGIN if set, else the request's. */
+export function appOrigin(env: Env, req: Request): string {
+  if (env.APP_ORIGIN) {
+    try {
+      return new URL(env.APP_ORIGIN).origin;
+    } catch {
+      // a malformed setting: fall back to the request
+    }
+  }
+  return new URL(req.url).origin;
 }
 
 /** An Env with everything sign-in needs. */

@@ -16,7 +16,8 @@ export interface Me {
 }
 
 export interface Person {
-  email: string;
+  /** Left out for someone who has the document only through its link. */
+  email?: string;
   name: string;
 }
 
@@ -37,7 +38,12 @@ export interface Share {
   email: string;
   role: 'viewer' | 'editor';
   created: number;
+  /** The account that has used this share (only that account has it from then on), if any. */
+  account?: { name: string; email: string } | null;
 }
+
+/** Why a share notification asked for was not sent. */
+export type MailOutcome = 'unavailable' | 'new-account' | 'opted-out' | 'limit' | 'failed';
 
 export class ApiError extends Error {
   constructor(
@@ -60,7 +66,7 @@ export class Api {
     private readonly f: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
-  private async call(path: string, init: Init = {}): Promise<Response> {
+  private async call(path: string, init: Init = {}, retried = false): Promise<Response> {
     const headers = new Headers(init.headers);
     const method = (init.method ?? 'GET').toUpperCase();
     if (method !== 'GET' && this.csrf) headers.set('x-csrf-token', this.csrf);
@@ -78,6 +84,8 @@ export class Api {
       } catch {
         // not JSON: keep the status
       }
+      // the session was renewed (another tab read /api/me): fetch its token and try once more
+      if (r.status === 403 && e.error === 'missing or wrong CSRF token' && !retried && method !== 'GET' && (await this.me())) return this.call(path, init, true);
       throw new ApiError(r.status, e.error ?? r.statusText, e.version);
     }
     return r;
@@ -102,6 +110,12 @@ export class Api {
 
   async logout(): Promise<void> {
     await this.call('/auth/logout', { method: 'POST' });
+    this.csrf = '';
+  }
+
+  /** Ends every session of the account, in every browser. */
+  async logoutEverywhere(): Promise<void> {
+    await this.call('/auth/logout-all', { method: 'POST' });
     this.csrf = '';
   }
 
@@ -140,7 +154,7 @@ export class Api {
     return (await this.call(`/docs/${id}/shares`)).json();
   }
 
-  async share(id: string, email: string, role: 'viewer' | 'editor', notify: boolean): Promise<{ email: string; role: string; notified: boolean }> {
+  async share(id: string, email: string, role: 'viewer' | 'editor', notify: boolean): Promise<{ email: string; role: string; notified: boolean; mail?: MailOutcome }> {
     return (await this.call(`/docs/${id}/shares`, { method: 'PUT', json: { email, role, notify } })).json();
   }
 

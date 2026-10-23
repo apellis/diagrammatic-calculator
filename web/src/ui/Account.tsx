@@ -2,8 +2,8 @@
 // document, the save status of an open document, and the share dialog. All of it is hidden when
 // the site has no accounts API, so the anonymous app is unchanged.
 import { createResource, createSignal, For, onMount, Show } from 'solid-js';
-import { account, api, loadAccount, openFromAccount, signIn, signOut, user } from '../account/account';
-import { ApiError, type CloudDoc, type Role } from '../account/api';
+import { account, api, loadAccount, openFromAccount, signIn, signOut, signOutEverywhere, takeLinkToken, user } from '../account/account';
+import { ApiError, type CloudDoc, type MailOutcome, type Role } from '../account/api';
 import { statusText, type DocSync } from '../account/docsync';
 import { findByCloud, updateInfo } from '../doc/store';
 import { ago } from '../app';
@@ -58,6 +58,29 @@ const SIGNIN: Record<string, string> = {
 
 export const signInMessage = (outcome: string | null) => (outcome ? SIGNIN[outcome] ?? SIGNIN.failed : '');
 
+/** Signing out in every browser, for the settings page; nothing without an account. */
+export function SignOutEverywhere() {
+  return (
+    <Show when={user()}>
+      {(u) => (
+        <section>
+          <h3>Account</h3>
+          <p class="muted">Signed in as {u().email}. Sessions end after 30 days, or after 7 days without use.</p>
+          <button onClick={() => void signOutEverywhere()} data-testid="sign-out-everywhere">Sign out everywhere</button>
+        </section>
+      )}
+    </Show>
+  );
+}
+
+const MAIL: Record<MailOutcome, string> = {
+  unavailable: 'e-mail is not set up on this site',
+  'new-account': 'accounts can send share e-mails one day after they are made',
+  'opted-out': 'that address asked for no share e-mails',
+  limit: 'the daily limit of share e-mails was reached',
+  failed: 'sending failed',
+};
+
 /** Documents others have shared with the signed-in account. */
 export function SharedWithMe(props: { docs: CloudDoc[] }) {
   return (
@@ -89,20 +112,22 @@ export function SharedWithMe(props: { docs: CloudDoc[] }) {
 export function OpenShared(props: { id: string; token?: string }) {
   const [problem, setProblem] = createSignal<'sign-in' | 'unavailable' | 'not-found' | 'error' | null>(null);
   const [detail, setDetail] = createSignal('');
+  // a link token put aside while signing in (it does not travel through the sign-in address)
+  const token = props.token ?? takeLinkToken(props.id);
   onMount(async () => {
     const s = await loadAccount();
     const local = await findByCloud(props.id);
     if (local) {
-      if (props.token && !local.cloud?.token) await updateInfo(local.id, { cloud: { ...local.cloud!, token: props.token } });
+      if (token && !local.cloud?.token) await updateInfo(local.id, { cloud: { ...local.cloud!, token } });
       location.replace(`#/doc/${local.id}`);
       return;
     }
     if (s.status === 'unavailable' || s.status === 'loading') return setProblem('unavailable');
     const u = s.status === 'signed-in' ? s.user : null;
-    if (!u && !props.token) return setProblem('sign-in');
+    if (!u && !token) return setProblem('sign-in');
     try {
-      const meta = await api.get(props.id, props.token);
-      location.replace(`#/doc/${await openFromAccount(u, meta, props.token)}`);
+      const meta = await api.get(props.id, token);
+      location.replace(`#/doc/${await openFromAccount(u, meta, token)}`);
     } catch (e) {
       setDetail(message(e));
       setProblem(e instanceof ApiError && e.status === 404 ? 'not-found' : 'error');
@@ -126,7 +151,7 @@ export function OpenShared(props: { id: string; token?: string }) {
             </p>
             <div class="row">
               <Show when={!user() && p() !== 'unavailable'}>
-                <button class="primary" onClick={() => signIn()}>Sign in</button>
+                <button class="primary" onClick={() => signIn(token ? `${location.pathname}#/s/${props.id}/${token}` : undefined)}>Sign in</button>
               </Show>
               <a class="button" href="#/">All documents</a>
             </div>
@@ -147,7 +172,7 @@ export function SyncBadge(props: { sync: DocSync }) {
 }
 
 /** Who has access to a document, and (for its owner) adding people and link sharing. */
-export function ShareDialog(props: { cloudId: string; name: string; role: Role; onClose: () => void }) {
+export function ShareDialog(props: { cloudId: string; name: string; role: Role; onClose: () => void; onCleanCopy?: () => void }) {
   const owner = () => props.role === 'owner';
   const [people, { refetch }] = createResource(() => (props.role === 'viewer' ? false : props.cloudId), (id) => api.shares(id));
   const [meta, { mutate }] = createResource(() => props.cloudId, (id) => api.get(id));
@@ -172,7 +197,8 @@ export function ShareDialog(props: { cloudId: string; name: string; role: Role; 
       const r = await api.share(props.cloudId, email().trim(), role(), notify());
       setEmail('');
       refetch();
-      return r.notified ? `Shared with ${r.email}, who was sent an e-mail.` : `Shared with ${r.email}.`;
+      if (r.notified) return `Shared with ${r.email}, who was sent an e-mail.`;
+      return r.mail ? `Shared with ${r.email}. No e-mail was sent: ${MAIL[r.mail] ?? 'sending failed'}; send them the link yourself.` : `Shared with ${r.email}.`;
     });
   };
   const url = (token?: string) => `${location.origin}/#/s/${props.cloudId}${token ? `/${token}` : ''}`;
@@ -200,6 +226,12 @@ export function ShareDialog(props: { cloudId: string; name: string; role: Role; 
             <input type="checkbox" checked={notify()} onChange={(e) => setNotify(e.currentTarget.checked)} /> Tell them by e-mail
           </label>
         </Show>
+        <Show when={owner()}>
+          <p class="hint" data-testid="share-history-note">
+            Everyone who can open the document receives its whole history, including text that was later deleted.
+            <Show when={props.onCleanCopy}>{' '}<a href="#" onClick={(e) => { e.preventDefault(); props.onCleanCopy!(); }}>Share a clean copy instead</a> (a new document with only the current content).</Show>
+          </p>
+        </Show>
         <Show when={note()}><p class="hint" data-testid="share-note">{note()}</p></Show>
         <Show when={error()}><div class="error" style={{ 'margin-top': '8px' }}>{error()}</div></Show>
 
@@ -207,11 +239,14 @@ export function ShareDialog(props: { cloudId: string; name: string; role: Role; 
           {(p) => (
             <table class="kv people" style={{ 'margin-top': '12px' }} data-testid="people">
               <tbody>
-                <tr><td>{p().owner.name ? `${p().owner.name} (${p().owner.email})` : p().owner.email}</td><td class="muted">owner</td><td /></tr>
+                <tr><td>{p().owner.name && p().owner.email ? `${p().owner.name} (${p().owner.email})` : p().owner.name || p().owner.email}</td><td class="muted">owner</td><td /></tr>
                 <For each={p().shares}>
                   {(s) => (
                     <tr data-person={s.email}>
-                      <td>{s.email}</td>
+                      <td title={s.account ? `Opened by the Google account ${s.account.name ? `${s.account.name}, ` : ''}${s.account.email}; only that account has this access` : 'Not opened yet; the first Google account with this address to open it keeps the access'}>
+                        {s.email}
+                        <Show when={s.account?.name}><span class="muted"> ({s.account!.name})</span></Show>
+                      </td>
                       <td>
                         <Show when={owner()} fallback={<span class="muted">{s.role === 'editor' ? 'can edit' : 'can view'}</span>}>
                           <select aria-label={`Access for ${s.email}`} value={s.role}

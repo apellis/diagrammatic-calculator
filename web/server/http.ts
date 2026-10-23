@@ -13,8 +13,10 @@ export class HttpError extends Error {
 
 const base = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
 
-export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', ...base, ...headers } });
+export function json(body: unknown, status = 200, headers: Record<string, string> = {}, cookies: string[] = []): Response {
+  const h = new Headers({ 'content-type': 'application/json; charset=utf-8', ...base, ...headers });
+  for (const c of cookies) h.append('set-cookie', c);
+  return new Response(JSON.stringify(body), { status, headers: h });
 }
 
 export function empty(status = 204, cookies: string[] = []): Response {
@@ -56,10 +58,40 @@ export function setCookie(name: string, value: string, maxAgeSeconds: number): s
 
 export const clearCookie = (name: string) => setCookie(name, '', 0);
 
+/**
+ * The request body, refused with 413 as soon as it is known to exceed `maxBytes`: from
+ * Content-Length before anything is read, else while streaming, so an oversized body is never
+ * held in memory whole.
+ */
+export async function readBody(req: Request, maxBytes: number): Promise<Uint8Array<ArrayBuffer>> {
+  const declared = req.headers.get('content-length');
+  if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) throw new HttpError(413, 'request too large');
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new HttpError(413, 'request too large');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out;
+}
+
 export async function readJson<T>(req: Request, maxBytes = 16 * 1024): Promise<T> {
   if (!(req.headers.get('content-type') ?? '').startsWith('application/json')) throw new HttpError(415, 'expected application/json');
-  const text = await req.text();
-  if (text.length > maxBytes) throw new HttpError(413, 'request too large');
+  const text = new TextDecoder().decode(await readBody(req, maxBytes));
   try {
     const v = JSON.parse(text) as unknown;
     if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error();

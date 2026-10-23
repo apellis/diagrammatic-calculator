@@ -383,6 +383,11 @@ describe('sharing and access', () => {
 });
 
 describe('share notifications', () => {
+  // these tests are about the message; account age has its own tests (hardening.test.ts)
+  const age = LIMITS.mailAccountAgeMs;
+  beforeAll(() => void (LIMITS.mailAccountAgeMs = 0));
+  afterAll(() => void (LIMITS.mailAccountAgeMs = age));
+
   it('e-mails a new person once, with everything inserted escaped', async () => {
     const owner = await w.signedIn({ sub: 'g-mal', email: 'mal@example.org', name: 'Mal <b>' });
     const id = await owner.newDoc('KLR <script>alert(1)</script>');
@@ -393,8 +398,12 @@ describe('share notifications', () => {
     expect(m.from).toBe('Calculator <share@send.example.org>');
     expect(m.to).toEqual(['new@example.org']);
     expect(m.auth).toBe('Bearer re_test_key');
-    expect(m.subject).toBe('Mal <b> shared “KLR <script>alert(1)</script>” with you');
+    // the title, which anyone can choose, stays out of the subject; the inviter shows with their verified address
+    expect(m.subject).toBe('A document was shared with you on diagrammatic-calculator');
+    expect(m.text).toContain('Mal <b> (mal@example.org) shared a document with you');
     expect(m.text).toContain(`${ORIGIN}/#/s/${id}`);
+    expect(m.headers?.['List-Unsubscribe']).toMatch(new RegExp(`^<${ORIGIN}/api/mail/unsubscribe\\?r=[A-Za-z0-9_-]{43}>$`));
+    expect(m.headers?.['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
     expect(m.text).toContain('You can edit it.');
     expect(m.html).not.toContain('<script>');
     expect(m.html).toContain('&#60;script&#62;');
@@ -410,7 +419,7 @@ describe('share notifications', () => {
     const id = await owner.newDoc();
     w.resendFails = true;
     const r = await owner.fetch(`/api/docs/${id}/shares`, { method: 'PUT', json: { email: 'r0@example.org', role: 'viewer' } });
-    expect(((await r.json()) as { notified: boolean }).notified).toBe(false);
+    expect(await r.json()).toMatchObject({ notified: false, mail: 'failed' });
     w.resendFails = false;
     const limit = LIMITS.mailsPerDay;
     LIMITS.mailsPerDay = 3;

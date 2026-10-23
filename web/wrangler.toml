@@ -9,6 +9,11 @@ compatibility_date = "2026-10-01"
 
 [vars]
 EMAIL_FROM = "diagrammatic-calculator <share@send.ape.computer>"
+# The site's address: sign-in redirects and links in e-mails use it, and the API refuses requests
+# reaching it under any other host (old deployments' own addresses, previews). Change it when the
+# custom domain moves over (and add the new callback URL to the Google OAuth client first). For
+# `wrangler pages dev`, override it in .dev.vars (APP_ORIGIN=http://localhost:8788).
+APP_ORIGIN = "https://diagcalc.pages.dev"
 
 [[d1_databases]]
 binding = "DB"
@@ -19,3 +24,9 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "diagcalc"
+
+# Preview deployments (branches other than the production branch) get none of the bindings above:
+# no database, no files, so they never touch production data and their API answers that accounts
+# are not available.
+[env.preview]
+vars = { EMAIL_FROM = "" }

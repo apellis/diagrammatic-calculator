@@ -1,6 +1,7 @@
 // Settings for this device: the appearance, and the AI provider with its key.
 import { createSignal, For } from 'solid-js';
 import { AISettingsForm } from './AISettingsForm';
+import { SignOutEverywhere } from './Account';
 import { loadTheme, saveTheme, type Theme } from './theme';
 
 const THEMES: { id: Theme; name: string }[] = [
@@ -27,6 +28,7 @@ export function SettingsPage(props: { from?: string }) {
         <p class="muted">The assistant uses your own key with the provider you choose. Every message goes from this browser straight to that provider.</p>
         <AISettingsForm />
       </section>
+      <SignOutEverywhere />
     </div>
   );
 }

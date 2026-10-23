@@ -19,7 +19,13 @@ export function ahead(local: Uint8Array, remote: Uint8Array | undefined): boolea
 /** Brings the server's content into `ydoc`, returning the link at the server's version. */
 async function pull(api: Api, ydoc: Y.Doc, link: CloudLink): Promise<CloudLink> {
   const s = await api.snapshot(link.id, link.token);
-  if (s.data.length) Y.applyUpdate(ydoc, s.data, CLOUD);
+  if (s.data.length) {
+    try {
+      Y.applyUpdate(ydoc, s.data, CLOUD);
+    } catch {
+      throw new Error('the copy in the account cannot be read');
+    }
+  }
   return { ...link, version: s.version, role: s.role, sv: s.data.length ? Y.encodeStateVectorFromUpdate(s.data) : new Uint8Array([0]) };
 }
 

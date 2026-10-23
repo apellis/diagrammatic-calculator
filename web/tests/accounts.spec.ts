@@ -139,6 +139,14 @@ test('a view link opens the document without an account', async ({ browser }) =>
   const e = await device(browser, mock, null);
   await e.page.goto(`/#/s/${id}`);
   await expect(e.page.getByTestId('open-shared')).toContainText('Sign in to open this document.');
+
+  // the owner is told that sharing sends the whole history, and can share a clean copy instead
+  await expect(dialog.getByTestId('share-history-note')).toContainText('including text that was later deleted');
+  const before = a.page.url();
+  await dialog.getByRole('link', { name: 'Share a clean copy instead' }).click();
+  await expect(a.page).not.toHaveURL(before);
+  await expect(a.page).toHaveURL(/#\/doc\//);
+  await expect(cell(a.page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_1 e(iji)');
   await a.context.close();
   await d.context.close();
   await e.context.close();

@@ -7,6 +7,7 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { Api, type CloudDoc, type User } from './api';
 import { CLOUD, syncDoc, upload } from './sync';
 import { createFromCloud, getInfo, listDocs, updateInfo, type CloudLink, type DocInfo } from '../doc/store';
+import { Doc } from '../doc/model';
 
 export type AccountState =
   | { status: 'loading' }
@@ -38,14 +39,49 @@ export function loadAccount(again = false): Promise<AccountState> {
   return loading;
 }
 
-/** Leaves for Google's sign-in, coming back to this page. */
+const LINK_KEY = 'diagcalc-signin-link';
+
+/**
+ * Leaves for Google's sign-in, coming back to this page. A document link's token
+ * (`#/s/<id>/<token>`) does not travel through the sign-in URL, where it would end up in request
+ * logs: it waits in this tab's session storage and the return address is `#/s/<id>`.
+ */
 export function signIn(returnTo = location.pathname + location.hash) {
+  const m = /^(.*#\/s\/[A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)$/.exec(returnTo);
+  if (m) {
+    try {
+      sessionStorage.setItem(LINK_KEY, JSON.stringify({ path: m[1], token: m[2] }));
+      returnTo = m[1];
+    } catch {
+      // no session storage: keep the token in the address rather than lose it
+    }
+  }
   location.assign(`/api/auth/login?return=${encodeURIComponent(returnTo)}`);
+}
+
+/** The link token put aside by signIn for the document `id`, taken (once). */
+export function takeLinkToken(id: string): string | undefined {
+  try {
+    const raw = sessionStorage.getItem(LINK_KEY);
+    if (!raw) return undefined;
+    const v = JSON.parse(raw) as { path?: unknown; token?: unknown };
+    if (typeof v.path !== 'string' || typeof v.token !== 'string' || !v.path.endsWith(`#/s/${id}`)) return undefined;
+    sessionStorage.removeItem(LINK_KEY);
+    return v.token;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Signs out. Documents stay in this browser. */
 export async function signOut() {
   await api.logout();
+  setAccount({ status: 'anonymous' });
+}
+
+/** Signs out in every browser where this account is signed in. */
+export async function signOutEverywhere() {
+  await api.logoutEverywhere();
   setAccount({ status: 'anonymous' });
 }
 
@@ -130,8 +166,8 @@ export async function syncAll(u: User, onChange?: () => void): Promise<SyncRepor
         if (meta.version === d.cloud.version && !changedHere) continue;
         const { link, name, edited } = await withYdoc(d.id, async (y) => {
           const link = await syncDoc(api, y, d.cloud!, d.name, meta);
-          const m = y.getMap('meta');
-          return { link, name: (m.get('name') as string | undefined) ?? d.name, edited: (m.get('edited') as number | undefined) ?? d.edited };
+          const doc = new Doc(y);
+          return { link, name: doc.meta.has('name') ? doc.name : d.name, edited: doc.edited ?? d.edited };
         });
         await updateInfo(d.id, { cloud: link, name, edited: Math.max(d.edited, edited) });
         report.updated++;

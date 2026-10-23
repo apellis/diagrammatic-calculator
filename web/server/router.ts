@@ -1,10 +1,11 @@
 // The accounts API under /api/: sign-in, the session, documents and sharing. Every route checks
 // the session and the caller's role on the document; every state-changing request needs the
 // session's CSRF token.
-import { defaultDeps, ready, type Deps, type Env, type ReadyEnv } from './env';
+import { appOrigin, defaultDeps, ready, type Deps, type Env, type ReadyEnv } from './env';
 import { HttpError, empty, json, redirect } from './http';
-import { callback, csrfOk, csrfToken, currentSession, login, logout, type Session } from './auth';
+import { callback, csrfOk, csrfToken, currentSession, login, logout, logoutEverywhere, rotate, type Session } from './auth';
 import * as docs from './docs';
+import { unsubscribe } from './mail';
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -36,6 +37,10 @@ export async function handle(req: Request, env: Env, deps: Deps = defaultDeps): 
       if (path === 'auth/login') return redirect('/?signin=unavailable#/');
       throw new HttpError(503, 'accounts are not available');
     }
+    // only the configured site's own host serves the API (not an old deployment's address)
+    if (new URL(req.url).origin !== appOrigin(env, req)) throw new HttpError(421, 'this address does not serve the accounts API');
+    // one-click unsubscribe from a share notification: no session, as mail clients send it
+    if (path === 'mail/unsubscribe' && (method === 'GET' || method === 'POST')) return await unsubscribe(req, env, deps);
     const s = await currentSession(req, env, deps);
     if (UNSAFE.has(method)) {
       if (!s) {
@@ -56,10 +61,13 @@ export async function handle(req: Request, env: Env, deps: Deps = defaultDeps): 
 
 async function dispatch({ req, env, deps, s, method, path, seg }: Call): Promise<Response> {
   switch (`${method} ${path}`) {
-    case 'GET me':
-      return json({ accounts: true, user: s?.user ?? null, ...(s ? { csrf: await csrfToken(env, s) } : {}) });
+    case 'GET me': {
+      if (!s) return json({ accounts: true, user: null });
+      const r = await rotate(env, s, deps);
+      return json({ accounts: true, user: s.user, csrf: await csrfToken(env, r.s) }, 200, {}, r.cookies);
+    }
     case 'DELETE me':
-      await docs.deleteAccount(env, s!);
+      await docs.deleteAccount(env, s!, deps);
       return empty(204, await logout(env, null));
     case 'GET auth/login':
       return login(req, env, deps);
@@ -67,6 +75,8 @@ async function dispatch({ req, env, deps, s, method, path, seg }: Call): Promise
       return callback(req, env, deps);
     case 'POST auth/logout':
       return empty(204, await logout(env, s));
+    case 'POST auth/logout-all':
+      return empty(204, await logoutEverywhere(env, s!));
     case 'GET docs':
       return docs.listDocs(env, s);
     case 'POST docs':
@@ -83,7 +93,7 @@ async function dispatch({ req, env, deps, s, method, path, seg }: Call): Promise
     case 'PATCH ':
       return docs.patchDoc(req, env, a, s);
     case 'DELETE ':
-      return docs.deleteDoc(env, a, s);
+      return docs.deleteDoc(env, a, s, deps);
     case 'GET snapshot':
       return docs.getSnapshot(env, a);
     case 'PUT snapshot':

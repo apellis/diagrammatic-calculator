@@ -4,5 +4,7 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  test: { environment: 'node', include: ['server/**/*.test.ts'] },
+  // Miniflare starts a workerd process per storage; under load (several test files, other builds)
+  // that can take longer than Vitest's default 5 s, so the limits are generous.
+  test: { environment: 'node', include: ['server/**/*.test.ts'], testTimeout: 30_000, hookTimeout: 60_000 },
 });

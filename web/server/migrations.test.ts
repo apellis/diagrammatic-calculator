@@ -37,11 +37,16 @@ describe('D1 migrations', () => {
         'index shares_email',
         'table sent_mail',
         'index sent_mail_sender',
+        'index sent_mail_recipient',
+        'index sent_mail_created',
+        'table mail_optout',
+        'table pending_deletes',
       ]),
     );
     const cols = async (t: string) => (await db.prepare(`SELECT name FROM pragma_table_info('${t}')`).all<{ name: string }>()).results.map((r) => r.name);
-    expect(await cols('documents')).toEqual(['id', 'owner_id', 'name', 'created', 'edited', 'version', 'size', 'snapshot_key', 'link_role', 'link_token']);
-    expect(await cols('shares')).toEqual(['doc_id', 'email', 'role', 'created', 'invited_by']);
+    expect(await cols('documents')).toEqual(['id', 'owner_id', 'name', 'created', 'edited', 'version', 'size', 'snapshot_key', 'link_role', 'link_token', 'files_size']);
+    expect(await cols('shares')).toEqual(['doc_id', 'email', 'role', 'created', 'invited_by', 'user_id']);
+    expect(await cols('sessions')).toEqual(['id_hash', 'user_id', 'created', 'expires', 'last_seen']);
   });
 
   it('fail on a second application, so wrangler must track them (it does)', async () => {
@@ -62,14 +67,27 @@ describe('D1 migrations', () => {
     await expect(run("UPDATE documents SET link_role = 'owner', link_token = 't' WHERE id = 'd1'")).rejects.toThrow(/CHECK/);
     await expect(run("UPDATE documents SET link_role = 'viewer' WHERE id = 'd1'")).rejects.toThrow(/CHECK/);
     await run("UPDATE documents SET link_role = 'viewer', link_token = 't' WHERE id = 'd1'");
-    await expect(run('INSERT INTO shares VALUES (?, ?, ?, ?, ?)', 'd1', 'b@example.org', 'owner', 1, 'u1')).rejects.toThrow(/CHECK/);
-    await run('INSERT INTO shares VALUES (?, ?, ?, ?, ?)', 'd1', 'b@example.org', 'editor', 1, 'u1');
-    await run('INSERT INTO sessions VALUES (?, ?, ?, ?)', 'h1', 'u1', 1, 2);
+    await expect(run('INSERT INTO shares (doc_id, email, role, created, invited_by) VALUES (?, ?, ?, ?, ?)', 'd1', 'b@example.org', 'owner', 1, 'u1')).rejects.toThrow(/CHECK/);
+    await run('INSERT INTO shares (doc_id, email, role, created, invited_by) VALUES (?, ?, ?, ?, ?)', 'd1', 'b@example.org', 'editor', 1, 'u1');
+    await run('INSERT INTO sessions (id_hash, user_id, created, expires) VALUES (?, ?, ?, ?)', 'h1', 'u1', 1, 2);
     await run('INSERT INTO sent_mail (sender_id, created) VALUES (?, ?)', 'u1', 1);
+    // a share claimed by an account goes with that account
+    await run('INSERT INTO shares (doc_id, email, role, created, invited_by) VALUES (?, ?, ?, ?, ?)', 'd1', 'c@example.org', 'viewer', 1, 'u1');
+    await run("UPDATE shares SET user_id = 'u2' WHERE email = 'c@example.org'");
     await run("DELETE FROM users WHERE id = 'u1'");
     for (const t of ['documents', 'shares', 'sessions', 'sent_mail']) {
       expect((await db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first<{ n: number }>())!.n).toBe(0);
     }
+  });
+
+  it('keep existing sessions alive across the idle-timeout migration', async () => {
+    const db = await fresh();
+    const [first, ...rest] = migrations();
+    await db.batch(statements(first.sql).map((s) => db.prepare(s)));
+    await db.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)').bind('u1', 'sub1', 'a@example.org', 'A', 1, 1).run();
+    await db.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').bind('h1', 'u1', 1234, 9999).run();
+    for (const m of rest) await db.batch(statements(m.sql).map((s) => db.prepare(s)));
+    expect(await db.prepare('SELECT last_seen FROM sessions').first()).toEqual({ last_seen: 1234 });
   });
 
   it('split into statements without comments', () => {

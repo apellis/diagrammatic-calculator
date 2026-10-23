@@ -118,6 +118,7 @@ export interface Mail {
   subject: string;
   text: string;
   html: string;
+  headers?: Record<string, string>;
   auth: string | null;
 }
 
@@ -135,7 +136,7 @@ export class World {
     this.deps = { now: () => this.clock, fetch: (input, init) => this.outside(new Request(input, init)) };
   }
 
-  static async create(options: { email?: boolean; accounts?: boolean } = {}): Promise<World> {
+  static async create(options: { email?: boolean; accounts?: boolean; appOrigin?: string } = {}): Promise<World> {
     const { mf, DB, FILES } = await storage();
     await applyMigrations(DB);
     const w = new World(mf, await FakeGoogle.create());
@@ -149,6 +150,7 @@ export class World {
             GOOGLE_CLIENT_SECRET: CLIENT_SECRET,
             SESSION_SECRET: 'a test secret that is long enough to sign with',
             ...(options.email === false ? {} : { RESEND_API_KEY: 're_test_key', EMAIL_FROM: 'Calculator <share@send.example.org>' }),
+            ...(options.appOrigin ? { APP_ORIGIN: options.appOrigin } : {}),
           };
     return w;
   }
@@ -198,6 +200,8 @@ export class Browser {
   csrf = '';
   /** Headers added to every request (tests set cross-site ones). */
   extra: Record<string, string> = {};
+  /** The origin this browser talks to (tests set another host). */
+  origin = ORIGIN;
   constructor(readonly world: World) {}
 
   async fetch(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
@@ -205,7 +209,7 @@ export class Browser {
     if (this.jar.size) headers.set('cookie', [...this.jar].map(([k, v]) => `${k}=${v}`).join('; '));
     const method = (init.method ?? 'GET').toUpperCase();
     if (method !== 'GET') {
-      if (!headers.has('origin')) headers.set('origin', ORIGIN);
+      if (!headers.has('origin')) headers.set('origin', this.origin);
       if (this.csrf && !headers.has('x-csrf-token')) headers.set('x-csrf-token', this.csrf);
     }
     for (const [k, v] of Object.entries(this.extra)) headers.set(k, v);
@@ -214,7 +218,7 @@ export class Browser {
       body = JSON.stringify(init.json);
       headers.set('content-type', 'application/json');
     }
-    const r = await handle(new Request(ORIGIN + path, { ...init, method, headers, body }), this.world.env, this.world.deps);
+    const r = await handle(new Request(this.origin + path, { ...init, method, headers, body, ...(body instanceof ReadableStream ? { duplex: 'half' } : {}) } as RequestInit), this.world.env, this.world.deps);
     for (const c of r.headers.getSetCookie()) {
       const [pair, ...attrs] = c.split(';');
       const i = pair.indexOf('=');
