@@ -2,11 +2,11 @@
 # in `vite preview`, so the browser tests run under them). Pages Functions (/api/) set their own.
 #
 # Cross-origin isolation, for multi-core WebAssembly. The Content-Security-Policy allows scripts,
-# workers, styles, fonts and images from this site only (plus WebAssembly compilation, and inline
-# style attributes, which KaTeX and the canvas use); network requests to this site and to the AI
-# providers: Anthropic, OpenAI, and an OpenAI-compatible server the person names, which can be
-# any https address or a server on this computer. Nothing may frame the app, and no page it links
-# to learns where the visitor came from.
+# workers, styles, fonts, images and the web-app manifest (through default-src) from this site
+# only (plus WebAssembly compilation, and inline style attributes, which KaTeX and the canvas
+# use); network requests to this site and to the AI providers: Anthropic, OpenAI, and an
+# OpenAI-compatible server the person names, which can be any https address or a server on this
+# computer. Nothing may frame the app, and no page it links to learns where the visitor came from.
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp

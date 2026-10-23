@@ -175,10 +175,11 @@ export function DocList() {
             copies.
           </li>
           <li>Without an account, documents live only in this browser; export them to keep a copy elsewhere.</li>
-          <li>
-            Some browsers delete a site's data when it has not been visited for a while (Safari after about seven days). Added to the
-            Dock (Safari on a Mac: File › Add to Dock) or to the home screen (iPhone and iPad: Share › Add to Home Screen), the
-            calculator keeps its documents.
+          <li data-testid="install-help">
+            Some browsers delete a site's data when they need space or when it has not been visited for a while (Safari after about
+            seven days). Installed as an app, the calculator keeps its documents: in Chrome or Edge, the install button at the right
+            of the address bar (or Install in the browser's menu); in Safari on a Mac, File › Add to Dock; on an iPhone or iPad, Share ›
+            Add to Home Screen. Firefox does not install sites; export documents there to keep a copy.
           </li>
         </ul>
       </details>
@@ -189,7 +190,7 @@ export function DocList() {
         <div class="banner row" data-testid="storage-banner">
           <span class="grow">
             This browser may delete stored documents when it needs space (Safari does after about seven days without a visit). Export
-            them, or add the calculator to the Dock or home screen, to keep them.
+            them, or install the calculator as an app (how: “where documents are kept” above), to keep them.
           </span>
           <button class="ghost" onClick={dismissStorage} aria-label="Dismiss for a week" title="Dismiss for a week">×</button>
         </div>

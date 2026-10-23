@@ -40,6 +40,34 @@ test('every page and asset carries the security headers', async ({ page, request
   expect(await page.locator('script:not([src])').count()).toBe(0);
 });
 
+test('the web-app manifest and its icons load under the policy, and Chromium can install the app', async ({ page, request }) => {
+  const violations = await watchViolations(page);
+  await page.goto('/');
+  const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+  expect(href).toBe('/manifest.webmanifest');
+  const r = await request.get(href!);
+  expect(r.ok()).toBe(true);
+  expect(r.headers()['content-security-policy']).toContain("default-src 'self'");
+  const m = (await r.json()) as { start_url: string; display: string; icons: { src: string; sizes: string; purpose?: string }[] };
+  expect(m.start_url).toBe('/');
+  expect(m.display).toBe('standalone');
+  expect(m.icons.map((i) => i.sizes)).toEqual(expect.arrayContaining(['192x192', '512x512']));
+  for (const i of m.icons) {
+    const ir = await request.get(i.src);
+    expect(ir.ok(), i.src).toBe(true);
+    expect(ir.headers()['content-type'], i.src).toMatch(/^image\//);
+  }
+  // the browser itself reads the manifest without errors and finds nothing in the way of installing
+  const cdp = await page.context().newCDPSession(page);
+  await expect.poll(async () => ((await cdp.send('Page.getAppManifest')) as { url: string }).url).toContain('/manifest.webmanifest');
+  const read = (await cdp.send('Page.getAppManifest')) as { errors: { message: string }[] };
+  expect(read.errors).toEqual([]);
+  const installability = (await cdp.send('Page.getInstallabilityErrors')) as { installabilityErrors: { errorId: string }[] };
+  // (the test browser's private profile is the one thing in the way; a person's browser has none)
+  expect(installability.installabilityErrors.map((e) => e.errorId).filter((e) => e !== 'in-incognito')).toEqual([]);
+  expect(await violations()).toEqual([]);
+});
+
 test('the engine, the typeset results, the theme and the AI panel work under the policy', async ({ page }) => {
   const violations = await watchViolations(page);
   await page.addInitScript(() => localStorage.setItem('diagcalc.theme', 'dark'));
