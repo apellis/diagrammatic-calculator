@@ -246,7 +246,7 @@ export async function putShare(req: Request, env: ReadyEnv, a: Access, s: Sessio
   const body = await readJson<{ email?: unknown; role?: unknown; notify?: unknown }>(req);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (email.length > 254 || !EMAIL.test(email)) throw new HttpError(400, 'not an e-mail address');
-  if (email === me.user.email) throw new HttpError(400, 'you own this document');
+  if (email === me.user.email) throw new HttpError(400, 'that is your own address: as the owner you already have full access');
   if (body.role !== 'viewer' && body.role !== 'editor') throw new HttpError(400, 'role must be viewer or editor');
   const now = deps.now();
   const existing = await env.DB.prepare('SELECT role FROM shares WHERE doc_id = ? AND email = ?').bind(a.doc.id, email).first();
