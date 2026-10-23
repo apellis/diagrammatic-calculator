@@ -98,6 +98,10 @@ export function Canvas(props: CanvasProps) {
   const [live, setLive] = createSignal<{ summand: number; layer: number; x: number; y: number; passed: number[]; near?: { layer: number; w: number }; held?: boolean } | null>(null);
   let root!: HTMLDivElement;
   let board!: HTMLDivElement;
+  let viewport!: HTMLDivElement;
+  // Summands fill rows as wide as the visible canvas (at zoom 1), so new ones go below the
+  // others once a row is full instead of always to the right.
+  const [rowWidth, setRowWidth] = createSignal(2400);
   let space = false;
   /** The summands before a gesture's write, to outline the ones it adds once the new term arrives. */
   let pending: { term: string | null; words: Set<string> } | null = null;
@@ -739,7 +743,14 @@ export function Canvas(props: CanvasProps) {
     if (e.key === ' ') space = false;
   };
 
-  onMount(() => root.focus({ preventScroll: true }));
+  onMount(() => {
+    root.focus({ preventScroll: true });
+    const fit = () => setRowWidth(Math.max(320, viewport.clientWidth - 48));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(viewport);
+    onCleanup(() => ro.disconnect());
+  });
 
   // drawing ---------------------------------------------------------------------------------
 
@@ -980,10 +991,10 @@ export function Canvas(props: CanvasProps) {
             )}
           </For>
         </div>
-        <div class="canvas-view" onWheel={onWheel} onPointerDown={onBackground}>
+        <div class="canvas-view" ref={viewport} onWheel={onWheel} onPointerDown={onBackground}>
           <Show when={props.term !== null} fallback={<div class="hint" style={{ padding: '20px' }}>Computing the term…</div>}>
             <Show when={!error()} fallback={<div class="error" style={{ margin: '20px' }}>{error()}</div>}>
-              <div class="canvas-board" ref={board} style={{ transform: `translate(${view().x}px, ${view().y}px) scale(${view().z})` }}>
+              <div class="canvas-board" ref={board} style={{ transform: `translate(${view().x}px, ${view().y}px) scale(${view().z})`, 'max-width': `${rowWidth()}px` }}>
                 <Show when={layouts().length} fallback={<div class="frame"><span class="c">0</span></div>}>
                   <For each={layouts()}>
                     {(l, k) => (

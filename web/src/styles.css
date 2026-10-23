@@ -250,7 +250,7 @@ a.button.icon:hover { color: var(--text); }
 .gen { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; font-size: 12px; cursor: grab; }
 .gen.on { border-color: var(--accent); background: var(--accent-soft); }
 .canvas-view { flex: 1; position: relative; overflow: hidden; cursor: default; }
-.canvas-board { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; width: max-content; max-width: 2400px; }
+.canvas-board { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; width: max-content; }
 .frame { border: 1.5px solid var(--border); border-radius: 10px; background: var(--panel); padding: 6px 8px; transition: border-color 0.2s, background 0.2s; }
 .frame.on { border-color: var(--accent); }
 .frame.new { border-color: var(--good); background: var(--good-soft); }

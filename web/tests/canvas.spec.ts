@@ -353,3 +353,20 @@ test('from the canvas, the back button and the breadcrumb return to the document
   await expect(canvas(page)).toHaveCount(0);
   await expect(page).toHaveURL(/#\/doc\//);
 });
+
+test('summands fill rows as wide as the canvas, so new ones go below', async ({ page }) => {
+  await newDoc(page);
+  const sum = Array.from({ length: 14 }, (_, k) => `x_1^${k} psi_2 e(iij)`).join(' + ');
+  await typeCell(page, `def s := ${sum}`);
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('14 terms');
+  await openCanvas(page, false);
+  await expect(frames(page)).toHaveCount(14);
+  const view = (await canvas(page).locator('.canvas-view').boundingBox())!;
+  const first = (await frames(page).first().boundingBox())!;
+  const last = (await frames(page).last().boundingBox())!;
+  expect(last.y).toBeGreaterThan(first.y + first.height / 2);
+  for (const f of await frames(page).all()) {
+    const b = (await f.boundingBox())!;
+    expect(b.x + b.width).toBeLessThanOrEqual(view.x + view.width);
+  }
+});
