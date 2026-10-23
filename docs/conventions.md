@@ -195,16 +195,28 @@ every weight of the rightmost region; the calculator instantiates them per regio
 
 ## Lean export
 
-`export.lean` and `diagcalc lean-chains` write a chain as a Lean theorem about
-categorification-lean's KL III diagrams `dg RD k μ s t L` (encoding `kl3-dg`, declared in the
-presentation's `[lean]` table). A word becomes the list `L` of layers bottom first, each
-`(left, shape, right)` with the strands beside the generator; `psi` on colours `a b` is
-`.cross true a b` and `x` on `a` is `.dot (up a)`. Colours become variables `ci, cj, …` with a
-hypothesis `ci ≠ cj` for each pair, and the Cartan data a step uses (`C.dot`, `C.dij`) become
-hypotheses with the context's values, so one theorem covers every Cartan datum with those values.
-Each step is one library lemma whiskered by `dg_stepL_at`; each interchange move is `dswap`.
-Only integer coefficients and even generators are exported; anything else is refused with a
-reason.
+`export.lean` and `diagcalc lean-chains` write a chain as a Lean theorem in the encoding the
+presentation's `[lean]` table declares:
+
+- `kl3-dg`: categorification-lean's KL III diagrams `dg RD k μ s t L` (presentations `klr`, `kl`);
+- `skm-cl`: odd-lean's normal-form diagrams `cl D Sc μ s t L` of Brundan–Ellis's super Kac–Moody
+  2-category (presentation `be2`).
+
+A word becomes the list `L` of layers bottom first, each `(left, shape, right)` with the strands
+beside the generator; the `[lean]` table gives the shape of each generator (`psi` on `a b` is
+`.cross true a b` in `kl3-dg`, `.cross a b` in `skm-cl`). Colours become variables `ci, cj, …`
+with a hypothesis `ci ≠ cj` for each pair, and the Cartan data a step uses become hypotheses with
+the context's values (`C.dot`, `C.dij` in `kl3-dg`; `D.d`, `D.dn` in `skm-cl`), so one theorem
+covers every datum with those values. A weight-dependent step adds the hypotheses `ip RD c μ = n`
+(`D.h c μ = n`). In `skm-cl` the parity of each colour is a hypothesis `D.parity c = 0` or `1`,
+and the scalars are those the calculator uses: `Sc.t a b = 1` and `Sc.s a b p q = 0`.
+
+Each step is one library lemma whiskered by `dg_stepL_at` (`cl_stepL_at`). Interchange moves,
+which bring a word to the layer order of a lemma or back to the calculator's, are `dswap`
+(`cswap`); in `skm-cl` a move exchanging two odd generators costs the Koszul sign, which the
+proof evaluates from the parity hypotheses. A relation used right to left is proved from its
+instance left to right. Only integer coefficients are exported, and in `kl3-dg` only even
+generators; anything else is refused with a reason.
 
 ## Display
 

@@ -7,6 +7,7 @@
 pub mod kl;
 pub mod nilcoxeter;
 pub mod smash;
+pub mod straighten;
 
 use crate::context::Context;
 use crate::elab::CTerm;
@@ -289,6 +290,12 @@ pub fn evaluator<'a, R: Ring + 'a>(
             true,
             prov(Strategy::BasisNormalForm),
         )),
+        "quiver-hecke-basis" => Box::new(straighten::QuiverHeckeBasis::new(
+            ctx,
+            dot()?,
+            crossing()?,
+            prov(Strategy::BasisNormalForm),
+        )?),
         "kl-basis" => Box::new(kl::KlBasis::new(
             ctx,
             decl,
@@ -316,7 +323,7 @@ pub fn basis_layout<R: Ring>(
     decl: &RepresentationDecl,
 ) -> Result<crate::rewrite::Layout> {
     let dots_on_top = match decl.kind.as_str() {
-        "klr-polynomial" => false,
+        "klr-polynomial" | "quiver-hecke-basis" => false,
         "nil-coxeter" | "odd-nil-coxeter" => true,
         k => {
             return Err(Error::precondition(format!(

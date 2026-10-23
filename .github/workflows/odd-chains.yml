@@ -1,0 +1,65 @@
+name: Lean chains (odd-lean)
+
+# Builds the rewrite chains of the super Kac-Moody 2-category exported by `diagcalc
+# lean-chains` (lean/odd-chains/DiagcalcChains) against the pinned odd-lean commit. The Rust
+# test `odd_chain_files_are_current` keeps the generated files in step with the exporter, so a
+# change to the export always touches lean/odd-chains/.
+#
+# A cold build of the odd-lean modules the chains import is slow, so the built dependencies are
+# cached by manifest and by the hand-written support library, whose imports name the library
+# modules the chains use; Mathlib comes from its own cache. The pin never moves by itself, so the
+# job runs when lean/odd-chains changes, and twice a week to keep the cache alive.
+
+on:
+  push:
+    branches: [master]
+    paths: ["lean/odd-chains/**", ".github/workflows/odd-chains.yml"]
+  schedule:
+    - cron: "37 4 * * 1,4"
+  workflow_dispatch:
+
+concurrency:
+  group: odd-chains-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: lean/odd-chains
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lean
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Fetch the dependencies and the Mathlib cache
+        run: lake exe cache get < /dev/null
+      - name: Restore the built dependencies
+        id: deps
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            lean/odd-chains/.lake/packages/OddMath/.lake
+            lean/odd-chains/.lake/packages/Categorification/.lake
+            lean/odd-chains/.lake/packages/StringDiagrams/.lake
+            lean/odd-chains/.lake/packages/LieLean/.lake
+            lean/odd-chains/.lake/packages/DG/.lake
+          key: odd-chains-deps-${{ hashFiles('lean/odd-chains/lake-manifest.json', 'lean/odd-chains/lean-toolchain') }}-${{ hashFiles('lean/odd-chains/DiagcalcSupport/**') }}
+          restore-keys: |
+            odd-chains-deps-${{ hashFiles('lean/odd-chains/lake-manifest.json', 'lean/odd-chains/lean-toolchain') }}-
+      - name: Build the chains
+        run: lake build < /dev/null
+      - name: Save the built dependencies
+        if: ${{ !cancelled() && steps.deps.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            lean/odd-chains/.lake/packages/OddMath/.lake
+            lean/odd-chains/.lake/packages/Categorification/.lake
+            lean/odd-chains/.lake/packages/StringDiagrams/.lake
+            lean/odd-chains/.lake/packages/LieLean/.lake
+            lean/odd-chains/.lake/packages/DG/.lake
+          key: ${{ steps.deps.outputs.cache-primary-key }}

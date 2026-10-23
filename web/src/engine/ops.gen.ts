@@ -418,7 +418,7 @@ export interface Provenance {
    */
   notes?: string[];
   certificate: {
-    status: 'lean' | 'literature' | 'assumed' | 'unknown';
+    status: 'lean' | 'literature' | 'conditional' | 'assumed' | 'unknown';
     reference: string;
     hypotheses: string;
   };
@@ -616,7 +616,7 @@ export interface Provenance1 {
    */
   notes?: string[];
   certificate: {
-    status: 'lean' | 'literature' | 'assumed' | 'unknown';
+    status: 'lean' | 'literature' | 'conditional' | 'assumed' | 'unknown';
     reference: string;
     hypotheses: string;
   };

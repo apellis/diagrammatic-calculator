@@ -49,7 +49,7 @@ function solveSummary(r: Ok): string {
 
 /** The equality strategy and certificate behind a result; a warning colour when it rests on an assumption or a truncation. */
 export function Badge(props: { p?: Provenance }) {
-  const warn = () => !!props.p && (['assumed', 'unknown'].includes(props.p.certificate.status) || (props.p.notes?.length ?? 0) > 0);
+  const warn = () => !!props.p && (['conditional', 'assumed', 'unknown'].includes(props.p.certificate.status) || (props.p.notes?.length ?? 0) > 0);
   return (
     <Show when={props.p}>
       {(p) => (

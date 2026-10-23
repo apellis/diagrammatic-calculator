@@ -97,7 +97,8 @@
       "properties": {
         "encoding": {
           "enum": [
-            "kl3-dg"
+            "kl3-dg",
+            "skm-cl"
           ]
         },
         "module": {
@@ -131,7 +132,7 @@
                 "type": "string"
               },
               "facts": {
-                "description": "Cartan data the lemma depends on: 'dot {a} {b}', 'dot≠0 {a} {b}' or 'dij {a} {b}'.",
+                "description": "Cartan data the lemma depends on: 'dot {a} {b}', 'dot≠0 {a} {b}' or 'dij {a} {b}' (kl3-dg); 'd {a} {b}', 'dn {a} {b}', 't {a} {b}' (t_ab = 1) or 's {a} {b}' (s_ab = 0) (skm-cl).",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -141,6 +142,16 @@
                 "enum": [
                   "canonical",
                   "left-first",
+                  "right-first",
+                  "bubbles-first"
+                ]
+              },
+              "pattern_layering": {
+                "description": "How the lemma lays out its left-hand side; the exported proof reaches it from the calculator's layout by interchange moves.",
+                "enum": [
+                  "canonical",
+                  "left-first",
+                  "right-first",
                   "bubbles-first"
                 ]
               },
@@ -334,11 +345,12 @@
             "klr-polynomial",
             "nil-coxeter",
             "odd-nil-coxeter",
-            "kl-basis"
+            "kl-basis",
+            "quiver-hecke-basis"
           ]
         },
         "roles": {
-          "description": "Generator names by role: dot and crossing for klr-polynomial and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis.",
+          "description": "Generator names by role: dot and crossing for klr-polynomial, quiver-hecke-basis and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -355,6 +367,7 @@
               "enum": [
                 "lean",
                 "literature",
+                "conditional",
                 "assumed",
                 "unknown"
               ]

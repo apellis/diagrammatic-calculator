@@ -69,6 +69,25 @@ use: show a quick result first from a faster method that may not be correct, mar
 pending reduction (a shimmer), and replace it with the normal form when that finishes. The quick
 result is never reported as decided. Not planned unless timings force it.
 
+A certificate's status is one of `lean`, `literature`, `conditional`, `assumed` or
+`unknown`. `conditional` means equal normal forms are proven equal, while distinct normal forms
+differ only under a named open hypothesis; results that rely on it say so, and the UI marks them
+like `assumed` results.
+
+### The quiver Hecke basis (`rep/straighten`, representation kind `quiver-hecke-basis`)
+
+For BE2 (Brundan–Ellis, arXiv:1701.04133v2) the upward diagrams are reduced to the basis
+`ψ_ŵ x^a e(i)` of the quiver Hecke superalgebra by the presentation's own relations, with Koszul
+signs from the interchange law (the straightening of `rewrite`). Every step applies a relation,
+so a diagram equals its normal form in `U(g)`. That the normal forms are linearly independent in
+the quiver Hecke supercategory is the basis theorem of Kang–Kashiwara–Tsuchioka (arXiv:1107.1039v2,
+Corollary 3.15; odd-lean `QuiverHecke.span_nf`, `QuiverHecke.linearIndependent_nf`). That they stay
+independent in `U(g)` is BE2's Nondegeneracy Conjecture, open for odd colours and proved for even
+data (odd-lean `EvenBridge.nondegeneracyConjecture_of_isEven`), so the certificate is `conditional`
+(Alex's choice): a result "equal" is proven, a result "different" for odd colours rests on the
+conjecture and says so. Only upward diagrams with `t_ij = 1` and `s_ij^pq = 0` are covered;
+anything else is refused with a reason.
+
 ### The KL basis normal form (`rep/kl`, representation kind `kl-basis`)
 
 A 2-morphism `f : s → t` of `U(g)` in the region `μ` is bent to `1_μ → *s t` with nested cups on
@@ -163,20 +182,24 @@ normal form without keeping the steps (B9 uses it beyond 50 layers).
 
 ## Lean bridge
 
-`lean.rs` turns a chain into a Lean theorem over categorification-lean's KL III diagrams (the
-encoding is described in the conventions). The presentation's `[lean]` table names, for each
-relation, the library lemma that proves it and the Cartan facts it needs, so the exporter is
-generic in the presentation and only the encoding (`kl3-dg`) is specific. Each step becomes a
+`lean.rs` turns a chain into a Lean theorem over categorification-lean's KL III diagrams
+(`kl3-dg`) or odd-lean's super Kac–Moody diagrams (`skm-cl`); the encodings are described in the
+conventions. The presentation's `[lean]` table names, for each relation, the library lemma that
+proves it and the Cartan facts it needs, so the exporter is generic in the presentation and only
+the encoding is specific. Each step becomes a
 `have` proved by that lemma whiskered into place, and the theorem is the chain of these steps
 under rewriting. A layering that the lemma states differently from canonical layering is declared
-(`layering = "left-first"`, or `"bubbles-first"` for closed components below the strands) and
-bridged with `dswap`. A lemma proves its relation in one of three ways (`proof`): by rewriting
+(`layering = "left-first"`, `"right-first"`, or `"bubbles-first"` for closed components below
+the strands; `pattern_layering` likewise for the lemma's left-hand side) and bridged with `dswap`
+(`cswap`, which also produces the Koszul sign of an odd interchange for the proof to evaluate from
+the parity hypotheses). In `skm-cl` a relation used right to left is proved from its instance left
+to right, stated inside the step's proof. A lemma proves its relation in one of three ways (`proof`): by rewriting
 (`rw`, then normalizing the sums), by being the statement itself (`exact`), or through a tactic
 script (`tactic`), used for the weight-dependent KL relations whose library form sums over labelled
 bubbles. A rule that applies only at some weights gives the exported theorem the hypothesis
 `hμ_c : ip RD c μ = n` for the region right of the diagram, and each step proves the lemma's own
 weight condition from it. The exporter refuses what it cannot state faithfully (scalars outside ℤ,
-odd generators) instead of exporting something weaker.
+odd generators in `kl3-dg`) instead of exporting something weaker.
 
 A chain rewrites each side by one of three strategies: `straighten` (to the basis of crossings and
 dots, the KLR default), `shrink` (rules whose replacement words are all shorter than the pattern,

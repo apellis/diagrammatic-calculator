@@ -7,6 +7,7 @@
 
 use crate::context::Context;
 use crate::error::{Error, Result};
+use crate::expr::ColourQuery;
 use crate::poly::Poly;
 use crate::ring::Ring;
 use crate::term::{Letter, Object, Term, Word};
@@ -542,20 +543,36 @@ impl<R: Ring> Context<R> {
                 .find(|(n, _)| n == v)
                 .map(|(_, x)| *x)
         };
-        let pair = |c: &str| -> Result<i64> {
-            let idx = scope
+        let index = |c: &str| -> Result<usize> {
+            scope
                 .colour_vars
                 .iter()
                 .find(|(v, _)| v == c)
                 .map(|(_, x)| *x as usize)
                 .or_else(|| self.colour_index(c))
-                .ok_or_else(|| Error::invalid(format!("'{c}' in h({c}) is not a colour")))?;
-            let mu = self.mu.as_ref().ok_or_else(|| {
-                Error::invalid("h(...) needs region weights: give the context mu=...")
-            })?;
-            Ok(mu[idx])
+                .ok_or_else(|| Error::invalid(format!("'{c}' is not a colour")))
         };
-        e.eval(&var, &pair)
+        let colour = |q: ColourQuery| -> Result<i64> {
+            match q {
+                ColourQuery::Pair(c) => {
+                    let idx = index(c)?;
+                    let mu = self.mu.as_ref().ok_or_else(|| {
+                        Error::invalid("h(...) needs region weights: give the context mu=...")
+                    })?;
+                    Ok(mu[idx])
+                }
+                ColourQuery::Par(c) => Ok(self.colours[index(c)?].odd as i64),
+                ColourQuery::Entry(c, d) => {
+                    let (a, b) = (index(c)?, index(d)?);
+                    let cartan = self
+                        .cartan
+                        .as_ref()
+                        .ok_or_else(|| Error::invalid("a Cartan entry a_cd needs a Cartan type"))?;
+                    Ok(cartan.a[a][b])
+                }
+            }
+        };
+        e.eval(&var, &colour)
     }
 
     /// The region right of the part being elaborated.

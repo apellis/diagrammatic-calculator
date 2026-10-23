@@ -258,6 +258,18 @@ impl<R: Ring> Context<R> {
                 .ok_or_else(|| Error::invalid(format!("odd colour '{o}' is not a colour")))?;
             c.odd = true;
         }
+        if let Some(cartan) = &cartan {
+            // Brundan–Ellis (1.4), as for quiver Hecke superalgebras: an odd colour pairs evenly
+            // with every simple root.
+            for (i, c) in colours.iter().enumerate() {
+                if let Some(j) = (0..colours.len()).find(|&j| c.odd && cartan.a[i][j] % 2 != 0) {
+                    return Err(Error::invalid(format!(
+                        "colour {} is odd, so ⟨h_{0}, α_j⟩ must be even for every colour j,                          but ⟨h_{0}, α_{}⟩ = {}",
+                        c.name, colours[j].name, cartan.a[i][j]
+                    )));
+                }
+            }
+        }
         for (k, c) in colours.iter().enumerate() {
             if colours[..k].iter().any(|d| d.name == c.name) {
                 return Err(Error::invalid(format!("colour '{}' named twice", c.name)));

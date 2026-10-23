@@ -119,6 +119,20 @@ fn export_random_batch() {
 /// The generated files under `lean/chains/` are what `diagcalc lean-chains` writes now; CI builds
 /// them in Lean (`.github/workflows/lean-chains.yml`).
 #[test]
+fn odd_chain_files_are_current() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lean/odd-chains");
+    let text = std::fs::read_to_string(dir.join("chains.toml")).unwrap();
+    for (rel, want) in lean::export_batch(&text, "DiagcalcChains").unwrap() {
+        let got = std::fs::read_to_string(dir.join(&rel)).unwrap_or_default();
+        assert!(
+            got == want,
+            "lean/odd-chains/{rel} is out of date: run \
+             `diagcalc lean-chains lean/odd-chains/chains.toml`"
+        );
+    }
+}
+
+#[test]
 fn chain_files_are_current() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lean/chains");
     let text = std::fs::read_to_string(dir.join("chains.toml")).unwrap();

@@ -145,6 +145,18 @@ impl IntExpr {
             _ => false,
         }
     }
+
+    /// Whether the expression reads a colour's parity `p(a)`.
+    pub fn uses_parity(&self) -> bool {
+        match self {
+            IntExpr::Par(_) => true,
+            IntExpr::Neg(e) => e.uses_parity(),
+            IntExpr::Add(x, y) | IntExpr::Sub(x, y) | IntExpr::Mul(x, y) => {
+                x.uses_parity() || y.uses_parity()
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Cond {
@@ -506,34 +518,50 @@ impl P<'_> {
 /// An integer expression inside a term: exponents `x_1^{h(i) - 1 - f}`, the bounds of sums
 /// `sum_{f=0..h(i)-1}` and the labels of bubbles. Names are resolved when the term is
 /// elaborated: a name is a summation index or an integer variable of a relation; `h(c)` is the
-/// pairing ⟨h_c, μ⟩ with the weight of the rightmost region, for a colour or colour variable `c`.
+/// pairing ⟨h_c, μ⟩ with the weight of the rightmost region, `p(c)` the parity and `a_cd` the
+/// Cartan entry ⟨h_c, α_d⟩, for colours or colour variables `c`, `d` (one letter each in `a_cd`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TermInt {
     Const(i64),
     Var(String),
     Pair(String),
+    Par(String),
+    Entry(String, String),
     Neg(Box<TermInt>),
     Add(Box<TermInt>, Box<TermInt>),
     Sub(Box<TermInt>, Box<TermInt>),
     Mul(Box<TermInt>, Box<TermInt>),
 }
 
+/// What a term's integer expression asks of its colours.
+#[derive(Clone, Copy, Debug)]
+pub enum ColourQuery<'a> {
+    /// `h(c)`.
+    Pair(&'a str),
+    /// `p(c)`.
+    Par(&'a str),
+    /// `a_cd`.
+    Entry(&'a str, &'a str),
+}
+
 impl TermInt {
     pub fn eval(
         &self,
         var: &dyn Fn(&str) -> Option<i64>,
-        pair: &dyn Fn(&str) -> Result<i64>,
+        colour: &dyn Fn(ColourQuery) -> Result<i64>,
     ) -> Result<i64> {
         Ok(match self {
             TermInt::Const(n) => *n,
             TermInt::Var(v) => {
                 var(v).ok_or_else(|| Error::invalid(format!("'{v}' is not an index in scope")))?
             }
-            TermInt::Pair(c) => pair(c)?,
-            TermInt::Neg(e) => -e.eval(var, pair)?,
-            TermInt::Add(x, y) => x.eval(var, pair)? + y.eval(var, pair)?,
-            TermInt::Sub(x, y) => x.eval(var, pair)? - y.eval(var, pair)?,
-            TermInt::Mul(x, y) => x.eval(var, pair)? * y.eval(var, pair)?,
+            TermInt::Pair(c) => colour(ColourQuery::Pair(c))?,
+            TermInt::Par(c) => colour(ColourQuery::Par(c))?,
+            TermInt::Entry(c, d) => colour(ColourQuery::Entry(c, d))?,
+            TermInt::Neg(e) => -e.eval(var, colour)?,
+            TermInt::Add(x, y) => x.eval(var, colour)? + y.eval(var, colour)?,
+            TermInt::Sub(x, y) => x.eval(var, colour)? - y.eval(var, colour)?,
+            TermInt::Mul(x, y) => x.eval(var, colour)? * y.eval(var, colour)?,
         })
     }
 
@@ -553,6 +581,8 @@ impl TermInt {
             TermInt::Const(n) => return n.to_string(),
             TermInt::Var(v) => return v.clone(),
             TermInt::Pair(c) => return format!("h({c})"),
+            TermInt::Par(c) => return format!("p({c})"),
+            TermInt::Entry(c, d) => return format!("a_{c}{d}"),
             TermInt::Neg(e) => (format!("-{}", e.print_prec(3)), 1),
             TermInt::Add(x, y) => (format!("{} + {}", x.print_prec(1), y.print_prec(2)), 1),
             TermInt::Sub(x, y) => (format!("{} - {}", x.print_prec(1), y.print_prec(2)), 1),
@@ -613,14 +643,33 @@ impl P<'_> {
             }
             Some(Tok::Ident(w)) => {
                 self.pos += 1;
-                if w == "h" && self.eat("(") {
+                if (w == "h" || w == "p") && self.eat("(") {
                     let c = match self.peek().cloned() {
                         Some(Tok::Ident(c)) => c,
-                        _ => return Err(Error::syntax("expected a colour in h(...)", self.off())),
+                        _ => {
+                            return Err(Error::syntax(
+                                format!("expected a colour in {w}(...)"),
+                                self.off(),
+                            ));
+                        }
                     };
                     self.pos += 1;
                     self.expect(")")?;
-                    return Ok(TermInt::Pair(c));
+                    return Ok(if w == "h" {
+                        TermInt::Pair(c)
+                    } else {
+                        TermInt::Par(c)
+                    });
+                }
+                if let Some(r) = w.strip_prefix("a_") {
+                    let cs: Vec<char> = r.chars().collect();
+                    if cs.len() != 2 {
+                        return Err(Error::syntax(
+                            format!("'{w}' should name two one-letter colours"),
+                            off,
+                        ));
+                    }
+                    return Ok(TermInt::Entry(cs[0].to_string(), cs[1].to_string()));
                 }
                 Ok(TermInt::Var(w))
             }
@@ -735,5 +784,34 @@ mod tests {
             assert_eq!(c.eval(&[0, 1], &Env).unwrap(), val, "{s}");
             assert_eq!(parse_cond(&c.print(&v), &v).unwrap(), c, "{s}");
         }
+    }
+
+    #[test]
+    fn term_ints() {
+        let colour = |q: ColourQuery| -> Result<i64> {
+            let idx = |c: &str| if c == "i" { 0 } else { 1 };
+            Ok(match q {
+                ColourQuery::Pair(c) => [3, -2][idx(c)],
+                ColourQuery::Par(c) => idx(c) as i64,
+                ColourQuery::Entry(c, d) => [[2, -1], [-1, 2]][idx(c)][idx(d)],
+            })
+        };
+        let var = |v: &str| (v == "f").then_some(4);
+        for (s, val) in [
+            ("h(i) - 1 - f", -2),
+            ("p(j) p(i) + p(j)", 1),
+            ("-a_ij + h(j)", -1),
+            ("f*(a_jj - 1)", 4),
+        ] {
+            let e = parse_term_int(s).unwrap();
+            assert_eq!(e.eval(&var, &colour).unwrap(), val, "{s}");
+            assert_eq!(
+                parse_term_int(&e.print()).unwrap(),
+                e,
+                "{s} printed as {}",
+                e.print()
+            );
+        }
+        assert!(parse_term_int("a_ijk").is_err());
     }
 }

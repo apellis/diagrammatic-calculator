@@ -100,7 +100,8 @@ pub struct Relation {
 /// A faithfulness certificate as stated in a file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Certificate {
-    /// `lean`, `literature`, `assumed` or `unknown`.
+    /// `lean`, `literature`, `conditional` (proved under a named open conjecture: equalities it
+    /// finds are proven, differences rest on the conjecture), `assumed` or `unknown`.
     pub status: String,
     pub reference: String,
     pub hypotheses: String,
@@ -110,7 +111,8 @@ pub struct Certificate {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RepresentationDecl {
     pub name: String,
-    /// Built-in action kind: `klr-polynomial`, `nil-coxeter`, `odd-nil-coxeter`, `kl-basis`.
+    /// Built-in action kind: `klr-polynomial`, `nil-coxeter`, `odd-nil-coxeter`, `kl-basis`,
+    /// `quiver-hecke-basis`.
     pub kind: String,
     /// Generator names by role (`dot`, `crossing`).
     pub roles: BTreeMap<String, String>,
@@ -155,7 +157,7 @@ pub struct Presentation {
 /// colours differ.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LeanDecl {
-    /// The encoding of diagrams the exporter writes (`kl3-dg`).
+    /// The encoding of diagrams the exporter writes (`kl3-dg` or `skm-cl`).
     pub encoding: String,
     /// The modules the exported file imports, separated by spaces.
     pub module: String,
@@ -177,9 +179,12 @@ pub struct LeanRelation {
     /// of the lemma: the relation exports only where the pairing is nonzero.
     pub facts: Vec<String>,
     /// How the lemma lays out the words of its right-hand side: `canonical` (as the calculator
-    /// does), `left-first` (generators on the left strands lower) or `bubbles-first` (closed
-    /// components, such as bubbles, lower).
+    /// does), `left-first` (generators on the left strands lower), `right-first` (on the right
+    /// strands lower) or `bubbles-first` (closed components, such as bubbles, lower).
     pub layering: String,
+    /// How the lemma lays out the words of its left-hand side, with the same values as
+    /// `layering`; the exported proof reaches it from the calculator's layout by interchange.
+    pub pattern_layering: String,
     /// How the lemma proves the relation as the calculator states it: `rw` (rewrite with it,
     /// then normalize the sums), `exact` (it is the statement, up to unfolding) or `tactic`
     /// (`lemma` is a tactic script, its steps separated by `; `).
@@ -277,6 +282,8 @@ struct RawLeanRel {
     facts: Vec<String>,
     #[serde(default = "canonical_layering")]
     layering: String,
+    #[serde(default = "canonical_layering")]
+    pattern_layering: String,
     #[serde(default = "rw_proof")]
     proof: String,
 }
@@ -591,12 +598,14 @@ impl Presentation {
                     if !relations.iter().any(|y| &y.name == r) {
                         return Err(Error::invalid(format!("lean: no relation '{r}'")));
                     }
-                    if !["canonical", "left-first", "bubbles-first"].contains(&x.layering.as_str())
-                    {
-                        return Err(Error::invalid(format!(
-                            "lean: relation {r} has unknown layering '{}'",
-                            x.layering
-                        )));
+                    for l in [&x.layering, &x.pattern_layering] {
+                        if !["canonical", "left-first", "right-first", "bubbles-first"]
+                            .contains(&l.as_str())
+                        {
+                            return Err(Error::invalid(format!(
+                                "lean: relation {r} has unknown layering '{l}'"
+                            )));
+                        }
                     }
                     if !["rw", "exact", "tactic"].contains(&x.proof.as_str()) {
                         return Err(Error::invalid(format!(
@@ -621,6 +630,7 @@ impl Presentation {
                                     lemma: r.lemma,
                                     facts: r.facts,
                                     layering: r.layering,
+                                    pattern_layering: r.pattern_layering,
                                     proof: r.proof,
                                 },
                             )
@@ -792,6 +802,9 @@ impl Presentation {
                 }
                 if r.layering != "canonical" {
                     o.push_str(&format!("layering = {}\n", q(&r.layering)));
+                }
+                if r.pattern_layering != "canonical" {
+                    o.push_str(&format!("pattern_layering = {}\n", q(&r.pattern_layering)));
                 }
                 if r.proof != "rw" {
                     o.push_str(&format!("proof = {}\n", q(&r.proof)));

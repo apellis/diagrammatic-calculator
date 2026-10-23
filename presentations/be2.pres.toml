@@ -1,0 +1,223 @@
+format = "diagcalc-presentation/1"
+name = "be2"
+title = "Brundan-Ellis super Kac-Moody 2-category U(g)"
+colours = "cartan"
+objects = "explicit"
+generator_order = ["x", "psi", "cup", "cap", "lcross"]
+
+[generators.x]
+colours = "a"
+source = "a"
+target = "a"
+degree = "(a,a)"
+parity = "p(a)"
+draw = "dot"
+
+[generators.psi]
+colours = "a b"
+source = "a b"
+target = "b a"
+degree = "-(a,b)"
+parity = "p(a) p(b)"
+draw = "crossing"
+aliases = ["ψ", "tau", "τ"]
+
+[generators.cup]
+colours = "a"
+source = ""
+target = "a* a"
+degree = "d_a (1 + h(a))"
+parity = 0
+draw = "cup"
+aliases = ["eta", "η"]
+
+[generators.cap]
+colours = "a"
+source = "a a*"
+target = ""
+degree = "d_a (1 - h(a))"
+parity = 0
+draw = "cap"
+aliases = ["eps", "ε"]
+
+[generators.lcross]
+colours = "a b"
+source = "a* b"
+target = "b a*"
+degree = 0
+parity = "p(a) p(b)"
+draw = "crossing"
+
+[[relations]]
+name = "zigzag-e"
+colours = "a"
+lhs = "cap_1 cup_{2,a*} e(a)"
+rhs = "e(a)"
+
+[[relations]]
+name = "zigzag-f"
+colours = "a"
+lhs = "cap_2 cup_{1,a*} e(a*)"
+rhs = "e(a*)"
+
+[[relations]]
+name = "square-same"
+colours = "a"
+lhs = "psi_1 psi_1 e(a a)"
+rhs = "0"
+
+[[relations]]
+name = "square-orthogonal"
+colours = "a b"
+when = "a != b and a_ab = 0"
+lhs = "psi_1 psi_1 e(a b)"
+rhs = "e(a b)"
+
+[[relations]]
+name = "square-linked"
+colours = "a b"
+when = "a != b and a_ab != 0"
+lhs = "psi_1 psi_1 e(a b)"
+rhs = "x_1^{-a_ab} e(a b) + x_2^{-a_ba} e(a b)"
+
+[[relations]]
+name = "dot-slide-left-same"
+colours = "a"
+lhs = "psi_1 x_1 e(a a)"
+rhs = "(-1)^{p(a)} x_2 psi_1 e(a a) + e(a a)"
+
+[[relations]]
+name = "dot-slide-left-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 x_1 e(a b)"
+rhs = "(-1)^{p(a) p(b)} x_2 psi_1 e(a b)"
+
+[[relations]]
+name = "dot-slide-right-same"
+colours = "a"
+lhs = "x_1 psi_1 e(a a)"
+rhs = "(-1)^{p(a)} psi_1 x_2 e(a a) + e(a a)"
+
+[[relations]]
+name = "dot-slide-right-distinct"
+colours = "a b"
+when = "a != b"
+lhs = "x_1 psi_1 e(a b)"
+rhs = "(-1)^{p(a) p(b)} psi_1 x_2 e(a b)"
+
+[[relations]]
+name = "braid-corrected"
+colours = "a b"
+when = "a != b"
+lhs = "psi_1 psi_2 psi_1 e(a b a)"
+rhs = "psi_2 psi_1 psi_2 e(a b a) + sum_{s=0..-a_ab - 1} (-1)^{p(a) (p(b) + s)} x_1^{-a_ab - 1 - s} x_3^{s} e(a b a)"
+
+[[relations]]
+name = "braid"
+colours = "a b c"
+when = "a != c or a = b"
+lhs = "psi_1 psi_2 psi_1 e(a b c)"
+rhs = "psi_2 psi_1 psi_2 e(a b c)"
+
+[[relations]]
+name = "invert-distinct-ef"
+colours = "a b"
+when = "a != b"
+lhs = "lcross_1 cap_3 psi_2 cup_{1,a*} e(b a*)"
+rhs = "e(b a*)"
+
+[[relations]]
+name = "invert-distinct-fe"
+colours = "a b"
+when = "a != b"
+lhs = "cap_3 psi_2 cup_{1,a*} lcross_1 e(a* b)"
+rhs = "e(a* b)"
+
+[[relations]]
+name = "invert-fe"
+colours = "a"
+when = "h(a) >= 0"
+lhs = "cap_3 psi_2 cup_{1,a*} lcross_1 e(a* a)"
+rhs = "-e(a* a)"
+
+[[relations]]
+name = "invert-ef"
+colours = "a"
+when = "h(a) <= 0"
+lhs = "lcross_1 cap_3 psi_2 cup_{1,a*} e(a a*)"
+rhs = "-e(a a*)"
+
+[[representations]]
+name = "quiver-hecke-basis"
+kind = "quiver-hecke-basis"
+roles = { crossing = "psi", dot = "x" }
+certificate.status = "conditional"
+certificate.reference = "odd-lean: QuiverHecke.span_nf, QuiverHecke.linearIndependent_nf (Kang-Kashiwara-Tsuchioka, arXiv:1107.1039v2, Corollary 3.15)"
+certificate.hypotheses = "upward diagrams only; t_ij = 1 and s_ij^pq = 0. Normal forms are a basis of the quiver Hecke supercategory, so equal normal forms are equal in U(g). That distinct normal forms differ in U(g) follows from Brundan-Ellis's Nondegeneracy Conjecture (arXiv:1701.04133v2, Section 8), open for odd colours and proved for even data (odd-lean: EvenBridge.nondegeneracyConjecture_of_isEven)"
+
+[lean]
+encoding = "skm-cl"
+module = "OddMath.SKM.Rewriting OddMath.SKM.RelationsNF OddMath.SKM.Lemma33 DiagcalcSupport.SKM"
+namespace = "OddMath.SKM"
+open = "CategoryTheory StringDiagrams Presentation"
+generators = { cap = ".cap {a}", cup = ".cup {a}", lcross = ".lcross {a} {b}", psi = ".cross {a} {b}", x = ".dot {a}" }
+
+[lean.relations.braid]
+lemma = "cl_braid Sc {a} {b} {c} ν {simp}"
+proof = "exact"
+
+[lean.relations.braid-corrected]
+lemma = "cl_braidEq Sc {a} {b} ν {a!=b}"
+facts = ["dn {a} {b}", "dn {b} {a}", "t {a} {b}", "s {a} {b}"]
+layering = "right-first"
+
+[lean.relations.dot-slide-left-distinct]
+lemma = "cl_slideL Sc {a} {b} ν {a!=b}"
+
+[lean.relations.dot-slide-left-same]
+lemma = "cl_slideLEq Sc {a} ν"
+
+[lean.relations.dot-slide-right-distinct]
+lemma = "cl_slideR Sc {a} {b} ν {a!=b}"
+
+[lean.relations.dot-slide-right-same]
+lemma = "cl_slideREq Sc {a} ν"
+
+[lean.relations.invert-distinct-ef]
+lemma = "cl_invNe₁ Sc {a} {b} ν {a!=b}"
+pattern_layering = "right-first"
+proof = "exact"
+
+[lean.relations.invert-distinct-fe]
+lemma = "cl_invNe₂ Sc {a} {b} ν {a!=b}"
+proof = "exact"
+
+[lean.relations.invert-ef]
+lemma = "cl_invM₂ Sc {a} ν (by norm_num [{ip a}])"
+pattern_layering = "right-first"
+proof = "exact"
+
+[lean.relations.invert-fe]
+lemma = "cl_invP₂ Sc {a} ν (by norm_num [{ip a}])"
+proof = "exact"
+
+[lean.relations.square-linked]
+lemma = "cl_quadNe Sc {a} {b} ν {a!=b} (by norm_num [hd_{a}_{b}])"
+facts = ["d {a} {b}", "dn {a} {b}", "dn {b} {a}", "t {a} {b}", "t {b} {a}", "s {a} {b}"]
+
+[lean.relations.square-orthogonal]
+lemma = "cl_quadZero Sc {a} {b} ν {a!=b} hd_{a}_{b}"
+facts = ["d {a} {b}", "t {a} {b}"]
+
+[lean.relations.square-same]
+lemma = "cl_quadEq Sc {a} ν"
+proof = "exact"
+
+[lean.relations.zigzag-e]
+lemma = "cl_zigE Sc {a} ν"
+proof = "exact"
+
+[lean.relations.zigzag-f]
+lemma = "cl_zigF Sc {a} ν"
+proof = "exact"

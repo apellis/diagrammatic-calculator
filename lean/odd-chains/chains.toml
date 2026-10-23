@@ -1,0 +1,185 @@
+# Rewrite chains in the super Kac–Moody 2-category of Brundan–Ellis (presentation be2), exported
+# by `diagcalc lean-chains lean/odd-chains/chains.toml` and checked against odd-lean.
+#
+# First one chain per relation with a Lean lemma: one step from an instance of its left side, at
+# odd colours where Brundan–Ellis (1.4) allows them (type A1 with i odd, B2 with j odd, B3 with
+# k odd) and at even ones. Then longer chains found by straightening or shrinking.
+
+[[chain]]
+name = "dc_be2_zigzag_e"
+context = "be2 type=A1 odd=i ring=ZZ"
+lhs = "cap_1 cup_{2,i*} e(i)"
+strategy = "once"
+relations = ["zigzag-e"]
+
+[[chain]]
+name = "dc_be2_zigzag_f"
+context = "be2 type=A1 odd=i ring=ZZ"
+lhs = "cap_2 cup_{1,i*} e(i*)"
+strategy = "once"
+relations = ["zigzag-f"]
+
+[[chain]]
+name = "dc_be2_square_same_odd"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_1 e(jj)"
+strategy = "once"
+relations = ["square-same"]
+
+[[chain]]
+name = "dc_be2_square_orthogonal"
+context = "be2 type=B3 odd=k ring=ZZ"
+lhs = "psi_1 psi_1 e(ik)"
+strategy = "once"
+relations = ["square-orthogonal"]
+
+[[chain]]
+name = "dc_be2_square_linked_ij"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_1 e(ij)"
+strategy = "once"
+relations = ["square-linked"]
+
+[[chain]]
+name = "dc_be2_square_linked_ji"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_1 e(ji)"
+strategy = "once"
+relations = ["square-linked"]
+
+[[chain]]
+name = "dc_be2_square_linked_g2"
+context = "be2 type=G2 ring=ZZ"
+lhs = "psi_1 psi_1 e(ij)"
+strategy = "once"
+relations = ["square-linked"]
+
+[[chain]]
+name = "dc_be2_slide_left_same_odd"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 x_1 e(jj)"
+strategy = "once"
+relations = ["dot-slide-left-same"]
+
+[[chain]]
+name = "dc_be2_slide_left_same_even"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 x_1 e(ii)"
+strategy = "once"
+relations = ["dot-slide-left-same"]
+
+[[chain]]
+name = "dc_be2_slide_left_distinct"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 x_1 e(ij)"
+strategy = "once"
+relations = ["dot-slide-left-distinct"]
+
+[[chain]]
+name = "dc_be2_slide_right_same_odd"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "x_1 psi_1 e(jj)"
+strategy = "once"
+relations = ["dot-slide-right-same"]
+
+[[chain]]
+name = "dc_be2_slide_right_distinct"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "x_1 psi_1 e(ji)"
+strategy = "once"
+relations = ["dot-slide-right-distinct"]
+
+[[chain]]
+name = "dc_be2_braid_odd"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_2 psi_1 e(jjj)"
+strategy = "once"
+relations = ["braid"]
+
+[[chain]]
+name = "dc_be2_braid_mixed"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_2 psi_1 e(ijj)"
+strategy = "once"
+relations = ["braid"]
+
+[[chain]]
+name = "dc_be2_braid_corrected_odd"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_2 psi_1 e(jij)"
+strategy = "once"
+relations = ["braid-corrected"]
+
+[[chain]]
+name = "dc_be2_braid_corrected_even"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_2 psi_1 e(iji)"
+strategy = "once"
+relations = ["braid-corrected"]
+
+[[chain]]
+name = "dc_be2_braid_corrected_g2"
+context = "be2 type=G2 ring=ZZ"
+lhs = "psi_1 psi_2 psi_1 e(jij)"
+strategy = "once"
+relations = ["braid-corrected"]
+
+[[chain]]
+name = "dc_be2_invert_distinct_ef"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "lcross_1 cap_3 psi_2 cup_{1,i*} e(j i*)"
+strategy = "once"
+relations = ["invert-distinct-ef"]
+
+[[chain]]
+name = "dc_be2_invert_distinct_fe"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "cap_3 psi_2 cup_{1,j*} lcross_1 e(j* i)"
+strategy = "once"
+relations = ["invert-distinct-fe"]
+
+[[chain]]
+name = "dc_be2_invert_fe"
+context = "be2 type=A1 odd=i mu=0 ring=ZZ"
+lhs = "cap_3 psi_2 cup_{1,i*} lcross_1 e(i* i)"
+strategy = "once"
+relations = ["invert-fe"]
+
+[[chain]]
+name = "dc_be2_invert_ef"
+context = "be2 type=A1 odd=i mu=-1 ring=ZZ"
+lhs = "lcross_1 cap_3 psi_2 cup_{1,i*} e(i i*)"
+strategy = "once"
+relations = ["invert-ef"]
+
+[[chain]]
+name = "dc_be2_slide_odd"
+context = "be2 type=A1 odd=i ring=ZZ"
+lhs = "x_1 x_1 psi_1 e(ii)"
+doc = "Two dots slide down through an odd crossing."
+
+[[chain]]
+name = "dc_be2_dots_odd"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "x_1 x_2 psi_1 e(jj)"
+doc = "Dots on both strands above an odd crossing, with Koszul signs."
+
+[[chain]]
+name = "dc_be2_braid_back_odd"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_2 psi_1 psi_2 e(jij)"
+doc = "The other side of the corrected braid relation, to the basis."
+
+[[chain]]
+name = "dc_be2_square_dot"
+context = "be2 type=B2 odd=j ring=ZZ"
+lhs = "psi_1 psi_1 x_2 e(ij)"
+doc = "A double crossing of distinct colours above a dot."
+
+[[chain]]
+name = "dc_be2_zigzag_twice"
+context = "be2 type=A1 odd=i ring=ZZ"
+lhs = "cap_1 cup_{2,i*} x_1 cap_1 cup_{2,i*} e(i)"
+rhs = "x_1 e(i)"
+strategy = "shrink"
+doc = "Two zigzags around an odd dot."

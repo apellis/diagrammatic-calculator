@@ -245,6 +245,13 @@ pub fn check<R: Ring>(ctx: &Context<R>) -> Report {
                             .unwrap_or_default();
                         findings.push(finding(check, false, format!("lhs − rhs = {nf}")))
                     }
+                    Err(e) if e.kind == crate::error::ErrorKind::Precondition => {
+                        findings.push(Finding {
+                            check,
+                            status: Status::Unchecked,
+                            detail: format!("does not apply: {e}"),
+                        })
+                    }
                     Err(e) => findings.push(finding(check, false, e.to_string())),
                 }
             }
@@ -320,6 +327,20 @@ pub fn standard_contexts(pres: &Presentation) -> Vec<ContextSpec> {
         out.extend(at("A2", &["0", "i", "-j", "2i-j", "-i-2j"]));
         out.extend(at("B2", &["0", "i-j", "-2j"]));
         out.extend(at("G2", &["0", "i", "-j"]));
+        if has_super_signs(pres) {
+            // Odd colours where Brundan–Ellis (1.4) allows them.
+            let odd = |t: &str, c: &str, mus: &[&str]| -> Vec<ContextSpec> {
+                at(t, mus)
+                    .into_iter()
+                    .map(|s| ContextSpec {
+                        odd: vec![c.to_string()],
+                        ..s
+                    })
+                    .collect()
+            };
+            out.extend(odd("A1", "i", &["-2", "-1", "0", "1", "2"]));
+            out.extend(odd("B2", "j", &["0", "i-j", "-2j", "2i+j"]));
+        }
         return out;
     }
     match pres.colours {
@@ -340,6 +361,11 @@ pub fn uses_weights(pres: &Presentation) -> bool {
     !pres.bubbles.is_empty()
         || pres.generators.iter().any(|g| g.degree.uses_pairing())
         || pres.relations.iter().any(|r| pres.relation_uses_region(r))
+}
+
+/// Whether a generator's parity depends on the parities of its colours.
+fn has_super_signs(pres: &Presentation) -> bool {
+    pres.generators.iter().any(|g| g.parity.uses_parity())
 }
 
 /// Checks a presentation over ℚ in its standard contexts.
