@@ -14,6 +14,7 @@ mod eval;
 mod mono;
 pub(crate) mod up;
 
+use super::basis_cache;
 use super::{Evaluator, PolyVector, Provenance, role, strand_ring};
 use crate::context::Context;
 use crate::elab::CTerm;
@@ -26,18 +27,29 @@ use basis::{Roles, bend};
 use eval::{Evaluated, Key, Phi, sum_into};
 use mono::Ev;
 use std::collections::BTreeMap;
+use std::sync::{Arc, OnceLock};
 use up::{OVERFLOW, Up};
 
 /// The largest number of bubble variables per colour tried before giving up.
 const MAX_KZ: usize = 256;
 
 type Group<E> = Vec<(Word, Poly<E>)>;
+type Echelon<E> = basis_cache::Echelon<Key, Poly<E>>;
+
+const MESSAGES: basis_cache::Messages = basis_cache::Messages {
+    dependent: "kl: the basis diagrams evaluate to dependent vectors",
+    pivot: "kl: a pivot is not invertible",
+    outside: "kl: a diagram evaluates outside the span of the basis",
+    inexact: "kl: a basis coefficient is not exact",
+};
 
 /// The KL basis normal form as an equality strategy.
 pub struct KlBasis<'a, R: Ring> {
     ctx: &'a Context<R>,
     roles: Roles,
     prov: Provenance,
+    /// The context's fingerprint for [`basis_cache`], computed when first needed.
+    fingerprint: OnceLock<Arc<str>>,
 }
 
 impl<'a, R: Ring> KlBasis<'a, R> {
@@ -73,7 +85,12 @@ impl<'a, R: Ring> KlBasis<'a, R> {
                 }
             }
         }
-        Ok(KlBasis { ctx, roles, prov })
+        Ok(KlBasis {
+            ctx,
+            roles,
+            prov,
+            fingerprint: OnceLock::new(),
+        })
     }
 
     /// The steps of a word from the empty object.
@@ -212,12 +229,31 @@ impl<'a, R: Ring> KlBasis<'a, R> {
             let phi = Phi::new(up, mu.clone());
             let (_, acc) = self.phi_sum(&phi, &bent)?;
             let target = phi.coords(&target_obj, &acc)?;
-            let mut rows = Vec::with_capacity(words.len());
-            for b in &bent_basis {
-                let (wf, vals) = phi.eval(&self.events(b)?)?;
-                rows.push(phi.coords(&wf, &vals)?);
-            }
-            solve(&self.ctx.coeff, rows, target)
+            let key = basis_cache::Key {
+                context: self
+                    .fingerprint
+                    .get_or_init(|| basis_cache::fingerprint("kl", &self.prov.method, self.ctx))
+                    .clone(),
+                src: src.clone(),
+                tgt: tgt.clone(),
+                degree,
+                nx: up.nx,
+                kz: up.kz,
+            };
+            let ech = match basis_cache::get::<Echelon<R::Elem>>(&key) {
+                Some(e) => e,
+                None => {
+                    let mut rows = Vec::with_capacity(words.len());
+                    for b in &bent_basis {
+                        let (wf, vals) = phi.eval(&self.events(b)?)?;
+                        rows.push(phi.coords(&wf, &vals)?);
+                    }
+                    let ech = Arc::new(basis_cache::echelon(&self.ctx.coeff, rows, &MESSAGES)?);
+                    basis_cache::insert(key, ech.clone(), ech.cost());
+                    ech
+                }
+            };
+            basis_cache::solve(&self.ctx.coeff, &ech, target, &MESSAGES)
         })?;
         Ok(words
             .into_iter()
@@ -225,118 +261,6 @@ impl<'a, R: Ring> KlBasis<'a, R> {
             .filter(|(_, c)| !self.ctx.coeff.is_zero(c))
             .collect())
     }
-}
-
-/// `b·v − a·r` for sparse vectors.
-fn axpy<K: Ring>(
-    k: &K,
-    b: &K::Elem,
-    v: &BTreeMap<Key, K::Elem>,
-    a: &K::Elem,
-    r: &BTreeMap<Key, K::Elem>,
-) -> BTreeMap<Key, K::Elem> {
-    let mut out = BTreeMap::new();
-    for (key, x) in v {
-        out.insert(key.clone(), k.mul(b, x));
-    }
-    for (key, y) in r {
-        let t = k.mul(a, y);
-        match out.get_mut(key) {
-            Some(o) => {
-                k.sub_assign(o, &t);
-                if k.is_zero(o) {
-                    out.remove(key);
-                }
-            }
-            None => {
-                let t = k.neg(&t);
-                if !k.is_zero(&t) {
-                    out.insert(key.clone(), t);
-                }
-            }
-        }
-    }
-    out.retain(|_, x| !k.is_zero(x));
-    out
-}
-
-/// `b·u − a·w` for dense vectors.
-fn axpy_dense<K: Ring>(
-    k: &K,
-    b: &K::Elem,
-    u: &[K::Elem],
-    a: &K::Elem,
-    w: &[K::Elem],
-) -> Vec<K::Elem> {
-    u.iter()
-        .zip(w)
-        .map(|(x, y)| k.add(&k.mul(b, x), &k.neg(&k.mul(a, y))))
-        .collect()
-}
-
-/// The coefficients `a` with `Σ a_j rows_j = target`, by fraction-free elimination (pivots made
-/// one over a field), each row's pivot its least key.
-fn solve<K: Ring>(
-    k: &K,
-    rows: Vec<BTreeMap<Key, K::Elem>>,
-    target: BTreeMap<Key, K::Elem>,
-) -> Result<Vec<K::Elem>> {
-    let n = rows.len();
-    let field = k.is_field();
-    type Row<E> = (BTreeMap<Key, E>, Vec<E>);
-    let mut ech: BTreeMap<Key, Row<K::Elem>> = BTreeMap::new();
-    for (j, mut v) in rows.into_iter().enumerate() {
-        let mut comb = vec![k.zero(); n];
-        comb[j] = k.one();
-        loop {
-            let Some((p, a)) = v.iter().next().map(|(p, a)| (p.clone(), a.clone())) else {
-                return Err(Error::invalid(
-                    "kl: the basis diagrams evaluate to dependent vectors",
-                ));
-            };
-            match ech.get(&p) {
-                Some((r, rc)) => {
-                    let b = r[&p].clone();
-                    v = axpy(k, &b, &v, &a, r);
-                    comb = axpy_dense(k, &b, &comb, &a, rc);
-                }
-                None => {
-                    if field {
-                        let inv = k
-                            .inv(&a)
-                            .ok_or_else(|| Error::invalid("kl: a pivot is not invertible"))?;
-                        v = v.iter().map(|(q, x)| (q.clone(), k.mul(&inv, x))).collect();
-                        comb = comb.iter().map(|x| k.mul(&inv, x)).collect();
-                    }
-                    ech.insert(p, (v, comb));
-                    break;
-                }
-            }
-        }
-    }
-    // s · target = Σ coef_j rows_j + t
-    let mut t = target;
-    let mut s = k.one();
-    let mut coef = vec![k.zero(); n];
-    while let Some((p, a)) = t.iter().next().map(|(p, a)| (p.clone(), a.clone())) {
-        let (r, rc) = ech.get(&p).ok_or_else(|| {
-            Error::invalid("kl: a diagram evaluates outside the span of the basis")
-        })?;
-        let b = r[&p].clone();
-        t = axpy(k, &b, &t, &a, r);
-        s = k.mul(&b, &s);
-        coef = coef
-            .iter()
-            .zip(rc)
-            .map(|(c, x)| k.add(&k.mul(&b, c), &k.mul(&a, x)))
-            .collect();
-    }
-    coef.iter()
-        .map(|c| {
-            k.div_exact(c, &s)
-                .ok_or_else(|| Error::invalid("kl: a basis coefficient is not exact"))
-        })
-        .collect()
 }
 
 impl<R: Ring> Evaluator<R> for KlBasis<'_, R> {

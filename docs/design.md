@@ -142,6 +142,26 @@ checked to be independent each time, and the target to lie in their span. Bubble
 the default `Q = klq2`; the strategy refuses any other `Q`. Bubble variables are allocated four
 per colour and doubled when an index overflows.
 
+The evaluation ring has one dot variable per strand of the longest object the words pass through.
+That is enough: a run from `w` to `w2` is straightened between sorted components no longer than
+`w` and `w2` into one upward diagram on `#E(src) + #F(tgt) = (|src| + |tgt|)/2` strands, since
+every cup or cap of the run adds or removes one `E` and one `F`; partial traces only remove
+strands. A value with more strands than dot variables is an error, never a silent reuse of a
+bubble variable. Divisions by `x_a − x_b` in the smash product are first tested at a fixed point
+modulo the prime `2^61 − 1` (`Ring::residue61`, a ring homomorphism): a nonzero value proves the
+division inexact, and a zero value falls back to the exact test.
+
+**Basis evaluations kept across calls** (`rep/basis_cache`, for `kl-basis` and `skm-basis`). The
+evaluations of the basis words of a hom space in a degree, brought to echelon form, depend only on
+the context and the hom space, not on the term being normalised, and cost almost all of the time.
+They are kept in a least-recently-used cache that outlives one evaluator (in the browser, everything
+one worker computes): at most 64 hom spaces and 200,000 coefficients. The key holds the strategy
+and representation names, the ground ring's type and the complete debug form of the context
+(presentation, specification, colours and parities, Cartan datum, weights, `μ`, parameters,
+scalars, the ground ring with its run-time data), compared in full, plus the source, target,
+degree and the numbers of dot and bubble variables. The tests change each component and check
+that the cache is missed, and check that a hit gives the same normal form as no cache.
+
 ### The BE2 basis normal form (`rep/skm`, representation kind `skm-basis`)
 
 The super version of the KL evaluation, for `be2` with any parities (Brundan–Ellis,
@@ -176,7 +196,7 @@ condition for the Nondegeneracy Conjecture; a failure would contradict it and is
 error), and the target to lie in their span (BE2 Theorem 8.1). The certificate is `conditional`,
 as for the quiver Hecke basis. For even colours the session still uses the translation into
 `kl`, whose certificate is a theorem; the tests check that the two agree. Basis evaluations are
-cached per source, target and degree, and bubble series per strand list; a diagram with three
+kept across calls as for KL, and bubble series are cached per strand list; a diagram with three
 strands, one of them downward, takes seconds, and that cost grows quickly with the width.
 
 ## Finite-dimensional quotients

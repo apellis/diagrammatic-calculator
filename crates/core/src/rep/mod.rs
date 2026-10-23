@@ -4,6 +4,7 @@
 //! term of the same context), decide whether a term is zero, and compute the action on
 //! polynomials. The strategy and the certificate of its faithfulness travel with every result.
 
+pub mod basis_cache;
 pub mod kl;
 pub mod nilcoxeter;
 pub mod skm;

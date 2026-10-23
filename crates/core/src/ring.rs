@@ -13,7 +13,7 @@ use std::hash::Hash;
 
 /// A commutative ring with identity, given as a context acting on element values.
 pub trait Ring: Clone + Debug + PartialEq + Send + Sync {
-    type Elem: Clone + Eq + Hash + Debug + Send + Sync;
+    type Elem: Clone + Eq + Hash + Debug + Send + Sync + 'static;
 
     fn zero(&self) -> Self::Elem;
     fn one(&self) -> Self::Elem;
