@@ -166,13 +166,22 @@ pub fn check<R: Ring>(ctx: &Context<R>) -> Report {
     free.weight = None;
     let ctx = &free;
     let mut findings = Vec::new();
-    let evals = match rep::evaluators(ctx) {
-        Ok(e) => e,
-        Err(e) => {
-            findings.push(finding("representations".into(), false, e.to_string()));
-            vec![]
+    let mut evals = Vec::new();
+    for d in &ctx.pres.representations {
+        match rep::evaluator(ctx, d) {
+            Ok(e) => evals.push(e),
+            Err(e) if e.kind == crate::error::ErrorKind::Precondition => findings.push(Finding {
+                check: format!("representation {}", d.name),
+                status: Status::Unchecked,
+                detail: format!("does not apply: {e}"),
+            }),
+            Err(e) => findings.push(finding(
+                format!("representation {}", d.name),
+                false,
+                e.to_string(),
+            )),
         }
-    };
+    }
     for rel in &ctx.pres.relations {
         let bindings = match instances(ctx, rel) {
             Ok(b) => b,

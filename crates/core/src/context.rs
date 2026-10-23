@@ -695,14 +695,37 @@ impl<R: Ring> Context<R> {
         .unwrap_or(0)
     }
 
-    pub fn layer_odd(&self, l: &Layer) -> bool {
+    /// Whether a layer applied to the object `below` is odd. In a 2-category the parity may
+    /// depend on the weight of the region just right of the generator (`h(a)` in the file); that
+    /// region, and so the parity, does not change under interchange.
+    pub fn layer_odd_at(&self, l: &Layer, below: &[Letter]) -> bool {
         let b: Vec<usize> = l.binding.iter().map(|&c| c as usize).collect();
-        self.pres.generators[l.generator as usize]
-            .parity
-            .eval(&b, self)
-            .unwrap_or(0)
-            .rem_euclid(2)
+        let par = &self.pres.generators[l.generator as usize].parity;
+        let p = l.pos as usize + self.source_len(l.generator as usize);
+        match self.region(below, p.min(below.len())) {
+            Some(r) => par.eval(
+                &b,
+                &crate::expr::AtRegion {
+                    env: self,
+                    region: &r,
+                },
+            ),
+            None => par.eval(&b, self),
+        }
+        .unwrap_or(0)
+        .rem_euclid(2)
             == 1
+    }
+
+    /// The parity of each layer of `w`, bottom first.
+    pub fn layer_parities(&self, w: &Word) -> Vec<bool> {
+        let mut obj = w.source.clone();
+        let mut out = Vec::with_capacity(w.layers.len());
+        for l in &w.layers {
+            out.push(self.layer_odd_at(l, &obj));
+            obj = self.apply(l, &obj);
+        }
+        out
     }
 
     /// The degree of each layer of `w`, bottom first.
@@ -721,7 +744,7 @@ impl<R: Ring> Context<R> {
     }
 
     pub fn word_odd(&self, w: &Word) -> bool {
-        w.layers.iter().filter(|l| self.layer_odd(l)).count() % 2 == 1
+        self.layer_parities(w).iter().filter(|&&o| o).count() % 2 == 1
     }
 
     // -----------------------------------------------------------------------------------------
@@ -796,9 +819,10 @@ impl<R: Ring> Context<R> {
     }
 
     /// The interchange of two adjacent layers, `lower` directly below `upper`, when their
-    /// generators sit side by side: the new lower and upper layers (positions adjusted) and
-    /// whether the move costs a Koszul sign. `None` when the layers share strands.
-    pub fn swap_adjacent(&self, lower: &Layer, upper: &Layer) -> Option<(Layer, Layer, bool)> {
+    /// generators sit side by side: the new lower and upper layers (positions adjusted). `None`
+    /// when the layers share strands. The move costs a Koszul sign when both layers are odd
+    /// ([`Context::layer_parities`]).
+    pub fn swap_adjacent(&self, lower: &Layer, upper: &Layer) -> Option<(Layer, Layer)> {
         let upper_left = self.relative(lower, upper)?;
         let (gl, gu) = (lower.generator as usize, upper.generator as usize);
         let (sl, tl) = (self.source_len(gl) as i64, self.target_len(gl) as i64);
@@ -813,7 +837,44 @@ impl<R: Ring> Context<R> {
         nl.pos = new_lower_pos as u16;
         let mut nu = lower.clone();
         nu.pos = new_upper_pos as u16;
-        Some((nl, nu, self.layer_odd(lower) && self.layer_odd(upper)))
+        Some((nl, nu))
+    }
+
+    /// A layering of `w` that keeps it narrow: generators that remove strands (caps) are moved
+    /// below adjacent generators that add more strands (cups) wherever the two sit side by side.
+    /// Returns the word and whether the Koszul signs of the moves multiply to −1. The result is
+    /// not canonical; evaluators whose cost grows with the width of a diagram read it.
+    pub fn narrow(&self, w: &Word) -> (Word, bool) {
+        let net = |l: &Layer| {
+            self.target_len(l.generator as usize) as i64
+                - self.source_len(l.generator as usize) as i64
+        };
+        let mut odd = self.layer_parities(w);
+        let mut layers = w.layers.clone();
+        let mut sign = false;
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for i in 0..layers.len().saturating_sub(1) {
+                if net(&layers[i + 1]) >= net(&layers[i]) {
+                    continue;
+                }
+                if let Some((lo, up)) = self.swap_adjacent(&layers[i], &layers[i + 1]) {
+                    sign ^= odd[i] && odd[i + 1];
+                    layers[i] = lo;
+                    layers[i + 1] = up;
+                    odd.swap(i, i + 1);
+                    changed = true;
+                }
+            }
+        }
+        (
+            Word {
+                source: w.source.clone(),
+                layers,
+            },
+            sign,
+        )
     }
 
     /// Moves every generator as low as possible, same-height generators left to right. Returns
@@ -855,6 +916,7 @@ impl<R: Ring> Context<R> {
 
     fn canonical_pass(&self, w: &Word, track: bool) -> Reordered {
         let levels = self.levels(w);
+        let odd = self.layer_parities(w);
         let mut items: Vec<(Layer, u32, usize)> = w
             .layers
             .iter()
@@ -876,9 +938,9 @@ impl<R: Ring> Context<R> {
                 if !(lu < ll || (lu == ll && upper_left)) {
                     continue;
                 }
-                let (nl, nu, odd) = self.swap_adjacent(lower, upper).expect("side by side");
-                sign ^= odd;
+                let (nl, nu) = self.swap_adjacent(lower, upper).expect("side by side");
                 let (ol, ou) = (items[i].2, items[i + 1].2);
+                sign ^= odd[ol] && odd[ou];
                 items[i] = (nl, lu, ou);
                 items[i + 1] = (nu, ll, ol);
                 if track {
@@ -904,6 +966,7 @@ impl<R: Ring> Context<R> {
     /// Reorders the layers of `w` by interchange moves so that their keys are nondecreasing,
     /// keeping the order of equal keys. `None` if a needed move exchanges layers sharing strands.
     pub fn reorder(&self, w: &Word, key: &[u8]) -> Option<Reordered> {
+        let odd = self.layer_parities(w);
         let mut items: Vec<(Layer, u8, usize)> = w
             .layers
             .iter()
@@ -920,8 +983,8 @@ impl<R: Ring> Context<R> {
                 if items[i].1 <= items[i + 1].1 {
                     continue;
                 }
-                let (nl, nu, odd) = self.swap_adjacent(&items[i].0, &items[i + 1].0)?;
-                sign ^= odd;
+                let (nl, nu) = self.swap_adjacent(&items[i].0, &items[i + 1].0)?;
+                sign ^= odd[items[i].2] && odd[items[i + 1].2];
                 let (kl, ol) = (items[i].1, items[i].2);
                 let (ku, ou) = (items[i + 1].1, items[i + 1].2);
                 items[i] = (nl, ku, ou);
@@ -1088,6 +1151,7 @@ impl<R: Ring> Context<R> {
     /// canonical word.
     pub fn print_order(&self, w: &Word) -> (Vec<Layer>, bool) {
         let levels = self.levels(w);
+        let odd = self.layer_parities(w);
         let mut groups: Vec<Vec<Layer>> = Vec::new();
         let mut sign = false;
         let mut i = 0;
@@ -1104,7 +1168,7 @@ impl<R: Ring> Context<R> {
                     ..l.clone()
                 });
                 shift += self.target_len(g) as i64 - self.source_len(g) as i64;
-                if self.layer_odd(l) {
+                if odd[j] {
                     if odd_before % 2 == 1 {
                         sign = !sign;
                     }

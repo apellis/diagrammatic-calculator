@@ -88,6 +88,29 @@ data (odd-lean `EvenBridge.nondegeneracyConjecture_of_isEven`), so the certifica
 conjecture and says so. Only upward diagrams with `t_ij = 1` and `s_ij^pq = 0` are covered;
 anything else is refused with a reason.
 
+### Translations (`rep/translate`, representation kind `translation`)
+
+A representation of kind `translation` names a shipped target presentation and gives each
+generator's image there, a term in the generator's colour variables. A term is carried over word by
+word: each source word is first given a narrow layering (`Context::narrow`: caps moved below cups
+beside them, so the diagram stays as wide as it must be), then every layer is replaced by its
+image, whiskered by the strands beside it, and the images are stacked without canonical
+relayering. The canonical layering moves every generator as low as it goes, which can open a
+cup beside a cap that has not closed yet; the KL evaluation bends and sorts whole diagrams, and its
+cost grows quickly with their width (a leftward crossing above a cap went from 2.5 seconds to 1
+millisecond). The target's first representation computes the normal form, which is carried back
+by the inverse renaming (every generator in the target's normal forms must be the image of exactly
+one generator); a translation that would need more is refused with a reason.
+
+`be2` uses one into `kl` for even colours (`even_only`), certified by Brundan's comparison of the
+Rouquier and Khovanov–Lauda definitions (arXiv:1501.00350) and KL III nondegeneracy; the
+conformance checker checks every relation of `be2` through it, in types A1, A2, B2 and G2 at every
+test weight. A translation that does not apply in a context (odd colours, no `mu=`) is skipped:
+the session uses the first representation that applies, and the conformance report lists the
+skipped one as unchecked. For odd colours the relations that define the leftward cups and caps
+and the downward dots and crossings are checked by typing only, until the Lean export covers
+them or the odd normal form (a super version of the KL evaluation) exists.
+
 ### The KL basis normal form (`rep/kl`, representation kind `kl-basis`)
 
 A 2-morphism `f : s → t` of `U(g)` in the region `μ` is bent to `1_μ → *s t` with nested cups on

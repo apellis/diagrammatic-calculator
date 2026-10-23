@@ -881,6 +881,7 @@ fn relay<R: Ring>(
     let mut swaps = Vec::new();
     // Interchange moves only: `down` says whether layer `i + 1` should go below layer `i`.
     let mut bub = bubble_layers(ctx, &w);
+    let mut odd_layers = ctx.layer_parities(&w);
     loop {
         let mut moved = false;
         for i in 0..w.layers.len().saturating_sub(1) {
@@ -896,8 +897,8 @@ fn relay<R: Ring>(
             if !down {
                 continue;
             }
-            if let Some((lo, up, odd)) = ctx.swap_adjacent(&w.layers[i], &w.layers[i + 1]) {
-                if odd {
+            if let Some((lo, up)) = ctx.swap_adjacent(&w.layers[i], &w.layers[i + 1]) {
+                if odd_layers[i] && odd_layers[i + 1] {
                     if enc == Enc::Kl3 {
                         return Err(Error::precondition("relaying a word costs a Koszul sign"));
                     }
@@ -906,6 +907,7 @@ fn relay<R: Ring>(
                 w.layers[i] = lo;
                 w.layers[i + 1] = up;
                 bub.swap(i, i + 1);
+                odd_layers.swap(i, i + 1);
                 swaps.push(i);
                 moved = true;
             }

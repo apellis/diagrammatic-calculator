@@ -8,6 +8,7 @@ pub mod kl;
 pub mod nilcoxeter;
 pub mod smash;
 pub mod straighten;
+pub mod translate;
 
 use crate::context::Context;
 use crate::elab::CTerm;
@@ -301,19 +302,49 @@ pub fn evaluator<'a, R: Ring + 'a>(
             decl,
             prov(Strategy::BasisNormalForm),
         )?),
+        "translation" => Box::new(translate::Translation::new(
+            ctx,
+            decl,
+            prov(Strategy::BasisNormalForm),
+        )?),
         k => return Err(Error::invalid(format!("unknown representation kind '{k}'"))),
     })
 }
 
-/// All evaluators of a context, in file order.
+/// All evaluators of a context, in file order, leaving out those whose precondition fails in it
+/// (a translation that holds for even colours only, in a context with an odd colour).
 pub fn evaluators<'a, R: Ring + 'a>(
     ctx: &'a Context<R>,
 ) -> Result<Vec<Box<dyn Evaluator<R> + 'a>>> {
-    ctx.pres
-        .representations
-        .iter()
-        .map(|d| evaluator(ctx, d))
-        .collect()
+    let mut out = Vec::new();
+    for d in &ctx.pres.representations {
+        match evaluator(ctx, d) {
+            Ok(e) => out.push(e),
+            Err(e) if e.kind == crate::error::ErrorKind::Precondition => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(out)
+}
+
+/// The first representation of a context that applies in it.
+pub fn first_applicable<R: Ring>(ctx: &Context<R>) -> Result<&RepresentationDecl> {
+    let mut why = None;
+    for d in &ctx.pres.representations {
+        match evaluator(ctx, d) {
+            Ok(_) => return Ok(d),
+            Err(e) if e.kind == crate::error::ErrorKind::Precondition => {
+                why.get_or_insert(e);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(why.unwrap_or_else(|| {
+        Error::precondition(format!(
+            "presentation {} declares no representation",
+            ctx.pres.name
+        ))
+    }))
 }
 
 /// The basis a declared representation writes normal forms in: the dot and crossing generators

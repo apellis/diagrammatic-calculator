@@ -37,7 +37,9 @@ References of the form `Library: Declaration` point to the Lean libraries
 - **Koszul signs.** Exchanging the heights of two generators on disjoint strands costs
   `(-1)^{|f||g|}`, whichever is on the left (string-diagrams-lean: `InterchangeData.sign`,
   `diag_interchange_diagrams`). Coefficients are even. The parity of a word is the number of odd
-  generators in it, mod 2.
+  generators in it, mod 2. A generator's parity may depend on the region just right of it (BE2's
+  leftward cups and caps have parity `p(a)(h(a) + 1)`); interchange leaves that region unchanged,
+  so it leaves every parity unchanged too.
 - **Canonical layering.** Words equal up to interchange are stored in one canonical layering:
   every generator as low as it can go, generators at the same height ordered left to right. The
   Koszul sign of the moves is absorbed into the coefficient. A generator without inputs (a cup)
@@ -140,6 +142,51 @@ sideways crossings `cap_3 psi_2 cup_{1,b*}: E_a F_b → F_b E_a` and `cap_1 psi_
 E_a F_b`; `mixed-ef`, `mixed-fe` (`downupEF`, `downupFE`); the KLR relations on upward strands
 (`klr`), with `Q_ab = u^{d_ab} + v^{d_ba}` by default. Relations whose terms involve `h(a)` hold for
 every weight of the rightmost region; the calculator instantiates them per region.
+
+## The super Kac–Moody 2-category
+
+`presentations/be2.pres.toml` is the super Kac–Moody 2-category `U(g)` of Brundan–Ellis (Super
+Kac–Moody 2-categories, arXiv:1701.04133v2), in the form formalized in odd-lean (`SKM`): colours
+carry a parity `p(a)`, and `t_ij = 1`, `s_ij^pq = 0`, `c_{λ,i} = 1`. The dot, the upward crossing,
+the rightward cup and cap and the leftward crossing are odd-lean's generators; the others are
+defined from them as in the paper and odd-lean, and the calculator has them as generators with
+relations that define them.
+
+| Generator | Written | Source → target | Degree | Parity | odd-lean |
+|---|---|---|---|---|---|
+| `x` | `x` | `a → a` | `(a,a)` | `p(a)` | `.dot a` |
+| `psi` | `psi` | `a b → b a` | `−(a,b)` | `p(a)p(b)` | `.cross a b` |
+| `cup` | `cup_{k,a*}` | `1 → a* a` | `d_a(1 + h(a))` | 0 | `.cup a` |
+| `cap` | `cap` | `a a* → 1` | `d_a(1 − h(a))` | 0 | `.cap a` |
+| `lcross` | `lcross` | `a* b → b a*` | 0 | `p(a)p(b)` | `.lcross a b` |
+| `xd` | `x` | `a* → a*` | `(a,a)` | `p(a)` | `ddotL` (right mate of the dot) |
+| `psid` | `psi` | `a* b* → b* a*` | `−(a,b)` | `p(a)p(b)` | `dcrossL` (right mate of the crossing) |
+| `cupl` | `cup_{k,a}` | `1 → a a*` | `d_a(1 − h(a))` | `p(a)(h(a) + 1)` | `etaP` |
+| `capl` | `cap` | `a* a → 1` | `d_a(1 + h(a))` | `p(a)(h(a) + 1)` | `epsP` |
+
+The defining relations: `down-dot` and `down-crossing` (the downward dot and crossing are right
+mates), `zigzag-left-up`, `zigzag-left-down` (the leftward cup and cap are adjoint, with the sign
+`(−1)^{p(a)(h(a)+1)}` on the upward zigzag), `lcross-rotation` (the leftward crossing is the
+rotation of the upward one, up to `(−1)^{p(a)p(b)(h(a)+1)}`). Derived from them in the paper and
+odd-lean: `cyclic-dot-even`, `cyclic-crossing`, and the bubble relations `bubble-*-negative`,
+`bubble-*-one` (bubbles of negative degree vanish; of degree zero they are 1). A sign
+`(−1)^{n}` with `n < 0` is read as `(−1)^{−n}`: only units take negative powers.
+
+**Normal forms.** With every colour even and these scalars, `U(g)` is the Khovanov–Lauda
+2-category (Brundan, On the definition of Kac–Moody 2-category, arXiv:1501.00350, main theorem),
+and the presentation's first representation, `kl-translation`, carries a term into `kl` and back:
+
+| `be2` | `kl` |
+|---|---|
+| `x`, `xd`, `psi`, `psid` | `x`, `xd`, `psi`, `psid` |
+| `cup`, `cupl` | `cupd`, `cup` (`cup_{1,a*}`, `cup_{1,a}`) |
+| `cap`, `capl` | `cap`, `capd` |
+| `lcross` | `cap_1 psi_2 cup_{3,a}` |
+
+Normal forms are KL's (below), written back in `be2`'s names; a leftward crossing comes back as the
+rotated crossing. The conformance checker checks every relation of `be2` through the translation.
+With an odd colour the translation does not apply, and the second representation,
+`quiver-hecke-basis`, covers upward diagrams only (conditional, see `design.md`).
 
 ## nilHecke and odd nilHecke algebras
 

@@ -276,10 +276,15 @@ impl<R: Ring> Context<R> {
             Ast::PowExpr(b, e) => {
                 let n = self.eval_int(e, scope)?;
                 if n < 0 {
-                    return Err(Error::invalid(format!(
-                        "the exponent {} is {n} here: only scalars take negative powers",
-                        e.print()
-                    )));
+                    // a unit such as −1 in a sign (−1)^{p(a)(h(a)+1)}
+                    let c = crate::context::poly_of_ast(&Ast::Pow(b.clone(), n as _), &self.coeff)
+                        .map_err(|_| {
+                            Error::invalid(format!(
+                                "the exponent {} is {n} here: only scalars take negative powers",
+                                e.print()
+                            ))
+                        })?;
+                    return Ok(self.scalar_term(c, src));
                 }
                 let items: Vec<Ast> = std::iter::repeat_n((**b).clone(), n as usize).collect();
                 if items.is_empty() {

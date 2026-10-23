@@ -187,6 +187,7 @@ pub fn picture<R: Ring>(ctx: &Context<R>, w: &Word) -> Picture {
 /// gives each layer's canonical index (see [`draw_levels`]).
 pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]>) -> Picture {
     let levels = draw_levels(ctx, w, rank);
+    let parities = ctx.layer_parities(w);
     let mut prims = Vec::new();
     let mut tags = Vec::new();
     // For each primitive that draws a line: whether the strand points up there (for a turn,
@@ -247,7 +248,7 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
         let mut j = i;
         let mut has_odd = false;
         while j < w.layers.len() && levels[j] == levels[i] {
-            let odd = ctx.layer_odd(&w.layers[j]);
+            let odd = parities[j];
             if odd && has_odd {
                 break;
             }

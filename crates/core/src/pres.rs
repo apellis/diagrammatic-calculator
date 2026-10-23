@@ -112,10 +112,17 @@ pub struct Certificate {
 pub struct RepresentationDecl {
     pub name: String,
     /// Built-in action kind: `klr-polynomial`, `nil-coxeter`, `odd-nil-coxeter`, `kl-basis`,
-    /// `quiver-hecke-basis`.
+    /// `quiver-hecke-basis`, `translation`.
     pub kind: String,
     /// Generator names by role (`dot`, `crossing`).
     pub roles: BTreeMap<String, String>,
+    /// For kind `translation`: the shipped presentation whose first representation decides
+    /// equality, and each generator's image there, a term in the generator's colour variables.
+    /// Every generator of the target's normal forms must be the image of exactly one generator.
+    pub target: String,
+    pub images: BTreeMap<String, String>,
+    /// For kind `translation`: the translation holds only when every colour is even.
+    pub even_only: bool,
     pub certificate: Certificate,
 }
 
@@ -379,7 +386,14 @@ struct RawRel {
 struct RawRep {
     name: String,
     kind: String,
+    #[serde(default)]
     roles: BTreeMap<String, String>,
+    #[serde(default)]
+    target: String,
+    #[serde(default)]
+    images: BTreeMap<String, String>,
+    #[serde(default)]
+    even_only: bool,
     certificate: RawCert,
 }
 
@@ -579,6 +593,9 @@ impl Presentation {
                 name: r.name,
                 kind: r.kind,
                 roles: r.roles,
+                target: r.target,
+                images: r.images,
+                even_only: r.even_only,
                 certificate: Certificate {
                     status: r.certificate.status,
                     reference: r.certificate.reference,
@@ -769,7 +786,23 @@ impl Presentation {
                 .iter()
                 .map(|(k, v)| format!("{k} = {}", q(v)))
                 .collect();
-            o.push_str(&format!("roles = {{ {} }}\n", roles.join(", ")));
+            if !roles.is_empty() {
+                o.push_str(&format!("roles = {{ {} }}\n", roles.join(", ")));
+            }
+            if !r.target.is_empty() {
+                o.push_str(&format!("target = {}\n", q(&r.target)));
+            }
+            if r.even_only {
+                o.push_str("even_only = true\n");
+            }
+            if !r.images.is_empty() {
+                let im: Vec<String> = r
+                    .images
+                    .iter()
+                    .map(|(k, v)| format!("{k} = {}", q(v)))
+                    .collect();
+                o.push_str(&format!("images = {{ {} }}\n", im.join(", ")));
+            }
             let c = &r.certificate;
             o.push_str(&format!("certificate.status = {}\n", q(&c.status)));
             if !c.reference.is_empty() {

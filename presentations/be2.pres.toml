@@ -3,7 +3,7 @@ name = "be2"
 title = "Brundan-Ellis super Kac-Moody 2-category U(g)"
 colours = "cartan"
 objects = "explicit"
-generator_order = ["x", "psi", "cup", "cap", "lcross"]
+generator_order = ["x", "xd", "psi", "psid", "cup", "cupl", "cap", "capl", "lcross"]
 
 [generators.x]
 colours = "a"
@@ -12,6 +12,15 @@ target = "a"
 degree = "(a,a)"
 parity = "p(a)"
 draw = "dot"
+
+[generators.xd]
+colours = "a"
+source = "a*"
+target = "a*"
+degree = "(a,a)"
+parity = "p(a)"
+draw = "dot"
+written = "x"
 
 [generators.psi]
 colours = "a b"
@@ -22,6 +31,15 @@ parity = "p(a) p(b)"
 draw = "crossing"
 aliases = ["ψ", "tau", "τ"]
 
+[generators.psid]
+colours = "a b"
+source = "a* b*"
+target = "b* a*"
+degree = "-(a,b)"
+parity = "p(a) p(b)"
+draw = "crossing"
+written = "psi"
+
 [generators.cup]
 colours = "a"
 source = ""
@@ -31,6 +49,15 @@ parity = 0
 draw = "cup"
 aliases = ["eta", "η"]
 
+[generators.cupl]
+colours = "a"
+source = ""
+target = "a a*"
+degree = "d_a (1 - h(a))"
+parity = "p(a) (h(a) + 1)"
+draw = "cup"
+written = "cup"
+
 [generators.cap]
 colours = "a"
 source = "a a*"
@@ -39,6 +66,15 @@ degree = "d_a (1 - h(a))"
 parity = 0
 draw = "cap"
 aliases = ["eps", "ε"]
+
+[generators.capl]
+colours = "a"
+source = "a* a"
+target = ""
+degree = "d_a (1 + h(a))"
+parity = "p(a) (h(a) + 1)"
+draw = "cap"
+written = "cap"
 
 [generators.lcross]
 colours = "a b"
@@ -147,6 +183,87 @@ colours = "a"
 when = "h(a) <= 0"
 lhs = "lcross_1 cap_3 psi_2 cup_{1,a*} e(a a*)"
 rhs = "-e(a a*)"
+
+[[relations]]
+name = "down-dot"
+colours = "a"
+lhs = "cap_2 x_2 cup_{1,a*} e(a*)"
+rhs = "x_1 e(a*)"
+
+[[relations]]
+name = "down-crossing"
+colours = "a b"
+lhs = "cap_3 cap_4 psi_3 cup_{2,a*} cup_{1,b*} e(a* b*)"
+rhs = "psi_1 e(a* b*)"
+
+[[relations]]
+name = "zigzag-left-up"
+colours = "a"
+lhs = "cap_2 cup_{1,a} e(a)"
+rhs = "(-1)^{p(a) (h(a) + 1)} e(a)"
+
+[[relations]]
+name = "zigzag-left-down"
+colours = "a"
+lhs = "cap_1 cup_{2,a} e(a*)"
+rhs = "e(a*)"
+
+[[relations]]
+name = "lcross-rotation"
+colours = "a b"
+lhs = "cap_1 psi_2 cup_{3,a} e(a* b)"
+rhs = "(-1)^{p(a) p(b) (h(a) + 1)} lcross_1 e(a* b)"
+
+[[relations]]
+name = "cyclic-dot-even"
+colours = "a"
+when = "p(a) = 0"
+lhs = "cap_1 x_2 cup_{2,a} e(a*)"
+rhs = "x_1 e(a*)"
+
+[[relations]]
+name = "cyclic-crossing"
+colours = "a b"
+lhs = "cap_1 cap_2 psi_3 cup_{4,b} cup_{3,a} e(a* b*)"
+rhs = "(-1)^{p(a) p(b) (h(a) + h(b) + 1)} psi_1 e(a* b*)"
+
+[[relations]]
+name = "bubble-left-negative"
+colours = "a"
+ints = { m = "0..h(a) - 2" }
+lhs = "cap_1 x_1^{m} cup_{1,a} e()"
+rhs = "0"
+
+[[relations]]
+name = "bubble-right-negative"
+colours = "a"
+ints = { m = "0..-h(a) - 2" }
+lhs = "cap_1 x_2^{m} cup_{1,a*} e()"
+rhs = "0"
+
+[[relations]]
+name = "bubble-left-one"
+colours = "a"
+when = "h(a) >= 1"
+lhs = "cap_1 x_1^{h(a) - 1} cup_{1,a} e()"
+rhs = "e()"
+
+[[relations]]
+name = "bubble-right-one"
+colours = "a"
+when = "h(a) <= -1"
+lhs = "cap_1 x_2^{-h(a) - 1} cup_{1,a*} e()"
+rhs = "e()"
+
+[[representations]]
+name = "kl-translation"
+kind = "translation"
+target = "kl"
+even_only = true
+images = { cap = "cap_1 e(a a*)", capl = "cap_1 e(a* a)", cup = "cup_{1,a*} e()", cupl = "cup_{1,a} e()", lcross = "cap_1 psi_2 cup_{3,a} e(a* b)", psi = "psi_1 e(a b)", psid = "psi_1 e(a* b*)", x = "x_1 e(a)", xd = "x_1 e(a*)" }
+certificate.status = "literature"
+certificate.reference = "Brundan, On the definition of Kac-Moody 2-category (arXiv:1501.00350), main theorem: for even colours U(g) as defined by Rouquier with these scalars is the Khovanov-Lauda 2-category; the KL normal form then rests on KL III nondegeneracy (categorification-lean KL3 calculusNondeg)"
+certificate.hypotheses = "every colour even; t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1; each relation of this presentation is checked through the translation by the conformance checker"
 
 [[representations]]
 name = "quiver-hecke-basis"

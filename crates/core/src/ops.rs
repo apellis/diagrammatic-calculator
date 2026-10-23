@@ -139,7 +139,8 @@ pub struct Session<'a, R: Ring> {
 }
 
 impl<'a, R: Ring> Session<'a, R> {
-    /// Uses the representation named `strategy`, or the first one the presentation declares.
+    /// Uses the representation named `strategy`, or the first one the presentation declares that
+    /// applies in the context.
     pub fn new(ctx: &'a Context<R>, strategy: Option<&str>) -> Result<Self> {
         let decl = match strategy {
             Some(name) => ctx
@@ -148,12 +149,7 @@ impl<'a, R: Ring> Session<'a, R> {
                 .iter()
                 .find(|d| d.name == name)
                 .ok_or_else(|| Error::invalid(format!("no representation named '{name}'")))?,
-            None => ctx.pres.representations.first().ok_or_else(|| {
-                Error::precondition(format!(
-                    "presentation {} declares no representation",
-                    ctx.pres.name
-                ))
-            })?,
+            None => rep::first_applicable(ctx)?,
         };
         Ok(Session {
             ctx,

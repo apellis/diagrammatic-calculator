@@ -133,7 +133,9 @@ impl RingVisitor for RewriteOp<'_> {
                         i + 1
                     )));
                 }
-                let (lo, up, odd) = ctx
+                let par = ctx.layer_parities(&w);
+                let odd = par[i] && par[i + 1];
+                let (lo, up) = ctx
                     .swap_adjacent(&w.layers[i], &w.layers[i + 1])
                     .ok_or_else(|| {
                         Error::precondition(format!(
@@ -378,25 +380,26 @@ fn reorder<R: Ring>(
         target[c] = place;
     }
     let mut layers = w.layers.clone();
+    let odd = ctx.layer_parities(w);
     let mut rank: Vec<usize> = (0..n).collect();
     let mut sign = false;
     loop {
         let mut moved = false;
         for i in 0..n.saturating_sub(1) {
             if target[rank[i]] > target[rank[i + 1]] {
-                let (lo, up, odd) =
-                    ctx.swap_adjacent(&layers[i], &layers[i + 1])
-                        .ok_or_else(|| {
-                            Error::precondition(format!(
-                                "layers {} and {} share strands: one cannot pass the other",
-                                rank[i] + 1,
-                                rank[i + 1] + 1
-                            ))
-                        })?;
+                let (lo, up) = ctx
+                    .swap_adjacent(&layers[i], &layers[i + 1])
+                    .ok_or_else(|| {
+                        Error::precondition(format!(
+                            "layers {} and {} share strands: one cannot pass the other",
+                            rank[i] + 1,
+                            rank[i + 1] + 1
+                        ))
+                    })?;
                 layers[i] = lo;
                 layers[i + 1] = up;
+                sign ^= odd[rank[i]] && odd[rank[i + 1]];
                 rank.swap(i, i + 1);
-                sign ^= odd;
                 moved = true;
             }
         }
@@ -482,6 +485,7 @@ fn layout_json<R: Ring>(
         })
         .collect();
     let degrees = ctx.layer_degrees(&drawn);
+    let parities = ctx.layer_parities(&drawn);
     let pieces: Vec<Value> = pic
         .pieces
         .iter()
@@ -493,7 +497,7 @@ fn layout_json<R: Ring>(
                 "layer": rank[pc.layer] + 1,
                 "generator": g.name,
                 "draw": g.draw,
-                "odd": ctx.layer_odd(l),
+                "odd": parities[pc.layer],
                 "degree": degrees[pc.layer],
                 "box": [pc.x0, pc.y0, pc.x1, pc.y1],
                 "bottom": pc.bottom,

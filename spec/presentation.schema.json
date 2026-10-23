@@ -333,7 +333,6 @@
       "required": [
         "name",
         "kind",
-        "roles",
         "certificate"
       ],
       "properties": {
@@ -346,8 +345,24 @@
             "nil-coxeter",
             "odd-nil-coxeter",
             "kl-basis",
-            "quiver-hecke-basis"
+            "quiver-hecke-basis",
+            "translation"
           ]
+        },
+        "target": {
+          "description": "For kind translation: the shipped presentation whose first representation decides equality.",
+          "type": "string"
+        },
+        "images": {
+          "description": "For kind translation: each generator's image in the target, a term in the generator's colour variables. Every generator of the target's normal forms must be the image of exactly one generator.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "even_only": {
+          "description": "For kind translation: the translation holds only when every colour is even.",
+          "type": "boolean"
         },
         "roles": {
           "description": "Generator names by role: dot and crossing for klr-polynomial, quiver-hecke-basis and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis.",
