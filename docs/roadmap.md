@@ -24,8 +24,7 @@ Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
   for share e-mails.
 - Before that, ask GitHub Support to remove the pre-rewrite history (master was rewritten on
   23 October to replace a personal e-mail address with the owner's noreply address): the refs of
-  pull requests #1 and #2 and the cached old commits. Delete the branch `wip/odd-normal-form`
-  (old history; its work landed on master).
+  pull requests #1 and #2 and the cached old commits.
 - Make the repository public, with the licence already in place.
 
 Polish (all remaining UX polish happens before going public): none open.
