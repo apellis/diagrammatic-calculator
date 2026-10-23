@@ -2,7 +2,7 @@
 
 import { Show } from 'solid-js';
 
-/** Where a tip to the author goes; no tip link until it is set. */
+/** Where a tip to the creator goes; no tip link until it is set. */
 const TIP_URL: string = 'https://buy.stripe.com/bJe28reyVa2081W86gaEE01';
 
 /** `from`: the route the page was opened from, returned to by Back (the document list if none). */
@@ -22,7 +22,7 @@ export function AboutPage(props: { from?: string }) {
       </dl>
       <p>
         <Show when={TIP_URL}>
-          <a href={TIP_URL} target="_blank" rel="noopener" data-testid="about-tip">Tip the author</a>
+          <a href={TIP_URL} target="_blank" rel="noopener" data-testid="about-tip">Tip the creator</a>
           {' · '}
         </Show>
         <a href="/privacy" target="_blank" rel="noopener" data-testid="about-privacy">Privacy policy</a>
