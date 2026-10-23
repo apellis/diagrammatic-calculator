@@ -32,7 +32,8 @@
             "term",
             "steps",
             "agrees",
-            "basis"
+            "basis",
+            "provenance"
           ],
           "properties": {
             "status": {
@@ -57,6 +58,9 @@
             "basis": {
               "description": "The representation whose basis is the target.",
               "type": "string"
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenanceMap"
             }
           }
         },

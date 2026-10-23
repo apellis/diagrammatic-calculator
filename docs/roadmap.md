@@ -36,8 +36,8 @@ Polish (all remaining UX polish happens before going public):
 
 - AI panel: claims in replies linked to the operation that produced them; comments on a cell as
   instructions to the AI; milestones with key diagrams in the timeline.
-- Occurrence IDs numbered document-wide in creation order (now numbered per summand from the
-  bottom); needs rewrite provenance maps in the core.
+- Occurrence IDs are carried through canvas gestures only: text typed by hand, terms written by
+  the AI and accepted branches give their new summands fresh IDs; strands are numbered per summand.
 - Clicking a summand to see which terms of the definitions produced it.
 - Size diagnostics when a job is stopped at its time limit.
 - Certificate hypotheses and references are printed as raw ASCII from the presentation files

@@ -132,6 +132,11 @@ const cellData = (m: Y.Map<string>): CellData => {
   return { id: m.get('id')!, text: isStr(text) ? text : '' };
 };
 
+/** Occurrence IDs as stored: a letter and a number each. */
+export function validIds(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => isStr(x) && /^[a-z][0-9]+$/.test(x));
+}
+
 export function validVersion(v: unknown): v is Version {
   return isObj(v) && isNum(v.n) && isStr(v.author) && isStr(v.note) && isNum(v.time) && v.snapshot instanceof Uint8Array;
 }
@@ -179,6 +184,12 @@ export class Doc {
   readonly snapshots: Y.Array<Snapshot>;
   /** Layout hints, keyed by cell ID and summand word. */
   readonly hints: Y.Map<Hint>;
+  /**
+   * Generator-occurrence IDs (docs/spec.md, IDs), keyed like hints by cell ID and summand word:
+   * one ID per layer of the word's canonical layering, from the bottom. Gestures carry them through
+   * rewrites by the provenance map; a summand drawn without them gets fresh ones.
+   */
+  readonly occurrences: Y.Map<string[]>;
   /** The AI activity timeline. */
   readonly timeline: Y.Array<TimelineEntry>;
   /** Scratch branches of this document (only the main document has any). */
@@ -195,10 +206,11 @@ export class Doc {
     this.history = ydoc.getArray('history');
     this.snapshots = ydoc.getArray('snapshots');
     this.hints = ydoc.getMap('hints');
+    this.occurrences = ydoc.getMap('occurrences');
     this.timeline = ydoc.getArray('timeline');
     this.branches = ydoc.getMap('branches');
     this.counters = ydoc.getMap('counters');
-    this.undoManager = new Y.UndoManager([this.cells, this.meta, this.hints], {
+    this.undoManager = new Y.UndoManager([this.cells, this.meta, this.hints, this.occurrences], {
       trackedOrigins: new Set([LOCAL, AI]),
       captureTimeout: 0,
     });
@@ -267,6 +279,7 @@ export class Doc {
     count('timeline entries', this.timeline.length, this.timelineList().length);
     count('branches', this.branches.size, this.branchList().length);
     count('layout hints', this.hints.size, [...this.hints.values()].filter(validHint).length);
+    count('occurrence IDs', this.occurrences.size, [...this.occurrences.values()].filter(validIds).length);
     return out;
   }
 
@@ -287,6 +300,8 @@ export class Doc {
       if (pinned.length) d.meta.set('pinned', pinned);
       d.cells.insert(0, cells.map(toMap));
       for (const [k, h] of Object.entries(hints)) d.hints.set(k, h);
+      for (const [k, ids] of this.occurrences.entries()) if (validIds(ids)) d.occurrences.set(k, ids);
+      for (const [k, n] of this.counters.entries()) if (k.startsWith('occ-') && Number.isSafeInteger(n)) d.counters.set(k, n);
       if (snapshots.length) d.snapshots.push(snapshots);
       d.counters.set('nextId', Math.max(this.nextId(), 1 + Math.max(0, ...cells.map((c) => idNumber(c.id)))));
     }, HISTORY);
@@ -381,11 +396,43 @@ export class Doc {
     return id;
   }
 
-  /** `cell.update` */
-  updateCell(id: string, text: string, note = `edit ${id}`) {
+  /**
+   * `cell.update`. `ids`, when given, names the occurrence IDs of the new text's summands (by
+   * word), given a way to make fresh ones; they are stored in the same step.
+   */
+  updateCell(id: string, text: string, note = `edit ${id}`, ids?: (fresh: (letter: string) => string) => Record<string, string[]>) {
     const i = this.index(id);
     if (i < 0 || this.cells.get(i).get('text') === text) return;
-    this.step(note, () => this.cells.get(i).set('text', text));
+    this.step(note, () => {
+      this.cells.get(i).set('text', text);
+      if (ids) for (const [word, list] of Object.entries(ids((l) => this.freshOccurrence(l)))) this.occurrences.set(`${id} ${word}`, list);
+    });
+  }
+
+  /** The occurrence IDs of a summand of a cell, one per canonical layer from the bottom. */
+  occurrenceIds(cellId: string, word: string): string[] | undefined {
+    const ids = this.occurrences.get(`${cellId} ${word}`);
+    return validIds(ids) ? ids : undefined;
+  }
+
+  /**
+   * Gives summands drawn for the first time their occurrence IDs, numbered on from every ID the
+   * document has used. Not an undoable step and not a version: it records what was drawn, as
+   * creation order needs, and changes no input.
+   */
+  assignOccurrences(cellId: string, summands: { word: string; letters: string[] }[]) {
+    if (!summands.length) return;
+    this.ydoc.transact(() => {
+      for (const s of summands) this.occurrences.set(`${cellId} ${s.word}`, s.letters.map((l) => this.freshOccurrence(l)));
+    }, HISTORY);
+  }
+
+  /** The next occurrence ID of a kind (d dot, c crossing, …); undo leaves the counter alone, so an ID is never reused. */
+  private freshOccurrence(letter: string): string {
+    const n = this.counters.get(`occ-${letter}`);
+    const next = Number.isSafeInteger(n) && n! > 0 ? n! : 1;
+    this.counters.set(`occ-${letter}`, next + 1);
+    return `${letter}${next}`;
   }
 
   hint(cellId: string, word: string): Hint | undefined {

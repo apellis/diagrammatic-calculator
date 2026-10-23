@@ -452,3 +452,33 @@ test('occurrence IDs show on hover and with the IDs toggle; Tab and X select sev
   await page.keyboard.press('?');
   await expect(canvas(page).getByRole('dialog', { name: 'Gestures and keys' })).toContainText('X adds');
 });
+
+test('occurrence IDs are numbered through the document and kept through a rewrite', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const ids = async (k: number) => (await frames(page).nth(k).locator('.hit-piece title').allTextContents()).map((t) => t.split(':')[0]).sort();
+  await expect.poll(() => ids(0)).toEqual(['c1', 'd1']);
+  // slide the dot up through the crossing: the slid dot and the crossing keep their IDs
+  await page.keyboard.press('Tab');
+  await expect(frames(page).first().locator('.hit-piece[data-draw="dot"]')).toHaveAttribute('stroke', 'var(--accent)');
+  await page.keyboard.press('ArrowUp');
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Slid the dot up through 1 crossing');
+  await expect(frames(page)).toHaveCount(2);
+  const both = async () => [await ids(0), await ids(1)].filter((x) => x.length);
+  await expect.poll(both).toEqual([['c1', 'd1']]);
+  // removing the crossing keeps the dot's ID; undo brings the crossing back with its own
+  await canvas(page).locator('.hit-piece[data-draw="crossing"]').click();
+  await page.keyboard.press('Delete');
+  await expect.poll(both).toEqual([['d1']]);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(both).toEqual([['c1', 'd1']]);
+  // a dot inserted from the palette is new: the next dot number
+  await canvas(page).locator('.hit-piece[data-draw="dot"]').click();
+  const x = await canvas(page).locator('.palette-bar .gen', { hasText: 'x' }).first().evaluate((b) => [...b.parentElement!.children].indexOf(b) + 1);
+  await page.keyboard.press('i');
+  await page.keyboard.press(String(x));
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Insert');
+  await expect.poll(async () => (await both()).find((x) => x.length === 3)).toEqual(['c1', 'd1', 'd2']);
+});

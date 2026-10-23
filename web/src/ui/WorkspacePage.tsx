@@ -522,11 +522,11 @@ function DocView(props: {
     const p = stateOf(id)?.parsed;
     return p?.kind === 'def' ? `def ${p.defines}` : `watch (${id})`;
   };
-  const writeCanvas = (id: string, term: string, note: string) => {
+  const writeCanvas = (id: string, term: string, note: string, ids?: (fresh: (letter: string) => string) => Record<string, string[]>) => {
     const p = stateOf(id)?.parsed;
     if (!p) return;
     const head = p.kind === 'def' ? `def ${p.defines} := ${term}` : `watch ${term}`;
-    doc.updateCell(id, head + Object.entries(p.options).map(([k, v]) => `  ${k}=${v}`).join(''), `${note} in ${p.defines ?? id}`);
+    doc.updateCell(id, head + Object.entries(p.options).map(([k, v]) => `  ${k}=${v}`).join(''), `${note} in ${p.defines ?? id}`, ids);
   };
 
   /** A new cell at `index`, starting from the template of a cell kind when one is given. */
@@ -813,7 +813,7 @@ function DocView(props: {
             <Canvas doc={doc} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
               term={canvasTerm(id)} expanded={usesDefinitions(id)} generators={described()?.generators ?? []}
               colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word} value={stateOf(id)?.value}
-              onWrite={(t, note) => writeCanvas(id, t, note)} onSelection={props.onSelection} onAsk={props.onAsk}
+              onWrite={(t, note, ids) => writeCanvas(id, t, note, ids)} onSelection={props.onSelection} onAsk={props.onAsk}
               onClose={() => { setCanvas(null); focusCell(id); }} />
           )}
         </Show>

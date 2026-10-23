@@ -427,6 +427,30 @@ one, I then a digit inserts, Delete removes, F fits; `?` lists them. However far
 pan is clamped, again whenever the drawing or the window changes size), and a summand reached
 with the arrow keys is panned into view.
 
+**Occurrence IDs.** A generator occurrence has an ID (`d` dot, `c` crossing, `u` cup, `n` cap,
+`b` bubble, `g` any other piece) numbered through the whole document in the order occurrences are
+made: `d3` is the third dot the document ever had. The engine knows nothing of IDs; it reports
+where occurrences go. Every operation that changes a term (`relation.apply`, `slide`,
+`straighten`, `term.edit`) returns a provenance map: for each summand of the result, in printed
+order, and each layer of its canonical layering, the occurrences `[summand, layer]` of the
+starting term it descends from. A layer outside a rewritten rectangle descends from itself; a
+layer a rule creates continues the pattern's layer of the same generator, matched bottom to top
+(`rewrite::Summand::continues`), so a dot slid through a crossing is the same dot and the crossing
+the same crossing, and a braid move keeps its three crossings. An occurrence may descend into
+several summands (it was split: it keeps its ID in each), a layer may descend from several (equal
+words from different rewrites were added together: it takes the oldest ID its summand does not
+already use), and a layer that descends from nothing was created. Pattern layers left over are
+deleted. `rewrite::Provenance` composes the steps of a chain. The document keeps the IDs in
+`Doc.occurrences`, keyed like the hints by cell and summand word, one ID per canonical layer, with
+one counter per letter that undo leaves alone, so an ID is never reused. A gesture computes the
+new summands' IDs from the provenance map (`src/canvas/occurrences.ts`, for the first 200 summands)
+and stores them in the same undoable step as the new text. A summand drawn without stored IDs
+(text typed by hand, a word the gesture did not reach) gets fresh ones when it is first drawn,
+outside the undo history: drawing records creation order and changes no input. Strands (`s1`,
+`s2`, …) are numbered left to right within each summand: they are not generators and no rewrite
+tracks them. Text edited by hand, terms written by the AI and branches accepted into the document
+do not carry IDs: their new summands get fresh ones.
+
 Inside the canvas, the top bar's ← and the breadcrumb (document name › cell) go back to the
 document, as do the canvas's own "← Back to the document" button and Esc; from the document, ←
 goes to the list of documents.

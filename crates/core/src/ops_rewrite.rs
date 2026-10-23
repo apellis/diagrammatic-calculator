@@ -12,7 +12,7 @@ use crate::lean;
 use crate::ops::{Request, RingVisitor, load_presentation, ring_of, with_ring, with_status};
 use crate::poly::Poly;
 use crate::rep::{self, Evaluator};
-use crate::rewrite::{self, Chain, Layout, Match, Rect, Rule, Step};
+use crate::rewrite::{self, Chain, Layout, Match, Provenance, Rect, Rule, Step};
 use crate::ring::Ring;
 use crate::term::Word;
 use serde_json::{Value, json};
@@ -246,6 +246,8 @@ impl RingVisitor for RewriteOp<'_> {
                 let order = self.r.orders.get(&k).map(Vec::as_slice);
                 let (drawn, flip, rank) = reorder(&ctx, &w, order)?;
                 let mut layers = drawn.layers.clone();
+                // for each drawn layer, its canonical layer in `w` (None: inserted)
+                let mut from: Vec<Option<usize>> = rank.iter().map(|&r| Some(r)).collect();
                 let cut = match self.r.action.as_str() {
                     "insert" => {
                         let h = self.r.below;
@@ -284,6 +286,7 @@ impl RingVisitor for RewriteOp<'_> {
                             ))
                         })?;
                         layers.insert(h, l);
+                        from.insert(h, None);
                         h + 1
                     }
                     "remove" => {
@@ -305,6 +308,7 @@ impl RingVisitor for RewriteOp<'_> {
                         drawn_at.dedup();
                         for &i in drawn_at.iter().rev() {
                             layers.remove(i);
+                            from.remove(i);
                         }
                         drawn_at[0]
                     }
@@ -331,10 +335,11 @@ impl RingVisitor for RewriteOp<'_> {
                         })?;
                     obj = ctx.apply(l, &obj);
                 }
-                let (canon, neg) = ctx.canonical(&Word {
+                let co = ctx.canonical_origin(&Word {
                     source: drawn.source.clone(),
                     layers,
                 });
+                let (canon, neg) = (co.word, co.sign);
                 let mut c2 = c.clone();
                 if flip != neg {
                     c2 = ctx.coeff.neg(&c2);
@@ -342,7 +347,14 @@ impl RingVisitor for RewriteOp<'_> {
                 let removed = ctx.neg(&ctx.monomial_term(&w, c));
                 let added = ctx.monomial_term(&canon, c2);
                 let out = ctx.add(&ctx.add(&t, &removed), &added);
-                Ok(json!({ "term": ctx.fmt_term(&out), "word": ctx.fmt_word(&canon) }))
+                let mut prov = Provenance::new(&t);
+                let origin: Vec<Option<usize>> = co.origin.iter().map(|&j| from[j]).collect();
+                prov.replace(&w, [(&canon, origin)]);
+                Ok(json!({
+                    "term": ctx.fmt_term(&out),
+                    "word": ctx.fmt_word(&canon),
+                    "provenance": provenance_json(&ctx, &out, &prov),
+                }))
             }
             op => Err(Error::invalid(format!(
                 "unknown rewriting operation '{op}'"
@@ -632,7 +644,35 @@ fn chain_json<R: Ring>(ctx: &Context<R>, ch: &Chain<R>) -> Value {
         "start": ctx.fmt_term(&ch.start),
         "term": ctx.fmt_term(&ch.end),
         "steps": ch.steps.iter().map(|s| step_json(ctx, s)).collect::<Vec<_>>(),
+        "provenance": provenance_json(ctx, &ch.end, &Provenance::of_chain(ch)),
     })
+}
+
+/// The provenance map of a result (docs/conventions.md, Provenance): for each summand of `end`,
+/// its word and, for each of its layers (canonical, from the bottom), the generator and the
+/// occurrences `[summand, layer]` (1-based) of the starting term it descends from.
+fn provenance_json<R: Ring>(ctx: &Context<R>, end: &CTerm<R>, p: &Provenance) -> Value {
+    let all = p.of_term(end);
+    let out: Vec<Value> = end
+        .terms
+        .iter()
+        .zip(all)
+        .map(|((w, _), layers)| {
+            let layers: Vec<Value> = w
+                .layers
+                .iter()
+                .zip(layers)
+                .map(|(l, from)| {
+                    json!({
+                        "generator": ctx.pres.generators[l.generator as usize].name,
+                        "from": from.iter().map(|&(k, i)| [k + 1, i + 1]).collect::<Vec<_>>(),
+                    })
+                })
+                .collect();
+            json!({ "word": ctx.fmt_word(w), "layers": layers })
+        })
+        .collect();
+    json!(out)
 }
 
 fn layout<R: Ring>(ctx: &Context<R>, strategy: Option<&str>) -> Result<Layout> {
@@ -747,7 +787,7 @@ fn slide<R: Ring>(
 #[cfg(test)]
 mod tests {
     use crate::ops::call;
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     #[test]
     fn rewriting_operations() {
@@ -889,5 +929,62 @@ mod tests {
             &json!({ "context": "nilhecke nu=2", "term": "x_1", "action": "remove", "layers": [2] }),
         );
         assert_eq!(v["kind"], "invalid", "{v}");
+    }
+    #[test]
+    fn provenance_maps() {
+        // A dot slid through a crossing is the same dot, the crossing the same crossing; the
+        // correction term deletes both.
+        let v = call(
+            "slide",
+            &json!({ "context": "nilhecke nu=2", "term": "psi_1 x_1", "layer": 1, "direction": "up" }),
+        );
+        assert_eq!(v["status"], "ok", "{v}");
+        let p = v["provenance"].as_array().unwrap();
+        let start = v["start"].as_str().unwrap();
+        assert_eq!(start, "psi_1 x_1", "{v}");
+        let slid = p
+            .iter()
+            .find(|s| s["layers"].as_array().unwrap().len() == 2)
+            .unwrap();
+        let from: Vec<(String, Value)> = slid["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| {
+                (
+                    l["generator"].as_str().unwrap().to_string(),
+                    l["from"].clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            from,
+            vec![
+                ("psi".to_string(), json!([[1, 2]])),
+                ("x".to_string(), json!([[1, 1]]))
+            ],
+            "{v}"
+        );
+        // Summands left alone keep their occurrences where they are.
+        let v = call(
+            "relation.apply",
+            &json!({ "context": "nilhecke nu=2", "term": "x_2 + psi_1 psi_1", "summand": 2, "match": 0 }),
+        );
+        assert_eq!(v["term"], "x_2", "{v}");
+        assert_eq!(
+            v["provenance"][0]["layers"][0]["from"],
+            json!([[1, 1]]),
+            "{v}"
+        );
+        // An inserted piece is new; the others keep theirs, in the canonical layering of the result.
+        let v = call(
+            "term.edit",
+            &json!({ "context": "klr type=A2 nu=2i+j", "term": "x_3 e(iji)", "action": "insert",
+                     "generator": "psi", "below": 0, "position": 2 }),
+        );
+        assert_eq!(v["term"], "x_3 psi_2 e(iji)", "{v}");
+        let layers = &v["provenance"][0]["layers"];
+        assert_eq!(layers[0]["from"], json!([]), "{v}");
+        assert_eq!(layers[1]["from"], json!([[1, 1]]), "{v}");
     }
 }

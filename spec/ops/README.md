@@ -29,6 +29,8 @@ Locations in the rewriting operations: a term's summands are numbered from 1 in 
 summand's layers are numbered from 1 at the bottom of its canonical layering, and strands from 1
 at the left. A rectangle names its first and last layer and strand. `term.layout` can draw a summand's layers in
 another order reachable by interchanges; the drawing's coefficient then carries the Koszul sign.
+The operations that change a term return its provenance map (`common.schema.json`,
+`provenanceMap`): where each generator occurrence of the result came from.
 
 The other operations of the specification (workspace editing, rewriting, solving, graded linear
 algebra, history, export, AI) get their schemas in the phase that implements them, so a schema

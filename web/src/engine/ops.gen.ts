@@ -13,6 +13,19 @@ export type Context = string;
  */
 export type Step = Match & Step1;
 /**
+ * Where each generator occurrence of a result came from (docs/conventions.md, Provenance): for each summand of the result, in printed order, its word and, for each of its layers (canonical, from the bottom), the generator and the occurrences [summand, layer] (1-based) of the starting term it descends from. An empty list: the layer was created. An occurrence listed under several summands was split; one listed nowhere was deleted.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "provenanceMap".
+ */
+export type ProvenanceMap = {
+  word: string;
+  layers: {
+    generator: string;
+    from: [number, number][];
+  }[];
+}[];
+/**
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "ChainFindRequest".
  */
@@ -178,6 +191,7 @@ export type RelationApplyResponse =
       start: string;
       term: string;
       steps: Step[];
+      provenance: ProvenanceMap;
     }
   | OpError;
 /**
@@ -235,6 +249,7 @@ export type SlideResponse =
       start: string;
       term: string;
       steps: Step[];
+      provenance: ProvenanceMap;
     }
   | OpError;
 /**
@@ -260,6 +275,7 @@ export type StraightenResponse =
        * The representation whose basis is the target.
        */
       basis: string;
+      provenance: ProvenanceMap;
     }
   | OpError;
 /**
@@ -279,6 +295,7 @@ export type TermEditResponse =
        * The edited summand's word.
        */
       word: string;
+      provenance: ProvenanceMap;
     }
   | OpError;
 /**
@@ -366,6 +383,7 @@ export interface Operations {
   step?: Step;
   chain?: Chain;
   summand?: Summand;
+  provenanceMap?: ProvenanceMap;
   ChainFindRequest?: ChainFindRequest;
   ChainFindResponse?: ChainFindResponse;
   CheckRequest?: CheckRequest;
@@ -561,6 +579,7 @@ export interface Chain {
    */
   term: string;
   steps: Step[];
+  provenance: ProvenanceMap;
 }
 /**
  * One summand of a term for display. The term's text is the summands' texts joined with their signs; the drawing shows the word in its canonical layering, and 'negative' and 'coefficient' are the sign and absolute coefficient that go with the drawing (they can differ in sign from 'text' when odd generators are written in another order).

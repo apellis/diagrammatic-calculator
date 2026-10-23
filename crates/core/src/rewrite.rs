@@ -440,6 +440,11 @@ pub struct Summand<R: Ring> {
     /// Provenance: for each layer of `word`, its index in the rewritten word, or `None` if the
     /// rule created it.
     pub origin: Vec<Option<usize>>,
+    /// For a layer the rule created, the layer of the rewritten word whose occurrence it
+    /// continues: the pattern's layers of the same generator, matched bottom to top in order (a
+    /// dot slid through a crossing is the same dot, the crossing the same crossing). `None` for
+    /// a layer outside the pattern (see `origin`) and for a created layer left over.
+    pub continues: Vec<Option<usize>>,
 }
 
 /// The words the rectangle of a match turns into.
@@ -450,15 +455,24 @@ pub fn apply_match<R: Ring>(ctx: &Context<R>, rule: &Rule<R>, m: &Match) -> Vec<
     for (rw, rc) in &rule.replacement.terms {
         let mut layers = mv.layers[..m.at].to_vec();
         let mut origin: Vec<Option<usize>> = m.order[..m.at].iter().map(|&i| Some(i)).collect();
+        let mut continues: Vec<Option<usize>> = vec![None; m.at];
+        let mut used = vec![false; k];
         for l in &rw.layers {
             layers.push(Layer {
                 pos: l.pos + m.window as u16,
                 ..l.clone()
             });
             origin.push(None);
+            let heir =
+                (0..k).find(|&j| !used[j] && rule.pattern.layers[j].generator == l.generator);
+            if let Some(j) = heir {
+                used[j] = true;
+            }
+            continues.push(heir.map(|j| m.order[m.at + j]));
         }
         layers.extend_from_slice(&mv.layers[m.at + k..]);
         origin.extend(m.order[m.at + k..].iter().map(|&i| Some(i)));
+        continues.extend(std::iter::repeat_n(None, mv.layers.len() - m.at - k));
         let raw = Word {
             source: mv.source.clone(),
             layers,
@@ -471,6 +485,7 @@ pub fn apply_match<R: Ring>(ctx: &Context<R>, rule: &Rule<R>, m: &Match) -> Vec<
             sign: c.sign,
             word: c.word,
             origin: c.origin.iter().map(|&j| origin[j]).collect(),
+            continues: c.origin.iter().map(|&j| continues[j]).collect(),
         });
     }
     out
@@ -527,6 +542,100 @@ impl<R: Ring> Chain<R> {
             out.push(t);
         }
         out
+    }
+}
+
+/// Where the generator occurrences of a term came from, through a sequence of rewrites of its
+/// words: for each word of the current term and each of its layers, the occurrences of the
+/// starting term (summand, layer, both 0-based) it descends from. A layer descends from an
+/// occurrence when it is that layer untouched, or a created layer continuing it (see
+/// `Summand::continues`). An occurrence can descend into several summands (it was split), and a
+/// layer from several occurrences (equal words from different rewrites were added together); a
+/// layer descending from none was created.
+#[derive(Clone, Debug, Default)]
+pub struct Provenance {
+    map: BTreeMap<Word, Vec<BTreeSet<(usize, usize)>>>,
+}
+
+impl Provenance {
+    /// Every occurrence of `start` descends from itself.
+    pub fn new<C>(start: &Term<C>) -> Self {
+        let map = start
+            .terms
+            .iter()
+            .enumerate()
+            .map(|(k, (w, _))| {
+                let layers = (0..w.layers.len())
+                    .map(|l| BTreeSet::from([(k, l)]))
+                    .collect();
+                (w.clone(), layers)
+            })
+            .collect();
+        Provenance { map }
+    }
+
+    /// The word `old` is replaced by the words `new`, each with the layer of `old` that each of
+    /// its layers comes from (`None`: created).
+    pub fn replace<'a>(
+        &mut self,
+        old: &Word,
+        new: impl IntoIterator<Item = (&'a Word, Vec<Option<usize>>)>,
+    ) {
+        let from = self
+            .map
+            .remove(old)
+            .unwrap_or_else(|| vec![BTreeSet::new(); old.layers.len()]);
+        for (w, origin) in new {
+            let p: Vec<BTreeSet<(usize, usize)>> = origin
+                .iter()
+                .map(|o| o.and_then(|i| from.get(i).cloned()).unwrap_or_default())
+                .collect();
+            match self.map.get_mut(w) {
+                Some(cur) => {
+                    for (a, b) in cur.iter_mut().zip(p) {
+                        a.extend(b);
+                    }
+                }
+                None => {
+                    self.map.insert(w.clone(), p);
+                }
+            }
+        }
+    }
+
+    /// Records a rewrite step.
+    pub fn step<R: Ring>(&mut self, st: &Step<R>) {
+        let new = st.summands.iter().map(|s| {
+            let o = s
+                .origin
+                .iter()
+                .zip(&s.continues)
+                .map(|(a, b)| a.or(*b))
+                .collect();
+            (&s.word, o)
+        });
+        self.replace(&st.word, new);
+    }
+
+    /// Provenance through a whole chain.
+    pub fn of_chain<R: Ring>(ch: &Chain<R>) -> Self {
+        let mut p = Provenance::new(&ch.start);
+        for st in &ch.steps {
+            p.step(st);
+        }
+        p
+    }
+
+    /// The occurrences a layer of each word of `end` descends from, sorted, in the order of
+    /// `end`'s words.
+    pub fn of_term<C>(&self, end: &Term<C>) -> Vec<Vec<Vec<(usize, usize)>>> {
+        end.terms
+            .iter()
+            .map(|(w, _)| match self.map.get(w) {
+                Some(v) => v.iter().map(|s| s.iter().copied().collect()).collect(),
+                None => vec![Vec::new(); w.layers.len()],
+            })
+            .collect()
     }
 }
 

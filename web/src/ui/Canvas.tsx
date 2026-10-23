@@ -18,6 +18,7 @@ import {
   along, arrowPoints, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
   offsetFor, onStrand, path, piece, piecesIn, pullMove, rectangle, sameOrder, track, type Layout, type Line, type Piece, type Rect,
 } from '../canvas/geometry';
+import { carry, fits, idMap, lettersOf, type ProvenanceSummand } from '../canvas/occurrences';
 
 export interface Generator {
   name: string;
@@ -80,7 +81,8 @@ export interface CanvasProps {
   colours: string[];
   hintsVersion: number;
   initialWord?: string;
-  onWrite: (term: string, note: string) => void;
+  /** Writes the term; `ids` gives the occurrence IDs of its summands, stored in the same step. */
+  onWrite: (term: string, note: string, ids?: (fresh: (letter: string) => string) => Record<string, string[]>) => void;
   onClose: () => void;
   onSelection?: (s: Selection | null) => void;
   onAsk?: () => void;
@@ -113,6 +115,18 @@ export function Canvas(props: CanvasProps) {
   const [cursor, setCursor] = createSignal<{ k: number; layer: number } | null>(null);
   /** Occurrence IDs (d1, c2, s1, …) written beside the pieces and strands. */
   const [labels, setLabels] = createSignal(false);
+  /** Bumped when the document's occurrence IDs change, so the IDs drawn follow them. */
+  const [occVersion, setOccVersion] = createSignal(0);
+  const onOccurrences = () => setOccVersion(occVersion() + 1);
+  props.doc.occurrences.observe(onOccurrences);
+  onCleanup(() => props.doc.occurrences.unobserve(onOccurrences));
+  /** The occurrence IDs of a drawn summand, by canonical layer. */
+  const idsOf = (l?: Layout): Map<number, string> => {
+    occVersion();
+    if (!l) return new Map();
+    const ids = props.doc.occurrenceIds(props.cellId, l.word);
+    return fits(ids, lettersOf(l)) ? idMap(ids) : new Map();
+  };
   const [fresh, setFresh] = createSignal(new Set<string>());
   const [menu, setMenu] = createSignal<{ summand: number; rect?: Rect; matches: Match[]; previews: (Layout[] | null)[] } | null>(null);
   const [inserting, setInserting] = createSignal(false);
@@ -194,6 +208,11 @@ export function Canvas(props: CanvasProps) {
       }
       if (sel().summand >= summands.length) setSel({ summand: 0, layers: [] });
     });
+    // summands drawn for the first time get their occurrence IDs
+    const missing = summands
+      .map((l) => ({ word: l.word, letters: lettersOf(l) }))
+      .filter((x) => !fits(props.doc.occurrenceIds(props.cellId, x.word), x.letters));
+    props.doc.assignOccurrences(props.cellId, missing.filter((x, i) => missing.findIndex((y) => y.word === x.word) === i));
   }));
 
   createEffect(() => {
@@ -225,13 +244,23 @@ export function Canvas(props: CanvasProps) {
       setBusy(false);
     }
   };
-  /** Writes a new term to the cell as one step, outlining the summands it adds. */
-  const write = (term: string, note: string) => {
+  /**
+   * Writes a new term to the cell as one step, outlining the summands it adds. Its provenance map
+   * carries the occurrence IDs of the summands drawn now to the new summands.
+   */
+  const write = (term: string, note: string, provenance?: ProvenanceSummand[]) => {
     changed = true;
-    pending = { term: props.term, words: new Set(layouts().map((l) => l.word)) };
+    const before = layouts();
+    pending = { term: props.term, words: new Set(before.map((l) => l.word)) };
     setCursor(null);
     setSel({ summand: sel().summand, layers: [] });
-    props.onWrite(term, note);
+    const old = (k: number) => {
+      const l = before[k - 1];
+      const ids = l && props.doc.occurrenceIds(props.cellId, l.word);
+      return l && fits(ids, lettersOf(l)) ? ids : undefined;
+    };
+    const draw = (name: string) => props.generators.find((g) => g.name === name)?.draw;
+    props.onWrite(term, note, provenance && ((fresh) => carry(provenance, old, draw, fresh)));
   };
   const terms = (t: string) => {
     const n = t === '0' ? 0 : t.split(/ [+-] /).length;
@@ -245,7 +274,7 @@ export function Canvas(props: CanvasProps) {
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
       if (!r.steps.length) return say('Nothing to slide through there.');
-      write(r.term, `slide a dot ${direction} through ${r.steps.length} crossing${r.steps.length > 1 ? 's' : ''}`);
+      write(r.term, `slide a dot ${direction} through ${r.steps.length} crossing${r.steps.length > 1 ? 's' : ''}`, r.provenance);
       say(`Slid the dot ${direction} through ${r.steps.length} crossing${r.steps.length > 1 ? 's' : ''} by ${[...new Set(r.steps.map((s) => s.relation))].join(', ')}; the term now has ${terms(r.term)}.`);
     });
 
@@ -314,7 +343,7 @@ export function Canvas(props: CanvasProps) {
       if (o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
-      write(r.term, `apply ${match.relation}`);
+      write(r.term, `apply ${match.relation}`, r.provenance);
       say(`Applied ${match.relation} (${match.direction})${match.sign === -1 ? ', with sign −1 from interchanges' : ''}; the term now has ${terms(r.term)}.`);
     });
 
@@ -327,7 +356,7 @@ export function Canvas(props: CanvasProps) {
       if (o.status !== 'done') return;
       const r = o.response;
       if (r.status !== 'ok') return say(r.message);
-      write(r.term, note);
+      write(r.term, note, r.provenance);
       say(`${note[0].toUpperCase()}${note.slice(1)}: this changes the element, unlike a rewrite.`);
     });
 
@@ -702,7 +731,7 @@ export function Canvas(props: CanvasProps) {
     // a kept selection stays as it is while the ring moves on
     if (!s.kept) setSel({ summand: next.k, layers: [next.layer] });
     else {
-      const id = occurrenceIds(layouts()[next.k]).get(next.layer);
+      const id = idsOf(layouts()[next.k]).get(next.layer);
       say(`On ${id ?? 'a piece'}${s.summand === next.k && s.layers.includes(next.layer) ? ' (selected)' : ''}: X adds or removes it.`);
     }
   };
@@ -899,7 +928,7 @@ export function Canvas(props: CanvasProps) {
       case 'L':
         handled();
         setLabels(!labels());
-        return say(labels() ? 'Occurrence IDs shown: d dots, c crossings, u cups, n caps, g other pieces, s strands, numbered from the bottom of each summand.' : 'Occurrence IDs hidden; hovering a piece still shows its ID.');
+        return say(labels() ? 'Occurrence IDs shown: d dots, c crossings, u cups, n caps, g other pieces, s strands, numbered through the document in the order they were made (strands left to right in each summand).' : 'Occurrence IDs hidden; hovering a piece still shows its ID.');
       case '+':
       case '=':
         handled();
@@ -991,7 +1020,7 @@ export function Canvas(props: CanvasProps) {
     const strandColour = (s?: number) => (s === undefined ? 'currentColor' : colourOf(l().strands[s]?.colour ?? ''));
     const strandDash = (s?: number) => (s === undefined ? undefined : dashOf(l().strands[s]?.colour ?? ''));
     const vb = () => `${-pad} ${-(l().height + pad)} ${l().width + 2 * pad} ${l().height + 2 * pad + 0.5}`;
-    const ids = createMemo(() => occurrenceIds(l()));
+    const ids = createMemo(() => idsOf(l()));
     /** The piece the keyboard ring is on, when it is in this summand and not just the selection. */
     const ring = () => {
       const c = cursor();
@@ -1326,25 +1355,6 @@ export function Canvas(props: CanvasProps) {
   );
 }
 
-/** The letter of an occurrence ID by how a piece is drawn (docs/spec.md, IDs); g for any other piece. */
-const OCCURRENCE: Record<string, string> = { dot: 'd', crossing: 'c', cup: 'u', cap: 'n', bubble: 'b' };
-
-/**
- * Occurrence IDs of a summand's pieces by layer: the letter of the piece's kind and its number
- * among the pieces of that kind, counted from the bottom of the canonical layering (d1, d2, c1).
- */
-export function occurrenceIds(l?: Layout): Map<number, string> {
-  const out = new Map<number, string>();
-  if (!l) return out;
-  const count: Record<string, number> = {};
-  for (const pc of [...l.pieces].sort((a, b) => a.layer - b.layer)) {
-    const k = OCCURRENCE[pc.draw] ?? 'g';
-    count[k] = (count[k] ?? 0) + 1;
-    out.set(pc.layer, `${k}${count[k]}`);
-  }
-  return out;
-}
-
 /** A label as typeset: a minus sign rather than a hyphen before a number. */
 const minus = (t?: string) => t?.replace(/(^|[^A-Za-z0-9_])-(?=[0-9])/g, '$1−');
 
@@ -1376,7 +1386,7 @@ const GESTURES: [string, string, string][] = [
   ['Move between summands', 'click a summand', '← →'],
   ['Pan', 'space-drag, scroll', '⇧ arrows'],
   ['Zoom', `${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
-  ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, g other piece, s strand; numbered from the bottom of each summand)', 'hover a piece; IDs', 'L'],
+  ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, b bubble, g other piece: numbered through the document in the order they were made, kept through rewrites; s strand: left to right in each summand)', 'hover a piece; IDs', 'L'],
   ['Ask the AI about the selection', '', keysOf('ask')],
   ['Leave the canvas for the toolbar and palette', 'click', '⇧Tab from the first piece'],
   ['Back to the document', '← Back', 'Esc (after clearing the selection)'],

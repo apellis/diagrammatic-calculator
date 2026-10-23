@@ -47,7 +47,8 @@
             "status",
             "start",
             "term",
-            "steps"
+            "steps",
+            "provenance"
           ],
           "properties": {
             "status": {
@@ -64,6 +65,9 @@
               "items": {
                 "$ref": "common.schema.json#/$defs/step"
               }
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenanceMap"
             }
           }
         },

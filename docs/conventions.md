@@ -255,8 +255,13 @@ diagrams.
   An occurrence of a pattern may be spread through the word: the interchange moves that bring it
   together are listed (each by the lower of the two exchanged layers) with their Koszul sign, and
   the rectangle is where the pattern sits after them.
-- **Provenance.** Each result word lists, for each of its layers, the layer of the rewritten word
-  it came from, or nothing for a layer the rule created.
+- **Provenance.** Each step's result word lists, for each of its layers, the layer of the
+  rewritten word it came from, or nothing for a layer the rule created. The provenance map of a
+  whole operation lists, for each summand of the result and each of its layers, the occurrences
+  `[summand, layer]` (1-based, summands in printed order) of the starting term it descends from:
+  itself when untouched; for a layer a rule creates, the pattern's layer of the same generator,
+  matched bottom to top in order (a slid dot is the same dot); none for a new layer. Occurrence
+  IDs follow this map (`docs/design.md`, Occurrence IDs).
 - **Straightening** rewrites to the basis of the presentation's first representation that has
   one (KLR: `ψ_ŵ x^a`; `ONH_n`: `x^a ψ_ŵ`), working upwards one layer at a time. Dots move through
   crossings by the dot slides; crossings are brought to the canonical reduced word by braid moves,

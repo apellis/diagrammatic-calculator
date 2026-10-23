@@ -322,7 +322,8 @@
       "required": [
         "start",
         "term",
-        "steps"
+        "steps",
+        "provenance"
       ],
       "properties": {
         "start": {
@@ -337,6 +338,9 @@
           "items": {
             "$ref": "#/$defs/step"
           }
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenanceMap"
         }
       }
     },
@@ -386,6 +390,49 @@
         "svg": {
           "description": "The word drawn as a standalone SVG.",
           "type": "string"
+        }
+      }
+    },
+    "provenanceMap": {
+      "description": "Where each generator occurrence of a result came from (docs/conventions.md, Provenance): for each summand of the result, in printed order, its word and, for each of its layers (canonical, from the bottom), the generator and the occurrences [summand, layer] (1-based) of the starting term it descends from. An empty list: the layer was created. An occurrence listed under several summands was split; one listed nowhere was deleted.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "word",
+          "layers"
+        ],
+        "properties": {
+          "word": {
+            "type": "string"
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "generator",
+                "from"
+              ],
+              "properties": {
+                "generator": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

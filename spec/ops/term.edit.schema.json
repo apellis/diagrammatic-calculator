@@ -72,7 +72,8 @@
           "required": [
             "status",
             "term",
-            "word"
+            "word",
+            "provenance"
           ],
           "properties": {
             "status": {
@@ -84,6 +85,9 @@
             "word": {
               "description": "The edited summand's word.",
               "type": "string"
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenanceMap"
             }
           }
         },
