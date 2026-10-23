@@ -302,7 +302,9 @@ mod tests {
         assert_eq!(k.div_exact(&cube, &k.mul(&tm1, &tm1)).unwrap(), tm1);
     }
 
-    /// Plain Gauss-Jordan on a 5 x 5 matrix of degree-4 polynomials: unrelated denominators.
+    /// Plain Gauss-Jordan on a 5 x 5 matrix of degree-4 polynomials: unrelated denominators. Every
+    /// intermediate entry is a ratio of minors, of degree at most 20, so reduced fractions stay
+    /// that small (a size bound rather than a time limit, which a busy runner can miss).
     #[test]
     fn elimination_stays_small() {
         let k = RationalFunctions::new(Rationals, "q");
@@ -321,7 +323,7 @@ mod tests {
                     .collect()
             })
             .collect();
-        let start = std::time::Instant::now();
+        let mut largest = 0;
         for c in 0..5 {
             let Some(p) = (c..5).find(|&r| !k.is_zero(&m[r][c])) else {
                 continue;
@@ -340,7 +342,10 @@ mod tests {
                         .collect();
                 }
             }
+            for x in m.iter().flatten() {
+                largest = largest.max(x.num.len()).max(x.den.len());
+            }
         }
-        assert!(start.elapsed().as_secs() < 5, "{:?}", start.elapsed());
+        assert!(largest <= 21, "an entry of degree {}", largest - 1);
     }
 }
