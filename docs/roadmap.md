@@ -47,29 +47,10 @@ Certificates:
 
 ## Phase 7: live co-editing
 
-Deliverables and gate as in the spec. Decided (Alex, 23 October): collaborators do not share
-computed results (each browser computes its own; the cache key makes them identical), and edit
-history and undo live outside the document as session context.
-
-Structure to change first:
-
-- History outside the live document: today `Y.Doc({gc: false})` plus a snapshot per step makes the
-  document grow quadratically (13.7 MB after 3,000 steps).
-- Cells keyed by ID, not text, and each cell's text a `Y.Text` bound to the editor, so a
-  collaborator's change does not remount an open editor or lose a draft.
-- Authors as stable user IDs with name and colour, shared with presence; "you" computed when
-  displayed.
-- Ownership of branches (per person, or shared with an owner badge) and AI proposals stored in the
-  document, so collaborators see them.
-- Room in the top bar for avatars and sync state (an overflow menu).
-- Remote edits: debounce recomputation, let running jobs finish, cancel cooperatively at row
-  boundaries instead of terminating the worker; batch cache lookups.
-
-Security requirements for the Durable Object relay (from the security review): authenticate the
-WebSocket upgrade (session cookie or link token, `Origin` check), filter writes by role, size and
-rate limits, validate each update on a scratch copy, presence rendered as text with names from the
-server, revocation that closes or downgrades open sockets at once, the Durable Object as the only
-writer of the snapshot, role re-checked after hibernation, no content in logs.
+Specified, with its plan and the decisions it needs from Alex, in `docs/phase7.md`. The phase 7
+items found by the reviews of 23 October (history out of the document, cells keyed by ID and
+edited as `Y.Text`, authors, branch and proposal ownership, the top bar, evaluation under remote
+edits, the room's security rules) are all there.
 
 ## Later
 
