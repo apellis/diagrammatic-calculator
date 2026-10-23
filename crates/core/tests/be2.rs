@@ -64,6 +64,28 @@ fn even_colours_use_the_basis_normal_form_with_a_lean_certificate() {
 }
 
 #[test]
+fn the_quiver_hecke_basis_is_lean_certified_for_even_colours_only() {
+    let cert = |spec: &str| {
+        let c = be2(spec);
+        let decl = c
+            .pres
+            .representations
+            .iter()
+            .find(|d| d.name == "quiver-hecke-basis")
+            .unwrap();
+        let ev = rep::evaluator(&c, decl).unwrap();
+        ev.provenance().certificate.clone()
+    };
+    let even = cert("be2 type=A2 mu=i");
+    assert_eq!(even.status, "lean");
+    assert!(
+        even.reference
+            .contains("EvenBridge.nondegeneracyConjecture_of_isEven")
+    );
+    assert_eq!(cert("be2 type=B2 odd=j mu=i").status, "conditional");
+}
+
+#[test]
 fn odd_colours_use_the_conditional_basis_normal_form() {
     let c = be2("be2 type=A1 odd=i mu=-1");
     // the translation holds for even colours only

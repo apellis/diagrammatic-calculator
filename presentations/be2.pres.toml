@@ -283,6 +283,9 @@ roles = { crossing = "psi", dot = "x" }
 certificate.status = "conditional"
 certificate.reference = "odd-lean: QuiverHecke.span_nf, QuiverHecke.linearIndependent_nf (Kang-Kashiwara-Tsuchioka, arXiv:1107.1039v2, Corollary 3.15)"
 certificate.hypotheses = "upward diagrams only; t_ij = 1 and s_ij^pq = 0. Normal forms are a basis of the quiver Hecke supercategory, so equal normal forms are equal in U(g). That distinct normal forms differ in U(g) follows from Brundan-Ellis's Nondegeneracy Conjecture (arXiv:1701.04133v2, Section 8), open for odd colours and proved for even data (odd-lean: EvenBridge.nondegeneracyConjecture_of_isEven)"
+even_certificate.status = "lean"
+even_certificate.reference = "odd-lean: EvenBridge.nondegeneracyConjecture_of_isEven (Brundan-Ellis, Super Kac-Moody 2-categories, arXiv:1701.04133v2, the Nondegeneracy Conjecture of Section 8 for purely even data), with QuiverHecke.span_nf (Kang-Kashiwara-Tsuchioka, arXiv:1107.1039v2, Corollary 3.15)"
+even_certificate.hypotheses = "upward diagrams only; every colour even; t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1; a symmetrizable Cartan datum with finitely many colours; any commutative ground ring. Every step is a relation of U(g), so equal normal forms are equal in U(g). The normal forms psi_w x^a e(i) (one reduced word per permutation, the dots at the bottom of the strands) are the decorated matchings of Theorem 8.1 between upward words, with the distinguished points at the bottom and no bubbles; the theorem makes the decorated matchings a basis over SYM, so distinct normal forms differ in U(g). That identification is read off the definitions, not proved in Lean"
 
 [lean]
 encoding = "skm-cl"

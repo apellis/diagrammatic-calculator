@@ -85,8 +85,13 @@ Corollary 3.15; odd-lean `QuiverHecke.span_nf`, `QuiverHecke.linearIndependent_n
 independent in `U(g)` is BE2's Nondegeneracy Conjecture, open for odd colours and proved for even
 data (odd-lean `EvenBridge.nondegeneracyConjecture_of_isEven`), so the certificate is `conditional`
 (Alex's choice): a result "equal" is proven, a result "different" for odd colours rests on the
-conjecture and says so. Only upward diagrams with `t_ij = 1` and `s_ij^pq = 0` are covered;
-anything else is refused with a reason.
+conjecture and says so. When every colour is even the representation carries `even_certificate`,
+status `lean`: the normal forms `ψ_ŵ x^a e(i)` are decorated matchings of Theorem 8.1 between
+upward words (one reduced word per permutation, distinguished points at the bottom of the strands,
+no bubbles), and the theorem for even data makes the decorated matchings a basis over `SYM`, so the
+normal forms stay independent in `U(g)`. That identification is read off the two definitions, as
+for `skm-basis`, and is said in the certificate. Only upward diagrams with `t_ij = 1` and
+`s_ij^pq = 0` are covered; anything else is refused with a reason.
 
 ### Translations (`rep/translate`, representation kind `translation`)
 

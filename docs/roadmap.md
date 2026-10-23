@@ -39,12 +39,15 @@ Polish (all remaining UX polish happens before going public):
 
 Certificates:
 
-- `kl`: the `basis` and `kl-evaluation` certificates say `literature`, though categorification-lean
-  proves the basis theorem (`KL3.Diagram.calculusNondeg`, `KL3.Diagram.canonicalBasis`, every
-  commutative ring, finitely many colours). Check that the calculator's spanning set is the one
-  `canonicalBasis` is about, then change the status to `lean`.
-- `be2`, `quiver-hecke-basis` for even colours: likewise check that its ψ_ŵ x^a basis is one the
-  even-data theorem covers before giving it `lean`.
+- `kl`: the `basis` and `kl-evaluation` certificates stay `literature`. categorification-lean's
+  `KL3.Diagram.canonicalBasis` is the family `IntegralSpanning.twoB`: a canonical chord diagram on
+  the word `rd s ++ t` (from the empty word), dots at the arcs' left ends, bubbles composed on, and
+  the lower endpoints bent back down by nested caps. The calculator's spanning set
+  (`rep/kl/basis.rs`) is drawn differently: caps at the bottom, a reduced word of the through
+  strands, cups at the top, a dot at each arc's left end, bubbles at the bottom right. The two are
+  indexed alike and plausibly differ by lower terms, but that is not proved. `lean` needs one of:
+  the calculator's set made literally `twoB`, a proof that the change of basis is unitriangular,
+  or a Lean proof that the calculator's evaluation is well defined on KL's Hom spaces.
 
 ## Phase 7: live co-editing
 
