@@ -102,6 +102,26 @@ export function DocList() {
           Exact computations in diagrammatic algebras. Documents are saved to your account and kept in this browser.
         </Show>
       </p>
+      <details class="storage-help" data-testid="storage-help">
+        <summary>Where documents are kept</summary>
+        <ul>
+          <li>Every document has a working copy in this browser, so it opens at once and works offline.</li>
+          <li>
+            When you are signed in, each of your documents also has a copy in your account. The two copies are merged edit by edit, so
+            neither overwrites the other: when the document list opens, shortly after each change, and every minute while a document
+            is open. Other devices you sign in on get the same documents.
+          </li>
+          <li>
+            Documents made while signed out are saved to your account the next time you sign in. The “Saved … from this browser”
+            notice appears only when that happens; a visit with nothing new to upload shows no notice.
+          </li>
+          <li>
+            Signing out, or removing a document from this browser, keeps the account copy. Deleting a document you own removes both
+            copies.
+          </li>
+          <li>Without an account, documents live only in this browser; export them to keep a copy elsewhere.</li>
+        </ul>
+      </details>
       <Show when={notice()}>
         <div class="banner info" data-testid="notice" onClick={() => setNotice('')}>{notice()}</div>
       </Show>

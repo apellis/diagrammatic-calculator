@@ -179,6 +179,10 @@ kbd { font-size: 12px; border: 1px solid var(--border); border-bottom-width: 2px
 /* document list */
 .doclist { max-width: 860px; margin: 0 auto; padding: 28px 18px; }
 .doclist h1 { font-size: 22px; margin: 0 0 4px; }
+.storage-help { margin: 4px 0 10px; font-size: 13px; color: var(--muted); }
+.storage-help summary { cursor: pointer; }
+.storage-help ul { margin: 6px 0 0; padding-left: 20px; }
+.storage-help li { margin: 3px 0; }
 .doclist table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .doclist td, .doclist th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .doclist th { font-weight: 500; color: var(--muted); font-size: 12.5px; }
