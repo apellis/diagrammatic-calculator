@@ -118,6 +118,45 @@
             "type": "string"
           }
         },
+        "derived": {
+          "description": "skm-cl: the layers of each generator the Lean library defines rather than takes, as cases tried in order. A case applies when its condition holds at the region right of the generator; each layer is [left strands, shape, right strands] with an optional repeat count, in the generator's colour variables and h(a).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "layers"
+              ],
+              "properties": {
+                "when": {
+                  "description": "A condition on h(a), p(a); empty for every region.",
+                  "type": "string"
+                },
+                "sign": {
+                  "description": "An integer expression; the expansion carries (-1) to this power.",
+                  "type": "string"
+                },
+                "negate": {
+                  "description": "The expansion carries a further minus sign.",
+                  "type": "boolean"
+                },
+                "layers": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 3,
+                    "maxItems": 4
+                  }
+                }
+              }
+            }
+          }
+        },
         "relations": {
           "type": "object",
           "additionalProperties": {

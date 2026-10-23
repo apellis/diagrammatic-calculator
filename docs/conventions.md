@@ -265,6 +265,22 @@ proof evaluates from the parity hypotheses. A relation used right to left is pro
 instance left to right. Only integer coefficients are exported, and in `kl3-dg` only even
 generators; anything else is refused with a reason.
 
+In `skm-cl` the generators odd-lean defines rather than takes (`xd`, `psid`, `cupl`, `capl`) are
+written out by the `[[lean.derived.NAME]]` cases of the `[lean]` table: layers in the generator's
+colours, one case for each range of `h(a)` at the region right of the generator (the leftward cup
+and cap, Brundan–Ellis (2.10), (2.11), with `c_{λ,i} = 1`), and a sign the expansion carries. A
+step with such a generator states its relation instance at the weight of the region it is applied
+at, so every weight case is a separate instance with its own hypotheses `D.h c ν = n`. The
+leftward cup and cap of odd-lean carry the scalars `c_{λ,i}`; they cancel in each relation, and a
+theorem using them takes a family `cs : CScalars Sc` as a hypothesis. The hand-written
+`DiagcalcSupport/SKMLeft.lean` proves the relation instances from odd-lean, case by case:
+`zigzag-left-up`, `zigzag-left-down` from Proposition 6.2 (`eq_6_6_a`, `eq_6_6_b`), the bubble
+relations from the inversion relations (`cl_invP₅`, `cl_invM₅`), and the layers of `xd`, `psid`
+equal to odd-lean's `ddotL`, `dcrossL` by `rfl`. Interchange next to a derived generator is not
+exported yet, and `lcross-rotation`, `cyclic-dot-even`, `cyclic-crossing` have no exported proof
+yet; their signs agree with odd-lean's `rot_tau_left`, `eq_1_26` and `eq_1_28` (the last with the
+sign of ERRATA [BE2] 3) by comparison of the statements.
+
 ## Display
 
 The web app shows text typeset wherever it is only read, and as plain text in a fixed-width font

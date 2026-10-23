@@ -8,6 +8,7 @@ import OddMath.SKM.Rewriting
 import OddMath.SKM.RelationsNF
 import OddMath.SKM.Lemma33
 import DiagcalcSupport.SKM
+import DiagcalcSupport.SKMLeft
 
 set_option backward.isDefEq.respectTransparency false
 set_option linter.unusedVariables false

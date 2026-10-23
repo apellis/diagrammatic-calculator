@@ -275,10 +275,57 @@ certificate.hypotheses = "upward diagrams only; t_ij = 1 and s_ij^pq = 0. Normal
 
 [lean]
 encoding = "skm-cl"
-module = "OddMath.SKM.Rewriting OddMath.SKM.RelationsNF OddMath.SKM.Lemma33 DiagcalcSupport.SKM"
+module = "OddMath.SKM.Rewriting OddMath.SKM.RelationsNF OddMath.SKM.Lemma33 DiagcalcSupport.SKM DiagcalcSupport.SKMLeft"
 namespace = "OddMath.SKM"
 open = "CategoryTheory StringDiagrams Presentation"
 generators = { cap = ".cap {a}", cup = ".cup {a}", lcross = ".lcross {a} {b}", psi = ".cross {a} {b}", x = ".dot {a}" }
+
+[[lean.derived.capl]]
+when = "h(a) < 0"
+layers = [
+  ["", ".dcap {a} {-h(a) - 1}", ""],
+]
+
+[[lean.derived.capl]]
+when = "h(a) >= 0"
+sign = "p(a) h(a)"
+negate = true
+layers = [
+  ["", ".lcross {a} {a}", ""],
+  ["", ".dot {a}", "dn {a}", "h(a)"],
+  ["", ".cap {a}", ""],
+]
+
+[[lean.derived.cupl]]
+when = "h(a) > 0"
+layers = [
+  ["", ".dcup {a} {h(a) - 1}", ""],
+]
+
+[[lean.derived.cupl]]
+when = "h(a) <= 0"
+sign = "p(a) (h(a) + 1)"
+layers = [
+  ["", ".cup {a}", ""],
+  ["dn {a}", ".dot {a}", "", "-h(a)"],
+  ["", ".lcross {a} {a}", ""],
+]
+
+[[lean.derived.psid]]
+layers = [
+  ["", ".cup {b}", "dn {a}, dn {b}"],
+  ["dn {b}", ".cup {a}", "up {b}, dn {a}, dn {b}"],
+  ["dn {b}, dn {a}", ".cross {a} {b}", "dn {a}, dn {b}"],
+  ["dn {b}, dn {a}, up {b}", ".cap {a}", "dn {b}"],
+  ["dn {b}, dn {a}", ".cap {b}", ""],
+]
+
+[[lean.derived.xd]]
+layers = [
+  ["", ".cup {a}", "dn {a}"],
+  ["dn {a}", ".dot {a}", "dn {a}"],
+  ["dn {a}", ".cap {a}", ""],
+]
 
 [lean.relations.braid]
 lemma = "cl_braid Sc {a} {b} {c} ν {simp}"
@@ -288,6 +335,22 @@ proof = "exact"
 lemma = "cl_braidEq Sc {a} {b} ν {a!=b}"
 facts = ["dn {a} {b}", "dn {b} {a}", "t {a} {b}", "s {a} {b}"]
 layering = "right-first"
+
+[lean.relations.bubble-left-negative]
+lemma = "dc_bubln Sc {a} ν {m}"
+proof = "tactic"
+
+[lean.relations.bubble-left-one]
+lemma = "dc_bubl1 Sc {a} ν"
+proof = "tactic"
+
+[lean.relations.bubble-right-negative]
+lemma = "dc_bubrn Sc {a} ν {m}"
+proof = "tactic"
+
+[lean.relations.bubble-right-one]
+lemma = "dc_bubr1 Sc {a} ν"
+proof = "tactic"
 
 [lean.relations.dot-slide-left-distinct]
 lemma = "cl_slideL Sc {a} {b} ν {a!=b}"
@@ -300,6 +363,14 @@ lemma = "cl_slideR Sc {a} {b} ν {a!=b}"
 
 [lean.relations.dot-slide-right-same]
 lemma = "cl_slideREq Sc {a} ν"
+
+[lean.relations.down-crossing]
+lemma = "rfl"
+proof = "exact"
+
+[lean.relations.down-dot]
+lemma = "rfl"
+proof = "exact"
 
 [lean.relations.invert-distinct-ef]
 lemma = "cl_invNe₁ Sc {a} {b} ν {a!=b}"
@@ -338,3 +409,13 @@ proof = "exact"
 [lean.relations.zigzag-f]
 lemma = "cl_zigF Sc {a} ν"
 proof = "exact"
+
+[lean.relations.zigzag-left-down]
+lemma = "dc_zzld Sc cs {a} ν"
+facts = ["cs"]
+proof = "tactic"
+
+[lean.relations.zigzag-left-up]
+lemma = "dc_zzlu Sc cs {a} ν"
+facts = ["cs"]
+proof = "tactic"

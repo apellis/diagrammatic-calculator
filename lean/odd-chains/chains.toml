@@ -153,6 +153,104 @@ strategy = "once"
 relations = ["invert-ef"]
 
 [[chain]]
+name = "dc_be2_down_dot"
+context = "be2 type=A1 odd=i mu=0 ring=ZZ"
+lhs = "cap_2 x_2 cup_{1,i*} e(i*)"
+strategy = "once"
+relations = ["down-dot"]
+
+[[chain]]
+name = "dc_be2_down_crossing"
+context = "be2 type=B2 odd=j mu=0 ring=ZZ"
+lhs = "cap_3 cap_4 psi_3 cup_{2,j*} cup_{1,i*} e(j* i*)"
+strategy = "once"
+relations = ["down-crossing"]
+
+[[chain]]
+name = "dc_be2_bubble_left_neg0"
+context = "be2 type=A1 odd=i mu=3 ring=ZZ"
+lhs = "cap_1 cup_{1,i} e()"
+strategy = "once"
+relations = ["bubble-left-negative"]
+
+[[chain]]
+name = "dc_be2_bubble_left_neg1"
+context = "be2 type=A1 odd=i mu=3 ring=ZZ"
+lhs = "cap_1 x_1 cup_{1,i} e()"
+strategy = "once"
+relations = ["bubble-left-negative"]
+
+[[chain]]
+name = "dc_be2_bubble_left_one"
+context = "be2 type=A1 odd=i mu=2 ring=ZZ"
+lhs = "cap_1 x_1 cup_{1,i} e()"
+strategy = "once"
+relations = ["bubble-left-one"]
+
+[[chain]]
+name = "dc_be2_bubble_right_neg1"
+context = "be2 type=A1 odd=i mu=-3 ring=ZZ"
+lhs = "cap_1 x_2 cup_{1,i*} e()"
+strategy = "once"
+relations = ["bubble-right-negative"]
+
+[[chain]]
+name = "dc_be2_bubble_right_one"
+context = "be2 type=A1 odd=i mu=-2 ring=ZZ"
+lhs = "cap_1 x_2 cup_{1,i*} e()"
+strategy = "once"
+relations = ["bubble-right-one"]
+
+[[chain]]
+name = "dc_be2_zigzag_left_up_nonneg"
+context = "be2 type=A1 odd=i mu=0 ring=ZZ"
+lhs = "cap_2 cup_{1,i} e(i)"
+strategy = "once"
+relations = ["zigzag-left-up"]
+
+[[chain]]
+name = "dc_be2_zigzag_left_up_m1"
+context = "be2 type=A1 odd=i mu=-1 ring=ZZ"
+lhs = "cap_2 cup_{1,i} e(i)"
+strategy = "once"
+relations = ["zigzag-left-up"]
+
+[[chain]]
+name = "dc_be2_zigzag_left_up_le"
+context = "be2 type=A1 odd=i mu=-2 ring=ZZ"
+lhs = "cap_2 cup_{1,i} e(i)"
+strategy = "once"
+relations = ["zigzag-left-up"]
+
+[[chain]]
+name = "dc_be2_zigzag_left_down_ge"
+context = "be2 type=A1 odd=i mu=2 ring=ZZ"
+lhs = "cap_1 cup_{2,i} e(i*)"
+strategy = "once"
+relations = ["zigzag-left-down"]
+
+[[chain]]
+name = "dc_be2_zigzag_left_down_pos"
+context = "be2 type=A1 odd=i mu=1 ring=ZZ"
+lhs = "cap_1 cup_{2,i} e(i*)"
+strategy = "once"
+relations = ["zigzag-left-down"]
+
+[[chain]]
+name = "dc_be2_zigzag_left_down_zero"
+context = "be2 type=A1 odd=i mu=0 ring=ZZ"
+lhs = "cap_1 cup_{2,i} e(i*)"
+strategy = "once"
+relations = ["zigzag-left-down"]
+
+[[chain]]
+name = "dc_be2_zigzag_left_down_le"
+context = "be2 type=A1 odd=i mu=-1 ring=ZZ"
+lhs = "cap_1 cup_{2,i} e(i*)"
+strategy = "once"
+relations = ["zigzag-left-down"]
+
+[[chain]]
 name = "dc_be2_slide_odd"
 context = "be2 type=A1 odd=i ring=ZZ"
 lhs = "x_1 x_1 psi_1 e(ii)"

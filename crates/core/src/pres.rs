@@ -173,8 +173,26 @@ pub struct LeanDecl {
     pub open: String,
     /// Each generator's Lean shape.
     pub generators: BTreeMap<String, String>,
+    /// Generators that are not Lean generators but are defined from them (BE2's leftward cups
+    /// and caps, downward dots and crossings): for each, the cases of its expansion into layers.
+    pub derived: BTreeMap<String, Vec<LeanDerived>>,
     /// For each relation that has one, the Lean lemma proving it.
     pub relations: BTreeMap<String, LeanRelation>,
+}
+
+/// One case of a derived generator's expansion: where `when` holds (evaluated, like a degree, at
+/// the region just right of the generator), the generator is `(−1)^sign` (negated if `negate`)
+/// times its layers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LeanDerived {
+    pub when: String,
+    pub sign: String,
+    pub negate: bool,
+    /// Each layer: the letters left of the shape and right of it inside the generator's strands
+    /// (Lean letters such as `dn {a}`, separated by commas), the shape, and how many times the
+    /// layer repeats (an integer expression; empty for once). `{a}` names a colour variable, any
+    /// other `{…}` an integer expression.
+    pub layers: Vec<[String; 4]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -278,7 +296,21 @@ struct RawLean {
     open: String,
     generators: BTreeMap<String, String>,
     #[serde(default)]
+    derived: BTreeMap<String, Vec<RawLeanDerived>>,
+    #[serde(default)]
     relations: BTreeMap<String, RawLeanRel>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawLeanDerived {
+    #[serde(default)]
+    when: String,
+    #[serde(default)]
+    sign: String,
+    #[serde(default)]
+    negate: bool,
+    layers: Vec<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -611,6 +643,54 @@ impl Presentation {
                         return Err(Error::invalid(format!("lean: no generator '{g}'")));
                     }
                 }
+                let mut derived = BTreeMap::new();
+                for (g, cases) in l.derived {
+                    let Some(gen_decl) = generators.iter().find(|x| x.name == g) else {
+                        return Err(Error::invalid(format!("lean: no generator '{g}'")));
+                    };
+                    let vars = &gen_decl.vars;
+                    let mut out = Vec::new();
+                    for c in cases {
+                        if !c.when.is_empty() {
+                            crate::expr::parse_cond(&c.when, vars)?;
+                        }
+                        if !c.sign.is_empty() {
+                            crate::expr::parse_int_expr(&c.sign, vars)?;
+                        }
+                        let mut layers = Vec::new();
+                        for l in c.layers {
+                            if !(3..=4).contains(&l.len()) {
+                                return Err(Error::invalid(format!(
+                                    "lean: a layer of {g} needs left letters, shape, right \
+                                     letters and optionally a repeat count"
+                                )));
+                            }
+                            for part in &l {
+                                for e in braced(part) {
+                                    if !vars.contains(&e) {
+                                        crate::expr::parse_int_expr(&e, vars)?;
+                                    }
+                                }
+                            }
+                            if let Some(n) = l.get(3) {
+                                crate::expr::parse_int_expr(n, vars)?;
+                            }
+                            layers.push([
+                                l[0].clone(),
+                                l[1].clone(),
+                                l[2].clone(),
+                                l.get(3).cloned().unwrap_or_default(),
+                            ]);
+                        }
+                        out.push(LeanDerived {
+                            when: c.when,
+                            sign: c.sign,
+                            negate: c.negate,
+                            layers,
+                        });
+                    }
+                    derived.insert(g, out);
+                }
                 for (r, x) in &l.relations {
                     if !relations.iter().any(|y| &y.name == r) {
                         return Err(Error::invalid(format!("lean: no relation '{r}'")));
@@ -637,6 +717,7 @@ impl Presentation {
                     namespace: l.namespace,
                     open: l.open,
                     generators: l.generators,
+                    derived,
                     relations: l
                         .relations
                         .into_iter()
@@ -826,6 +907,30 @@ impl Presentation {
                 .map(|(k, v)| format!("{k} = {}", q(v)))
                 .collect();
             o.push_str(&format!("generators = {{ {} }}\n", gs.join(", ")));
+            for (name, cases) in &l.derived {
+                for c in cases {
+                    o.push_str(&format!("\n[[lean.derived.{name}]]\n"));
+                    if !c.when.is_empty() {
+                        o.push_str(&format!("when = {}\n", q(&c.when)));
+                    }
+                    if !c.sign.is_empty() {
+                        o.push_str(&format!("sign = {}\n", q(&c.sign)));
+                    }
+                    if c.negate {
+                        o.push_str("negate = true\n");
+                    }
+                    let ls: Vec<String> = c
+                        .layers
+                        .iter()
+                        .map(|l| {
+                            let n = if l[3].is_empty() { 3 } else { 4 };
+                            let parts: Vec<String> = l[..n].iter().map(|x| q(x)).collect();
+                            format!("  [{}],\n", parts.join(", "))
+                        })
+                        .collect();
+                    o.push_str(&format!("layers = [\n{}]\n", ls.concat()));
+                }
+            }
             for (name, r) in &l.relations {
                 o.push_str(&format!("\n[lean.relations.{name}]\n"));
                 o.push_str(&format!("lemma = {}\n", q(&r.lemma)));
@@ -846,4 +951,16 @@ impl Presentation {
         }
         o
     }
+}
+
+/// The contents of each `{…}` in `s`, in order.
+pub fn braced(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = s;
+    while let Some(a) = rest.find('{') {
+        let Some(b) = rest[a..].find('}') else { break };
+        out.push(rest[a + 1..a + b].to_string());
+        rest = &rest[a + b + 1..];
+    }
+    out
 }

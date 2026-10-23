@@ -123,38 +123,187 @@ impl<R: Ring> Writer<'_, R> {
         format!("[{}]", parts.join(", "))
     }
 
-    fn word(&self, w: &Word, weight: &str) -> Result<String> {
-        let mut obj: Object = w.source.clone();
-        let mut layers = Vec::new();
-        for l in &w.layers {
-            let g = &self.ctx.pres.generators[l.generator as usize];
-            let shape = self.decl.generators.get(&g.name).ok_or_else(|| {
-                Error::precondition(format!("generator {} has no Lean shape", g.name))
-            })?;
+    /// The letters of an object, as Lean terms.
+    fn letters(&self, o: &[Letter]) -> Vec<String> {
+        o.iter().map(|l| self.letter(l)).collect()
+    }
+
+    /// `s` with each `{v}` for a colour variable replaced by its colour and each other `{…}` by
+    /// the value of that integer expression at `env`.
+    fn fill(
+        &self,
+        s: &str,
+        vars: &[String],
+        b: &[usize],
+        env: &dyn crate::expr::ColourEnv,
+    ) -> Result<String> {
+        let mut out = s.to_string();
+        for e in crate::pres::braced(s) {
+            let val = match vars.iter().position(|v| *v == e) {
+                Some(i) => self.colour(b[i] as u16),
+                None => crate::expr::parse_int_expr(&e, vars)?
+                    .eval(b, env)?
+                    .to_string(),
+            };
+            out = out.replacen(&format!("{{{e}}}"), &val, 1);
+        }
+        Ok(out)
+    }
+
+    /// The Lean layers of one layer of a word whose source is `obj`, and whether they carry a
+    /// minus sign: one layer for a Lean generator, the expansion for a derived one.
+    fn layer(
+        &self,
+        l: &crate::term::Layer,
+        obj: &Object,
+        mu: Option<&[i64]>,
+    ) -> Result<(bool, Vec<String>)> {
+        let g = &self.ctx.pres.generators[l.generator as usize];
+        let p = l.pos as usize;
+        let s = self.ctx.source_len(l.generator as usize);
+        let left = self.letters(&obj[..p]);
+        let right = self.letters(&obj[p + s..]);
+        let b: Vec<usize> = l.binding.iter().map(|&c| c as usize).collect();
+        if let Some(shape) = self.decl.generators.get(&g.name) {
             let mut shape = shape.clone();
             for (v, &c) in g.vars.iter().zip(&l.binding) {
                 shape = shape.replace(&format!("{{{v}}}"), &self.colour(c));
             }
-            let p = l.pos as usize;
-            let s = self.ctx.source_len(l.generator as usize);
-            layers.push(format!(
-                "({}, {}, {})",
-                self.object(&obj[..p]),
-                shape,
-                self.object(&obj[p + s..])
+            return Ok((
+                false,
+                vec![format!(
+                    "([{}], {}, [{}])",
+                    left.join(", "),
+                    shape,
+                    right.join(", ")
+                )],
             ));
+        }
+        let cases = self.decl.derived.get(&g.name).ok_or_else(|| {
+            Error::precondition(format!("generator {} has no Lean shape", g.name))
+        })?;
+        let region = match mu {
+            Some(m) => Some(self.ctx.shift_region(m, &obj[p + s..])),
+            None => self.ctx.region(obj, p + s),
+        };
+        let region = region.ok_or_else(|| {
+            Error::precondition(format!(
+                "the Lean expansion of {} needs the region weight mu=",
+                g.name
+            ))
+        })?;
+        let env = crate::expr::AtRegion {
+            env: self.ctx,
+            region: &region,
+        };
+        for c in cases {
+            if !c.when.is_empty() && !crate::expr::parse_cond(&c.when, &g.vars)?.eval(&b, &env)? {
+                continue;
+            }
+            let mut neg = c.negate;
+            if !c.sign.is_empty() {
+                neg ^= crate::expr::parse_int_expr(&c.sign, &g.vars)?
+                    .eval(&b, &env)?
+                    .rem_euclid(2)
+                    == 1;
+            }
+            let mut out = Vec::new();
+            for [ll, shape, rr, rep] in &c.layers {
+                let n = if rep.is_empty() {
+                    1
+                } else {
+                    crate::expr::parse_int_expr(rep, &g.vars)?.eval(&b, &env)?
+                };
+                let mut lf = left.clone();
+                lf.extend(
+                    self.fill(ll, &g.vars, &b, &env)?
+                        .split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty()),
+                );
+                let mut rt: Vec<String> = self
+                    .fill(rr, &g.vars, &b, &env)?
+                    .split(',')
+                    .map(|x| x.trim().to_string())
+                    .filter(|x| !x.is_empty())
+                    .collect();
+                rt.extend(right.iter().cloned());
+                let shape = self.fill(shape, &g.vars, &b, &env)?;
+                for _ in 0..n.max(0) {
+                    out.push(format!(
+                        "([{}], {}, [{}])",
+                        lf.join(", "),
+                        shape,
+                        rt.join(", ")
+                    ));
+                }
+            }
+            return Ok((neg, out));
+        }
+        Err(Error::precondition(format!(
+            "no case of the Lean expansion of {} applies here",
+            g.name
+        )))
+    }
+
+    /// For each layer of `w`, the index of its first Lean layer; and the total.
+    fn lean_index(&self, w: &Word) -> Result<Vec<usize>> {
+        let mut obj: Object = w.source.clone();
+        let mut out = Vec::with_capacity(w.layers.len() + 1);
+        let mut n = 0;
+        for l in &w.layers {
+            out.push(n);
+            n += self.layer(l, &obj, None)?.1.len();
             obj = self.ctx.apply(l, &obj);
         }
-        Ok(format!(
-            "{} {weight} {} {} [{}]",
-            match self.enc {
-                Enc::Kl3 => "dg RD k",
-                Enc::Skm => "cl D Sc",
-            },
-            self.object(&w.source),
-            self.object(&obj),
-            layers.join(", ")
+        out.push(n);
+        Ok(out)
+    }
+
+    /// Whether some layer of `w` is a derived generator.
+    fn has_derived(&self, w: &Word) -> bool {
+        w.layers.iter().any(|l| {
+            let name = &self.ctx.pres.generators[l.generator as usize].name;
+            self.decl.derived.contains_key(name)
+        })
+    }
+
+    /// A word as a Lean diagram, and whether the expansions of derived generators in it carry a
+    /// minus sign.
+    fn word_signed(&self, w: &Word, weight: &str, mu: Option<&[i64]>) -> Result<(bool, String)> {
+        let mut obj: Object = w.source.clone();
+        let mut layers = Vec::new();
+        let mut neg = false;
+        for l in &w.layers {
+            let (n, ls) = self.layer(l, &obj, mu)?;
+            neg ^= n;
+            layers.extend(ls);
+            obj = self.ctx.apply(l, &obj);
+        }
+        Ok((
+            neg,
+            format!(
+                "{} {weight} {} {} [{}]",
+                match self.enc {
+                    Enc::Kl3 => "dg RD k",
+                    Enc::Skm => "cl D Sc",
+                },
+                self.object(&w.source),
+                self.object(&obj),
+                layers.join(", ")
+            ),
         ))
+    }
+
+    /// A word as a Lean diagram; its derived generators must expand without a sign.
+    fn word(&self, w: &Word, weight: &str) -> Result<String> {
+        let (neg, d) = self.word_signed(w, weight, None)?;
+        if neg {
+            return Err(Error::precondition(
+                "a derived generator expands with a minus sign where the export needs a diagram",
+            ));
+        }
+        Ok(d)
     }
 
     fn int(&self, c: &crate::poly::Poly<R::Elem>) -> Result<BigInt> {
@@ -171,12 +320,28 @@ impl<R: Ring> Writer<'_, R> {
 
     /// `Σ c_w • D(w)` with integer coefficients.
     fn term(&self, t: &CTerm<R>, weight: &str) -> Result<String> {
+        self.term_signed(t, weight, false, None)
+    }
+
+    /// `Σ c_w • D(w)`, negated if `negate`; the signs of derived generators' expansions are
+    /// folded into the coefficients.
+    fn term_signed(
+        &self,
+        t: &CTerm<R>,
+        weight: &str,
+        negate: bool,
+        mu: Option<&[i64]>,
+    ) -> Result<String> {
         if t.terms.is_empty() {
             return Ok("0".into());
         }
         let mut s = String::new();
         for (k, (w, c)) in t.terms.iter().enumerate() {
-            let n = self.int(c)?;
+            let (wneg, d) = self.word_signed(w, weight, mu)?;
+            let mut n = self.int(c)?;
+            if wneg ^ negate {
+                n = -n;
+            }
             let neg = n < BigInt::from(0);
             let a = if neg { -n } else { n };
             if k == 0 {
@@ -186,7 +351,6 @@ impl<R: Ring> Writer<'_, R> {
             } else {
                 s.push_str(if neg { " - " } else { " + " });
             }
-            let d = self.word(w, weight)?;
             if a == BigInt::from(1) {
                 s.push_str(&d);
             } else {
@@ -223,6 +387,9 @@ enum Fact {
     T(u16, u16),
     /// `skm-cl`: `∀ p q, Sc.s a b p q = 0`.
     S(u16, u16),
+    /// `skm-cl`: a family `cs` of the scalars `c_{λ;i}` of the leftward cups and caps, which
+    /// the calculator sets to `1` and odd-lean's relations carry (they cancel in each relation).
+    Cs,
 }
 
 fn word_colours(w: &Word, out: &mut BTreeSet<u16>) {
@@ -246,6 +413,7 @@ impl<R: Ring> Writer<'_, R> {
             Fact::Dn(a, b, _) => format!("hdn_{}_{}", c(a), c(b)),
             Fact::T(a, b) => format!("ht_{}_{}", c(a), c(b)),
             Fact::S(a, b) => format!("hs_{}_{}", c(a), c(b)),
+            Fact::Cs => "cs".to_string(),
         }
     }
 
@@ -267,11 +435,52 @@ impl<R: Ring> Writer<'_, R> {
             Fact::Dn(a, b, v) => format!("D.dn {} {} = {v}", c(a), c(b)),
             Fact::T(a, b) => format!("(Sc.t {} {} : k) = 1", c(a), c(b)),
             Fact::S(a, b) => format!("∀ p q, Sc.s {} {} p q = 0", c(a), c(b)),
+            Fact::Cs => "CScalars Sc".to_string(),
         }
     }
 }
 
+/// The chains of an item with every rule whose Lean expansion depends on a region (a derived
+/// generator with cases) pinned to the region right of the place it is applied at, so its
+/// relation instance is stated with the weight hypotheses that choose the expansions.
+fn pin_regions<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Vec<Chain<R>> {
+    let cased = |w: &Word| {
+        w.layers.iter().any(|l| {
+            decl.derived
+                .get(&ctx.pres.generators[l.generator as usize].name)
+                .is_some_and(|cs| cs.iter().any(|c| !c.when.is_empty()))
+        })
+    };
+    it.chains
+        .iter()
+        .map(|ch| {
+            let mut ch = (*ch).clone();
+            for st in &mut ch.steps {
+                if st.rule.region.is_some()
+                    || !(cased(&st.rule.pattern)
+                        || st.rule.replacement.terms.iter().any(|(w, _)| cased(w)))
+                {
+                    continue;
+                }
+                let m = &st.at;
+                let mut obj = m.moved.source.clone();
+                for l in &m.moved.layers[..m.at] {
+                    obj = ctx.apply(l, &obj);
+                }
+                st.rule.region = ctx.region(&obj, m.window + st.rule.pattern.source.len());
+            }
+            ch
+        })
+        .collect()
+}
+
 fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<String> {
+    let pinned = pin_regions(ctx, decl, it);
+    let it = &Item {
+        name: it.name.clone(),
+        doc: it.doc.clone(),
+        chains: pinned.iter().collect(),
+    };
     let enc = encoding(decl);
     let wr = Writer { ctx, decl, enc };
     let cartan = ctx.cartan.as_ref().ok_or_else(|| {
@@ -372,6 +581,9 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
                         let (a, b) = two(a, b)?;
                         facts.insert(Fact::S(a, b));
                     }
+                    (Enc::Skm, ["cs"]) => {
+                        facts.insert(Fact::Cs);
+                    }
                     _ => return Err(Error::invalid(format!("unknown Lean fact '{f}'"))),
                 }
             }
@@ -418,7 +630,7 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
     for (f, n) in facts.iter().zip(&fact_names) {
         match f {
             Fact::Par(..) => par_names.push(n.clone()),
-            Fact::A(..) | Fact::Ip(..) => {}
+            Fact::A(..) | Fact::Ip(..) | Fact::Cs => {}
             _ => other_names.push(n.clone()),
         }
     }
@@ -567,10 +779,12 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
         } else {
             rel.layering.as_str()
         };
+        // Derived generators expand at the regions of the rule's own weight.
+        let rmu = r.region.as_deref().or(ctx.mu.as_deref());
+        let (pneg, pword) = wr.word_signed(&r.pattern, "ν", rmu)?;
         o.push_str(&format!(
-            "  have E{ri} : ∀ ν : X, {premises}{} =\n      {} := fun ν{binders} => by\n",
-            wr.word(&r.pattern, "ν")?,
-            wr.term(&relaid(ctx, enc, layering, &r.replacement)?, "ν")?
+            "  have E{ri} : ∀ ν : X, {premises}{pword} =\n      {} := fun ν{binders} => by\n",
+            wr.term_signed(&relaid(ctx, enc, layering, &r.replacement)?, "ν", pneg, rmu)?
         ));
         let mut ind = "    ";
         let f = if via_forward {
@@ -584,7 +798,7 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
                     f.relation == r.relation
                         && f.binding == r.binding
                         && f.ints == r.ints
-                        && f.region == r.region
+                        && (f.region.is_none() || f.region == r.region)
                         && f.forward
                 })
                 .ok_or_else(|| {
@@ -593,10 +807,15 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
                         r.relation
                     ))
                 })?;
+            let (fneg, fword) = wr.word_signed(&f.pattern, "ν", rmu)?;
             o.push_str(&format!(
-                "    have F : {} =\n        {} := by\n",
-                wr.word(&f.pattern, "ν")?,
-                wr.term(&relaid(ctx, enc, &rel.layering, &f.replacement)?, "ν")?
+                "    have F : {fword} =\n        {} := by\n",
+                wr.term_signed(
+                    &relaid(ctx, enc, &rel.layering, &f.replacement)?,
+                    "ν",
+                    fneg,
+                    rmu
+                )?
             ));
             ind = "      ";
             Some(f)
@@ -606,6 +825,11 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
         let pattern = f.as_ref().map_or(&r.pattern, |f| &f.pattern);
         // The moves from the calculator's layout of the left-hand side to the lemma's.
         let (_, pattern_swaps, _) = relay(ctx, enc, &rel.pattern_layering, pattern)?;
+        if !pattern_swaps.is_empty() && wr.has_derived(pattern) {
+            return Err(Error::precondition(
+                "interchange next to a derived generator does not export yet",
+            ));
+        }
         if !pattern_swaps.is_empty() {
             let swap = match enc {
                 Enc::Kl3 => "dswap",
@@ -658,6 +882,11 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
             let c = ctx.canonical_tracked(w);
             if c.swaps.is_empty() {
                 continue;
+            }
+            if wr.has_derived(w) {
+                return Err(Error::precondition(
+                    "interchange next to a derived generator does not export yet",
+                ));
             }
             let cn = format!("C{}", cs.len());
             o.push_str(&format!(
@@ -757,10 +986,15 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
                 st.rule.relation,
                 m.at + 1,
             ));
+            if wr.has_derived(&st.word) && !m.swaps.is_empty() {
+                return Err(Error::precondition(
+                    "interchange next to a derived generator does not export yet",
+                ));
+            }
+            let (kneg, kword) = wr.word_signed(&st.word, "μ", None)?;
             o.push_str(&format!(
-                "  have {kn} : {} =\n      {} := by\n",
-                wr.word(&st.word, "μ")?,
-                wr.term(&raw, "μ")?
+                "  have {kn} : {kword} =\n      {} := by\n",
+                wr.term_signed(&raw, "μ", kneg, None)?
             ));
             for s in &m.swaps {
                 o.push_str(&format!("    {swap} {s}\n"));
@@ -805,7 +1039,7 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
             o.push_str(&format!(
                 "    rw [{step} _ {} {u} {v} (E{ri} _{weight_args}) (by (try {norm}); {chain}) \
                  (by (try {norm}); {chain}) (by {norm})]\n",
-                m.at
+                wr.lean_index(&m.moved)?[m.at]
             ));
             o.push_str("    try simp only [map_add, map_sub, map_neg, map_zsmul, map_zero]\n");
             o.push_str(&format!(
@@ -821,6 +1055,11 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
             for (j, (raw, _, swaps, sign, word)) in raws.iter().enumerate() {
                 if swaps.is_empty() || !seen.insert(raw.clone()) {
                     continue;
+                }
+                if wr.has_derived(raw) {
+                    return Err(Error::precondition(
+                        "interchange next to a derived generator does not export yet",
+                    ));
                 }
                 let cn = format!("C{tag}{si}_{j}");
                 o.push_str(&format!(
