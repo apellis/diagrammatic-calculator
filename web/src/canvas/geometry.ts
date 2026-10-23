@@ -76,7 +76,9 @@ export function crossingsPassed(l: Layout, dot: Piece, y: number): { direction: 
 export function track(l: Layout, dot: Piece): Line[] {
   const s = dotStrand(dot);
   const segs = l.lines.filter((x) => x.kind === 'strand' && x.strand === s);
-  const own = segs.find((x) => x.layer === dot.layer);
+  // a later dot of a dot power has no line of its own: it sits on the first one's (docs/conventions.md, Drawing)
+  const y = centre(dot)[1];
+  const own = segs.find((x) => x.layer === dot.layer) ?? segs.find((x) => x.y0! <= y && y <= x.y1!);
   if (!own) return [];
   const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
   const run = [own];

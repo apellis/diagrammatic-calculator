@@ -8,11 +8,7 @@ keeps it), and new findings are added here.
 
 ## Decisions for Alex
 
-1. **Dot powers.** x₁¹⁵ is drawn as 15 separate dots, which makes very tall diagrams. Proposal: a
-   single dot labelled with its power above 3. Changes `docs/conventions.md` and the golden corpus.
-2. **Normal-form display.** Normal forms print the canonical layering (x₁⁴x₂x₁x₂x₁x₂x₃…), which is
-   correct but hard to read. Proposal: an optional view with commuting dots gathered into monomials;
-   the text form stays as it is.
+None open.
 
 ## Before going public
 

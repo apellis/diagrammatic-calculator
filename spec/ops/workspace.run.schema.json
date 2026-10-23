@@ -23,6 +23,7 @@
         "name": { "description": "def: the name defined.", "type": "string" },
         "term": { "description": "def: the elaborated term; watch: the watched term with definitions substituted, before simplifying.", "type": "string" },
         "normal_form": { "description": "watch: as in simplify.", "type": "string" },
+        "monomials": { "description": "watch: as in simplify.", "type": "string" },
         "terms": { "description": "def and watch: the number of summands (of the term as written for def, of the normal form for watch).", "type": "integer", "minimum": 0 },
         "summands": { "description": "def and watch, when the request asks: the first summands, drawn.", "type": "array", "items": { "$ref": "common.schema.json#/$defs/summand" } },
         "holds": { "description": "check: as in check.", "type": "boolean" },

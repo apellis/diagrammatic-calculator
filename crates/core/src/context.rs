@@ -1311,6 +1311,111 @@ impl<R: Ring> Context<R> {
         parts.join(" ")
     }
 
+    /// A word read with its commuting dots gathered into monomials (docs/conventions.md,
+    /// Printing), with whether that reading carries a Koszul sign against the stored word. It
+    /// starts from the printed reading ([`Context::print_order`]); every even dot is then moved
+    /// down past the pieces that do not touch its strand, and the dots that come to rest at one
+    /// height are written together, `x_1^2 x_3`, in increasing position. Only even dots move, so
+    /// the sign is the printed reading's. It parses back to the same element; it is a view, not
+    /// the canonical text.
+    pub fn fmt_word_monomials(&self, w: &Word) -> (String, bool) {
+        enum Item {
+            Piece(Layer),
+            /// Dots at one height: (position, generator, binding) to exponent.
+            Dots(BTreeMap<(u16, u16, Vec<u16>), usize>),
+        }
+        let (top_first, sign) = self.print_order(w);
+        let read = Word {
+            source: w.source.clone(),
+            layers: top_first.into_iter().rev().collect(),
+        };
+        let parities = self.layer_parities(&read);
+        let mut out: Vec<Item> = Vec::new();
+        for (k, l) in read.layers.iter().enumerate() {
+            let g = l.generator as usize;
+            let dot = self.pres.generators[g].draw == "dot"
+                && self.source_len(g) == 1
+                && self.target_len(g) == 1
+                && !parities[k];
+            if !dot {
+                out.push(Item::Piece(l.clone()));
+                continue;
+            }
+            // move down while nothing touches the strand; another dot generator on the same
+            // strand stops it
+            let mut p = l.pos as usize;
+            let mut at = out.len();
+            while at > 0 {
+                match &out[at - 1] {
+                    Item::Piece(q) => {
+                        let gq = q.generator as usize;
+                        let (s, t) = (self.source_len(gq), self.target_len(gq));
+                        let qp = q.pos as usize;
+                        if p < qp {
+                        } else if p >= qp + t {
+                            p = p + s - t;
+                        } else {
+                            break;
+                        }
+                    }
+                    Item::Dots(m) => {
+                        if m.keys().any(|(pos, g2, b)| {
+                            *pos as usize == p && (*g2 != l.generator || *b != l.binding)
+                        }) {
+                            break;
+                        }
+                    }
+                }
+                at -= 1;
+            }
+            let key = (p as u16, l.generator, l.binding.clone());
+            match out.get_mut(at) {
+                Some(Item::Dots(m)) => *m.entry(key).or_insert(0) += 1,
+                _ => out.insert(at, Item::Dots(BTreeMap::from([(key, 1)]))),
+            }
+        }
+        // written from the top
+        let mut parts: Vec<String> = Vec::new();
+        let mut last: Option<(Layer, usize)> = None;
+        let flush = |parts: &mut Vec<String>, last: &mut Option<(Layer, usize)>| {
+            if let Some((l, n)) = last.take() {
+                let s = self.fmt_layer_name(&l);
+                parts.push(if n > 1 { format!("{s}^{n}") } else { s });
+            }
+        };
+        for item in out.iter().rev() {
+            match item {
+                Item::Piece(l) => match &mut last {
+                    Some((m, n)) if m == l => *n += 1,
+                    _ => {
+                        flush(&mut parts, &mut last);
+                        last = Some((l.clone(), 1));
+                    }
+                },
+                Item::Dots(m) => {
+                    flush(&mut parts, &mut last);
+                    for ((pos, generator, binding), n) in m {
+                        let s = self.fmt_layer_name(&Layer {
+                            generator: *generator,
+                            pos: *pos,
+                            binding: binding.clone(),
+                        });
+                        parts.push(if *n > 1 { format!("{s}^{n}") } else { s });
+                    }
+                }
+            }
+        }
+        flush(&mut parts, &mut last);
+        if !self.omit_idempotent(&w.source) || parts.is_empty() {
+            if self.omit_idempotent(&w.source) {
+                parts.push("1".into());
+            } else {
+                parts.push(format!("e({})", self.fmt_object(&w.source)));
+            }
+        }
+        (parts.join(" "), sign)
+    }
+
     /// A layer as written in a word: the generator's written name and its position, and for a
     /// generator whose source leaves colours open (a cup) the leading target letters that fix
     /// them: `cup_{1,i*}`.
@@ -1347,16 +1452,29 @@ impl<R: Ring> Context<R> {
 
     /// Canonical text of a term.
     pub fn fmt_term(&self, t: &Term<Poly<R::Elem>>) -> String {
+        self.fmt_term_with(t, |w| (self.fmt_word(w), self.print_order(w).1))
+    }
+
+    /// A term with its commuting dots gathered into monomials ([`Context::fmt_word_monomials`]):
+    /// an alternative view of a value, which parses back to the same element.
+    pub fn fmt_term_monomials(&self, t: &Term<Poly<R::Elem>>) -> String {
+        self.fmt_term_with(t, |w| self.fmt_word_monomials(w))
+    }
+
+    /// A term printed with `word`, which gives a word's text and whether that reading carries a
+    /// Koszul sign against the stored word.
+    fn fmt_term_with(
+        &self,
+        t: &Term<Poly<R::Elem>>,
+        word: impl Fn(&Word) -> (String, bool),
+    ) -> String {
         if t.terms.is_empty() {
             return "0".into();
         }
         let mut s = String::new();
         for (k, (w, c)) in t.terms.iter().enumerate() {
-            let c = &if self.print_order(w).1 {
-                self.coeff.neg(c)
-            } else {
-                c.clone()
-            };
+            let (ws, flip) = word(w);
+            let c = &if flip { self.coeff.neg(c) } else { c.clone() };
             let neg = self.coeff.is_negative(c);
             let abs = if neg { self.coeff.neg(c) } else { c.clone() };
             if k == 0 {
@@ -1366,7 +1484,6 @@ impl<R: Ring> Context<R> {
             } else {
                 s.push_str(if neg { " - " } else { " + " });
             }
-            let ws = self.fmt_word(w);
             if self.coeff.is_one(&abs) {
                 s.push_str(&ws);
             } else {

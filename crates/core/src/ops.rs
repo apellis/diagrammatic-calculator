@@ -189,6 +189,11 @@ impl<'a, R: Ring> Session<'a, R> {
             "certified_by": if proven { "computation" } else { "certificate" },
             "provenance": provenance_json(self.eval.as_ref()),
         });
+        // the same value with its commuting dots gathered, when that reads differently
+        let gathered = self.ctx.fmt_term_monomials(&nf);
+        if gathered != v["normal_form"] {
+            v["monomials"] = json!(gathered);
+        }
         if let Some(n) = shown {
             v["summands"] = summands_json(self.ctx, &nf, n);
         }
@@ -1374,6 +1379,35 @@ mod tests {
             context: c.into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn normal_forms_with_dots_gathered_into_monomials() {
+        // the canonical layering writes x_1 where the strand is free; gathered, the dots sit
+        // together at the bottom of the basis word
+        let v = simplify(&req("nilhecke nu=3 ring=QQ"), "psi_1 psi_2 x_1^2 x_3");
+        assert_eq!(v["normal_form"], "psi_1 x_1 psi_2 x_1 x_3", "{v}");
+        assert_eq!(v["monomials"], "psi_1 psi_2 x_1^2 x_3", "{v}");
+        let v = simplify(&req("nilhecke nu=3 ring=QQ"), "x_1^3 x_2^2 x_3 - 2 x_2");
+        assert_eq!(v["monomials"], "-2 x_2 + x_1^3 x_2^2 x_3", "{v}");
+        // the gathered text parses back to the same element
+        let back = simplify(
+            &req("nilhecke nu=3 ring=QQ"),
+            v["monomials"].as_str().unwrap(),
+        );
+        assert_eq!(back["normal_form"], v["normal_form"]);
+        // nothing to gather: no second text
+        let v = simplify(&req("nilhecke nu=2 ring=ZZ"), "x_1 psi_1");
+        assert!(v.get("monomials").is_none(), "{v}");
+        // odd dots stay where they are: nothing to gather
+        let v = simplify(&req("be2 type=A1 odd=i mu=-1"), "x_2 x_1 x_2 e(ii)");
+        assert!(v.get("monomials").is_none(), "{v}");
+        // even dots move past odd pieces with no sign
+        let c = req("be2 type=B2 odd=j mu=i");
+        let v = simplify(&c, "x_1 x_2 x_1 x_2 e(ij)");
+        let m = v["monomials"].as_str().unwrap_or_else(|| panic!("{v}"));
+        assert_eq!(m, "x_2^2 x_1^2 e(ij)", "{v}");
+        assert_eq!(simplify(&c, m)["normal_form"], v["normal_form"], "{v}");
     }
 
     #[test]

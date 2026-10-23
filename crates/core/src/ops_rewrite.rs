@@ -467,7 +467,10 @@ fn layout_json<R: Ring>(
                 Prim::Turn { x0, x1, y, up } => {
                     json!({ "kind": "turn", "x0": x0, "x1": x1, "y": y, "up": up })
                 }
-                Prim::Dot { x, y } => json!({ "kind": "dot", "x": x, "y": y }),
+                Prim::Dot { x, y, power } if *power > 1 => {
+                    json!({ "kind": "dot", "x": x, "y": y, "power": power })
+                }
+                Prim::Dot { x, y, .. } => json!({ "kind": "dot", "x": x, "y": y }),
                 Prim::Box {
                     x0,
                     y0,
@@ -748,6 +751,14 @@ fn slide<R: Ring>(
         steps
     };
     for _ in 0..limit {
+        // a dot next to an equal one on its strand is the same element as that one: slide the
+        // last of the power (drawn as one dot labelled with its exponent), so a power splits
+        while let Some(d) = rewrite::neighbour(ctx, &cur, dot, up).filter(|&d| {
+            let (a, b) = (&cur.layers[d], &cur.layers[dot]);
+            a.generator == b.generator && a.binding == b.binding
+        }) {
+            dot = d;
+        }
         let next = rewrite::neighbour(ctx, &cur, dot, up)
             .filter(|&c| cur.layers[c].generator == layout.crossing);
         let Some(c) = next else {
@@ -930,6 +941,33 @@ mod tests {
         );
         assert_eq!(v["kind"], "invalid", "{v}");
     }
+    #[test]
+    fn a_dot_slid_off_a_power_splits_it() {
+        // the bottom dot of x_1^4, slid up, is the top one: it passes the crossing
+        let v = call(
+            "slide",
+            &json!({ "context": "nilhecke nu=2", "term": "psi_1 x_1^4", "layer": 1, "direction": "up" }),
+        );
+        assert_eq!(v["status"], "ok", "{v}");
+        let end = v["term"].as_str().unwrap();
+        assert!(end.contains("psi_1 x_1^3"), "{v}");
+        // a power drawn as one dot keeps a piece per dot
+        let v = call(
+            "term.layout",
+            &json!({ "context": "nilhecke nu=2", "term": "psi_1 x_1^4" }),
+        );
+        let s = &v["summands"][0];
+        let dots: Vec<&Value> = s["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|l| l["kind"] == "dot")
+            .collect();
+        assert_eq!(dots.len(), 1, "{v}");
+        assert_eq!(dots[0]["power"], 4);
+        assert_eq!(s["pieces"].as_array().unwrap().len(), 5);
+    }
+
     #[test]
     fn provenance_maps() {
         // A dot slid through a crossing is the same dot, the crossing the same crossing; the

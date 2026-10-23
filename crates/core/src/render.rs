@@ -15,23 +15,11 @@ use crate::term::{Letter, Object, Term, Word};
 #[derive(Clone, Debug, PartialEq)]
 pub enum Prim {
     /// A strand from `(x0, y0)` up to `(x1, y1)`, leaving and arriving vertically.
-    Strand {
-        x0: f64,
-        y0: f64,
-        x1: f64,
-        y1: f64,
-    },
+    Strand { x0: f64, y0: f64, x1: f64, y1: f64 },
     /// A cup (`up = true`, opening upwards) or cap joining `x0` and `x1` at height `y`.
-    Turn {
-        x0: f64,
-        x1: f64,
-        y: f64,
-        up: bool,
-    },
-    Dot {
-        x: f64,
-        y: f64,
-    },
+    Turn { x0: f64, x1: f64, y: f64, up: bool },
+    /// A dot, or a dot power drawn as one dot labelled with its exponent (`power` above 1).
+    Dot { x: f64, y: f64, power: usize },
     Box {
         x0: f64,
         y0: f64,
@@ -40,25 +28,12 @@ pub enum Prim {
         label: String,
     },
     /// A colour label under a strand.
-    Label {
-        x: f64,
-        y: f64,
-        text: String,
-    },
+    Label { x: f64, y: f64, text: String },
     /// An arrowhead at `(x, y)` pointing along `(dx, dy)`: the orientation of a strand.
-    Arrow {
-        x: f64,
-        y: f64,
-        dx: f64,
-        dy: f64,
-    },
+    Arrow { x: f64, y: f64, dx: f64, dy: f64 },
     /// Text centred at `(x, y)`: the colour of a strand that does not start at the bottom, or
     /// the weight of the rightmost region.
-    Note {
-        x: f64,
-        y: f64,
-        text: String,
-    },
+    Note { x: f64, y: f64, text: String },
 }
 
 /// The primitives of one word, with its width and height, and what each primitive belongs to:
@@ -183,9 +158,87 @@ pub fn picture<R: Ring>(ctx: &Context<R>, w: &Word) -> Picture {
     picture_ranked(ctx, w, None)
 }
 
+/// The least power of a dot drawn as one dot labelled with its exponent.
+pub const DOT_POWER: usize = 4;
+
+/// The dot powers of `w` drawn as one dot: for each layer, the first layer of its power when it is
+/// a later dot of one. A power is a run of at least [`DOT_POWER`] even dots of one generator,
+/// one after another along a strand with nothing between them. Odd dots are left alone: their
+/// heights against the other odd pieces carry the word's sign.
+fn dot_powers<R: Ring>(ctx: &Context<R>, w: &Word) -> Vec<Option<usize>> {
+    let parities = ctx.layer_parities(w);
+    // for each position of the current object: the first dot of the run its strand ends in
+    let mut last: Vec<Option<usize>> = vec![None; w.source.len()];
+    let mut head: Vec<usize> = (0..w.layers.len()).collect();
+    let mut count = vec![1usize; w.layers.len()];
+    for (k, l) in w.layers.iter().enumerate() {
+        let g = l.generator as usize;
+        let p = l.pos as usize;
+        let (s, t) = (ctx.source_len(g), ctx.target_len(g));
+        if ctx.pres.generators[g].draw == "dot" && s == 1 && t == 1 && !parities[k] {
+            match last[p] {
+                Some(h) if w.layers[h].generator == l.generator => {
+                    head[k] = h;
+                    count[h] += 1;
+                }
+                _ => last[p] = Some(k),
+            }
+        } else {
+            last.splice(p..p + s, std::iter::repeat_n(None, t));
+        }
+    }
+    (0..w.layers.len())
+        .map(|k| (head[k] != k && count[head[k]] >= DOT_POWER).then_some(head[k]))
+        .collect()
+}
+
 /// [`picture`] of a word whose layers are in an order other than the canonical one; `rank`
 /// gives each layer's canonical index (see [`draw_levels`]).
+///
+/// A dot power of at least [`DOT_POWER`] is drawn as its first dot, labelled with the exponent;
+/// the other dots of the power are pieces in the same place, so each layer still has a piece.
 pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]>) -> Picture {
+    let absorbed = dot_powers(ctx, w);
+    if absorbed.iter().all(Option::is_none) {
+        return picture_layers(ctx, w, rank);
+    }
+    // draw the word without the later dots of each power: they act on no object
+    let keep: Vec<usize> = (0..w.layers.len())
+        .filter(|&k| absorbed[k].is_none())
+        .collect();
+    let shown = Word {
+        source: w.source.clone(),
+        layers: keep.iter().map(|&k| w.layers[k].clone()).collect(),
+    };
+    let shown_rank: Option<Vec<usize>> = rank.map(|r| keep.iter().map(|&k| r[k]).collect());
+    let mut pic = picture_layers(ctx, &shown, shown_rank.as_deref());
+    for t in &mut pic.tags {
+        if let Some(l) = &mut t.layer {
+            *l = keep[*l];
+        }
+    }
+    for pc in &mut pic.pieces {
+        pc.layer = keep[pc.layer];
+    }
+    for (p, t) in pic.prims.iter_mut().zip(&pic.tags) {
+        if let (Prim::Dot { power, .. }, Some(l)) = (p, t.layer) {
+            *power = 1 + absorbed.iter().filter(|&&h| h == Some(l)).count();
+        }
+    }
+    for (k, h) in absorbed.iter().enumerate() {
+        if let Some(h) = h {
+            let first = pic.pieces.iter().find(|pc| pc.layer == *h).cloned();
+            if let Some(mut pc) = first {
+                pc.layer = k;
+                pic.pieces.push(pc);
+            }
+        }
+    }
+    pic
+}
+
+/// [`picture_ranked`] with every layer drawn.
+fn picture_layers<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]>) -> Picture {
     let levels = draw_levels(ctx, w, rank);
     let parities = ctx.layer_parities(w);
     let mut prims = Vec::new();
@@ -335,7 +388,11 @@ pub fn picture_ranked<R: Ring>(ctx: &Context<R>, w: &Word, rank: Option<&[usize]
                         &mut prims,
                         &mut tags,
                         &mut ups,
-                        Prim::Dot { x: cx, y: cy },
+                        Prim::Dot {
+                            x: cx,
+                            y: cy,
+                            power: 1,
+                        },
                         tag(Some(ids[p])),
                         None,
                     );
@@ -697,7 +754,17 @@ pub fn tikz_word<R: Ring>(ctx: &Context<R>, w: &Word) -> String {
                     num(*y)
                 )
             }
-            Prim::Dot { x, y } => format!("\\fill ({},{}) circle (2pt);", num(*x), num(*y)),
+            Prim::Dot { x, y, power } => {
+                let mut d = format!("\\fill ({},{}) circle (2pt);", num(*x), num(*y));
+                if *power > 1 {
+                    d.push_str(&format!(
+                        " \\node[right=2.5pt,inner sep=0pt] at ({},{}) {{$\\scriptstyle {power}$}};",
+                        num(*x),
+                        num(*y)
+                    ));
+                }
+                d
+            }
             Prim::Box {
                 x0,
                 y0,
@@ -897,11 +964,25 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
                         py(*y)
                     )
                 }
-                Prim::Dot { x, y } => format!(
-                    "<circle{k} cx=\"{}\" cy=\"{}\" r=\"3\" fill=\"currentColor\"/>",
-                    px(*x),
-                    py(*y)
-                ),
+                Prim::Dot {
+                    x: cx,
+                    y: cy,
+                    power,
+                } => {
+                    let mut d = format!(
+                        "<circle{k} cx=\"{}\" cy=\"{}\" r=\"3\" fill=\"currentColor\"/>",
+                        px(*cx),
+                        py(*cy)
+                    );
+                    if *power > 1 {
+                        d.push_str(&format!(
+                            "<text{k} x=\"{}\" y=\"{}\" font-size=\"10\" stroke=\"none\" fill=\"currentColor\">{power}</text>",
+                            num(x + cx * U + 5.0),
+                            num(base - (cy + off) * U + 3.5)
+                        ));
+                    }
+                    d
+                }
                 Prim::Box {
                     x0,
                     y0,
@@ -1030,6 +1111,52 @@ mod tests {
                 .iter()
                 .any(|p| matches!(p, Prim::Arrow { .. } | Prim::Note { .. }))
         );
+    }
+
+    #[test]
+    fn dot_powers_above_three_are_one_labelled_dot() {
+        let ctx = |text: &str, pres: &str| {
+            let spec = ContextSpec::parse(text).unwrap();
+            Context::new(builtin::presentation(pres).unwrap(), spec, Rationals).unwrap()
+        };
+        let dots = |pic: &Picture| -> Vec<usize> {
+            pic.prims
+                .iter()
+                .filter_map(|p| match p {
+                    Prim::Dot { power, .. } => Some(*power),
+                    _ => None,
+                })
+                .collect()
+        };
+        let c = ctx("nilhecke nu=3", "nilhecke");
+        // a power of 3 stays three dots; 5 is one dot labelled 5, at one height
+        let w = |t: &str| c.parse_term(t).unwrap().terms[0].0.clone();
+        assert_eq!(dots(&picture(&c, &w("x_1^3"))), vec![1, 1, 1]);
+        let pic = picture(&c, &w("x_1^5 x_2"));
+        assert_eq!(dots(&pic), vec![5, 1]);
+        assert_eq!(pic.height, 1.0);
+        // every layer keeps a piece, the power's all in one place
+        assert_eq!(pic.pieces.len(), 6);
+        let boxes: Vec<_> = pic
+            .pieces
+            .iter()
+            .filter(|pc| pc.x0 < 0.0)
+            .map(|pc| (pc.x0, pc.y0))
+            .collect();
+        assert_eq!(boxes.len(), 5);
+        assert!(boxes.iter().all(|b| *b == boxes[0]));
+        // dots separated by a crossing on their strand are two powers
+        let pic = picture(&c, &w("x_1^4 psi_1 x_1^4"));
+        assert_eq!(dots(&pic), vec![4, 4]);
+        assert!(svg(&c, &c.parse_term("x_1^4").unwrap()).contains(">4</text>"));
+        let tz = tikz(&c, &c.parse_term("x_1^4").unwrap());
+        assert_eq!(tz.matches("circle").count(), 1, "{tz}");
+        assert!(tz.contains("{$\\scriptstyle 4$}"), "{tz}");
+        // odd dots stay separate: their heights against other odd pieces carry the sign
+        let c = ctx("be2 type=A1 odd=i mu=-1", "be2");
+        let t = c.parse_term("x_1^4 e(i)").unwrap();
+        assert!(c.layer_parities(&t.terms[0].0).iter().all(|&o| o));
+        assert_eq!(dots(&picture(&c, &t.terms[0].0)), vec![1, 1, 1, 1]);
     }
 
     #[test]

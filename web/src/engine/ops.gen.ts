@@ -226,6 +226,10 @@ export type SimplifyResponse =
        * Canonical text of the normal form.
        */
       normal_form: string;
+      /**
+       * The normal form with its commuting dots gathered into monomials (docs/conventions.md, Printing), when that reads differently: a view of the same element, which parses back to it.
+       */
+      monomials?: string;
       terms: number;
       /**
        * 'computation' when the normal form is 0 and the computation alone proves the term zero (every step a relation of the presentation); 'certificate' when the normal form, in particular that it is not zero, also rests on the representation's certificate.
@@ -902,6 +906,10 @@ export interface TermLayoutLayout {
     x?: number;
     y?: number;
     /**
+     * dot: a dot power above 3, drawn as one dot labelled with this exponent; every dot of the power has its own piece, all in the same place.
+     */
+    power?: number;
+    /**
      * arrow: the direction it points in (a unit vector, y up).
      */
     dx?: number;
@@ -1023,6 +1031,10 @@ export interface WorkspaceRunCell {
    * watch: as in simplify.
    */
   normal_form?: string;
+  /**
+   * watch: as in simplify.
+   */
+  monomials?: string;
   /**
    * def and watch: the number of summands (of the term as written for def, of the normal form for watch).
    */

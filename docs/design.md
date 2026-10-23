@@ -51,6 +51,15 @@ sorted with no zero coefficients. Words equal up to the interchange law are iden
 canonical layering (each generator as low as possible, ties broken left to right) together with
 the Koszul sign accumulated on the way, so equality up to interchange is a direct comparison.
 
+The canonical layering is also how a word is printed, which scatters a dot monomial over several
+heights. `Context::fmt_term_monomials` gives a second reading, offered as `monomials` beside a
+normal form when it differs: even dots moved down past whatever does not touch their strand and
+written together as monomials (docs/conventions.md, Printing). It is printed from the stored word
+with no sign to track, since only even dots move, and nothing is stored in that form. Drawings
+shorten dot powers the same way (`render::dot_powers`): four or more even dots one after another
+on a strand are drawn as the first of them, labelled with the exponent, and the others keep
+pieces in the same place, so the canvas can still pick any of them.
+
 Parsing is in two steps. The text format parses to a syntax tree that keeps what was written
 (positional generators, idempotents, powers, sums). Elaboration in a context (a presentation and,
 for KLR, a weight ν) turns the tree into an explicit term: every word gets its source object, and a
@@ -407,6 +416,10 @@ its previous value, shows the vanished ones faded for two seconds, and lists the
 colour when it rests on an assumption or a finite quotient or truncation, whose notes are shown.
 The badge's hypotheses and reference keep the presentation file's text and are shown typeset
 (`src/ui/prose.ts`: short formulas through KaTeX, Lean names in the fixed-width font).
+
+**Gathered dots.** Next to a watch's text form, "Gather dots" switches every watch to the reading
+with its commuting dots gathered into monomials (`monomials`), and "Canonical layering" back; the
+choice is kept in this browser (`diagcalc.monomials`). The drawings and the cell text do not change.
 
 **Tracing a summand.** Clicking a summand of a fresh watch (or Enter on it) asks `workspace.trace`
 which terms of the definitions produced it. The core multiplies each term of each definition the

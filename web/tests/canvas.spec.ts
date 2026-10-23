@@ -482,3 +482,22 @@ test('occurrence IDs are numbered through the document and kept through a rewrit
   await expect(canvas(page).getByTestId('canvas-message')).toContainText('Insert');
   await expect.poll(async () => (await both()).find((x) => x.length === 3)).toEqual(['c1', 'd1', 'd2']);
 });
+
+test('a dot power above 3 is one dot labelled with its exponent, and sliding a dot off splits it', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 x_1^5 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const frame = frames(page).first();
+  await expect(frame.locator('[data-power="5"]')).toBeVisible();
+  // every dot of the power is still a piece of its own, all in one place
+  await expect(frame.locator('[data-draw="dot"]')).toHaveCount(5);
+  const dot = frame.locator('[data-draw="dot"]').last();
+  const box = (await dot.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 60, { steps: 6 });
+  await page.mouse.up();
+  await expect(canvas(page).getByTestId('canvas-message')).toContainText('Slid the dot up through 1 crossing');
+  await expect(canvas(page).locator('[data-power="4"]').first()).toBeVisible();
+});

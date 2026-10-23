@@ -305,6 +305,24 @@ function TraceView(props: { word: string; text: string; trace: Tracer; onClose: 
   );
 }
 
+/** Whether values are read with their commuting dots gathered into monomials: one choice for every watch, kept in this browser. */
+const MONOMIALS = 'diagcalc.monomials';
+const [gathered, setGathered] = createSignal((() => {
+  try {
+    return localStorage.getItem(MONOMIALS) === '1';
+  } catch {
+    return false;
+  }
+})());
+const gather = (on: boolean) => {
+  setGathered(on);
+  try {
+    localStorage.setItem(MONOMIALS, on ? '1' : '0');
+  } catch {
+    // the choice then lasts for this page only
+  }
+};
+
 /** A sum of diagrams, outlining summands that are new since the previous value and showing the vanished ones briefly. */
 export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey?: string; onFocus?: (word: string) => void; source?: string; trace?: Tracer }) {
   const [picked, setPicked] = createSignal<string | null>(null);
@@ -326,6 +344,7 @@ export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey
   }));
   const terms = () => props.r.terms ?? 0;
   const shown = () => props.r.summands?.length ?? 0;
+  const shownText = () => (gathered() && props.r.monomials ? props.r.monomials : props.text);
   return (
     <div class="result">
       <div class="sum" role="img" aria-label={props.text}>
@@ -352,10 +371,17 @@ export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey
           </div>
         </details>
       </Show>
-      {/* the text form only when it says more than the cell's own text */}
-      <Show when={!props.source || same(props.source) !== same(props.text)}>
-        <div class="nf"><span class="hint">{props.source ? 'Normal form' : ''}</span>
-          <Value class="textform" testid="textform" text={props.text} />
+      {/* the text form only when it says more than the cell's own text; optionally with the dots gathered */}
+      <Show when={!props.source || same(props.source) !== same(props.text) || !!props.r.monomials}>
+        <div class="nf">
+          <div class="row">
+            <span class="hint">{props.source ? (gathered() && props.r.monomials ? 'Normal form, dots gathered' : 'Normal form') : ''}</span>
+            <Show when={props.r.monomials}>
+              <button class="small" aria-pressed={gathered()} data-testid="monomials" title="Write commuting dots together as monomials (x₁²x₃) instead of in the canonical layering; the same element"
+                onClick={() => gather(!gathered())}>{gathered() ? 'Canonical layering' : 'Gather dots'}</button>
+            </Show>
+          </div>
+          <Value class="textform" testid="textform" text={shownText()} />
         </div>
       </Show>
     </div>

@@ -1058,7 +1058,13 @@ export function Canvas(props: CanvasProps) {
         case 'turn':
           return <path d={path(line, o())} stroke={strandColour(line.strand)} stroke-dasharray={strandDash(line.strand)} stroke-width={hot() || strandHot() ? 0.09 : 0.055} fill="none" opacity={pulled(line.layer) ? 0.3 : undefined} />;
         case 'dot':
-          return <circle cx={line.x! + o()[0]} cy={-(line.y! + o()[1])} r={hot() ? 0.15 : 0.11} fill={hot() ? 'var(--accent)' : strandColour(line.strand)} visibility={isLive(line.layer) ? 'hidden' : undefined} />;
+          return (
+            <>
+              <circle cx={line.x! + o()[0]} cy={-(line.y! + o()[1])} r={hot() ? 0.15 : 0.11} fill={hot() ? 'var(--accent)' : strandColour(line.strand)} visibility={isLive(line.layer) ? 'hidden' : undefined} />
+              {/* a dot power above 3: one dot labelled with its exponent (docs/conventions.md, Drawing) */}
+              <Show when={line.power}>{(n) => <text x={line.x! + o()[0] + 0.17} y={-(line.y! + o()[1]) + 0.12} font-size="0.32" fill={strandColour(line.strand)} data-power={n()}>{n()}</text>}</Show>
+            </>
+          );
         case 'box':
           return (
             <g transform={`translate(${o()[0]} ${-o()[1]})`}>
@@ -1193,7 +1199,7 @@ export function Canvas(props: CanvasProps) {
               <For each={l.lines}>
                 {(line) =>
                   line.kind === 'strand' || line.kind === 'turn' ? <path d={path(line)} stroke={colourOf(l.strands[line.strand ?? 0]?.colour ?? '')} stroke-width={0.08} fill="none" />
-                  : line.kind === 'dot' ? <circle cx={line.x} cy={-line.y!} r={0.15} fill="currentColor" />
+                  : line.kind === 'dot' ? <><circle cx={line.x} cy={-line.y!} r={0.15} fill="currentColor" /><Show when={line.power}>{(n) => <text x={line.x! + 0.2} y={-line.y! + 0.13} font-size="0.36" fill="currentColor">{n()}</text>}</Show></>
                   : line.kind === 'box' ? <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="none" stroke="currentColor" stroke-width={0.06} />
                   : line.kind === 'arrow' ? <polygon points={arrowPoints(line, 1.3)} fill={colourOf(l.strands[line.strand ?? 0]?.colour ?? '')} />
                   : null}

@@ -268,6 +268,10 @@
               "y": {
                 "type": "number"
               },
+              "power": {
+                "description": "dot: a dot power above 3, drawn as one dot labelled with this exponent; every dot of the power has its own piece, all in the same place.",
+                "type": "integer"
+              },
               "dx": {
                 "description": "arrow: the direction it points in (a unit vector, y up).",
                 "type": "number"

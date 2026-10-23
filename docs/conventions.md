@@ -235,6 +235,15 @@ diagrams.
   stored in canonical layering, a dot on a strand untouched by the crossings below it is printed
   lower than the basis order suggests (`psi_1 x_1 psi_2 x_1 x_3` in `NH_3` is `ψ_1 ψ_2 x_1² x_3`).
   Terms are printed shorter permutations first.
+- **Gathered dots (a view).** A value can also be read with its commuting dots gathered into
+  monomials (`monomials` in `simplify` and in a watch of `workspace.run`, only when it reads
+  differently; the web app's "Gather dots"). Reading the stored word from the bottom, every even
+  dot moves down past the pieces that do not touch its strand and past dots on other strands; the
+  dots that come to rest at one height are written together, in increasing position, with powers
+  (`x_1^2 x_3`). Every other piece keeps its place, so the coefficient keeps its sign, and the
+  text parses back to the same element: `psi_1 x_1 psi_2 x_1 x_3` in `NH_3` reads
+  `psi_1 psi_2 x_1^2 x_3`. Odd dots stay where they are. It is a view only: the text form, the
+  canonical layering and the drawings do not change.
 - **Printing.** A word is printed from its canonical layering, top to bottom. Generators at the same
   height are written left to right; when some of them are odd, the coefficient carries the Koszul
   sign of that order, so that every printed term parses back to exactly the same element.
@@ -339,6 +348,14 @@ strands) carries one arrowhead: on its first plain vertical stretch, else below 
 crossing, else on its cup or cap. A strand that does not start at the bottom, such as a bubble,
 has its colour written beside that arrowhead, and the weight of the rightmost region is written
 to the right of the diagram, in the context's `mu=` notation.
+
+Dot powers. Four or more even dots of one generator one after another on a strand, with no other
+piece on the strand between them, are drawn as one dot at the height of the first, with the
+exponent written to its right (SVG, TikZ and the canvas); the drawing is that much shorter. Three
+or fewer are drawn one by one, and so are odd dots, whose heights against the other odd pieces
+carry the sign. On the canvas every dot of a power is still a piece, all in one place; a dot slid
+off a power is the last one of the power in that direction (they are the same element), so the
+power splits.
 
 Colour. In SVG, every line, dot, arrowhead and colour label of a strand carries the class `k<n>`,
 where `n` is the place of the strand's colour in the context's colour list, from 0 (`klr type=A2`:

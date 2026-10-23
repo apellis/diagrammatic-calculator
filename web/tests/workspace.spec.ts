@@ -364,3 +364,18 @@ test('clicking a summand of a watch shows which terms of the definitions produce
   await trace.getByTestId('trace-close').click();
   await expect(cell(page, 1).getByTestId('trace')).toHaveCount(0);
 });
+
+test("a watch's value can be read with its commuting dots gathered into monomials", async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'watch psi_1 psi_2 x_1^2 x_3 e(iij)');
+  const text = cell(page, 0).getByTestId('textform');
+  await expect(text).toHaveAttribute('data-text', 'psi_1 x_1 psi_2 x_1 x_3 e(iij)');
+  await cell(page, 0).getByTestId('monomials').click();
+  await expect(text).toHaveAttribute('data-text', 'psi_1 psi_2 x_1^2 x_3 e(iij)');
+  // one choice for every watch, kept across reloads
+  await page.reload();
+  await cell(page, 0).locator('.head').click();
+  await expect(cell(page, 0).getByTestId('textform')).toHaveAttribute('data-text', 'psi_1 psi_2 x_1^2 x_3 e(iij)');
+  await cell(page, 0).getByTestId('monomials').click();
+  await expect(cell(page, 0).getByTestId('textform')).toHaveAttribute('data-text', 'psi_1 x_1 psi_2 x_1 x_3 e(iij)');
+});
