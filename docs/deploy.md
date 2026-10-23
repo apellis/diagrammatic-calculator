@@ -13,34 +13,48 @@ allowlist to open it. Removing Access is part of the public release.
 
 ## Steps for Alex
 
-Each step is done once, in this order.
+The deploy workflow provisions what it can itself (see "What the deploy does"); these are the steps
+that need a person, done once.
 
-1. Cloudflare dashboard, Workers & Pages, Plans: subscribe to Workers Paid ($5 a month).
-2. Storage & Databases, D1: create a database named `diagcalc` and copy its database ID.
-3. R2: create a bucket named `diagcalc` (location automatic, no public access).
-4. My Profile, API Tokens: edit the token stored as `CLOUDFLARE_API_TOKEN` and add the account permissions D1: Edit and Workers R2 Storage: Edit (keep Cloudflare Pages: Edit).
-5. GitHub, repository settings, Secrets and variables, Actions: add the secret `D1_DATABASE_ID` with the database ID from step 2.
-6. Google Cloud console, Google Auth Platform: create the consent screen (external audience, app name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only) and publish it.
-7. Google Auth Platform, Clients: create an OAuth client of type Web application with the authorized redirect URI `https://diagcalc.ape.computer/api/auth/callback`.
-8. Cloudflare, Workers & Pages, `diagcalc`, Settings, Variables and Secrets, Production: add the secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 7.
-9. Same place: add the secret `SESSION_SECRET`, a fresh random value of at least 32 characters (for example the output of `openssl rand -base64 48`).
-10. Resend: add the domain `send.ape.computer`, and add the DNS records it lists (SPF, DKIM, and its return-path MX) to the `ape.computer` zone in Cloudflare DNS; wait until Resend shows the domain verified.
-11. Cloudflare DNS: add a TXT record `_dmarc.send.ape.computer` with the value `v=DMARC1; p=quarantine; adkim=s; aspf=s`.
-12. Resend, API Keys: create a key with sending access to `send.ape.computer` only, and add it on the Pages project as the secret `RESEND_API_KEY` (as in step 8).
-13. GitHub, Actions, "Deploy web app": run the workflow; its summary should say "Accounts: D1 database and R2 bucket bound, migrations applied."
+1. Cloudflare, My Profile, API Tokens: edit the token stored as `CLOUDFLARE_API_TOKEN` and add the
+   account permissions D1: Edit and Workers R2 Storage: Edit, and the zone permission DNS: Edit for
+   `ape.computer` (keep Cloudflare Pages: Edit). If R2 was never used on the account, open R2 in the
+   dashboard once and enable it.
+2. Google Cloud console, Google Auth Platform: create the consent screen (external audience, app
+   name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only)
+   and publish it. Then Clients: create an OAuth client of type Web application with the authorized
+   redirect URI `https://diagcalc.ape.computer/api/auth/callback`.
+3. Cloudflare, Workers & Pages, `diagcalc`, Settings, Variables and Secrets, Production: add the
+   secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 2.
+4. Resend: add the domain `send.ape.computer` and put the records it lists (SPF, DKIM, return-path
+   MX) into the `ape.computer` zone (Resend's automatic Cloudflare setup does this); wait until it
+   shows verified. Then API Keys: create a key with sending access to `send.ape.computer` only, and
+   add it as the Pages secret `RESEND_API_KEY` (as in step 3).
+5. GitHub, Actions, "Deploy web app": run the workflow. Its summary lists each part; the last line
+   should say "Accounts: D1 database and R2 bucket bound, migrations applied."
 
-Secrets set in steps 8, 9 and 12 take effect with the next deployment, which step 13 makes. Without
-`RESEND_API_KEY` everything works except that sharing sends no e-mail. The sender address is the
-`EMAIL_FROM` variable in `web/wrangler.toml`.
+Workers Paid ($5 a month) should not be needed yet: D1, R2 and Pages Functions have free
+allowances far above this app's use, and the API does little computation per request (the free
+plan's limit is 10 ms of CPU per request). It is needed for Durable Objects (real-time co-editing,
+phase 7), or earlier if the API ever reports exceeded CPU limits.
+
+Secrets take effect with the next deployment, which step 5 makes. Without `RESEND_API_KEY`
+everything works except that sharing sends no e-mail. The sender address is the `EMAIL_FROM`
+variable in `web/wrangler.toml`.
 
 ## What the deploy does
 
 - Builds the app as before.
-- Without `D1_DATABASE_ID`: removes `web/wrangler.toml` and deploys the site and functions with no
-  bindings.
-- With it: writes the ID into `web/wrangler.toml`, applies the migrations in `web/migrations/` with
-  `wrangler d1 migrations apply diagcalc --remote` (wrangler records which have run), then deploys
-  with the D1 binding `DB`, the R2 binding `FILES` and the variable `EMAIL_FROM`.
+- Runs `.github/scripts/provision-accounts.sh`, which creates, if missing and if the token allows:
+  the D1 database `diagcalc`, the R2 bucket `diagcalc`, the Pages secret `SESSION_SECRET` (a fresh
+  random value, never printed; an existing one is kept, since changing it signs everyone out) and
+  the TXT record `_dmarc.send.ape.computer` = `v=DMARC1; p=quarantine; adkim=s; aspf=s`. It also
+  reports which of the other secrets are set. Nothing in it fails the run.
+- If the database and bucket exist: writes the database ID (looked up by name, or the secret
+  `D1_DATABASE_ID` if set) into `web/wrangler.toml`, applies the migrations in `web/migrations/`
+  with `wrangler d1 migrations apply diagcalc --remote` (wrangler records which have run), then
+  deploys with the D1 binding `DB`, the R2 binding `FILES` and the variable `EMAIL_FROM`.
+- Otherwise: removes `web/wrangler.toml` and deploys the site and functions with no bindings.
 
 A migration is never edited once it is on `master`; a schema change is the next numbered file.
 

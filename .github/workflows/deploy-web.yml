@@ -5,15 +5,19 @@ name: Deploy web app
 # repository has the secrets CLOUDFLARE_API_TOKEN (a token with Cloudflare Pages: Edit) and
 # CLOUDFLARE_ACCOUNT_ID. The Pages project "diagcalc" already exists.
 #
-# The accounts API (web/functions/, phase 6) deploys with the site. Its D1 database and R2 bucket
-# are bound only once the secret D1_DATABASE_ID is set (docs/deploy.md); until then the site is
-# deployed without web/wrangler.toml, the API answers that accounts are not available, and the app
-# stays anonymous. With the secret, the D1 migrations are applied before the new code goes live.
+# The accounts API (web/functions/, phase 6) deploys with the site. Before each deploy,
+# .github/scripts/provision-accounts.sh creates what is missing on Cloudflare (D1 database and R2
+# bucket "diagcalc", the Pages secret SESSION_SECRET, the DMARC record of send.ape.computer) as far
+# as the API token's permissions allow, and says in the run summary what it did or why it could
+# not. The D1 database ID is looked up by name (the secret D1_DATABASE_ID, if set, overrides it).
+# Without both the database and the bucket the site is deployed without web/wrangler.toml, the API
+# answers that accounts are not available, and the app stays anonymous. With them, the D1
+# migrations are applied before the new code goes live.
 
 on:
   push:
     branches: [master]
-    paths: ["web/**", "crates/core/**", "crates/wasm/**", "presentations/**", "examples/**", "Cargo.lock", ".github/workflows/deploy-web.yml"]
+    paths: ["web/**", "crates/core/**", "crates/wasm/**", "presentations/**", "examples/**", "Cargo.lock", ".github/workflows/deploy-web.yml", ".github/scripts/provision-accounts.sh"]
   workflow_dispatch:
 
 concurrency:
@@ -26,7 +30,6 @@ jobs:
     timeout-minutes: 30
     env:
       CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
-      ACCOUNTS: ${{ secrets.D1_DATABASE_ID != '' }}
     defaults:
       run:
         working-directory: web
@@ -64,19 +67,10 @@ jobs:
       - name: Accounts storage
         if: env.CONFIGURED == 'true'
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
-        run: |
-          if [ "$ACCOUNTS" != true ]; then
-            rm wrangler.toml
-            echo "No D1_DATABASE_ID secret yet: deployed without accounts (the app stays anonymous)." >> "$GITHUB_STEP_SUMMARY"
-          elif ! printf '%s' "$D1_DATABASE_ID" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
-            rm wrangler.toml
-            echo "ACCOUNTS=false" >> "$GITHUB_ENV"
-            echo "D1_DATABASE_ID is not a D1 database ID: deployed without accounts." >> "$GITHUB_STEP_SUMMARY"
-          else
-            sed -i "s/^database_id = .*/database_id = \"$D1_DATABASE_ID\"/" wrangler.toml
-            echo "Accounts: D1 database and R2 bucket bound, migrations applied." >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: ../.github/scripts/provision-accounts.sh
       - name: Apply database migrations
         if: env.CONFIGURED == 'true' && env.ACCOUNTS == 'true'
         uses: cloudflare/wrangler-action@v3
