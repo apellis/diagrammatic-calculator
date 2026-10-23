@@ -370,6 +370,10 @@ impl<R: Ring> Evaluator<R> for SkmBasis<'_, R> {
         &self.prov
     }
 
+    fn rewrites_by_relations(&self) -> bool {
+        true
+    }
+
     fn normal_form(&self, t: &CTerm<R>) -> Result<CTerm<R>> {
         let mut out = Term::zero();
         for ((src, tgt, _), terms) in self.groups(t, true) {

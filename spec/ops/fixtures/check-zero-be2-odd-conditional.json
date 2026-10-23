@@ -1,0 +1,15 @@
+{
+  "op": "check",
+  "request": {
+    "context": "be2 type=A1 odd=i mu=-1",
+    "name": "zero",
+    "terms": [
+      "x_1 e(i)"
+    ]
+  },
+  "expect": {
+    "status": "ok",
+    "holds": false,
+    "certified_by": "certificate"
+  }
+}

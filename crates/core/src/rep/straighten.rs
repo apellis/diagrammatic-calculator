@@ -79,6 +79,10 @@ impl<R: Ring> Evaluator<R> for QuiverHeckeBasis<'_, R> {
         &self.prov
     }
 
+    fn rewrites_by_relations(&self) -> bool {
+        true
+    }
+
     fn normal_form(&self, t: &CTerm<R>) -> Result<CTerm<R>> {
         self.check(t)?;
         crate::rewrite::normal_form(self.ctx, &self.rules, &self.layout, t, MAX_STEPS)

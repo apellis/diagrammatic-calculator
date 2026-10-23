@@ -201,6 +201,10 @@ export type SimplifyResponse =
        */
       normal_form: string;
       terms: number;
+      /**
+       * 'computation' when the normal form is 0 and the computation alone proves the term zero (every step a relation of the presentation); 'certificate' when the normal form, in particular that it is not zero, also rests on the representation's certificate.
+       */
+      certified_by?: 'computation' | 'certificate';
       provenance: Provenance;
     }
   | OpError;
@@ -443,6 +447,10 @@ export interface Verdict {
    * When the check fails: the normal form of what should vanish.
    */
   witness: string | null;
+  /**
+   * What this verdict rests on: 'computation' when the computation alone proves it (every step is a relation of the presentation, so a vanishing normal form proves the term zero whatever the certificate says); 'certificate' when it also rests on the representation's certificate, for example that distinct normal forms differ. A verdict that rests on a conditional certificate is conditional; one certified by computation is not.
+   */
+  certified_by: 'computation' | 'certificate';
   provenance: Provenance;
 }
 /**
@@ -944,6 +952,10 @@ export interface WorkspaceRunCell {
    */
   holds?: boolean;
   witness?: string | null;
+  /**
+   * check: as in check; watch: as in simplify.
+   */
+  certified_by?: 'computation' | 'certificate';
   provenance?: Provenance;
   /**
    * solve: 1 for a linear system, 2 for Gröbner bases.

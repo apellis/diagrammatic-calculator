@@ -110,6 +110,7 @@
         "status",
         "holds",
         "witness",
+        "certified_by",
         "provenance"
       ],
       "properties": {
@@ -124,6 +125,13 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "certified_by": {
+          "description": "What this verdict rests on: 'computation' when the computation alone proves it (every step is a relation of the presentation, so a vanishing normal form proves the term zero whatever the certificate says); 'certificate' when it also rests on the representation's certificate, for example that distinct normal forms differ. A verdict that rests on a conditional certificate is conditional; one certified by computation is not.",
+          "enum": [
+            "computation",
+            "certificate"
           ]
         },
         "provenance": {

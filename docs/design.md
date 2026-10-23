@@ -167,14 +167,17 @@ with bubbles, solve against the basis of reduced matchings. What changes:
 - **Sorting decompositions** carry BE2's signs `(−1)^{p(i)p(j)(⟨i,λ⟩+1)}` and the odd versions of
   the curl terms.
 
-Every step is a relation of `U(g)`, so equal normal forms are equal there. The basis words are
-checked to evaluate to independent vectors in every degree computed (a necessary condition for
-the Nondegeneracy Conjecture; a failure would contradict it and is reported as an error), and the
-target to lie in their span (BE2 Theorem 8.1). The certificate is `conditional`, as for the quiver
-Hecke basis. For even colours the session still uses the translation into `kl`, whose
-certificate is a theorem; the tests check that the two agree. Basis evaluations are cached per
-source, target and degree, and bubble series per strand list; a diagram with three strands, one
-of them downward, takes seconds, and that cost grows quickly with the width.
+Every step is a relation of `U(g)`, so equal normal forms are equal there: a check that holds, and
+a normal form of zero, are proven by the computation alone, and the result says so with
+`certified_by: "computation"`; a check that fails, and a nonzero normal form, rest on the
+certificate (`certified_by: "certificate"`), and the web app marks them conditional. The basis
+words are checked to evaluate to independent vectors in every degree computed (a necessary
+condition for the Nondegeneracy Conjecture; a failure would contradict it and is reported as an
+error), and the target to lie in their span (BE2 Theorem 8.1). The certificate is `conditional`,
+as for the quiver Hecke basis. For even colours the session still uses the translation into
+`kl`, whose certificate is a theorem; the tests check that the two agree. Basis evaluations are
+cached per source, target and degree, and bubble series per strand list; a diagram with three
+strands, one of them downward, takes seconds, and that cost grows quickly with the width.
 
 ## Finite-dimensional quotients
 

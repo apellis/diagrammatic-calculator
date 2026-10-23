@@ -27,6 +27,7 @@
         "summands": { "description": "def and watch, when the request asks: the first summands, drawn.", "type": "array", "items": { "$ref": "common.schema.json#/$defs/summand" } },
         "holds": { "description": "check: as in check.", "type": "boolean" },
         "witness": { "type": ["string", "null"] },
+        "certified_by": { "description": "check: as in check; watch: as in simplify.", "enum": ["computation", "certificate"] },
         "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
         "tier": { "description": "solve: 1 for a linear system, 2 for Gröbner bases.", "enum": [1, 2] },
         "outcome": { "description": "solve: what the solution set is.", "enum": ["none", "unique", "finite", "family", "limit_reached"] },

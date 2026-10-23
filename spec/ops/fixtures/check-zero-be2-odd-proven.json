@@ -1,0 +1,16 @@
+{
+  "op": "check",
+  "request": {
+    "context": "be2 type=A1 odd=i mu=-1",
+    "name": "zero",
+    "terms": [
+      "psi_1 psi_1 e(ii)"
+    ]
+  },
+  "expect": {
+    "status": "ok",
+    "holds": true,
+    "witness": null,
+    "certified_by": "computation"
+  }
+}

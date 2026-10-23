@@ -17,6 +17,7 @@
             "status": { "const": "ok" },
             "normal_form": { "description": "Canonical text of the normal form.", "type": "string" },
             "terms": { "type": "integer", "minimum": 0 },
+            "certified_by": { "description": "'computation' when the normal form is 0 and the computation alone proves the term zero (every step a relation of the presentation); 'certificate' when the normal form, in particular that it is not zero, also rests on the representation's certificate.", "enum": ["computation", "certificate"] },
             "provenance": { "$ref": "common.schema.json#/$defs/provenance" }
           }
         },

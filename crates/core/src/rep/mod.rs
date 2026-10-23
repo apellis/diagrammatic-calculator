@@ -118,6 +118,13 @@ pub trait Evaluator<R: Ring>: Sync {
         vec![]
     }
 
+    /// Whether every step of `normal_form` is a relation of the presentation, so that a normal
+    /// form of zero proves the term zero whatever the certificate says; only that distinct normal
+    /// forms differ rests on the certificate.
+    fn rewrites_by_relations(&self) -> bool {
+        false
+    }
+
     /// The highest degree of a basis word starting at `src` with every dot exponent below `cap`;
     /// those words span the quotient by all `x_k^cap`.
     fn max_degree_below_dot_cap(&self, src: &Object, cap: u32) -> Result<i64> {

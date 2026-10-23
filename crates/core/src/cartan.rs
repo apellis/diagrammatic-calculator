@@ -61,7 +61,12 @@ impl Cartan {
     /// in `G2` the first is short (`a_12 = -3`, `a_21 = -1`). Here `a_ij = 2(α_i, α_j)/(α_i, α_i)`,
     /// and the symmetrizer is normalized so that short roots have `(α, α) = 2`.
     pub fn of_type(name: &str) -> Result<Cartan> {
-        let bad = || Error::invalid(format!("unknown Cartan type {name}"));
+        let bad = || {
+            Error::invalid(format!(
+                "unknown Cartan type {name}; the types are An (n ≥ 1), Bn and Cn (n ≥ 2), Dn (n ≥ 4), \
+                 G2, F4, and products such as A1xA1"
+            ))
+        };
         if name.contains('x') {
             let parts = name
                 .split('x')

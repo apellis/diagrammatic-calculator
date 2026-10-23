@@ -177,9 +177,13 @@ impl<'a, R: Ring> Session<'a, R> {
     /// `simplify`, with the first `shown` summands drawn when it is given.
     pub fn simplify_shown(&self, t: &CTerm<R>, shown: Option<usize>) -> Result<Value> {
         let nf = self.eval.normal_form(t)?;
+        // a normal form of zero proves the term zero when every step is a relation; that a
+        // nonzero normal form is the term's own (and nonzero) rests on the certificate
+        let proven = nf.is_zero() && self.eval.rewrites_by_relations();
         let mut v = json!({
             "normal_form": self.ctx.fmt_term(&nf),
             "terms": nf.len(),
+            "certified_by": if proven { "computation" } else { "certificate" },
             "provenance": provenance_json(self.eval.as_ref()),
         });
         if let Some(n) = shown {
@@ -271,7 +275,8 @@ impl<'a, R: Ring> Session<'a, R> {
                 };
                 let ok = toolkit::is_primitive(&alg, &args[0])?;
                 let witness = (!ok).then(|| "e A e / e J e has dimension greater than 1".into());
-                return Ok(self.verdict(ok, witness));
+                // a dimension count rests on the basis either way
+                return Ok(self.verdict_by(ok, witness, false));
             }
             _ => return Err(Error::invalid(format!("unknown check '{name}'"))),
         };
@@ -280,8 +285,23 @@ impl<'a, R: Ring> Session<'a, R> {
         Ok(self.verdict(nf.is_zero(), witness))
     }
 
+    /// A verdict read off normal forms: it holds when they vanish (or, for `homogeneous` and
+    /// `central`, have the required shape), which the computation alone proves when every step is a
+    /// relation; that a check fails rests on the certificate (distinct normal forms differ).
     fn verdict(&self, holds: bool, witness: Option<String>) -> Value {
-        json!({ "holds": holds, "witness": witness, "provenance": provenance_json(self.eval.as_ref()) })
+        let proven = holds && self.eval.rewrites_by_relations();
+        self.verdict_by(holds, witness, proven)
+    }
+
+    /// A verdict, with what it rests on: `computation` when the computation alone proves it,
+    /// `certificate` when it also rests on the representation's certificate.
+    fn verdict_by(&self, holds: bool, witness: Option<String>, proven: bool) -> Value {
+        json!({
+            "holds": holds,
+            "witness": witness,
+            "certified_by": if proven { "computation" } else { "certificate" },
+            "provenance": provenance_json(self.eval.as_ref()),
+        })
     }
 
     pub fn render(&self, t: &CTerm<R>, format: &str) -> Result<String> {
