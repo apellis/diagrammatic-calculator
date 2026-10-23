@@ -94,13 +94,21 @@ if printf '%s' "$r" | ok; then
       summary "SESSION_SECRET: could not be set ($(printf '%s' "$r" | errors))."
     fi
   fi
-  for s in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET RESEND_API_KEY; do
+  r=$(cf GET "$ACC/pages/projects/$NAME")
+  missing=""
+  for s in SESSION_SECRET GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET RESEND_API_KEY; do
     if printf '%s' "$r" | jq -e --arg s "$s" '.result.deployment_configs.production.env_vars[$s]' >/dev/null 2>&1; then
       summary "$s: set."
     else
       summary "$s: not set yet on the Pages project."
+      [ "$s" = RESEND_API_KEY ] || missing="$missing $s"
     fi
   done
+  if [ -z "$missing" ]; then
+    summary "Sign-in secrets: all set."
+  else
+    summary "Sign-in secrets: missing$missing (sign-in stays off until they are set)."
+  fi
 else
   summary "Pages project: could not be read ($(printf '%s' "$r" | errors))."
 fi
