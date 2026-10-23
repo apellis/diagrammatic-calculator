@@ -219,6 +219,19 @@ impl<F: Ring> Ring for RationalFunctions<F> {
     fn div_exact(&self, a: &Self::Elem, b: &Self::Elem) -> Option<Self::Elem> {
         self.inv(b).map(|bi| self.mul(a, &bi))
     }
+    /// Evaluation at a fixed point after the field's map, where the denominator does not vanish.
+    fn residue61(&self, a: &Self::Elem) -> Option<u64> {
+        use crate::ring::{addmod61, invmod61, mulmod61, point61};
+        let r = point61(u64::MAX, 0);
+        let horner = |p: &[F::Elem]| -> Option<u64> {
+            let mut v = 0u64;
+            for c in p.iter().rev() {
+                v = addmod61(mulmod61(v, r), self.field.residue61(c)?);
+            }
+            Some(v)
+        };
+        Some(mulmod61(horner(&a.num)?, invmod61(horner(&a.den)?)?))
+    }
     fn fmt_elem(&self, a: &Self::Elem) -> String {
         let (n, np) = self.fmt_poly(&a.num);
         if a.den.len() == 1 {

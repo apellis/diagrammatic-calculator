@@ -13,11 +13,12 @@ use super::mono::{
 };
 use super::up::{P, Up, Val};
 use crate::error::Result;
+use crate::fxhash::{self, FxHashMap};
 use crate::poly::Poly;
 use crate::ring::Ring;
 use crate::term::Letter;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 /// A coordinate: the component of the sorting decomposition, the permutation and the dots of
@@ -61,7 +62,7 @@ fn rev_colours(w: &[Letter]) -> Vec<u16> {
 
 /// A target object with the coordinates of a diagram into it.
 pub(super) type Evaluated<E> = (Vec<Letter>, Vec<Val<E>>);
-type Decompositions = HashMap<(Vec<Letter>, bool), Rc<Vec<Comp>>>;
+type Decompositions = FxHashMap<(Vec<Letter>, bool), Rc<Vec<Comp>>>;
 
 pub(super) struct Phi<'u, 'a, R: Ring> {
     pub up: &'u Up<'a, R>,
@@ -74,7 +75,7 @@ impl<'u, 'a, R: Ring> Phi<'u, 'a, R> {
         Phi {
             up,
             mu,
-            decs: RefCell::new(HashMap::new()),
+            decs: RefCell::new(fxhash::map()),
         }
     }
 

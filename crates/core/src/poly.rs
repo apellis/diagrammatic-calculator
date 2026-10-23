@@ -47,8 +47,9 @@ pub mod trace {
     }
 }
 
-/// Exponents of a monomial, stored inline for up to 8 variables.
-pub type Exps = SmallVec<[i32; 8]>;
+/// Exponents of a monomial, stored inline for up to 32 variables (the rings of the KL and BE2
+/// normal forms have 16 to 30).
+pub type Exps = SmallVec<[i32; 32]>;
 
 /// Exponent vector of a monomial; its length is the number of variables of the ring.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -89,12 +90,26 @@ impl PartialOrd for Monomial {
     }
 }
 
-/// Graded lexicographic order with `x_1 > x_2 > ⋯`.
+/// Graded lexicographic order with `x_1 > x_2 > ⋯`: total degree first, then the exponents
+/// lexicographically (then the length, for monomials of different rings).
 impl Ord for Monomial {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.degree()
-            .cmp(&other.degree())
-            .then_with(|| self.0.cmp(&other.0))
+        // one pass: both degrees and the first difference
+        let (mut da, mut db) = (0i64, 0i64);
+        let mut first = Ordering::Equal;
+        for (x, y) in self.0.iter().zip(other.0.iter()) {
+            da += *x as i64;
+            db += *y as i64;
+            if first == Ordering::Equal {
+                first = x.cmp(y);
+            }
+        }
+        let (la, lb) = (self.0.len(), other.0.len());
+        if la != lb {
+            da += self.0[la.min(lb)..].iter().map(|&e| e as i64).sum::<i64>();
+            db += other.0[la.min(lb)..].iter().map(|&e| e as i64).sum::<i64>();
+        }
+        da.cmp(&db).then(first).then(la.cmp(&lb))
     }
 }
 
@@ -142,7 +157,8 @@ impl<R: Ring> PolyRing<R> {
     }
 
     pub fn is_commutative(&self) -> bool {
-        self.odd.iter().filter(|&&o| o).count() < 2
+        // stops at the second odd variable
+        self.odd.iter().filter(|&&o| o).nth(1).is_none()
     }
 
     pub fn var(&self, i: usize) -> Poly<R::Elem> {
@@ -188,7 +204,8 @@ impl<R: Ring> PolyRing<R> {
 
     /// Collects unsorted terms into canonical form.
     pub fn normalize(&self, mut terms: Vec<(Monomial, R::Elem)>) -> Poly<R::Elem> {
-        terms.sort_by(|a, b| b.0.cmp(&a.0));
+        // Equal monomials are combined by exact addition, so their order does not matter.
+        terms.sort_unstable_by(|a, b| b.0.cmp(&a.0));
         let mut out: Vec<(Monomial, R::Elem)> = Vec::with_capacity(terms.len());
         for (m, c) in terms {
             match out.last_mut() {
@@ -198,6 +215,53 @@ impl<R: Ring> PolyRing<R> {
         }
         out.retain(|(_, c)| !self.base.is_zero(c));
         Poly { terms: out }
+    }
+
+    /// `a ± b` into `a`, moving the terms of `a` instead of cloning them.
+    fn merge_into(&self, a: &mut Poly<R::Elem>, b: &Poly<R::Elem>, neg: bool) {
+        let signed = |c: &R::Elem| if neg { self.base.neg(c) } else { c.clone() };
+        if b.terms.is_empty() {
+            return;
+        }
+        if a.terms.is_empty() {
+            a.terms = b
+                .terms
+                .iter()
+                .map(|(m, c)| (m.clone(), signed(c)))
+                .collect();
+            return;
+        }
+        let old = std::mem::take(&mut a.terms);
+        let mut out = Vec::with_capacity(old.len() + b.terms.len());
+        let mut it = old.into_iter().peekable();
+        for (mb, cb) in &b.terms {
+            let mut equal = false;
+            while let Some((ma, _)) = it.peek() {
+                match ma.cmp(mb) {
+                    Ordering::Greater => out.push(it.next().expect("peeked")),
+                    Ordering::Equal => {
+                        equal = true;
+                        break;
+                    }
+                    Ordering::Less => break,
+                }
+            }
+            if equal {
+                let (ma, mut ca) = it.next().expect("peeked");
+                if neg {
+                    self.base.sub_assign(&mut ca, cb);
+                } else {
+                    self.base.add_assign(&mut ca, cb);
+                }
+                if !self.base.is_zero(&ca) {
+                    out.push((ma, ca));
+                }
+            } else {
+                out.push((mb.clone(), signed(cb)));
+            }
+        }
+        out.extend(it);
+        a.terms = out;
     }
 
     /// Multiplies every coefficient by a scalar.
@@ -291,6 +355,12 @@ impl<R: Ring> PolyRing<R> {
             1 => return None,
             _ => {}
         }
+        // Fast rejection: the remainder at a fixed point modulo 2⁶¹ − 1 (an image under a ring
+        // homomorphism). A nonzero value proves the remainder nonzero, so the division inexact;
+        // a zero value proves nothing and the exact test below decides.
+        if self.identified_residue61(a, i, j).is_some_and(|v| v != 0) {
+            return None;
+        }
         let rem = self.normalize(
             a.terms
                 .iter()
@@ -318,6 +388,30 @@ impl<R: Ring> PolyRing<R> {
             }
         }
         Some(self.normalize(q_terms))
+    }
+
+    /// `a(x_i := x_j)` evaluated at the points [`crate::ring::point61`] modulo `2⁶¹ − 1`, when
+    /// every coefficient has a residue and no exponent is negative.
+    fn identified_residue61(&self, a: &Poly<R::Elem>, i: usize, j: usize) -> Option<u64> {
+        use crate::ring::{addmod61, mulmod61, point61};
+        let n = self.nvars();
+        let pts: SmallVec<[u64; 32]> = (0..n)
+            .map(|k| point61(0, if k == i { j } else { k }))
+            .collect();
+        let mut sum = 0u64;
+        for (m, c) in &a.terms {
+            let mut v = self.base.residue61(c)?;
+            for (&e, &p) in m.0.iter().zip(&pts) {
+                if e < 0 {
+                    return None;
+                }
+                for _ in 0..e {
+                    v = mulmod61(v, p);
+                }
+            }
+            sum = addmod61(sum, v);
+        }
+        Some(sum)
     }
 
     /// Substitutes `x_i := x_j` (commutative case).
@@ -453,6 +547,20 @@ impl<R: Ring> Ring for PolyRing<R> {
         out.extend_from_slice(&b.terms[j..]);
         Poly { terms: out }
     }
+    fn add_assign(&self, a: &mut Self::Elem, b: &Self::Elem) {
+        if cfg!(feature = "trace") {
+            *a = self.add(a, b);
+        } else {
+            self.merge_into(a, b, false);
+        }
+    }
+    fn sub_assign(&self, a: &mut Self::Elem, b: &Self::Elem) {
+        if cfg!(feature = "trace") {
+            *a = self.sub(a, b);
+        } else {
+            self.merge_into(a, b, true);
+        }
+    }
     fn neg(&self, a: &Self::Elem) -> Self::Elem {
         Poly {
             terms: a
@@ -534,6 +642,28 @@ impl<R: Ring> Ring for PolyRing<R> {
             q = self.add(&q, &t);
         }
         Some(q)
+    }
+    /// Evaluation at the points [`crate::ring::point61`] (salted by the number of variables)
+    /// after the base ring's map; for commutative rings without exterior variables.
+    fn residue61(&self, a: &Self::Elem) -> Option<u64> {
+        use crate::ring::{addmod61, invmod61, mulmod61, point61, powmod61};
+        if !self.is_commutative() || self.exterior.iter().any(|&e| e) {
+            return None;
+        }
+        let salt = 1 + self.nvars() as u64;
+        let mut sum = 0u64;
+        for (m, c) in &a.terms {
+            let mut v = self.base.residue61(c)?;
+            for (k, &e) in m.0.iter().enumerate() {
+                if e != 0 {
+                    let p = point61(salt, k);
+                    let p = if e < 0 { invmod61(p)? } else { p };
+                    v = mulmod61(v, powmod61(p, e.unsigned_abs() as u64));
+                }
+            }
+            sum = addmod61(sum, v);
+        }
+        Some(sum)
     }
     fn fmt_elem(&self, a: &Self::Elem) -> String {
         if a.terms.is_empty() {

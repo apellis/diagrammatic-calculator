@@ -27,13 +27,17 @@ use crate::perm::Perm;
 use crate::poly::{Monomial, Poly, PolyRing};
 use crate::ring::Ring;
 use crate::term::{Object, Term, Word};
+use smallvec::{SmallVec, smallvec};
 use std::collections::BTreeMap;
+
+/// The exponents of a denominator, indexed by `a·n + b`: inline for up to 4 strands.
+pub(super) type Den = SmallVec<[u32; 16]>;
 
 /// `num / Π_{a<b} (x_a − x_b)^{den[a·n+b]}`, with no factor of the denominator dividing `num`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Frac<E> {
     pub(super) num: Poly<E>,
-    pub(super) den: Vec<u32>,
+    pub(super) den: Den,
 }
 
 pub(super) type Value<E> = BTreeMap<(Object, Perm), Frac<E>>;
@@ -60,7 +64,7 @@ impl<R: Ring> Alg<R> {
     pub(super) fn poly(&self, p: Poly<R::Elem>) -> Frac<R::Elem> {
         Frac {
             num: p,
-            den: vec![0; self.n * self.n],
+            den: smallvec![0; self.n * self.n],
         }
     }
 
@@ -100,7 +104,7 @@ impl<R: Ring> Alg<R> {
     /// denominators can cancel.
     pub(super) fn mul(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
         let num = self.ring.mul(&x.num, &y.num);
-        let den: Vec<u32> = x.den.iter().zip(&y.den).map(|(a, b)| a + b).collect();
+        let den: Den = x.den.iter().zip(&y.den).map(|(a, b)| a + b).collect();
         if !self.ring.is_domain() {
             return self.canon(Frac { num, den });
         }
@@ -112,7 +116,7 @@ impl<R: Ring> Alg<R> {
     /// with a higher power in one denominator divides the other lifted numerator but not this
     /// one, so only factors with equal positive powers can cancel.
     pub(super) fn add(&self, x: &Frac<R::Elem>, y: &Frac<R::Elem>) -> Frac<R::Elem> {
-        let den: Vec<u32> = x.den.iter().zip(&y.den).map(|(a, b)| *a.max(b)).collect();
+        let den: Den = x.den.iter().zip(&y.den).map(|(a, b)| *a.max(b)).collect();
         let lift = |f: &Frac<R::Elem>| {
             let mut num = f.num.clone();
             for (k, (&have, &want)) in f.den.iter().zip(&den).enumerate() {
@@ -128,6 +132,42 @@ impl<R: Ring> Alg<R> {
         }
         let ks = (0..den.len()).filter(|&k| x.den[k] > 0 && x.den[k] == y.den[k]);
         self.canon_at(Frac { num, den }, ks)
+    }
+
+    /// [`Alg::add`] into `x`, lifting only the summand that needs it.
+    pub(super) fn add_assign(&self, x: &mut Frac<R::Elem>, y: &Frac<R::Elem>) {
+        if !self.ring.is_domain() {
+            *x = self.add(x, y);
+            return;
+        }
+        let mut ks: SmallVec<[usize; 16]> = SmallVec::new();
+        let mut lifted_y: Option<Poly<R::Elem>> = None;
+        for k in 0..x.den.len() {
+            let (have, want) = (x.den[k], y.den[k]);
+            if have > 0 && have == want {
+                ks.push(k);
+            } else if have < want {
+                for _ in have..want {
+                    x.num = self.ring.mul(&x.num, &self.diffs[k]);
+                }
+                x.den[k] = want;
+            } else if want < have {
+                let ly = lifted_y.get_or_insert_with(|| y.num.clone());
+                for _ in want..have {
+                    *ly = self.ring.mul(ly, &self.diffs[k]);
+                }
+            }
+        }
+        self.ring
+            .add_assign(&mut x.num, lifted_y.as_ref().unwrap_or(&y.num));
+        let f = std::mem::replace(
+            x,
+            Frac {
+                num: self.ring.zero(),
+                den: Den::new(),
+            },
+        );
+        *x = self.canon_at(f, ks.into_iter());
     }
 
     pub(super) fn neg(&self, x: &Frac<R::Elem>) -> Frac<R::Elem> {
@@ -155,7 +195,7 @@ impl<R: Ring> Alg<R> {
         }
         let n = self.n;
         let mut num = self.act_poly(w, &f.num);
-        let mut den = vec![0; n * n];
+        let mut den: Den = smallvec![0; n * n];
         for a in 0..n {
             for b in a + 1..n {
                 let e = f.den[a * n + b];
@@ -199,18 +239,31 @@ impl<R: Ring> Alg<R> {
 
     pub(super) fn val_add(&self, a: &mut Value<R::Elem>, b: &Value<R::Elem>) {
         for (k, f) in b {
-            match a.get(k) {
+            match a.get_mut(k) {
                 Some(g) => {
-                    let s = self.add(g, f);
-                    if self.ring.is_zero(&s.num) {
+                    self.add_assign(g, f);
+                    if self.ring.is_zero(&g.num) {
                         a.remove(k);
-                    } else {
-                        a.insert(k.clone(), s);
                     }
                 }
                 None => {
                     a.insert(k.clone(), f.clone());
                 }
+            }
+        }
+    }
+
+    /// Adds `f` at the key `k` of `a`.
+    fn val_add_one(&self, a: &mut Value<R::Elem>, k: (Object, Perm), f: Frac<R::Elem>) {
+        match a.get_mut(&k) {
+            Some(g) => {
+                self.add_assign(g, &f);
+                if self.ring.is_zero(&g.num) {
+                    a.remove(&k);
+                }
+            }
+            None => {
+                a.insert(k, f);
             }
         }
     }
@@ -225,9 +278,7 @@ impl<R: Ring> Alg<R> {
                     break;
                 }
                 let f = self.mul(r, &self.act(w, s));
-                let mut one = Value::new();
-                one.insert((j.clone(), w.compose(v)), f);
-                self.val_add(&mut out, &one);
+                self.val_add_one(&mut out, (j.clone(), w.compose(v)), f);
             }
         }
         out
@@ -309,7 +360,7 @@ impl<'a, R: Ring> Smash<'a, R> {
             } else if l.generator == self.crossing {
                 let (a, b) = (obj[k].colour, obj[k + 1].colour);
                 if a == b {
-                    let mut den = vec![0; n * n];
+                    let mut den: Den = smallvec![0; n * n];
                     den[k * n + k + 1] = 1;
                     let inv = Frac {
                         num: alg.ring.one(),

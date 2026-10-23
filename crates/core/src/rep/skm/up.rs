@@ -20,13 +20,14 @@
 
 use crate::context::Context;
 use crate::error::{Error, Result};
+use crate::fxhash::{self, FxHashMap};
 use crate::perm::Perm;
 use crate::poly::{Exps, Monomial, Poly, PolyRing};
 use crate::rep::kl::up::{adapted_l, adapted_r};
 use crate::rewrite::{Op, perm_of, plan};
 use crate::ring::Ring;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 /// The message of the error raised when a bubble index exceeds the allocated variables; the
@@ -38,10 +39,10 @@ pub(super) const OVERFLOW: &str = "skm: bubble index above the allocated variabl
 pub(super) type Val<E> = BTreeMap<Perm, Poly<E>>;
 
 pub(super) type P<R> = Poly<<R as Ring>::Elem>;
-type Cache<E> = RefCell<HashMap<(Vec<u16>, Perm, usize), Rc<Val<E>>>>;
+type Cache<E> = RefCell<FxHashMap<(Vec<u16>, Perm, usize), Rc<Val<E>>>>;
 /// Strands `(colour, dot)` that bubbles slide across.
 type Strands<E> = Vec<(u16, Poly<E>)>;
-type SeriesCache<K, E> = RefCell<HashMap<K, Rc<Vec<Poly<E>>>>>;
+type SeriesCache<K, E> = RefCell<FxHashMap<K, Rc<Vec<Poly<E>>>>>;
 /// A bubble series: colour, clockwise, the strands it slides across, and on which side.
 type BubbleKey<E> = (u16, bool, Strands<E>, bool);
 /// A value peeled into crossing words with the polynomials below them.
@@ -82,8 +83,8 @@ pub(super) struct Up<'a, R: Ring> {
     pub nc: usize,
     /// The ring with every dot even; the dots get their parities from the strands below them.
     plain: PolyRing<R>,
-    rings: RefCell<HashMap<Vec<u16>, Rc<PolyRing<R>>>>,
-    cser: RefCell<HashMap<u16, Vec<P<R>>>>,
+    rings: RefCell<FxHashMap<Vec<u16>, Rc<PolyRing<R>>>>,
+    cser: RefCell<FxHashMap<u16, Vec<P<R>>>>,
     slide_cache: SeriesCache<(Strands<R::Elem>, bool), R::Elem>,
     bubble_cache: SeriesCache<BubbleKey<R::Elem>, R::Elem>,
     cross_cache: Cache<R::Elem>,
@@ -136,12 +137,12 @@ impl<'a, R: Ring> Up<'a, R> {
             kz,
             nc,
             plain,
-            rings: RefCell::new(HashMap::new()),
-            cser: RefCell::new(HashMap::new()),
-            slide_cache: RefCell::new(HashMap::new()),
-            bubble_cache: RefCell::new(HashMap::new()),
-            cross_cache: RefCell::new(HashMap::new()),
-            dot_cache: RefCell::new(HashMap::new()),
+            rings: RefCell::new(fxhash::map()),
+            cser: RefCell::new(fxhash::map()),
+            slide_cache: RefCell::new(fxhash::map()),
+            bubble_cache: RefCell::new(fxhash::map()),
+            cross_cache: RefCell::new(fxhash::map()),
+            dot_cache: RefCell::new(fxhash::map()),
         })
     }
 
@@ -151,6 +152,10 @@ impl<'a, R: Ring> Up<'a, R> {
         if let Some(r) = self.rings.borrow().get(cols) {
             return r.clone();
         }
+        assert!(
+            cols.len() <= self.nx,
+            "skm: more strands than dot variables"
+        );
         let mut r = self.plain.clone();
         for (k, &c) in cols.iter().enumerate() {
             r.odd[k] = self.odd[c as usize];
@@ -294,15 +299,23 @@ impl<'a, R: Ring> Up<'a, R> {
     fn add_into(&self, cols: &[u16], a: &mut Val<R::Elem>, b: &Val<R::Elem>, neg: bool) {
         let r = self.ring(cols);
         for (w, f) in b {
-            let f = if neg { r.neg(f) } else { f.clone() };
-            let s = match a.get(w) {
-                Some(g) => r.add(g, &f),
-                None => f,
-            };
-            if r.is_zero(&s) {
-                a.remove(w);
-            } else {
-                a.insert(w.clone(), s);
+            match a.get_mut(w) {
+                Some(g) => {
+                    if neg {
+                        r.sub_assign(g, f);
+                    } else {
+                        r.add_assign(g, f);
+                    }
+                    if r.is_zero(g) {
+                        a.remove(w);
+                    }
+                }
+                None => {
+                    let f = if neg { r.neg(f) } else { f.clone() };
+                    if !r.is_zero(&f) {
+                        a.insert(w.clone(), f);
+                    }
+                }
             }
         }
     }
@@ -869,6 +882,13 @@ impl<'a, R: Ring> Up<'a, R> {
         top: &mut [u16],
         evs: &[UpEv<R::Elem>],
     ) -> Result<Val<R::Elem>> {
+        if top.len() > self.nx || cols.len() > self.nx {
+            return Err(Error::invalid(format!(
+                "skm: a value on {} strands, but the ring has {} dot variables",
+                top.len().max(cols.len()),
+                self.nx
+            )));
+        }
         for ev in evs {
             if v.is_empty() {
                 return Ok(v);

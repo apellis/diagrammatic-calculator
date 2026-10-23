@@ -15,6 +15,7 @@ pub mod context;
 pub mod elab;
 pub mod error;
 pub mod expr;
+pub mod fxhash;
 pub mod groebner;
 pub mod lean;
 pub mod linalg;

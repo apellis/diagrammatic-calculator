@@ -22,13 +22,14 @@
 
 use crate::context::{Context, PARAM_VARS};
 use crate::error::{Error, Result};
+use crate::fxhash::{self, FxHashMap};
 use crate::perm::Perm;
 use crate::poly::{Exps, Monomial, Poly, PolyRing};
-use crate::rep::smash::{Alg, Frac, Value};
+use crate::rep::smash::{Alg, Den, Frac, Value};
 use crate::ring::Ring;
 use crate::term::{Letter, Object};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 /// The message of the error raised when a bubble index exceeds the allocated variables; the
 /// caller retries with more.
@@ -63,12 +64,12 @@ pub(super) struct Up<'a, R: Ring> {
     pub kz: usize,
     pub nc: usize,
     algs: Vec<Alg<R>>,
-    cser: RefCell<HashMap<u16, Vec<Poly<R::Elem>>>>,
+    cser: RefCell<FxHashMap<u16, Vec<Poly<R::Elem>>>>,
     basis: RefCell<BasisCache<R::Elem>>,
 }
 
 pub(super) type P<R> = Poly<<R as Ring>::Elem>;
-type BasisCache<E> = HashMap<(Vec<u16>, Vec<usize>), Value<E>>;
+type BasisCache<E> = FxHashMap<(Vec<u16>, Vec<usize>), Value<E>>;
 /// A term of [`Up::peel`]: the permutation, its reduced word and the polynomial.
 pub(super) type Peeled<R> = (Perm, Vec<usize>, P<R>);
 
@@ -163,8 +164,8 @@ impl<'a, R: Ring> Up<'a, R> {
             kz,
             nc,
             algs,
-            cser: RefCell::new(HashMap::new()),
-            basis: RefCell::new(HashMap::new()),
+            cser: RefCell::new(fxhash::map()),
+            basis: RefCell::new(fxhash::map()),
         })
     }
 
@@ -462,6 +463,12 @@ impl<'a, R: Ring> Up<'a, R> {
         evs: &[UpEv<R::Elem>],
     ) -> Result<Value<R::Elem>> {
         let n = top.len();
+        if n > self.nx {
+            return Err(Error::invalid(format!(
+                "kl: a value on {n} strands, but the ring has {} dot variables",
+                self.nx
+            )));
+        }
         let alg = self.alg(n);
         for ev in evs {
             if v.is_empty() {
@@ -485,7 +492,7 @@ impl<'a, R: Ring> Up<'a, R> {
                     let (a, b) = (top[k], top[k + 1]);
                     let mut g = Value::new();
                     if a == b {
-                        let mut den = vec![0; n * n];
+                        let mut den: Den = smallvec::smallvec![0; n * n];
                         den[k * n + k + 1] = 1;
                         let inv = Frac {
                             num: self.ring.one(),
@@ -787,7 +794,7 @@ impl<'a, R: Ring> Up<'a, R> {
             let mut p: Vec<u8> = (0..s as u8).collect();
             p.extend(w.0.iter().map(|&b| b + s as u8));
             p.extend((s + from) as u8..n as u8);
-            let mut den = vec![0; n * n];
+            let mut den: Den = smallvec::smallvec![0; n * n];
             for a in 0..from {
                 for b in a + 1..from {
                     den[(a + s) * n + b + s] = f.den[a * from + b];

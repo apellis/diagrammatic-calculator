@@ -150,7 +150,9 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
     }
 
     /// Runs `f` with enough bubble variables: from 4 per colour, doubling while an index
-    /// overflows.
+    /// overflows. `nx`, the number of dot variables, is the longest object the words pass through,
+    /// for the reason given at `crate::rep::kl`'s `with_up` (the evaluation has the same runs);
+    /// [`Up::run`] checks it.
     fn with_up<T>(&self, nx: usize, f: impl Fn(&Up<'_, R>) -> Result<T>) -> Result<T> {
         let mut kz = 4;
         loop {
@@ -228,7 +230,7 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
         for w in bent.iter().map(|(w, _)| w).chain(&bent_basis) {
             len = len.max(self.longest(w));
         }
-        let coefs = self.with_up(2 * len + 2, |up| {
+        let coefs = self.with_up(len, |up| {
             let phi = Phi::new(up, mu.clone());
             let (_, acc) = self.phi_sum(&phi, &bent)?;
             let target = phi.coords(&target_obj, &acc)?;
@@ -271,15 +273,20 @@ fn axpy<K: Ring>(
         out.insert(key.clone(), k.mul(b, x));
     }
     for (key, y) in r {
-        let t = k.neg(&k.mul(a, y));
-        let s = match out.get(key) {
-            Some(o) => k.add(o, &t),
-            None => t,
-        };
-        if k.is_zero(&s) {
-            out.remove(key);
-        } else {
-            out.insert(key.clone(), s);
+        let t = k.mul(a, y);
+        match out.get_mut(key) {
+            Some(o) => {
+                k.sub_assign(o, &t);
+                if k.is_zero(o) {
+                    out.remove(key);
+                }
+            }
+            None => {
+                let t = k.neg(&t);
+                if !k.is_zero(&t) {
+                    out.insert(key.clone(), t);
+                }
+            }
         }
     }
     out.retain(|_, x| !k.is_zero(x));
@@ -392,7 +399,7 @@ impl<R: Ring> Evaluator<R> for SkmBasis<'_, R> {
                 .map(|(w, c)| (bend(&self.roles, w), c.clone()))
                 .collect();
             let len = bent.iter().map(|(w, _)| self.longest(w)).max().unwrap_or(0);
-            let zero = self.with_up(2 * len + 2, |up| {
+            let zero = self.with_up(len, |up| {
                 let phi = Phi::new(up, mu.clone());
                 let (_, acc) = self.phi_sum(&phi, &bent)?;
                 Ok(acc.iter().all(|v| v.is_empty()))

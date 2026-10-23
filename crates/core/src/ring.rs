@@ -26,6 +26,14 @@ pub trait Ring: Clone + Debug + PartialEq + Send + Sync {
     /// `b⁻¹` if `b` is a unit.
     fn inv(&self, b: &Self::Elem) -> Option<Self::Elem>;
 
+    /// The image of `a` under a fixed ring homomorphism into `ℤ/(2⁶¹ − 1)`, when the ring has
+    /// one defined at `a` ([`P61`]). A fast test for zero: a nonzero image proves `a ≠ 0`; a zero
+    /// image proves nothing. `None` when there is no such map (the default).
+    fn residue61(&self, a: &Self::Elem) -> Option<u64> {
+        let _ = a;
+        None
+    }
+
     /// `a / b` when `b` divides `a` exactly (for domains, the quotient is unique).
     fn div_exact(&self, a: &Self::Elem, b: &Self::Elem) -> Option<Self::Elem>;
 
@@ -77,6 +85,9 @@ pub trait Ring: Clone + Debug + PartialEq + Send + Sync {
     fn add_assign(&self, a: &mut Self::Elem, b: &Self::Elem) {
         *a = self.add(a, b);
     }
+    fn sub_assign(&self, a: &mut Self::Elem, b: &Self::Elem) {
+        *a = self.sub(a, b);
+    }
     fn pow(&self, a: &Self::Elem, mut e: u32) -> Self::Elem {
         let mut base = a.clone();
         let mut acc = self.one();
@@ -96,6 +107,52 @@ pub trait Ring: Clone + Debug + PartialEq + Send + Sync {
         let _ = a;
         false
     }
+}
+
+/// The prime `2⁶¹ − 1` of [`Ring::residue61`].
+pub const P61: u64 = (1u64 << 61) - 1;
+
+/// `a · b mod 2⁶¹ − 1` for `a, b < 2⁶¹ − 1`.
+pub fn mulmod61(a: u64, b: u64) -> u64 {
+    let r = (a as u128) * (b as u128);
+    let s = ((r as u64) & P61) + ((r >> 61) as u64);
+    if s >= P61 { s - P61 } else { s }
+}
+
+/// `a + b mod 2⁶¹ − 1` for `a, b < 2⁶¹ − 1`.
+pub fn addmod61(a: u64, b: u64) -> u64 {
+    let s = a + b;
+    if s >= P61 { s - P61 } else { s }
+}
+
+/// `b^e mod 2⁶¹ − 1`.
+pub fn powmod61(mut b: u64, mut e: u64) -> u64 {
+    let mut r = 1u64;
+    while e > 0 {
+        if e & 1 == 1 {
+            r = mulmod61(r, b);
+        }
+        b = mulmod61(b, b);
+        e >>= 1;
+    }
+    r
+}
+
+/// `b⁻¹ mod 2⁶¹ − 1`, `None` for 0.
+pub fn invmod61(b: u64) -> Option<u64> {
+    (b != 0).then(|| powmod61(b, P61 - 2))
+}
+
+/// A fixed nonzero point modulo `2⁶¹ − 1` for variable `k` of a ring (SplitMix64 of `k` and a
+/// salt): the evaluation point of the homomorphisms behind [`Ring::residue61`]. Any choice of
+/// points gives a homomorphism; well-spread points only make zero images of nonzero elements rare.
+pub fn point61(salt: u64, k: usize) -> u64 {
+    let mut z = (k as u64)
+        .wrapping_add(salt.wrapping_mul(0xD1B5_4A32_D192_ED03))
+        .wrapping_add(0x9E37_79B9_7F4A_7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    1 + (z ^ (z >> 31)) % (P61 - 1)
 }
 
 /// The integers ℤ.
@@ -127,6 +184,9 @@ impl Ring for Integers {
     }
     fn inv(&self, b: &Int) -> Option<Int> {
         b.abs().is_one().then(|| b.clone())
+    }
+    fn residue61(&self, a: &Int) -> Option<u64> {
+        Some(a.rem_u64(P61))
     }
     fn div_exact(&self, a: &Int, b: &Int) -> Option<Int> {
         if b.is_zero() {
@@ -178,6 +238,14 @@ impl Ring for Rationals {
     }
     fn inv(&self, b: &Rat) -> Option<Rat> {
         b.recip()
+    }
+    fn residue61(&self, a: &Rat) -> Option<u64> {
+        // defined on fractions whose denominator is prime to 2⁶¹ − 1
+        let n = a.numer().rem_u64(P61);
+        if a.denom().is_one() {
+            return Some(n);
+        }
+        Some(mulmod61(n, invmod61(a.denom().rem_u64(P61))?))
     }
     fn div_exact(&self, a: &Rat, b: &Rat) -> Option<Rat> {
         b.recip().map(|r| a.mul(&r))
@@ -262,6 +330,9 @@ impl Ring for PrimeField {
             e >>= 1;
         }
         Some(acc)
+    }
+    fn residue61(&self, a: &u64) -> Option<u64> {
+        (self.p == P61).then_some(*a)
     }
     fn div_exact(&self, a: &u64, b: &u64) -> Option<u64> {
         self.inv(b).map(|bi| self.mul(a, &bi))

@@ -126,7 +126,12 @@ impl<'a, R: Ring> KlBasis<'a, R> {
     }
 
     /// Runs `f` with enough bubble variables: from 4 per colour, doubling while an index
-    /// overflows.
+    /// overflows. `nx`, the number of dot variables, is the longest object the words pass through:
+    /// `Φ` ([`eval`]) works one run of layers at a time, from an object `w` to `w2`, and straightens
+    /// `q ≫ run ≫ p` (between sorted components no longer than `w` and `w2`) into one upward
+    /// diagram on `#E(src) + #F(tgt) = (|src| + |tgt|) / 2` strands, since each cup or cap of the
+    /// run adds or removes one `E` and one `F`. So no value has more than `max(|w|, |w2|)` strands,
+    /// and partial traces only remove strands; [`Up::run`] checks it.
     fn with_up<T>(&self, nx: usize, f: impl Fn(&Up<'_, R>) -> Result<T>) -> Result<T> {
         let mut kz = 4;
         loop {
@@ -203,7 +208,7 @@ impl<'a, R: Ring> KlBasis<'a, R> {
         for w in bent.iter().map(|(w, _)| w).chain(&bent_basis) {
             len = len.max(self.longest(w));
         }
-        let coefs = self.with_up(2 * len + 2, |up| {
+        let coefs = self.with_up(len, |up| {
             let phi = Phi::new(up, mu.clone());
             let (_, acc) = self.phi_sum(&phi, &bent)?;
             let target = phi.coords(&target_obj, &acc)?;
@@ -235,15 +240,20 @@ fn axpy<K: Ring>(
         out.insert(key.clone(), k.mul(b, x));
     }
     for (key, y) in r {
-        let t = k.neg(&k.mul(a, y));
-        let s = match out.get(key) {
-            Some(o) => k.add(o, &t),
-            None => t,
-        };
-        if k.is_zero(&s) {
-            out.remove(key);
-        } else {
-            out.insert(key.clone(), s);
+        let t = k.mul(a, y);
+        match out.get_mut(key) {
+            Some(o) => {
+                k.sub_assign(o, &t);
+                if k.is_zero(o) {
+                    out.remove(key);
+                }
+            }
+            None => {
+                let t = k.neg(&t);
+                if !k.is_zero(&t) {
+                    out.insert(key.clone(), t);
+                }
+            }
         }
     }
     out.retain(|_, x| !k.is_zero(x));
@@ -352,7 +362,7 @@ impl<R: Ring> Evaluator<R> for KlBasis<'_, R> {
                 .map(|(w, c)| (bend(&self.roles, w), c.clone()))
                 .collect();
             let len = bent.iter().map(|(w, _)| self.longest(w)).max().unwrap_or(0);
-            let zero = self.with_up(2 * len + 2, |up| {
+            let zero = self.with_up(len, |up| {
                 let phi = Phi::new(up, mu.clone());
                 let (_, acc) = self.phi_sum(&phi, &bent)?;
                 Ok(acc.iter().all(|v| v.is_empty()))
