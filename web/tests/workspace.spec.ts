@@ -86,16 +86,16 @@ test('history: versions, read-only view and restore', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'watch x_1 e(ij)');
   await addCell(page, 'watch x_2 e(ij)');
-  await page.getByRole('button', { name: 'History' }).click();
+  await page.getByRole('tab', { name: 'History' }).click();
   const items = page.locator('.outline .oitem');
-  await expect(items.first()).toContainText('add watch x_2 e(ij)');
+  await expect(items.first()).toHaveAttribute('data-note', 'add watch x_2 e(ij)');
   // the version before the second cell was added
   await items.nth(1).click();
   await expect(page.getByRole('dialog')).toContainText('watch x_1 e(ij)');
   await expect(page.getByRole('dialog')).not.toContainText('x_2');
   await page.getByRole('button', { name: 'Restore this version' }).click();
   await expect(page.locator('.cell[data-cell]')).toHaveCount(1);
-  await expect(items.first()).toContainText('restore version');
+  await expect(items.first()).toHaveAttribute('data-note', /^restore version/);
 });
 
 test('documents persist across reloads, and the list can rename, duplicate and delete', async ({ page }) => {
@@ -105,13 +105,14 @@ test('documents persist across reloads, and the list can rename, duplicate and d
   await page.reload();
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term, degree 4');
   await page.goto('/');
-  page.once('dialog', (d) => d.accept('Dots'));
   await page.getByRole('button', { name: 'Rename' }).first().click();
+  await page.getByLabel('Document name').fill('Dots');
+  await page.getByLabel('Document name').press('Enter');
   await expect(page.locator('td.open').first()).toHaveText('Dots');
   await page.getByRole('button', { name: 'Duplicate' }).first().click();
   await expect(page.locator('td.open')).toHaveText(['Dots (copy)', 'Dots']);
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Delete' }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(page.locator('td.open')).toHaveText(['Dots']);
 });
 
@@ -138,16 +139,17 @@ test('pinning a result keeps a snapshot', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'watch x_1 psi_1 e(iij)');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('2 terms, degree 0');
-  page.once('dialog', (d) => d.accept('first'));
   await cell(page, 0).getByRole('button', { name: 'Pin result' }).click();
-  await page.getByRole('button', { name: 'Snapshots' }).click();
+  await page.getByLabel('Snapshot name').fill('first');
+  await page.getByLabel('Snapshot name').press('Enter');
+  await page.getByRole('tab', { name: 'Snapshots' }).click();
   await page.locator('.outline .oitem', { hasText: 'first' }).click();
   await expect(page.getByRole('dialog').or(page.locator('.modal'))).toContainText('"kind": "watch"');
 });
 
 test('the gate example: idempotents of a cyclotomic quotient', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'klr-a2-idempotents' }).click();
+  await page.locator('[data-example="klr-a2-idempotents"]').click();
   const summaries = page.locator('.cell[data-cell] [data-testid=summary]');
   await expect(summaries).toHaveText(['', '2 terms', '2 terms, degree 0', '4 solutions', '1 term', '2 terms', 'holds', 'holds', 'holds', 'holds', 'holds', 'holds', '1 term, degree 0'], { timeout: 30_000 });
 });

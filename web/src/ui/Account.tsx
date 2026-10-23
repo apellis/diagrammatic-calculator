@@ -69,7 +69,7 @@ export function SharedWithMe(props: { docs: CloudDoc[] }) {
           <For each={props.docs} fallback={<tr><td colspan="4" class="muted">Nothing shared with you yet.</td></tr>}>
             {(d) => (
               <tr data-shared={d.id}>
-                <td class="open" onClick={() => (location.hash = `#/s/${d.id}`)}>{d.name}</td>
+                <td class="open" onClick={(e) => (e.target as HTMLElement).closest('a') || (location.hash = `#/s/${d.id}`)}><a href={`#/s/${d.id}`}>{d.name}</a></td>
                 <td class="muted">{d.owner?.name || d.owner?.email}</td>
                 <td class="muted">{d.role === 'editor' ? 'can edit' : 'can view'}</td>
                 <td class="muted">{ago(d.edited)}</td>

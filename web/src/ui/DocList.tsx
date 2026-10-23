@@ -5,10 +5,32 @@ import { ago, pickFile } from '../app';
 import { account, api, ours, syncAll, takeSignInOutcome, user } from '../account/account';
 import { ApiError, type CloudDoc } from '../account/api';
 import { AccountBar, SharedWithMe, signInMessage } from './Account';
+import { NoteView } from './Results';
+import { Dialog } from './Dialog';
+import { ContextText } from './ContextChip';
 
 const examples = import.meta.glob('../../../examples/*.dcw', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 const open = (id: string) => (location.hash = `#/doc/${id}`);
+
+/** An example's name, context and first line of description (its first comment or note). */
+function describeExample(path: string, text: string) {
+  const name = path.split('/').pop()!.replace(/\.dcw$/, '');
+  const context = /^context (.*)$/m.exec(text)?.[1] ?? '';
+  const first = /^(?:# (.*)|note """([^\n]*?)(?:"""|$))/m.exec(text);
+  const about = (first?.[1] ?? first?.[2] ?? '').replace(/\.$/, '');
+  return { name, context, about };
+}
+
+/** The storage warning can be put away for a week. */
+const DISMISS_KEY = 'diagcalc.storage-note-dismissed';
+const dismissedRecently = () => {
+  try {
+    return Date.now() - Number(localStorage.getItem(DISMISS_KEY) ?? 0) < 7 * 86400_000;
+  } catch {
+    return false;
+  }
+};
 
 export async function importText(name: string, text: string): Promise<string> {
   const ws = await parseDcw(text);
@@ -53,16 +75,21 @@ export function DocList() {
     return d.cloud.role === 'owner' ? null : d.cloud.role === 'editor' ? 'shared, can edit' : 'shared, can view';
   };
   const inAccount = (d: DocInfo) => !!d.cloud && !!user() && ours(d, user()!);
-  const remove = async (d: DocInfo) => {
+  const [removing, setRemoving] = createSignal<DocInfo | null>(null);
+  const [renaming, setRenaming] = createSignal<string | null>(null);
+  const removeText = (d: DocInfo) => {
     const owned = inAccount(d) && d.cloud!.role === 'owner';
-    const text = owned
+    return owned
       ? `Delete “${d.name}” from your account and this browser? This cannot be undone.`
       : d.cloud && d.cloud.role !== 'owner'
         ? `Remove “${d.name}” from this browser? It stays shared with you.`
         : d.cloud
           ? `Remove “${d.name}” from this browser? It stays in the account it was saved to.`
           : `Delete “${d.name}”? This cannot be undone.`;
-    if (!confirm(text)) return;
+  };
+  const remove = async (d: DocInfo) => {
+    setRemoving(null);
+    const owned = inAccount(d) && d.cloud!.role === 'owner';
     if (owned) {
       try {
         await api.remove(d.cloud!.id);
@@ -75,6 +102,23 @@ export function DocList() {
   };
 
   const create = async () => open(await createDoc('Untitled', (d) => d.setContext('klr type=A2 nu=2i+j ring=QQ')));
+  /** An example opened again gets a numbered name, so two copies are told apart. */
+  const openExample = async (name: string, text: string) => {
+    const names = new Set((docs() ?? []).map((d) => d.name));
+    let n = name;
+    for (let k = 2; names.has(n); k++) n = `${name} (${k})`;
+    const ws = await parseDcw(text);
+    open(await createDoc(n, (d) => d.replace(ws.context, ws.cells, `import ${name}.dcw`)));
+  };
+  const [storageDismissed, setStorageDismissed] = createSignal(dismissedRecently());
+  const dismissStorage = () => {
+    setStorageDismissed(true);
+    try {
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    } catch {
+      /* storage unavailable: dismissed for this visit */
+    }
+  };
   const doImport = async () => {
     const f = await pickFile('.dcw,text/plain');
     if (!f) return;
@@ -84,9 +128,9 @@ export function DocList() {
       setError(`${f.name}: ${(e as Error).message}`);
     }
   };
-  const rename = async (id: string, old: string) => {
-    const name = prompt('Rename document', old);
-    if (!name) return;
+  const rename = async (id: string, old: string, name: string) => {
+    setRenaming(null);
+    if (!name.trim() || name === old) return;
     const d = await openDoc(id);
     d.doc.rename(name);
     await new Promise((r) => setTimeout(r, 50));
@@ -103,7 +147,7 @@ export function DocList() {
         </Show>
       </p>
       <details class="storage-help" data-testid="storage-help">
-        <summary>Where documents are kept</summary>
+        <summary>{user() ? 'Saved to your account and kept in this browser' : 'Stored in this browser'} · where documents are kept</summary>
         <ul>
           <li>Every document has a working copy in this browser, so it opens at once and works offline.</li>
           <li>
@@ -120,17 +164,26 @@ export function DocList() {
             copies.
           </li>
           <li>Without an account, documents live only in this browser; export them to keep a copy elsewhere.</li>
+          <li>
+            Some browsers delete a site's data when it has not been visited for a while (Safari after about seven days). Added to the
+            Dock (Safari on a Mac: File › Add to Dock) or to the home screen (iPhone and iPad: Share › Add to Home Screen), the
+            calculator keeps its documents.
+          </li>
         </ul>
       </details>
       <Show when={notice()}>
         <div class="banner info" data-testid="notice" onClick={() => setNotice('')}>{notice()}</div>
       </Show>
-      <Show when={persisted() === false && !user()}>
-        <div class="banner">
-          This browser may delete stored documents when it needs space (Safari does after about seven days without a visit). Installing the app or exporting documents keeps them safe.
+      <Show when={persisted() === false && !user() && (docs()?.length ?? 0) > 0 && !storageDismissed()}>
+        <div class="banner row" data-testid="storage-banner">
+          <span class="grow">
+            This browser may delete stored documents when it needs space (Safari does after about seven days without a visit). Export
+            them, or add the calculator to the Dock or home screen, to keep them.
+          </span>
+          <button class="ghost" onClick={dismissStorage} aria-label="Dismiss for a week" title="Dismiss for a week">×</button>
         </div>
       </Show>
-      <div class="row">
+      <div class="row toolbar">
         <button class="primary" onClick={create}>New document</button>
         <button onClick={doImport}>Import .dcw…</button>
         <div class="grow" />
@@ -147,18 +200,37 @@ export function DocList() {
       <table>
         <thead><tr><th>Name<Show when={syncing()}> <span class="spinner" title="Syncing with your account" /></Show></th><th>Edited</th><th /></tr></thead>
         <tbody>
-          <For each={shown()} fallback={<tr><td colspan="3" class="muted">No documents yet.</td></tr>}>
+          <For each={shown()} fallback={
+            <tr><td colspan="3" class="muted">
+              <Show when={query()} fallback={
+                <div class="empty" data-testid="empty">
+                  <strong>No documents yet.</strong> Start a new document, import a <code>.dcw</code> workspace, or open one of the examples
+                  below and change it.
+                </div>
+              }>
+                No document matches “{query()}”.
+              </Show>
+            </td></tr>
+          }>
             {(d) => (
               <tr data-doc={d.id} data-cloud={d.cloud?.id}>
-                <td class="open" onClick={() => open(d.id)}>
-                  {d.name}
-                  <Show when={where(d)}>{(w) => <span class="tag">{w()}</span>}</Show>
-                </td>
+                <Show when={renaming() === d.id} fallback={
+                  <td class="open" onClick={(e) => (e.target as HTMLElement).closest('a') || open(d.id)}>
+                    <a href={`#/doc/${d.id}`}>{d.name}</a>
+                    <Show when={where(d)}>{(w) => <span class="tag">{w()}</span>}</Show>
+                  </td>
+                }>
+                  <td>
+                    <input value={d.name} aria-label="Document name" ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void rename(d.id, d.name, e.currentTarget.value); } if (e.key === 'Escape') setRenaming(null); }}
+                      onBlur={(e) => renaming() === d.id && void rename(d.id, d.name, e.currentTarget.value)} />
+                  </td>
+                </Show>
                 <td class="muted">{ago(d.edited)}</td>
-                <td style={{ 'text-align': 'right' }}>
-                  <button class="ghost" onClick={() => rename(d.id, d.name)}>Rename</button>
+                <td class="actions">
+                  <button class="ghost" onClick={() => setRenaming(d.id)}>Rename</button>
                   <button class="ghost" onClick={async () => { await duplicateDoc(d.id); refetch(); }}>Duplicate</button>
-                  <button class="ghost" onClick={() => remove(d)}>Delete</button>
+                  <button class="ghost" onClick={() => setRemoving(d)}>Delete</button>
                 </td>
               </tr>
             )}
@@ -168,12 +240,30 @@ export function DocList() {
       <Show when={account().status === 'signed-in'}>
         <SharedWithMe docs={shared()} />
       </Show>
+      <Show when={removing()}>
+        {(d) => (
+          <Dialog label="Delete the document" class="small" onClose={() => setRemoving(null)}>
+            <h3 style={{ margin: '0 0 8px' }}>Delete “{d().name}”?</h3>
+            <p class="hint" style={{ margin: '0 0 10px' }}>{removeText(d())}</p>
+            <div class="row">
+              <button class="danger" onClick={() => void remove(d())}>Delete</button>
+              <button onClick={() => setRemoving(null)}>Keep it</button>
+            </div>
+          </Dialog>
+        )}
+      </Show>
       <h3 style={{ 'margin-top': '28px' }}>Examples</h3>
       <div class="examples">
         <For each={Object.entries(examples)}>
           {([path, text]) => {
-            const name = path.split('/').pop()!;
-            return <button onClick={async () => open(await importText(name, text))}>{name.replace('.dcw', '')}</button>;
+            const ex = describeExample(path, text);
+            return (
+              <button class="example" onClick={() => openExample(ex.name, text)} data-example={ex.name}>
+                <span class="example-name">{ex.name}</span>
+                <span class="example-ctx"><ContextText context={ex.context} /></span>
+                <Show when={ex.about}><span class="example-about"><NoteView text={ex.about} inline /></span></Show>
+              </button>
+            );
           }}
         </For>
       </div>

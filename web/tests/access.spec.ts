@@ -1,0 +1,113 @@
+import { expect, test } from '@playwright/test';
+import { addCell, cell, newDoc, typeCell } from './helpers';
+
+/** The page is no wider than the window: nothing scrolls sideways. */
+async function fitsWidth(page: import('@playwright/test').Page) {
+  const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+  expect(scroll).toBeLessThanOrEqual(inner);
+}
+
+test('at phone width the pages fit the window and the cells show', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New document' })).toBeVisible();
+  await fitsWidth(page);
+  await page.getByRole('button', { name: 'New document' }).click();
+  await typeCell(page, 'watch x_1 e(iji)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term, degree 2');
+  await expect(cell(page, 0)).toBeInViewport();
+  await fitsWidth(page);
+  // the outline is a drawer: closed at first, opened by ☰, closed again by choosing a cell
+  await expect(page.locator('.outline')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show the outline' }).click();
+  await page.locator('.outline .oitem').first().click();
+  await expect(page.locator('.outline')).toHaveCount(0);
+});
+
+test('cells, the outline and the document list are reachable and operable by keyboard', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 e(iji)');
+  await addCell(page, 'watch a a');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term, degree 4');
+  await page.keyboard.press('Escape');
+  await page.locator('.main').click({ position: { x: 5, y: 5 } });
+
+  // Tab reaches the first cell's head without stopping on invisible inserters
+  const head0 = cell(page, 0).locator('.head');
+  await head0.focus();
+  await expect(head0).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Enter');
+  await expect(head0).toHaveAttribute('aria-expanded', 'true');
+  await expect(cell(page, 0).getByTestId('cell-display')).toBeVisible();
+  // ↓ moves to the next cell's head, Space opens it
+  await page.keyboard.press('ArrowDown');
+  await expect(cell(page, 1).locator('.head')).toBeFocused();
+  await page.keyboard.press(' ');
+  await expect(cell(page, 1).locator('.head')).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Tab');
+  await expect(cell(page, 1).getByTestId('cell-display')).toBeFocused();
+  expect(await page.locator('.insert button[tabindex="-1"]').count()).toBeGreaterThan(0);
+
+  // Alt+Enter on a head inserts a cell below it
+  await cell(page, 0).locator('.head').focus();
+  await page.keyboard.press('Alt+Enter');
+  await expect(page.locator('.cell[data-cell="new"] .cm-content')).toBeFocused();
+  await page.keyboard.type('watch x_2 e(iji)');
+  await page.keyboard.press('Enter');
+  await expect(cell(page, 1).locator('.head .text')).toHaveAttribute('data-text', 'x_2 e(iji)');
+
+  // outline rows are buttons with names; the tabs are a tab list
+  await expect(page.getByRole('tab', { name: 'Cells' })).toHaveAttribute('aria-selected', 'true');
+  await page.locator('.outline .oitem').nth(2).focus();
+  await page.keyboard.press('Enter');
+  await expect(cell(page, 2)).toHaveClass(/active/);
+
+  // the document name renames in place; the list links each document
+  await page.getByRole('button', { name: /Rename the document/ }).click();
+  await page.getByLabel('Document name').fill('Keys');
+  await page.getByLabel('Document name').press('Enter');
+  await expect(page.locator('.topbar .name')).toHaveText('Keys');
+  await page.getByRole('button', { name: 'All documents' }).click();
+  await expect(page.getByRole('link', { name: 'Keys' })).toHaveAttribute('href', /#\/doc\//);
+});
+
+test('a conditional certificate is named, and says which verdict rests on it', async ({ page }) => {
+  await newDoc(page);
+  await page.getByTestId('context').click();
+  await page.getByLabel('Context').fill('be2 type=A1 odd=i mu=-1');
+  await page.getByLabel('Context').press('Enter');
+  await page.locator('.cm-content').click();
+  await typeCell(page, 'check zero(psi_1 psi_1 e(ii))');
+  await addCell(page, 'check zero(x_1 e(i))');
+  await addCell(page, 'watch x_1 e(i)');
+  // holds: proven by the computation, so no mark; fails: conditional, in the summary and the outline
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('holds');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 0).locator('.cond-mark')).toHaveCount(0);
+  await expect(cell(page, 1).locator('.cond-mark')).toHaveText('conditional');
+  await expect(cell(page, 2).locator('.cond-mark')).toHaveText('conditional');
+  await expect(page.locator('.outline .cond-mark')).toHaveCount(2);
+  await cell(page, 0).locator('.head').click();
+  await expect(cell(page, 0).getByTestId('verdict-note')).toHaveText('unconditional');
+  await cell(page, 1).locator('.head').click();
+  await expect(cell(page, 1).getByTestId('verdict-note')).toHaveText('conditional on the Nondegeneracy Conjecture');
+  // the badge opens on the reference and hypotheses
+  await cell(page, 1).getByTestId('badge').click();
+  await expect(cell(page, 1).getByTestId('provenance')).toContainText('arXiv:1701.04133');
+});
+
+test('a long computation shows how long it has run and stops from its cell', async ({ page }) => {
+  await newDoc(page);
+  await page.getByTestId('context').click();
+  await page.getByLabel('Context').fill('nilhecke nu=6');
+  await page.getByLabel('Context').press('Enter');
+  await page.locator('.cm-content').click();
+  const sum = '(x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + psi_1 + psi_3 + psi_5)';
+  await typeCell(page, `watch ${Array(24).fill(sum).join(' ')}`);
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('computing…');
+  await expect(cell(page, 0).locator('.head .elapsed')).toHaveText(/^\d+ s$/);
+  // the new cell is open: its running row has the Stop button
+  await cell(page, 0).getByTestId('stop').click();
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('cancelled');
+  await expect(page.getByTestId('light')).toBeDisabled();
+});

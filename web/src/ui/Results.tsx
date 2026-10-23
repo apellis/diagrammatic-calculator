@@ -1,5 +1,5 @@
 // How each kind of result is shown.
-import { createEffect, createSignal, For, Match, on, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, For, Match, on, onCleanup, Show, Switch } from 'solid-js';
 import type { CellState, CellValue } from '../eval/evaluator';
 import type { Provenance, Summand, WorkspaceRunCell } from '../engine/ops.gen';
 import katex from 'katex';
@@ -36,6 +36,91 @@ export function summary(s: CellState): string {
   return '';
 }
 
+/** A clock that ticks every second while some component reads it. */
+const [now, setNow] = createSignal(Date.now());
+let ticking = 0;
+let tick: ReturnType<typeof setInterval> | undefined;
+function useClock() {
+  if (ticking++ === 0) {
+    setNow(Date.now());
+    tick = setInterval(() => setNow(Date.now()), 1000);
+  }
+  onCleanup(() => {
+    if (--ticking === 0) clearInterval(tick);
+  });
+  return now;
+}
+
+/** Seconds as m:ss, or s s under a minute. */
+export function elapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** How long a running cell has been computing, ticking. */
+function Elapsed(props: { since?: number }) {
+  const clock = useClock();
+  return <Show when={props.since}>{(t) => <span class="elapsed">{elapsed(clock() - t())}</span>}</Show>;
+}
+
+/**
+ * The one-line summary of a cell's value, for collapsed cells and the outline: what the value is,
+ * how long it has been computing, and a mark when the value rests on an open hypothesis.
+ */
+export function Summary(props: { state?: CellState; small?: boolean }) {
+  const c = () => (props.state && ok(props.state.value) ? certainty(props.state.value) : null);
+  const running = () => props.state?.status === 'running' || props.state?.status === 'stale';
+  return (
+    <span class="summary-wrap" classList={{ small: props.small }}>
+      <span class="summary" data-testid="summary" classList={{ fails: !!props.state && ok(props.state.value) && props.state.value.kind === 'check' && !props.state.value.holds && props.state.status === 'fresh' }}>
+        {props.state ? summary(props.state) : ''}
+      </span>
+      <Show when={running()}><Elapsed since={props.state?.since} /></Show>
+      <Show when={c()?.mark}>{(m) => <span class="cond-mark" title={c()!.text}>{m()}</span>}</Show>
+    </span>
+  );
+}
+
+/** How far a value can be trusted, read off its provenance (and, for a check, its verdict). */
+export interface Certainty {
+  /** proven, or resting on an open conjecture, an assumption, or nothing known. */
+  level: 'proven' | 'conditional' | 'assumed' | 'unknown';
+  /** A short mark for summaries ('' when proven). */
+  mark: string;
+  /** One line saying what the value rests on. */
+  text: string;
+}
+
+/** The open conjecture a certificate names, such as "Nondegeneracy Conjecture". */
+export function conjecture(p: Provenance): string | null {
+  const m = /([A-Z][A-Za-z'-]*(?:[ -][A-Z][A-Za-z'-]*)* Conjecture)/.exec(`${p.certificate.reference} ${p.certificate.hypotheses}`);
+  return m ? m[1] : null;
+}
+
+export function certainty(v: Ok): Certainty | null {
+  const p = v.provenance;
+  if (!p) return null;
+  if ((v.kind === 'check' || v.kind === 'watch') && v.certified_by === 'computation') {
+    return { level: 'proven', mark: '', text: 'proven by the computation alone: every step is a relation of the presentation' };
+  }
+  switch (p.certificate.status) {
+    case 'lean':
+      return { level: 'proven', mark: '', text: 'proven: the strategy is checked in Lean' };
+    case 'literature':
+      return { level: 'proven', mark: '', text: 'proven: the strategy rests on a published theorem' };
+    case 'conditional': {
+      const c = conjecture(p);
+      const on = c ? `the ${c}` : 'an open conjecture';
+      const what = v.kind === 'check' ? (v.holds ? 'that it holds' : 'that it fails') : 'that the terms of the normal form are independent';
+      return { level: 'conditional', mark: 'conditional', text: `conditional on ${on}: ${what} rests on it` };
+    }
+    case 'assumed':
+      return { level: 'assumed', mark: 'assumed', text: 'rests on an assumption: the representation is assumed faithful' };
+    default:
+      return { level: 'unknown', mark: 'unproven', text: 'unproven: whether the representation is faithful is not known' };
+  }
+}
+
 function solveSummary(r: Ok): string {
   switch (r.outcome) {
     case 'none': return 'no solution';
@@ -47,20 +132,84 @@ function solveSummary(r: Ok): string {
   return '';
 }
 
-/** The equality strategy and certificate behind a result; a warning colour when it rests on an assumption or a truncation. */
-export function Badge(props: { p?: Provenance }) {
-  const warn = () => !!props.p && (['conditional', 'assumed', 'unknown'].includes(props.p.certificate.status) || (props.p.notes?.length ?? 0) > 0);
+const STATUS: Record<string, string> = {
+  lean: 'proven in Lean',
+  literature: 'proven in the literature',
+  conditional: 'conditional',
+  assumed: 'assumed',
+  unknown: 'unknown',
+};
+
+/**
+ * The equality strategy and certificate behind a result, as a disclosure: the badge names the
+ * strategy and the certificate, in a warning colour when the result rests on an assumption or a
+ * truncation; opened, it shows the method, the reference, the hypotheses and the notes.
+ */
+export function Badge(props: { p?: Provenance; value?: Ok; compact?: boolean }) {
+  const [open, setOpen] = createSignal(false);
+  const c = () => (props.value ? certainty(props.value) : null);
+  const warn = () => !!props.p && ((c() ? c()!.level !== 'proven' : ['conditional', 'assumed', 'unknown'].includes(props.p.certificate.status)) || (props.p.notes?.length ?? 0) > 0);
   return (
     <Show when={props.p}>
       {(p) => (
-        <span class="badge-wrap">
-          <span class={`badge ${warn() ? 'warn' : ''}`} title={[p().method, p().certificate.reference, p().certificate.hypotheses].filter(Boolean).join('\n')}>
-            {p().strategy} · {p().certificate.status}
-          </span>
-          <For each={p().notes ?? []}>{(n) => <span class="hint note-line">{n}</span>}</For>
+        <span class="badge-wrap" classList={{ compact: props.compact }}>
+          <button class={`badge ${warn() ? 'warn' : ''}`} aria-expanded={open()} data-testid="badge" onClick={() => setOpen(!open())}
+            title={open() ? 'Hide how this was computed' : 'How this was computed'}>
+            {p().strategy} · {c()?.level === 'proven' && p().certificate.status === 'conditional' ? 'proven by computation' : STATUS[p().certificate.status] ?? p().certificate.status}
+            <span class="caret" aria-hidden="true">{open() ? '▴' : '▾'}</span>
+          </button>
+          {/* a check says it beside its verdict */}
+          <Show when={c() && c()!.level !== 'proven' && props.value?.kind !== 'check'}>
+            <span class="cond-text" data-testid="cond-text">{props.compact ? c()!.text.replace(/:.*$/, '') : c()!.text}</span>
+          </Show>
+          <Show when={!props.compact}>
+            <For each={p().notes ?? []}>{(n) => <span class="hint note-line">{n}</span>}</For>
+          </Show>
+          <Show when={open()}>
+            <div classList={{ pop: props.compact, 'prov-pop': props.compact }}>
+            <table class="kv provenance" data-testid="provenance">
+              <tbody>
+                <Show when={c()}>{(x) => <tr><td>this result</td><td>{x().text}</td></tr>}</Show>
+                <tr><td>strategy</td><td>{p().strategy}</td></tr>
+                <tr><td>method</td><td>{p().method}</td></tr>
+                <tr><td>certificate</td><td>{STATUS[p().certificate.status] ?? p().certificate.status}</td></tr>
+                <Show when={p().certificate.reference}><tr><td>reference</td><td>{p().certificate.reference}</td></tr></Show>
+                <Show when={p().certificate.hypotheses}><tr><td>hypotheses</td><td>{p().certificate.hypotheses}</td></tr></Show>
+                <Show when={props.compact}><For each={p().notes ?? []}>{(n) => <tr><td>note</td><td>{n}</td></tr>}</For></Show>
+              </tbody>
+            </table>
+            </div>
+          </Show>
         </span>
       )}
     </Show>
+  );
+}
+
+/** The badge of a computed value: a definition's, or the strategy and certificate of any other. */
+export function ValueBadge(props: { value: Ok; compact?: boolean }) {
+  return (
+    <Show when={props.value.kind === 'def'} fallback={<Badge p={props.value.provenance} value={props.value} compact={props.compact} />}>
+      <DefBadge />
+    </Show>
+  );
+}
+
+/** A definition's value is its term as written: no relation is applied, so no strategy is involved. */
+function DefBadge() {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <span class="badge-wrap">
+      <button class="badge" aria-expanded={open()} data-testid="badge" onClick={() => setOpen(!open())}>
+        as written · no relations used<span class="caret" aria-hidden="true">{open() ? '▴' : '▾'}</span>
+      </button>
+      <Show when={open()}>
+        <span class="hint">
+          A definition's value is its term as written, with like terms collected; no relation is applied, so it rests on no
+          certificate. Watch it to see its normal form.
+        </span>
+      </Show>
+    </span>
   );
 }
 
@@ -131,10 +280,18 @@ export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey
 const same = (t: string) => t.replace(/\s+/g, '');
 
 function CheckView(props: { r: Ok }) {
+  const c = () => certainty(props.r);
+  // with a conditional certificate, say which verdicts are proven and which rest on the conjecture
+  const qualifier = () => {
+    const x = c();
+    if (!x || props.r.provenance?.certificate.status === 'lean' || props.r.provenance?.certificate.status === 'literature') return '';
+    return x.level === 'proven' ? 'unconditional' : x.text.replace(/:.*$/, '');
+  };
   return (
     <div class="result">
       <div class="row">
         <span class={`badge ${props.r.holds ? 'good' : 'bad'}`} data-testid="verdict">{props.r.holds ? 'holds' : 'fails'}</span>
+        <Show when={qualifier()}><span class="verdict-note" classList={{ warn: c()?.level !== 'proven' }} data-testid="verdict-note">{qualifier()}</span></Show>
       </div>
       <Show when={props.r.witness}>
         <div class="hint">Witness (should vanish):</div>
@@ -160,7 +317,7 @@ function SolveView(props: { r: Ok }) {
       <table class="kv">
         <tbody>
           <tr><td>outcome</td><td data-testid="outcome">{solveSummary(r())}</td></tr>
-          <tr><td>method</td><td>{r().tier === 1 ? 'linear system' : 'Gröbner basis'}, {r().equations} equations</td></tr>
+          <tr><td>method</td><td>{r().tier === 1 ? 'linear system' : 'Gröbner basis'}, {r().equations} {r().equations === 1 ? 'equation' : 'equations'}</td></tr>
           <Show when={r().solution}><tr><td>solution</td><td><Assigned lines={[assignments(r().solution)]} /></td></tr></Show>
           <Show when={r().particular}><tr><td>particular</td><td><Assigned lines={[assignments(r().particular)]} /></td></tr></Show>
           <Show when={r().directions?.length}>
@@ -188,7 +345,46 @@ export function NoteView(props: { text: string; inline?: boolean }) {
   return <div class="note" innerHTML={html()} />;
 }
 
-export function ResultView(props: { s: CellState; onFocus?: (word?: string) => void }) {
+/** A running cell: how long it has run, and a button that stops it. */
+function Running(props: { s: CellState; onStop?: () => void }) {
+  return (
+    <div class="running row" data-testid="running">
+      <span class="spinner" aria-hidden="true" />
+      <span>{props.s.status === 'stale' ? 'Recomputing' : 'Computing'}</span>
+      <Elapsed since={props.s.since} />
+      <Show when={props.onStop}><button onClick={() => props.onStop!()} data-testid="stop">Stop</button></Show>
+    </div>
+  );
+}
+
+/** A cell stopped at the time limit: what happened, and ways to go on. */
+function Exploded(props: { message: string; onRunLonger?: () => void; commandLine?: () => string | undefined }) {
+  const [copied, setCopied] = createSignal(false);
+  const copy = async () => {
+    const c = props.commandLine?.();
+    if (!c) return;
+    await navigator.clipboard?.writeText(c);
+    setCopied(true);
+  };
+  return (
+    <div class="exploded" data-testid="exploded">
+      <div class="error">{props.message}</div>
+      <div class="row" style={{ 'margin-top': '6px', 'flex-wrap': 'wrap' }}>
+        <Show when={props.onRunLonger}><button onClick={() => props.onRunLonger!()}>Run for up to 10 minutes</button></Show>
+        <Show when={props.commandLine?.()}><button onClick={copy}>Copy command-line command</button></Show>
+        <span class="hint" role="status">{copied() ? 'Copied: the command-line tool has no time limit.' : 'The command-line tool has no time limit. Size diagnostics are not available in the browser yet.'}</span>
+      </div>
+    </div>
+  );
+}
+
+export function ResultView(props: {
+  s: CellState;
+  onFocus?: (word?: string) => void;
+  onStop?: () => void;
+  onRunLonger?: () => void;
+  commandLine?: () => string | undefined;
+}) {
   /** The cell's own text after its kind word, which a definition's text form may just repeat. */
   const source = () => props.s.text.replace(/^(def|watch)\s+/, '');
   const v = () => props.s.value;
@@ -196,14 +392,17 @@ export function ResultView(props: { s: CellState; onFocus?: (word?: string) => v
     <Switch>
       <Match when={props.s.parseError}><div class="error">{props.s.parseError}</div></Match>
       <Match when={props.s.parsed?.kind === 'note'}><NoteView text={props.s.parsed!.note ?? ''} /></Match>
-      <Match when={props.s.status === 'running'}><div class="hint">Computing…</div></Match>
-      <Match when={v()?.status === 'error'}><div class="error">{(v() as { message: string }).message}</div></Match>
-      <Match when={v()?.status === 'exploded'}><div class="error">Stopped: {(v() as { message: string }).message}</div></Match>
+      <Match when={props.s.status === 'running'}><Running s={props.s} onStop={props.onStop} /></Match>
+      <Match when={v()?.status === 'error'}><div class="error">{(v() as { message: string }).message === 'cancelled' ? 'Stopped before it finished. Recompute to run it again.' : (v() as { message: string }).message}</div></Match>
+      <Match when={v()?.status === 'exploded'}><Exploded message={(v() as { message: string }).message} onRunLonger={props.onRunLonger} commandLine={props.commandLine} /></Match>
       <Match when={ok(v()) && (v() as Ok)} keyed>
         {(res) => {
           return (
             <div class={props.s.status === 'stale' ? 'result stale' : 'result'} data-testid="result">
-              <Show when={props.s.status === 'stale'}><div class="hint">Stale: the inputs changed and the new value is being computed.</div></Show>
+              <Show when={props.s.status === 'stale'}>
+                <div class="hint">Stale: the inputs changed and the new value is being computed.</div>
+                <Running s={props.s} onStop={props.onStop} />
+              </Show>
               <Switch>
                 <Match when={res.kind === 'watch'}><Sum r={res} previous={props.s.previous} text={res.normal_form ?? ''} valueKey={props.s.valueKey} onFocus={props.onFocus && (() => props.onFocus!())} source={source()} /></Match>
                 <Match when={res.kind === 'def'}><Sum r={res} text={`${res.name} := ${res.term}`} valueKey={props.s.valueKey} onFocus={props.onFocus} source={source()} /></Match>
@@ -211,7 +410,7 @@ export function ResultView(props: { s: CellState; onFocus?: (word?: string) => v
                 <Match when={res.kind === 'solve'}><SolveView r={res} /></Match>
               </Switch>
               <div class="row">
-                <Badge p={res.provenance} />
+                <ValueBadge value={res} />
                 <Show when={props.s.ms !== undefined}><span class="hint">{props.s.ms! < 1 ? '<1' : Math.round(props.s.ms!)} ms</span></Show>
               </div>
             </div>

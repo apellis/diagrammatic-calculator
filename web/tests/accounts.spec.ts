@@ -161,11 +161,10 @@ test('signing out keeps the documents here; deleting an owned document deletes i
   a.session.next = ada;
   await a.page.getByTestId('sign-in').click();
   await expect(a.page.getByTestId('account-name')).toHaveText('Ada');
-  a.page.once('dialog', (dlg) => {
-    expect(dlg.message()).toContain('from your account and this browser');
-    void dlg.accept();
-  });
   await a.page.locator('tr[data-doc]').getByRole('button', { name: 'Delete' }).click();
+  const confirm = a.page.getByRole('dialog', { name: 'Delete the document' });
+  await expect(confirm).toContainText('from your account and this browser');
+  await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(a.page.locator('tr[data-doc]')).toHaveCount(0);
   expect(mock.docs.size).toBe(0);
   await a.context.close();

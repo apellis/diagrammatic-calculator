@@ -10,6 +10,8 @@ import type { Calls } from '../eval/evaluator';
 import type { RelationsMatchResponse } from '../engine/ops.gen';
 import { isMac, mod } from '../app';
 import { Typeset } from './Typeset';
+import { ValueBadge } from './Results';
+import type { CellValue } from '../eval/evaluator';
 import {
   along, arrowPoints, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
   offsetFor, onStrand, path, piece, piecesIn, pullMove, rectangle, sameOrder, track, type Layout, type Line, type Piece, type Rect,
@@ -51,6 +53,8 @@ export interface CanvasProps {
   onClose: () => void;
   onSelection?: (s: Selection | null) => void;
   onAsk?: () => void;
+  /** The cell's computed value, whose provenance the canvas shows. */
+  value?: CellValue;
 }
 
 type Match = Extract<RelationsMatchResponse, { status: 'ok' }>['matches'][number];
@@ -757,7 +761,7 @@ export function Canvas(props: CanvasProps) {
   /** A summand's sign and coefficient, typeset. */
   const Lead = (q: { l: Layout; k: number }) => (
     <>
-      {q.l.negative ? '−' : q.k === 0 && !q.l.coefficient ? '+' : q.k === 0 ? '' : '+'}
+      {q.l.negative ? '−' : q.k === 0 ? '' : '+'}
       <Show when={q.l.coefficient}>{(c) => <> <Typeset text={c()} /></>}</Show>
     </>
   );
@@ -806,11 +810,11 @@ export function Canvas(props: CanvasProps) {
             </g>
           );
         case 'label':
-          return <text x={line.x} y={0.55} font-size="0.36" font-style="italic" text-anchor="middle" fill={strandColour(line.strand)}>{line.text}</text>;
+          return <text x={line.x} y={0.55} font-size="0.36" font-style="italic" text-anchor="middle" fill={strandColour(line.strand)}>{minus(line.text)}</text>;
         case 'arrow':
           return <polygon points={arrowPoints(line)} fill={line.strand === undefined ? 'currentColor' : strandColour(line.strand)} />;
         case 'note':
-          return <text x={line.x} y={-line.y! + 0.13} font-size="0.36" font-style="italic" text-anchor="middle" fill={line.strand === undefined ? 'currentColor' : strandColour(line.strand)}>{line.text}</text>;
+          return <text x={line.x} y={-line.y! + 0.13} font-size="0.36" font-style="italic" text-anchor="middle" fill={line.strand === undefined ? 'currentColor' : strandColour(line.strand)}>{minus(line.text)}</text>;
       }
     };
     return (
@@ -953,7 +957,10 @@ export function Canvas(props: CanvasProps) {
         <strong>{props.title}</strong>
         <span class="hint">{total() > layouts().length ? `${layouts().length} of ${total()} summands` : `${total()} ${total() === 1 ? 'summand' : 'summands'}`}</span>
         <Show when={busy()}><span class="light busy" /></Show>
-        <span class="hint grow canvas-msg" data-testid="canvas-message">{message()}</span>
+        <Show when={props.value?.status === 'ok' && props.value}>
+          {(v) => <span class="canvas-badge row"><span class="hint">value</span><ValueBadge value={v() as Extract<CellValue, { status: 'ok' }>} compact /></span>}
+        </Show>
+        <span class="hint grow canvas-msg" data-testid="canvas-message" role="status">{message()}</span>
         <label class="hint row" title="Strand patterns, so colours are not the only cue">
           <input type="checkbox" checked={patterns()} onChange={(e) => {
             setPatterns(e.currentTarget.checked);
@@ -962,9 +969,9 @@ export function Canvas(props: CanvasProps) {
             } catch {
               /* storage unavailable */
             }
-          }} /> patterns
+          }} /> Strand patterns
         </label>
-        <button class="ghost" onClick={() => setHelp(!help())} title="Gestures and keys (?)">?</button>
+        <button class="ghost" onClick={() => setHelp(!help())} title="Gestures and keys (?)" aria-label="Gestures and keys">?</button>
       </div>
       <Show when={props.expanded}>
         <div class="banner">This term uses definitions; it is shown written out, and a gesture writes it out in full in the cell.</div>
@@ -1019,7 +1026,7 @@ export function Canvas(props: CanvasProps) {
           <Show when={menu()}>
             {(m) => (
               <div class="relmenu" role="dialog" aria-label="Relations that apply">
-                <div class="row"><strong class="grow">Relations{m().rect ? ' in the selection' : ''}</strong><button class="ghost" onClick={() => setMenu(null)}>×</button></div>
+                <div class="row"><strong class="grow">Relations{m().rect ? ' in the selection' : ''}</strong><button class="ghost" onClick={() => setMenu(null)} aria-label="Close the relations">×</button></div>
                 <For each={m().matches.slice(0, 9)}>
                   {(x, i) => (
                     <button class="relitem" onClick={() => void apply(i())} data-relation={x.relation}>
@@ -1039,7 +1046,7 @@ export function Canvas(props: CanvasProps) {
           </Show>
           <Show when={help()}>
             <div class="relmenu" role="dialog" aria-label="Gestures">
-              <div class="row"><strong class="grow">Gestures and keys</strong><button class="ghost" onClick={() => setHelp(false)}>×</button></div>
+              <div class="row"><strong class="grow">Gestures and keys</strong><button class="ghost" onClick={() => setHelp(false)} aria-label="Close the gestures">×</button></div>
               <table class="kv"><tbody>
                 <For each={GESTURES}>{([k, v]) => <tr><td><kbd>{k}</kbd></td><td>{v}</td></tr>}</For>
               </tbody></table>
@@ -1050,6 +1057,9 @@ export function Canvas(props: CanvasProps) {
     </div>
   );
 }
+
+/** A label as typeset: a minus sign rather than a hyphen before a number. */
+const minus = (t?: string) => t?.replace(/(^|[^A-Za-z0-9_])-(?=[0-9])/g, '$1−');
 
 /** How near (in units) a dragged dot must come to a crossing on its strand before the crossing glows. */
 const REACH = 0.75;

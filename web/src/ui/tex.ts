@@ -121,7 +121,7 @@ export function contextTex(options: string): string {
       const [k, v = ''] = o.split('=');
       if (k === 'type') return `\\text{type }${v.replace(/^([A-Z])([0-9]+)$/, '$1_{$2}')}`;
       if (k === 'ring') return ringTex(v);
-      return `${k === 'nu' ? '\\nu' : k === 'Lambda' ? '\\Lambda' : k.length === 1 ? k : `\\mathrm{${k}}`} = ${toTex(v)}`;
+      return `${GREEK.has(k) ? `\\${k}` : k.length === 1 ? k : `\\mathrm{${k}}`} = ${toTex(v)}`;
     })
     .join(',\\quad ');
 }

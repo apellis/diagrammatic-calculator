@@ -4,7 +4,7 @@ import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import type { CellState } from '../eval/evaluator';
 import { kindOf } from '../doc/model';
 import { Editor } from './Editor';
-import { NoteView, ResultView, summary } from './Results';
+import { NoteView, ResultView, Summary, summary } from './Results';
 import { Typeset } from './Typeset';
 import { toTex } from './tex';
 
@@ -35,6 +35,23 @@ export interface CellProps {
   onCanvas?: (word?: string) => void;
   /** Why a text cannot be a cell (it does not parse), or null when it can. */
   validate?: (text: string) => Promise<string | null>;
+  /** A new cell's starting text, with the cursor position in it (a template of a cell kind). */
+  initial?: { text: string; cursor?: number };
+  /** Opens a new cell below this one (Alt+Enter on the head). */
+  onInsertBelow?: () => void;
+  /** Stops this cell's computation. */
+  onStop?: () => void;
+  /** Computes the cell again with a longer time limit, after it was stopped at the limit. */
+  onRunLonger?: () => void;
+  /** The cell's workspace for the command-line tool, after it was stopped at the limit. */
+  commandLine?: () => string | undefined;
+}
+
+/** Moves the focus from a cell's head to the next or previous cell's head. */
+function moveFocus(from: HTMLElement, delta: number) {
+  const heads = [...document.querySelectorAll<HTMLElement>('.cells .cell[data-cell]:not([data-cell="new"]) > .head')];
+  const i = heads.indexOf(from);
+  heads[i + delta]?.focus();
 }
 
 export function Cell(props: CellProps) {
@@ -84,10 +101,28 @@ export function Cell(props: CellProps) {
 
   return (
     <div class={`cell ${props.active ? 'active' : ''}`} id={`cell-${props.id}`} data-cell={props.id} data-kind={kind()} data-status={props.state?.status ?? ''}>
-      <div class="head" onClick={() => {
-        if (!props.expanded) setEditing(true);
-        props.onToggle();
-      }}>
+      {/* the head is the cell's keyboard stop: Enter or Space opens or closes it, ↑ and ↓ move
+          between cells, Alt+Enter inserts a cell below */}
+      <div class="head" role="button" tabindex={0} aria-expanded={props.expanded} aria-controls={`body-${props.id}`}
+        aria-label={`${kind()} cell ${props.id}: ${head() || 'empty'}${props.state ? `, ${summary(props.state)}` : ''}`}
+        onClick={() => {
+          if (!props.expanded) setEditing(true);
+          props.onToggle();
+        }}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if ((e.key === 'Enter' || e.key === ' ') && !e.altKey && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            props.onToggle();
+          } else if (e.key === 'Enter' && e.altKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            props.onInsertBelow?.();
+          } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            moveFocus(e.currentTarget, e.key === 'ArrowDown' ? 1 : -1);
+          }
+        }}>
         <span class={`dot ${props.state?.status ?? ''}`} />
         <span class="kind">{kind()}</span>
         {/* expanded, the text is shown once, below, where it is edited */}
@@ -100,10 +135,10 @@ export function Cell(props: CellProps) {
           </Show>
           </Show>
         </span>
-        <span class="summary" data-testid="summary">{props.state ? summary(props.state) : ''}</span>
+        <Summary state={props.state} />
       </div>
       <Show when={props.expanded}>
-        <div class="body">
+        <div class="body" id={`body-${props.id}`}>
           <Show when={editing()} fallback={<CellText text={props.text} kind={kind()} onEdit={edit} />}>
             <Editor
               text={props.text}
@@ -118,7 +153,11 @@ export function Cell(props: CellProps) {
                 props.onCancel();
               }}
               onLeave={() => !props.isNew && !problem() && draft() === props.text && setEditing(false)}
-              ref={(api) => (editor = api)}
+              ref={(api) => {
+                editor = api;
+                const t = props.initial;
+                if (t) queueMicrotask(() => api.set(t.text, t.cursor));
+              }}
             />
           </Show>
           <Show when={editing() && problem()}>
@@ -132,21 +171,26 @@ export function Cell(props: CellProps) {
             </div>
           </Show>
           <Show when={props.state && !props.isNew && ((kind() !== 'note' && kind() !== 'comment') || editing())}>
-            <ResultView s={props.state!} onFocus={props.onCanvas} />
+            <ResultView s={props.state!} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} />
           </Show>
-          <div class="tools">
-            <button class="ghost" title="Move up" onClick={() => props.onMove(-1)}>↑</button>
-            <button class="ghost" title="Move down" onClick={() => props.onMove(1)}>↓</button>
-            <button class="ghost" onClick={props.onRerun} disabled={!props.state?.key}>Recompute</button>
-            <button class="ghost" onClick={props.onPin} disabled={!canPin()}>Pin result</button>
-            <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
-            <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>
-              <button class="ghost" onClick={() => props.onCanvas?.()} title="Open the focus canvas (F)" data-testid="open-canvas">Canvas</button>
-            </Show>
-            <div class="grow" />
-            <span class="hint">{props.id}</span>
-            <button class="ghost" onClick={props.onRemove}>Delete</button>
-          </div>
+          {/* a new cell has nothing to recompute, pin or move until it is committed */}
+          <Show when={!props.isNew} fallback={
+            <div class="tools"><div class="grow" /><button class="ghost" onClick={props.onRemove}>Discard (Esc)</button></div>
+          }>
+            <div class="tools">
+              <button class="ghost" title="Move up" aria-label="Move the cell up" onClick={() => props.onMove(-1)}>↑</button>
+              <button class="ghost" title="Move down" aria-label="Move the cell down" onClick={() => props.onMove(1)}>↓</button>
+              <button class="ghost" onClick={props.onRerun} disabled={!props.state?.key}>Recompute</button>
+              <button class="ghost" onClick={props.onPin} disabled={!canPin()}>Pin result</button>
+              <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
+              <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>
+                <button class="ghost" onClick={() => props.onCanvas?.()} title="Open the focus canvas (F)" data-testid="open-canvas">Canvas</button>
+              </Show>
+              <div class="grow" />
+              <span class="hint">{props.id}</span>
+              <button class="ghost" onClick={props.onRemove}>Delete</button>
+            </div>
+          </Show>
         </div>
       </Show>
     </div>

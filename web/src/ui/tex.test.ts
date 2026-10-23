@@ -24,6 +24,7 @@ describe('typesetting text', () => {
     expect(ringTex('ZZ[I]')).toBe('\\mathbb{Z}[I]');
     expect(ringTex('GF(5)')).toBe('\\mathbb{F}_{5}');
     expect(contextTex('type=A2 nu=2i+j ring=QQ')).toBe('\\text{type }A_{2},\\quad \\nu = 2i+j,\\quad \\mathbb{Q}');
+    expect(contextTex('type=A1 odd=i mu=-1')).toBe('\\text{type }A_{1},\\quad \\mathrm{odd} = i,\\quad \\mu = -1');
   });
 
   it('gives KaTeX something it can typeset for every printed form', () => {

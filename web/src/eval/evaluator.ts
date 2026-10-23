@@ -48,6 +48,8 @@ export interface CellState {
   previous?: CellValue;
   /** Milliseconds the engine took for the value. */
   ms?: number;
+  /** When the job computing the cell's value started (Date.now()), while it runs. */
+  since?: number;
 }
 
 export interface EvaluatorOptions {
@@ -63,6 +65,10 @@ type Parsed = { cell: WorkspaceParseCell } | { error: string };
 export class Evaluator {
   private parses = new Map<string, Promise<Parsed>>();
   private jobs = new Map<string, AbortController>();
+  /** The workspace each job runs, by key: the cell as the command-line tool would take it. */
+  private workspaces = new Map<string, string>();
+  /** Time limits asked for once, by cell id, for the next job of that cell. */
+  private limits = new Map<string, number>();
   private states = new Map<string, CellState>();
   private generation = 0;
   private current: { context: string; cells: CellData[] } = { context: '', cells: [] };
@@ -89,12 +95,25 @@ export class Evaluator {
     for (const a of this.jobs.values()) a.abort();
   }
 
-  /** Computes a cell again, for example after it was cancelled. */
-  rerun(id: string) {
+  /** Stops the job computing one cell; the cell shows as failed with 'cancelled'. */
+  cancel(id: string) {
+    const key = this.states.get(id)?.key;
+    if (key) this.jobs.get(key)?.abort();
+  }
+
+  /** Computes a cell again, for example after it was cancelled; `timeoutMs` sets the time limit for this run. */
+  rerun(id: string, timeoutMs?: number) {
     const s = this.states.get(id);
     if (!s) return;
+    if (timeoutMs) this.limits.set(id, timeoutMs);
     this.states.set(id, { ...s, key: undefined });
     void this.update(this.current.context, this.current.cells);
+  }
+
+  /** The workspace that computes a cell (the definitions it needs, then the cell), as a .dcw file. */
+  workspaceOf(id: string): string | undefined {
+    const key = this.states.get(id)?.key;
+    return key ? this.workspaces.get(key) : undefined;
   }
 
   parse(text: string): Promise<Parsed> {
@@ -160,6 +179,8 @@ export class Evaluator {
               s.status = old.status; // failed or exploded with these very inputs
             } else {
               wanted.add(s.key);
+              // the time computing counts from when this key's job started
+              s.since = old?.key === s.key && old.since ? old.since : Date.now();
               this.start(s.key, this.miniWorkspace(context, cells, deps, i), cells[i].id, scalars[i]);
             }
           }
@@ -170,6 +191,8 @@ export class Evaluator {
     for (const id of [...this.states.keys()]) if (!cells.some((c) => c.id === id)) this.states.delete(id);
     // jobs no longer needed by any cell are cancelled
     for (const [key, a] of this.jobs) if (!wanted.has(key)) { a.abort(); this.jobs.delete(key); }
+    const live = new Set([...this.states.values()].map((s) => s.key));
+    for (const key of this.workspaces.keys()) if (!live.has(key)) this.workspaces.delete(key);
   }
 
   /** The workspace that evaluates cell i: the definitions it needs, in order, then the cell. */
@@ -186,11 +209,14 @@ export class Evaluator {
   }
 
   private start(key: string, workspace: string, id: string, scalars: string[]) {
+    this.workspaces.set(key, workspace);
     if (this.jobs.has(key)) return;
     const abort = new AbortController();
     this.jobs.set(key, abort);
+    const timeoutMs = this.limits.get(id) ?? this.opts.timeoutMs ?? 120_000;
+    this.limits.delete(id);
     this.engine
-      .call('workspace.run', { workspace, summands: this.opts.summands ?? 200, scalars }, { signal: abort.signal, timeoutMs: this.opts.timeoutMs ?? 120_000 })
+      .call('workspace.run', { workspace, summands: this.opts.summands ?? 200, scalars }, { signal: abort.signal, timeoutMs })
       .then(async (o) => {
         if (this.jobs.get(key) === abort) this.jobs.delete(key);
         let stored: Stored;
@@ -198,13 +224,13 @@ export class Evaluator {
           // cells still waiting on this key were stopped by the person, not by an edit
           for (const s of this.states.values()) {
             if (s.key === key && (s.status === 'running' || s.status === 'stale')) {
-              this.set({ ...s, status: 'failed', previous: s.value, value: { kind: 'error', status: 'error', message: 'cancelled' } });
+              this.set({ ...s, status: 'failed', since: undefined, previous: s.value, value: { kind: 'error', status: 'error', message: 'cancelled' } });
             }
           }
           return;
         }
         if (o.status === 'exploded') {
-          stored = { value: { kind: 'exploded', status: 'exploded', message: `${o.message}; the command-line tool has no time limit` }, ms: o.ms };
+          stored = { value: { kind: 'exploded', status: 'exploded', message: `${o.message[0].toUpperCase()}${o.message.slice(1)}.` }, ms: o.ms };
         } else {
           const r = o.response;
           if (r.status !== 'ok') stored = { value: { kind: 'error', status: 'error', message: r.message, error_kind: r.kind }, ms: o.ms };
@@ -227,6 +253,7 @@ export class Evaluator {
     s.ms = stored.ms;
     s.key = key;
     s.status = v.status === 'ok' ? 'fresh' : v.status === 'exploded' ? 'exploded' : 'failed';
+    s.since = undefined;
     this.set(s);
   }
 

@@ -1,5 +1,6 @@
 // The command palette (⌘K): every command by name.
 import { createSignal, For } from 'solid-js';
+import { Dialog } from './Dialog';
 
 export interface Command {
   name: string;
@@ -17,27 +18,26 @@ export function Palette(props: { commands: Command[]; onClose: () => void }) {
     c.run();
   };
   return (
-    <div class="modal-bg" onClick={props.onClose}>
-      <div class="modal palette" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Command palette">
-        <input autofocus placeholder="Type a command" value={q()}
+    <Dialog label="Command palette" class="palette" onClose={props.onClose} noClose>
+        <input placeholder="Type a command" value={q()} aria-label="Command" role="combobox" aria-expanded="true" aria-controls="palette-list"
+          aria-activedescendant={shown()[i()] ? `palette-${i()}` : undefined}
           onInput={(e) => { setQ(e.currentTarget.value); setI(0); }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') { setI(Math.min(i() + 1, shown().length - 1)); e.preventDefault(); }
             if (e.key === 'ArrowUp') { setI(Math.max(i() - 1, 0)); e.preventDefault(); }
             if (e.key === 'Enter') run(shown()[i()]);
-            if (e.key === 'Escape') props.onClose();
           }} />
-        <div style={{ 'margin-top': '8px' }}>
+        <div style={{ 'margin-top': '8px' }} role="listbox" id="palette-list" aria-label="Commands">
           <For each={shown()}>
             {(c, k) => (
-              <div class="opt row" classList={{ on: k() === i() }} onMouseEnter={() => setI(k())} onClick={() => run(c)}>
+              <div class="opt row" classList={{ on: k() === i() }} id={`palette-${k()}`} role="option" aria-selected={k() === i()}
+                onMouseEnter={() => setI(k())} onClick={() => run(c)}>
                 <span class="grow">{c.name}</span>
                 {c.keys && <kbd>{c.keys}</kbd>}
               </div>
             )}
           </For>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

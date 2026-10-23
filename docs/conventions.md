@@ -303,7 +303,8 @@ wherever it is entered (a click on typeset text opens it). Typesetting changes o
 | `a := t`, `*`, `(x)` or `⊗`, `∘` | a ≔ t, ·, ⊗, ∘ |
 | `solve … for c1, c2` | … for c₁, c₂ |
 | `ring=QQ`, `ZZ[I]`, `GF(5)`, `QQ(q)` | ℚ, ℤ[I], 𝔽₅, ℚ(q) |
-| `type=A2 nu=2i+j` | type A₂, ν = 2i+j |
+| `type=A2 nu=2i+j`, `mu=-1`, `Lambda=2i` | type A₂, ν = 2i+j, μ = −1, Λ = 2i (Greek option names as letters) |
+| a weight written beside a canvas drawing, `-1` | −1 (a minus sign, not a hyphen) |
 
 ## Drawing
 

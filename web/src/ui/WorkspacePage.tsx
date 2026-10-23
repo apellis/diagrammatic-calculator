@@ -6,10 +6,12 @@ import { kindOf, type CellData, type Comparison, type Doc, type Inputs } from '.
 import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
 import { exportDch, exportDcw, fileName } from '../doc/dcw';
-import { Cell } from './Cell';
+import { Cell, TEMPLATES } from './Cell';
 import { Outline } from './Outline';
 import { ContextChip, ContextText } from './ContextChip';
 import { Typeset } from './Typeset';
+import { ResultView } from './Results';
+import { Dialog } from './Dialog';
 import { Palette, type Command } from './Palette';
 import { importText } from './DocList';
 import { Canvas, type Generator, type Selection } from './Canvas';
@@ -255,8 +257,13 @@ function DocView(props: {
   const [expanded, setExpanded] = createSignal(new Set<string>());
   const [active, setActive] = createSignal<string | null>(null);
   const [adding, setAdding] = createSignal<number | null>(null);
-  const [outline, setOutline] = createSignal(true);
-  const [modal, setModal] = createSignal<null | 'palette' | 'keys' | 'branch' | 'share' | { version: number } | { snapshot: number }>(null);
+  // on a narrow screen the outline is a drawer over the cells, closed at first
+  const narrow = () => window.matchMedia?.('(max-width: 760px)').matches ?? false;
+  const [outline, setOutline] = createSignal(!narrow());
+  const [template, setTemplate] = createSignal<{ text: string; cursor?: number } | undefined>(undefined);
+  const [renaming, setRenaming] = createSignal(false);
+  const [branchName, setBranchName] = createSignal<string | null>(null);
+  const [modal, setModal] = createSignal<null | 'palette' | 'keys' | 'branch' | 'share' | 'discard' | { version: number } | { snapshot: number } | { pin: string }>(null);
   const [linked, setLinked] = props.linked;
   const [message, setMessage] = createSignal('');
   const [canvas, setCanvas] = createSignal<{ id: string; word?: string } | null>(null);
@@ -397,6 +404,7 @@ function DocView(props: {
   const commitNew = (index: number, text: string) => {
     const t = normalize(text);
     setAdding(null);
+    setTemplate(undefined);
     if (!t || t.startsWith('/')) return;
     const id = doc.addCell(t, index);
     focusCell(id);
@@ -410,9 +418,12 @@ function DocView(props: {
 
   const pin = (id: string) => {
     const s = stateOf(id);
-    if (!s?.value || !s.valueKey) return;
-    const label = prompt('Name this snapshot', s.parsed?.defines ?? id);
-    if (!label) return;
+    if (s?.value && s.valueKey) setModal({ pin: id });
+  };
+  const pinAs = (id: string, label: string) => {
+    setModal(null);
+    const s = stateOf(id);
+    if (!s?.value || !s.valueKey || !label.trim()) return;
     main.pin({ name: label, cellId: id, cellText: s.text, context: context(), version: versions().length, key: s.valueKey, value: s.value, time: Date.now() });
     setMessage(`Pinned “${label}”.`);
   };
@@ -457,12 +468,34 @@ function DocView(props: {
     doc.updateCell(id, head + Object.entries(p.options).map(([k, v]) => `  ${k}=${v}`).join(''), `${note} in ${p.defines ?? id}`);
   };
 
-  const newBranch = () => {
-    props.branching.create();
+  /** A new cell at `index`, starting from the template of a cell kind when one is given. */
+  const addAt = (index: number, kind?: string) => {
+    const t = TEMPLATES.find(([k]) => k === kind);
+    setTemplate(t ? { text: t[1], cursor: t[2] } : undefined);
+    setAdding(index);
+  };
+  const insertBelow = (id: string | null) => {
+    const i = id ? cells().findIndex((c) => c.id === id) : -1;
+    addAt(i < 0 ? cells().length : i + 1);
+  };
+  const stop = (id: string) => ev?.cancel(id);
+  const runLonger = (id: string) => ev?.rerun(id, 600_000);
+  const commandLine = (id: string) => {
+    const ws = ev?.workspaceOf(id);
+    return ws && `cat > cell.dcw <<'EOF'\n${ws}EOF\ndiagcalc run cell.dcw\n`;
+  };
+  const rename = (n: string) => {
+    setRenaming(false);
+    const t = n.trim();
+    if (t && t !== name()) doc.rename(t);
+  };
+
+  const newBranch = (name?: string) => {
+    setBranchName(null);
+    props.branching.create(name?.trim() || undefined);
   };
   const discardBranch = () => {
-    const b = props.branching.current;
-    if (b && confirm(`Discard the branch “${b.name}”? Its changes are lost.`)) props.branching.discard();
+    if (props.branching.current) setModal('discard');
   };
 
   const exportFile = async () => {
@@ -495,14 +528,16 @@ function DocView(props: {
   };
 
   const commands = (): Command[] => [
-    ...['def', 'watch', 'solve', 'check', 'note'].map((k) => ({ name: `New ${k} cell`, run: () => setAdding(cells().length) })),
+    ...['def', 'watch', 'solve', 'check', 'note'].map((k) => ({ name: `New ${k} cell`, run: () => addAt(cells().length, k) })),
+    { name: 'Insert a cell below the active cell', keys: isMac ? '⌥Enter' : 'Alt+Enter', run: () => insertBelow(active()) },
+    { name: 'Rename document', run: () => setRenaming(true) },
     { name: 'Undo', keys: `${K}Z`, run: () => doc.undo() },
     { name: 'Redo', keys: isMac ? '⇧⌘Z' : 'Ctrl+Y', run: () => doc.redo() },
     { name: 'Export workspace (.dcw)', keys: isMac ? '⇧⌘S' : 'Ctrl+Shift+S', run: exportFile },
     { name: 'Export history (.dch)', run: () => download(fileName(name(), 'dch'), exportDch(doc), 'application/json') },
     { name: 'Import a workspace as a new document', keys: `${K}O`, run: importFile },
     { name: 'Save to a file on disk after every step', run: linkFile },
-    { name: 'Start a scratch branch', keys: `${K}B`, run: () => newBranch() },
+    { name: 'Start a scratch branch', keys: `${K}B`, run: () => setBranchName(defaultBranchName()) },
     ...(props.sync?.cloudId && user() ? [{ name: 'Share this document', run: () => setModal('share') }] : []),
     ...(onBranch()
       ? [
@@ -512,7 +547,7 @@ function DocView(props: {
         ]
       : props.branching.list.map((b) => ({ name: `Open branch “${b.name}”`, run: () => props.branching.open(b.id) }))),
     { name: 'Cancel running computations', run: () => ev?.cancelAll() },
-    { name: 'Clear the result cache', run: () => void cache.clear() },
+    { name: 'Clear the result cache', run: async () => { await cache.clear(); setMessage('Result cache cleared; results are computed again as needed.'); } },
     { name: 'Show or hide the outline', run: () => setOutline(!outline()) },
     { name: 'Open the active cell in the canvas', keys: 'F', run: () => active() && openCanvas(active()!) },
     { name: 'Show or hide the AI panel', keys: `${K}J`, run: props.onToggleAI },
@@ -526,7 +561,7 @@ function DocView(props: {
     if (mod(e) && e.key.toLowerCase() === 'k') { e.preventDefault(); setModal(modal() === 'palette' ? null : 'palette'); return; }
     if (mod(e) && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); void exportFile(); return; }
     if (mod(e) && e.key.toLowerCase() === 'o') { e.preventDefault(); void importFile(); return; }
-    if (mod(e) && e.key.toLowerCase() === 'b') { e.preventDefault(); newBranch(); return; }
+    if (mod(e) && e.key.toLowerCase() === 'b') { e.preventDefault(); setBranchName(defaultBranchName()); return; }
     if (mod(e) && e.key.toLowerCase() === 'j') { e.preventDefault(); props.onToggleAI(); return; }
     if (mod(e) && e.key.toLowerCase() === 'l') { e.preventDefault(); props.onAsk(); return; }
     if (inEditor) return;
@@ -534,7 +569,8 @@ function DocView(props: {
     if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); doc.redo(); return; }
     if (e.key === '?') setModal('keys');
     if ((e.key === 'f' || e.key === 'F') && !mod(e) && active() && !canvas()) { e.preventDefault(); openCanvas(active()!); return; }
-    if (e.key === 'Escape') { setModal(null); if (!canvas()) setActive(null); }
+    if (e.key === 'Enter' && e.altKey && !mod(e)) { e.preventDefault(); insertBelow(active()); return; }
+    if (e.key === 'Escape') { setModal(null); setBranchName(null); if (!canvas()) setActive(null); }
   };
   onMount(() => window.addEventListener('keydown', onKey));
   const um = doc.undoManager;
@@ -560,21 +596,28 @@ function DocView(props: {
   };
 
   const NewCell = (p: { index: number }) => (
-    <Cell id="new" text="" expanded active isNew onToggle={() => setAdding(null)}
+    <Cell id="new" text="" expanded active isNew initial={template()} onToggle={() => setAdding(null)}
       onCommit={(t) => commitNew(p.index, t)} onCancel={() => setAdding(null)} onRemove={() => setAdding(null)}
       onMove={() => {}} onPin={() => {}} onRerun={() => {}} onCopyTikz={() => {}} validate={validate} />
   );
+  const defaultBranchName = () => `what if ${main.branches.size + 1}`;
 
   return (
     <>
       <header class="topbar">
         {/* inside a canvas, back means the document; from the document, the list of documents */}
-        <Show when={canvas()} fallback={<button class="ghost" title="All documents" onClick={() => (location.hash = '#/')}>←</button>}>
-          {(c) => <button class="ghost" title="Back to the document (Esc)" data-testid="back-to-doc" onClick={() => { const id = c().id; setCanvas(null); focusCell(id); }}>←</button>}
+        <Show when={canvas()} fallback={<button class="ghost" title="All documents" aria-label="All documents" onClick={() => (location.hash = '#/')}>←</button>}>
+          {(c) => <button class="ghost" title="Back to the document (Esc)" aria-label="Back to the document" data-testid="back-to-doc" onClick={() => { const id = c().id; setCanvas(null); focusCell(id); }}>←</button>}
         </Show>
-        <button class="ghost" title="Show or hide the outline" onClick={() => setOutline(!outline())}>☰</button>
+        <button class="ghost" title="Show or hide the outline" aria-label={outline() ? 'Hide the outline' : 'Show the outline'} aria-expanded={outline()} onClick={() => setOutline(!outline())}>☰</button>
         <Show when={canvas()} fallback={
-          <span class="name" title="Rename" onClick={() => { const n = prompt('Rename document', name()); if (n) doc.rename(n); }}>{name()}</span>
+          <Show when={renaming()} fallback={
+            <button class="ghost name" title="Rename" aria-label={`Rename the document ${name()}`} onClick={() => setRenaming(true)}>{name()}</button>
+          }>
+            <input class="name-input" value={name()} aria-label="Document name" ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); rename(e.currentTarget.value); } if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); } }}
+              onBlur={(e) => renaming() && rename(e.currentTarget.value)} />
+          </Show>
         }>
           {(c) => (
             <span class="crumbs" data-testid="crumbs">
@@ -584,15 +627,30 @@ function DocView(props: {
             </span>
           )}
         </Show>
-        <ContextChip context={context()} scalars={scalars()} onSet={(c) => doc.setContext(c)} />
-        <Show when={props.branching.current} fallback={
+        <ContextChip context={context()} scalars={scalars()} onSet={(c) => c !== context() && doc.setContext(c)} />
+        <Show when={props.branching.current} fallback={<>
+          <span class="branch-start" style={{ position: 'relative' }}>
+            <button class="ghost" title={`Try something on a scratch branch, then accept or discard it (${K}B)`} aria-expanded={branchName() !== null}
+              data-testid="branch-start" onClick={() => setBranchName(branchName() === null ? defaultBranchName() : null)}>⑂ Branch</button>
+            <Show when={branchName() !== null}>
+              <div class="pop branch-pop" role="dialog" aria-label="Start a scratch branch">
+                <label class="hint" for="branch-name">Try something without changing the document; accept or discard it afterwards.</label>
+                <div class="row" style={{ 'margin-top': '6px' }}>
+                  <input id="branch-name" class="grow" value={branchName() ?? ''} aria-label="Branch name" ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
+                    onInput={(e) => setBranchName(e.currentTarget.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); newBranch(e.currentTarget.value); } if (e.key === 'Escape') { e.stopPropagation(); setBranchName(null); } }} />
+                  <button class="primary" onClick={() => newBranch(branchName() ?? '')}>Start</button>
+                </div>
+              </div>
+            </Show>
+          </span>
           <Show when={props.branching.list.length}>
             <select class="branches" aria-label="Branches" onChange={(e) => { if (e.currentTarget.value) props.branching.open(e.currentTarget.value); }}>
               <option value="">{props.branching.list.length} {props.branching.list.length === 1 ? 'branch' : 'branches'}</option>
               <For each={props.branching.list}>{(b) => <option value={b.id}>{b.name}</option>}</For>
             </select>
           </Show>
-        }>
+        </>}>
           {(b) => (
             <span class="row branch" data-testid="branch">
               <span class="branch-name" title="A scratch branch: changes here leave the document alone until you accept them">⑂ {b().name}</span>
@@ -603,7 +661,7 @@ function DocView(props: {
           )}
         </Show>
         <div class="grow" />
-        <Show when={message()}><span class="hint" onClick={() => setMessage('')}>{message()}</span></Show>
+        <span class="hint topbar-msg" role="status" onClick={() => setMessage('')}>{message()}</span>
         <Show when={linked() && !onBranch()}><span class="hint" title="Saved after every step">↔ {linked()!.name}</span></Show>
         <Show when={props.sync}>
           {(s) => (
@@ -617,15 +675,18 @@ function DocView(props: {
         </Show>
         <button class="ghost" title={`Undo (${K}Z)`} disabled={!canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
         <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
-        <span class={`light ${jobs() ? 'busy' : ''}`} title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'} data-testid="light"
+        <button class={`light ${jobs() ? 'busy' : ''}`} disabled={!jobs()} data-testid="light"
+          title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'}
+          aria-label={jobs() ? `Cancel ${jobs()} ${jobs() === 1 ? 'computation' : 'computations'}` : 'No computations running'}
           onClick={() => jobs() && ev?.cancelAll()} />
         <button class="ghost" classList={{ on: props.aiOpen }} onClick={props.onToggleAI} title={`AI panel (${K}J)`} data-testid="ai-toggle">AI</button>
-        <button class="ghost" onClick={() => setModal('palette')} title={`Commands (${K}K)`}>⋯</button>
+        <button class="ghost" onClick={() => setModal('palette')} title={`Commands (${K}K)`} aria-label="Commands">⋯</button>
       </header>
       <div class="layout" classList={{ 'no-outline': !outline() }}>
-        <Show when={outline()} fallback={<div />}>
+        <Show when={outline()}>
           <Outline cells={cells()} state={stateOf} active={active()} versions={versions()} snapshots={snapshots()} pinned={pinned()}
-            onSelect={focusCell} onVersion={(n) => setModal({ version: n })} onSnapshot={(i) => setModal({ snapshot: i })} />
+            onSelect={(id) => { if (narrow()) setOutline(false); focusCell(id); }}
+            onVersion={(n) => setModal({ version: n })} onSnapshot={(i) => setModal({ snapshot: i })} />
         </Show>
         <div class="stage">
         <main class="main">
@@ -640,14 +701,16 @@ function DocView(props: {
               {(c, i) => (
                 <>
                   <Show when={adding() === i()}><NewCell index={i()} /></Show>
-                  <div class="insert"><button onClick={() => setAdding(i())}>+ cell</button></div>
+                  {/* a pointer shortcut; the keyboard inserts with Alt+Enter or the palette */}
+                  <div class="insert"><button tabindex={-1} aria-hidden="true" onClick={() => addAt(i())}>+ cell</button></div>
                   <Show when={c.text} keyed>
                     {(text) => (
                       <Cell id={c.id} text={text} state={stateOf(c.id)} expanded={expanded().has(c.id)} active={active() === c.id}
                         onToggle={() => toggle(c.id)} onCommit={(t) => commit(c.id, t)} onCancel={() => setActive(null)}
                         onRemove={() => doc.removeCell(c.id)} onMove={(d) => doc.moveCell(c.id, i() + d)}
                         onPin={() => pin(c.id)} onRerun={() => ev?.rerun(c.id)} onCopyTikz={() => copyTikz(c.id)}
-                        onCanvas={(w) => openCanvas(c.id, w)} validate={validate} />
+                        onCanvas={(w) => openCanvas(c.id, w)} validate={validate} onInsertBelow={() => insertBelow(c.id)}
+                        onStop={() => stop(c.id)} onRunLonger={() => runLonger(c.id)} commandLine={() => commandLine(c.id)} />
                     )}
                   </Show>
                 </>
@@ -655,7 +718,7 @@ function DocView(props: {
             </For>
             <Show when={adding() !== null && adding()! >= cells().length}><NewCell index={cells().length} /></Show>
             <div style={{ 'margin-top': '10px' }}>
-              <button onClick={() => setAdding(cells().length)} data-testid="add-cell">+ New cell</button>
+              <button onClick={() => addAt(cells().length)} data-testid="add-cell">+ New cell</button>
               <span class="hint" style={{ 'margin-left': '10px' }}>Type a term to define it, or <kbd>/</kbd> for a cell kind; <kbd>Enter</kbd> commits.</span>
             </div>
           </div>
@@ -664,7 +727,7 @@ function DocView(props: {
           {(id) => (
             <Canvas doc={doc} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
               term={canvasTerm(id)} expanded={usesDefinitions(id)} generators={described()?.generators ?? []}
-              colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word}
+              colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word} value={stateOf(id)?.value}
               onWrite={(t, note) => writeCanvas(id, t, note)} onSelection={props.onSelection} onAsk={props.onAsk}
               onClose={() => { setCanvas(null); focusCell(id); }} />
           )}
@@ -683,6 +746,34 @@ function DocView(props: {
             onDiscard={() => { setModal(null); discardBranch(); }} />
         )}
       </Show>
+      <Show when={(() => { const m = modal(); return m && typeof m === 'object' && 'pin' in m ? m.pin : null; })()} keyed>
+        {(id) => {
+          const [label, setLabel] = createSignal(stateOf(id)?.parsed?.defines ?? id);
+          return (
+            <Dialog label="Pin the result" class="small" onClose={() => setModal(null)}>
+              <h3 style={{ margin: '0 0 8px' }}>Pin the result</h3>
+              <p class="hint" style={{ margin: '0 0 8px' }}>A snapshot keeps this value as it is now, in the outline under Snapshots.</p>
+              <div class="row">
+                <input class="grow" aria-label="Snapshot name" value={label()} onInput={(e) => setLabel(e.currentTarget.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pinAs(id, label()); } }} />
+                <button class="primary" disabled={!label().trim()} onClick={() => pinAs(id, label())}>Pin</button>
+              </div>
+            </Dialog>
+          );
+        }}
+      </Show>
+      <Show when={modal() === 'discard' && props.branching.current}>
+        {(b) => (
+          <Dialog label="Discard the branch" class="small" onClose={() => setModal(null)}>
+            <h3 style={{ margin: '0 0 8px' }}>Discard the branch “{b().name}”?</h3>
+            <p class="hint" style={{ margin: '0 0 10px' }}>Its changes are lost; the document stays as it is.</p>
+            <div class="row">
+              <button class="danger" onClick={() => { setModal(null); props.branching.discard(); }}>Discard</button>
+              <button onClick={() => setModal(null)}>Keep the branch</button>
+            </div>
+          </Dialog>
+        )}
+      </Show>
       <Show when={(() => { const m = modal(); return m && typeof m === 'object' && 'version' in m ? m.version : null; })()} keyed>
         {(n) => <VersionView n={n} at={doc.at(n)} dcw={(s) => doc.toDcw(s)} onClose={() => setModal(null)}
           onRestore={(s) => { doc.replace(s.context, s.cells, `restore version ${n}`); setModal(null); }}
@@ -693,19 +784,23 @@ function DocView(props: {
       </Show>
       <Show when={(() => { const m = modal(); return m && typeof m === 'object' && 'snapshot' in m ? snapshots()[m.snapshot] : null; })()} keyed>
         {(s) => (
-          <div class="modal-bg" onClick={() => setModal(null)}>
-            <div class="modal" onClick={(e) => e.stopPropagation()}>
+          <Dialog label={`Snapshot ${s.name}`} onClose={() => setModal(null)}>
               <h3 style={{ margin: '0 0 8px' }}>{s.name}</h3>
               <table class="kv"><tbody>
-                <tr><td>cell</td><td><Typeset text={s.cellText} /></td></tr>
+                <tr><td>cell</td><td><span class="kind">{kindOf(s.cellText) ?? 'def'}</span> <Typeset text={s.cellText.replace(/^(def|watch|solve|check)\s+/, '')} /></td></tr>
                 <tr><td>context</td><td><ContextText context={s.context} /></td></tr>
                 <tr><td>version</td><td>{s.version}, {new Date(s.time).toLocaleString()}</td></tr>
                 <tr><td>inputs</td><td class="hint">{s.key}</td></tr>
               </tbody></table>
-              <pre class="textform" style={{ 'margin-top': '8px' }}>{JSON.stringify(stripSvg(s.value), null, 2)}</pre>
-              <button onClick={() => setModal(null)}>Close</button>
-            </div>
-          </div>
+              <div style={{ 'margin-top': '10px' }}>
+                <ResultView s={{ id: 'snapshot', text: s.cellText, status: 'fresh', value: s.value as CellState['value'] }} />
+              </div>
+              <details class="raw" style={{ 'margin-top': '8px' }}>
+                <summary class="hint">Raw value</summary>
+                <pre class="textform">{JSON.stringify(stripSvg(s.value), null, 2)}</pre>
+              </details>
+              <button style={{ 'margin-top': '8px' }} onClick={() => setModal(null)}>Close</button>
+          </Dialog>
         )}
       </Show>
     </>
@@ -719,23 +814,25 @@ function stripSvg(v: unknown): unknown {
 
 /** One line saying what accepting a branch changes. */
 function describe(c: Comparison): string {
-  const parts = [
-    c.context && 'the context',
-    c.changed.length && `${c.changed.length} changed`,
-    c.added.length && `${c.added.length} added`,
-    c.removed.length && `${c.removed.length} removed`,
-    c.hints && `${c.hints} drawing${c.hints === 1 ? '' : 's'}`,
-  ].filter(Boolean);
+  const cells = (n: number) => `${n} ${n === 1 ? 'cell' : 'cells'}`;
+  const counts: [number, string][] = [
+    [c.changed.length, 'changed'],
+    [c.added.length, 'added'],
+    [c.removed.length, 'removed'],
+  ];
+  // "1 cell changed, 2 added": the noun once, on the first count
+  const parts: string[] = counts.filter(([n]) => n).map(([n, what], i) => (i === 0 ? `${cells(n)} ${what}` : `${n} ${what}`));
+  if (c.context) parts.unshift('the context changed');
+  if (c.hints) parts.push(`${c.hints} ${c.hints === 1 ? 'drawing' : 'drawings'} moved`);
   return parts.length ? parts.join(', ') : 'no changes';
 }
 
 function BranchView(props: { name: string; cmp: Comparison; onClose: () => void; onAccept: () => void; onDiscard: () => void }) {
   const c = () => props.cmp;
   return (
-    <div class="modal-bg" onClick={props.onClose}>
-      <div class="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Branch ${props.name}`}>
+    <Dialog label={`Branch ${props.name}`} onClose={props.onClose}>
         <h3 style={{ margin: '0 0 8px' }}>Accept “{props.name}” into the document?</h3>
-        <p class="hint" style={{ margin: '0 0 8px' }}>Accepting is one step: undo takes it back. It changes {describe(c())}.</p>
+        <p class="hint" style={{ margin: '0 0 8px' }}>Accepting is one step: undo takes it back. In this branch: {describe(c())}.</p>
         <Show when={c().conflicts.length}>
           <div class="banner">The document also changed {c().conflicts.join(', ')} since the branch was made; accepting takes the branch's text there.</div>
         </Show>
@@ -752,8 +849,7 @@ function BranchView(props: { name: string; cmp: Comparison; onClose: () => void;
           <div class="grow" />
           <button onClick={props.onDiscard}>Discard the branch</button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -766,8 +862,7 @@ function VersionView(props: {
   onBranch: (s: { context: string; cells: CellData[] }) => void;
 }) {
   return (
-    <div class="modal-bg" onClick={props.onClose}>
-      <div class="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Version ${props.n}`}>
+    <Dialog label={`Version ${props.n}`} onClose={props.onClose}>
         <h3 style={{ margin: '0 0 8px' }}>Version {props.n} (read-only)</h3>
         <Show when={props.at} fallback={<div class="error">This version cannot be read.</div>}>
           {(s) => (
@@ -781,35 +876,41 @@ function VersionView(props: {
             </>
           )}
         </Show>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
 function Keys(props: { onClose: () => void }) {
-  const rows: [string, string][] = [
-    [`${K}Z, ${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z or Ctrl+Y'}`, 'Undo, redo (outside a cell editor)'],
-    [`${K}K`, 'Command palette'],
-    ['click, Enter', 'Edit a cell: its typeset text opens as plain text in a fixed-width font'],
-    [`Enter or ${K}Enter`, 'Commit the cell being edited (Enter adds a line in a note)'],
-    ['click a result', 'Show its text, selected, to copy'],
-    ['Esc', 'Stop editing, close a dialog'],
-    [`${K}O, ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, 'Import a workspace, export this one'],
-    [`${K}B`, 'Start a scratch branch: try something, then accept or discard it'],
-    [`${K}J, ${K}L`, 'Show or hide the AI panel; ask the AI about the selection'],
-    ['/', 'At the start of a new cell: choose its kind'],
-    ['F', 'Open the active definition or watch in the focus canvas (? there lists its gestures)'],
-    ['?', 'This sheet'],
+  // what each action is, its keys, and its pointer gesture when there is one
+  const rows: [string, string, string][] = [
+    ['Move between cells', 'Tab, ↑ ↓ on a cell', ''],
+    ['Open or close a cell', 'Enter or Space on its head', 'click its head'],
+    ['Edit a cell: its typeset text opens as plain text in a fixed-width font', 'Enter on the text', 'click the text'],
+    ['Commit the cell being edited (Enter adds a line in a note)', `Enter or ${K}Enter`, ''],
+    ['Stop editing, close a dialog', 'Esc', ''],
+    ['Insert a cell below', isMac ? '⌥Enter' : 'Alt+Enter', 'hover between cells, + cell'],
+    ['At the start of a new cell: choose its kind', '/', ''],
+    ['Show a result’s text, selected, to copy', '', 'click the result'],
+    ['Undo, redo (outside a cell editor)', `${K}Z, ${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z or Ctrl+Y'}`, ''],
+    ['Command palette', `${K}K`, '⋯'],
+    ['Import a workspace, export this one', `${K}O, ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, ''],
+    ['Start a scratch branch: try something, then accept or discard it', `${K}B`, '⑂ Branch'],
+    ['Show or hide the AI panel; ask the AI about the selection', `${K}J, ${K}L`, 'AI'],
+    ['Open the active definition or watch in the focus canvas (? there lists its gestures)', 'F', 'Canvas'],
+    ['This sheet', '?', ''],
   ];
   return (
-    <div class="modal-bg" onClick={props.onClose}>
-      <div class="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Keyboard shortcuts">
+    <Dialog label="Keyboard shortcuts" onClose={props.onClose}>
         <h3 style={{ margin: '0 0 8px' }}>Keyboard shortcuts</h3>
-        <table class="kv"><tbody>
-          <For each={rows}>{([k, v]) => <tr><td><kbd>{k}</kbd></td><td>{v}</td></tr>}</For>
-        </tbody></table>
-      </div>
-    </div>
+        <table class="kv keys">
+          <thead><tr><th>Action</th><th>Keys</th><th>Pointer</th></tr></thead>
+          <tbody>
+            <For each={rows}>{([action, keys, pointer]) => (
+              <tr><td>{action}</td><td><Show when={keys}><kbd>{keys}</kbd></Show></td><td class="hint">{pointer}</td></tr>
+            )}</For>
+          </tbody>
+        </table>
+    </Dialog>
   );
 }
 

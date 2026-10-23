@@ -13,6 +13,12 @@ export type Outcome<R> =
   | { status: 'cancelled'; ms: number }
   | { status: 'exploded'; ms: number; message: string };
 
+/** What a job stopped at its time limit says: "stopped at the 120-second limit". */
+export function limitMessage(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return s % 60 === 0 && s >= 120 ? `stopped at the ${s / 60}-minute limit` : `stopped at the ${s}-second limit`;
+}
+
 export interface CallOptions {
   /** 'interactive' for quick operations, 'job' (the default) for evaluations. */
   lane?: 'interactive' | 'job';
@@ -75,7 +81,7 @@ class Slot {
     p.started = performance.now();
     if (p.timeoutMs) {
       this.timer = setTimeout(() => {
-        this.stop({ status: 'exploded', ms: performance.now() - p.started, message: `stopped after ${Math.round(p.timeoutMs! / 1000)} s` });
+        this.stop({ status: 'exploded', ms: performance.now() - p.started, message: limitMessage(p.timeoutMs!) });
       }, p.timeoutMs);
     }
     p.signal?.addEventListener('abort', () => {
