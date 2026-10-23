@@ -9,7 +9,7 @@ import { ago } from '../app';
 
 export function label(c: CellData, s?: CellState): string {
   const p = s?.parsed;
-  if (p?.kind === 'def') return `${p.defines} :=`;
+  if (p?.kind === 'def') return `${p.defines} := ${p.term ?? ''}`.trimEnd();
   if (p?.kind === 'note') return (p.note ?? '').split('\n')[0] || 'note';
   if (p?.kind === 'check') return c.text.replace(/^check\s+/, '');
   if (kindOf(c.text) === 'comment') return c.text.replace(/^\s*#\s?/, '');

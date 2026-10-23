@@ -106,7 +106,11 @@ export function kindOf(text: string): CellKind | null {
   return (['def', 'watch', 'solve', 'check', 'note'] as const).find((k) => k === w) ?? null;
 }
 
-const LETTER: Record<CellKind, string> = { def: 'd', watch: 'w', solve: 's', check: 'k', note: 'n', comment: 'c' };
+/**
+ * The letter of a cell ID by kind. A comment's is r (remark), not c, which names crossings among the
+ * occurrence IDs of a diagram (docs/spec.md, IDs).
+ */
+export const LETTER: Record<CellKind, string> = { def: 'd', watch: 'w', solve: 's', check: 'k', note: 'n', comment: 'r' };
 
 export const DEFAULT_CONTEXT = 'klr type=A2 nu=2i+j ring=QQ';
 

@@ -1,6 +1,6 @@
 // Workspace files (.dcw) and history files (.dch) to and from documents.
 import { engine } from '../app';
-import type { CellData, Doc } from './model';
+import { LETTER, type CellData, type Doc } from './model';
 import type { WorkspaceParseCell } from '../engine/ops.gen';
 
 export interface Imported {
@@ -19,10 +19,11 @@ export async function parseDcw(text: string): Promise<Imported> {
   if (o.status !== 'done') throw new Error('cancelled');
   const r = o.response;
   if (r.status !== 'ok' || !('cells' in r)) throw new Error('message' in r ? r.message : 'cannot read the file');
-  let n = 0;
+  // comments carry no ID in the file; they get the next numbers after the file's own IDs
+  let n = 1 + Math.max(0, ...r.cells.map((c) => Number(c.id?.slice(1)) || 0));
   const cells = r.cells
     .filter((c) => c.kind !== 'blank')
-    .map((c) => ({ id: c.id ?? `c${1000 + n++}`, text: cellText(c) }));
+    .map((c) => ({ id: c.id ?? `${LETTER.comment}${n++}`, text: cellText(c) }));
   return { context: r.context, cells };
 }
 

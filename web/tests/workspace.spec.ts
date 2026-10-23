@@ -161,6 +161,8 @@ test('the gate example: idempotents of a cyclotomic quotient', async ({ page }) 
   await watch.locator('.head').click();
   await expect(watch.getByTestId('prov-note').first().locator('.katex').first()).toBeVisible();
   await expect(watch.getByTestId('prov-note').first()).not.toContainText('<h_(i_1)');
+  // a definition's outline row shows its term after the name
+  await expect(page.locator('.outline .oitem .t[data-text*=":= "]').first()).toBeVisible();
 });
 
 test('an idempotent outside the weight ν is named in a warning, not a silent 0', async ({ page }) => {
