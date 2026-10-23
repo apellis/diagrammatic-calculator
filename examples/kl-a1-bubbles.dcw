@@ -1,0 +1,15 @@
+diagcalc-workspace/1
+context kl type=A1 ring=QQ mu=2
+
+# Real and fake bubbles in the Khovanov-Lauda 2-category U(sl_2) at weight 2
+# cw_{i,m} and ccw_{i,m} carry m dots; those of degree 0 are 1, those of negative degree vanish
+check equal(cw_{i,1} e(), e())  # id=k1
+check zero(cw_{i,0} e())  # id=k2
+# Counterclockwise bubbles of negative label are fake, defined by the infinite Grassmannian relation
+watch ccw_{i,-2} e()  # id=w3
+watch ccw_{i,-1} e()  # id=w4
+check zero(cw_{i,2} e() + ccw_{i,-2} e())  # id=k5
+check zero(cw_{i,3} e() + cw_{i,2} ccw_{i,-2} e() + ccw_{i,-1} e())  # id=k6
+# On downward strands the dots and crossings satisfy the nilHecke relations
+watch x_1 psi_1 e(i* i*) - psi_1 x_2 e(i* i*)  # id=w7
+check zero(psi_1 psi_1 e(i* i*))  # id=k8
