@@ -36,7 +36,7 @@ jobs:
       run:
         working-directory: lean/chains
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Lean
@@ -54,7 +54,7 @@ jobs:
         run: lake exe cache get < /dev/null
       - name: Restore the built dependencies
         id: deps
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             lean/chains/.lake/packages/Categorification/.lake
@@ -71,7 +71,7 @@ jobs:
           diff -u klr-relations.txt /tmp/klr-relations.txt
       - name: Save the built dependencies
         if: ${{ !cancelled() && steps.deps.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             lean/chains/.lake/packages/Categorification/.lake
