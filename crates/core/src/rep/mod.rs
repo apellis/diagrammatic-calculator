@@ -275,7 +275,7 @@ pub fn evaluator<'a, R: Ring + 'a>(
     let prov = |strategy| Provenance {
         strategy,
         method: decl.name.clone(),
-        certificate: decl.certificate.clone(),
+        certificate: decl.certificate_in(ctx).clone(),
     };
     let dot = || role(ctx, decl, "dot");
     let crossing = || role(ctx, decl, "crossing");

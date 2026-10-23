@@ -350,7 +350,7 @@ mod tests {
         let prov = Provenance {
             strategy: super::super::Strategy::BasisNormalForm,
             method: decl.name.clone(),
-            certificate: decl.certificate.clone(),
+            certificate: decl.certificate_in(c).clone(),
         };
         SkmBasis::new(c, decl, prov).unwrap()
     }
@@ -375,12 +375,63 @@ mod tests {
         out
     }
 
-    /// Both sides of every relation have the same normal form, and normal forms are fixed.
+    /// The translation into `kl`, in a context whose colours are all even.
+    fn kl_translation<'a>(
+        c: &'a Context<Rationals>,
+    ) -> Option<Box<dyn super::super::Evaluator<Rationals> + 'a>> {
+        if c.colours.iter().any(|col| col.odd) {
+            return None;
+        }
+        let decl = c
+            .pres
+            .representations
+            .iter()
+            .find(|d| d.name == "kl-translation")
+            .unwrap();
+        Some(super::super::evaluator(c, decl).unwrap())
+    }
+
+    /// For even colours: the normal form `n` of `t` here is the one the translation into `kl`
+    /// gives (both are written in KL's basis), and each is fixed by the other strategy.
+    fn agrees_with_kl(
+        c: &Context<Rationals>,
+        skm: &SkmBasis<'_, Rationals>,
+        kl: &dyn super::super::Evaluator<Rationals>,
+        t: &CTerm<Rationals>,
+        n: &CTerm<Rationals>,
+    ) {
+        let k = kl.normal_form(t).unwrap();
+        assert_eq!(
+            c.fmt_term(&k),
+            c.fmt_term(n),
+            "{}: skm and kl give different normal forms of {}",
+            c.spec.print(),
+            c.fmt_term(t)
+        );
+        assert_eq!(
+            c.fmt_term(&skm.normal_form(&k).unwrap()),
+            c.fmt_term(n),
+            "{}: skm and kl disagree on {}",
+            c.spec.print(),
+            c.fmt_term(t)
+        );
+        assert_eq!(
+            c.fmt_term(&kl.normal_form(n).unwrap()),
+            c.fmt_term(&k),
+            "{}: kl and skm disagree on {}",
+            c.spec.print(),
+            c.fmt_term(t)
+        );
+    }
+
+    /// Both sides of every relation have the same normal form, and normal forms are fixed. For
+    /// even colours the normal forms also agree with the translation into `kl`.
     fn relations_agree(spec: &str) {
         let mut c = ctx(spec);
         c.objects.clear();
         c.weight = None;
         let skm = strategy(&c);
+        let kl = kl_translation(&c);
         for rel in &c.pres.relations {
             for b in instances(&c, rel).unwrap() {
                 let (l, r) = instance_terms(&c, rel, &b).unwrap();
@@ -393,6 +444,10 @@ mod tests {
                     c.fmt_term(&l)
                 );
                 assert_eq!(skm.normal_form(&nl).unwrap(), nl, "{spec}: {}", rel.name);
+                if let Some(kl) = &kl {
+                    agrees_with_kl(&c, &skm, kl.as_ref(), &l, &nl);
+                    agrees_with_kl(&c, &skm, kl.as_ref(), &r, &nr);
+                }
             }
         }
     }
@@ -444,6 +499,7 @@ mod tests {
                 }
                 for (c2, pads, right) in &sides {
                     let skm2 = strategy(c2);
+                    let kl2 = kl_translation(c2);
                     for p in pads {
                         let p = c2.parse_term(p).unwrap();
                         let (pl, pr) = if *right {
@@ -472,6 +528,9 @@ mod tests {
                             c2.fmt_term(&pl),
                             c2.fmt_term(&pr)
                         );
+                        if let Some(kl2) = &kl2 {
+                            agrees_with_kl(c2, &skm2, kl2.as_ref(), &pl, &nl);
+                        }
                     }
                 }
             }
@@ -504,10 +563,44 @@ mod tests {
         }
     }
 
+    /// Even colours, where this is the session's representation with a Lean certificate: every
+    /// relation in types A1, A2, B2 and G2 at the conformance checker's weights, against the
+    /// translation into `kl`.
     #[test]
     fn relations_have_equal_normal_forms_even() {
-        relations_agree("be2 type=A1 mu=1");
-        relations_agree("be2 type=A1 mu=-2");
+        for spec in [
+            "be2 type=A1 mu=-3",
+            "be2 type=A1 mu=-2",
+            "be2 type=A1 mu=-1",
+            "be2 type=A1 mu=0",
+            "be2 type=A1 mu=1",
+            "be2 type=A1 mu=2",
+            "be2 type=A1 mu=3",
+            "be2 type=A2 mu=0",
+            "be2 type=A2 mu=i",
+            "be2 type=A2 mu=-j",
+            "be2 type=A2 mu=2i-j",
+            "be2 type=A2 mu=-i-2j",
+            "be2 type=B2 mu=0",
+            "be2 type=B2 mu=i-j",
+            "be2 type=B2 mu=-2j",
+            "be2 type=G2 mu=0",
+            "be2 type=G2 mu=i",
+            "be2 type=G2 mu=-j",
+        ] {
+            relations_agree(spec);
+        }
+    }
+
+    /// The same next to a strand of each colour and orientation, against the translation too.
+    #[test]
+    fn padded_relations_have_equal_normal_forms_even() {
+        for mu in ["-1", "0", "1"] {
+            padded_relations_agree("be2 type=A1", mu, 1);
+        }
+        padded_relations_agree("be2 type=A2", "i", 1);
+        padded_relations_agree("be2 type=B2", "i-j", 1);
+        padded_relations_agree("be2 type=G2", "-j", 1);
     }
 
     #[test]
@@ -520,16 +613,19 @@ mod tests {
     /// written in KL's basis and carried back, has itself as normal form here.
     #[test]
     fn even_colours_agree_with_the_kl_translation() {
-        for spec in ["be2 type=A1 mu=1", "be2 type=A1 mu=-2", "be2 type=A2 mu=i"] {
+        for spec in [
+            "be2 type=A1 mu=-2",
+            "be2 type=A1 mu=0",
+            "be2 type=A1 mu=1",
+            "be2 type=A2 mu=i",
+            "be2 type=A2 mu=-i-2j",
+            "be2 type=B2 mu=i-j",
+            "be2 type=G2 mu=0",
+            "be2 type=G2 mu=-j",
+        ] {
             let c = ctx(spec);
             let skm = strategy(&c);
-            let decl = c
-                .pres
-                .representations
-                .iter()
-                .find(|d| d.name == "kl-translation")
-                .unwrap();
-            let kl = super::super::evaluator(&c, decl).unwrap();
+            let kl = kl_translation(&c).unwrap();
             let mut n = 0;
             for s in objects(c.colours.len(), 2) {
                 for t in objects(c.colours.len(), 2) {

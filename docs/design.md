@@ -102,14 +102,15 @@ millisecond). The target's first representation computes the normal form, which 
 by the inverse renaming (every generator in the target's normal forms must be the image of exactly
 one generator); a translation that would need more is refused with a reason.
 
-`be2` uses one into `kl` for even colours (`even_only`), certified by Brundan's comparison of the
-Rouquier and Khovanov–Lauda definitions (arXiv:1501.00350) and KL III nondegeneracy; the
-conformance checker checks every relation of `be2` through it, in types A1, A2, B2 and G2 at every
-test weight. A translation that does not apply in a context (odd colours, no `mu=`) is skipped:
-the session uses the first representation that applies, and the conformance report lists the
-skipped one as unchecked. For odd colours the relations are checked through the BE2 basis normal
-form below, and those that define the leftward cups and caps and the downward dots and crossings
-also against odd-lean by the Lean export.
+`be2` has one into `kl` for even colours (`even_only`), certified by Brundan's comparison of the
+Rouquier and Khovanov–Lauda definitions (arXiv:1501.00350) and KL III nondegeneracy. It is the
+second representation, after the BE2 basis normal form below, which is about ten times faster on
+the same diagrams; it stays as a cross-check (`--strategy kl-translation`). The conformance checker
+checks every relation of `be2` through both, in types A1, A2, B2 and G2 at every test weight. A
+translation that does not apply in a context (odd colours, no `mu=`) is skipped, and the
+conformance report lists it as unchecked. For odd colours the relations are checked through the
+BE2 basis normal form, and those that define the leftward cups and caps and the downward dots and
+crossings also against odd-lean by the Lean export.
 
 ### The KL basis normal form (`rep/kl`, representation kind `kl-basis`)
 
@@ -193,9 +194,16 @@ a normal form of zero, are proven by the computation alone, and the result says 
 certificate (`certified_by: "certificate"`), and the web app marks them conditional. The basis
 words are checked to evaluate to independent vectors in every degree computed (a necessary
 condition for the Nondegeneracy Conjecture; a failure would contradict it and is reported as an
-error), and the target to lie in their span (BE2 Theorem 8.1). The certificate is `conditional`,
-as for the quiver Hecke basis. For even colours the session still uses the translation into
-`kl`, whose certificate is a theorem; the tests check that the two agree. Basis evaluations are
+error), and the target to lie in their span (BE2 Theorem 8.1). With an odd colour the
+certificate is `conditional`, as for the quiver Hecke basis. When every colour is even the
+conjecture is a theorem (odd-lean `EvenBridge.nondegeneracyConjecture_of_isEven`, for Khovanov–Lauda
+scalars, a symmetrizable Cartan datum with finitely many colours and any commutative ground ring),
+so the representation declares a second certificate, `even_certificate`, with status `lean`, and
+results in such a context carry it: this is the session's representation for even data. The tests
+check every relation in types A1, A2, B2 and G2 at the conformance checker's weights, plain and
+next to a strand of each colour and orientation, against the translation into `kl`: both sides'
+normal forms are identical to KL's, written in `be2`'s names, and each strategy fixes the other's
+normal form; so does every basis word of up to three strands in several weights. Basis evaluations are
 kept across calls as for KL, and bubble series are cached per strand list; a diagram with three
 strands, one of them downward, takes seconds, and that cost grows quickly with the width.
 

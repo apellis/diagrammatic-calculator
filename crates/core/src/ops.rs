@@ -866,7 +866,7 @@ impl RingVisitor for Describe<'_> {
             "representations": ctx.pres.representations.iter().map(|d| json!({
                 "name": d.name,
                 "kind": d.kind,
-                "certificate": d.certificate.status,
+                "certificate": d.certificate_in(&ctx).status,
             })).collect::<Vec<_>>(),
             "scalars": ctx.spec.scalars,
             "provenance": provenance_json(s.eval.as_ref()),

@@ -172,9 +172,17 @@ odd-lean: `cyclic-dot-even`, `cyclic-crossing`, and the bubble relations `bubble
 `bubble-*-one` (bubbles of negative degree vanish; of degree zero they are 1). A sign
 `(−1)^{n}` with `n < 0` is read as `(−1)^{−n}`: only units take negative powers.
 
-**Normal forms.** With every colour even and these scalars, `U(g)` is the Khovanov–Lauda
-2-category (Brundan, On the definition of Kac–Moody 2-category, arXiv:1501.00350, main theorem),
-and the presentation's first representation, `kl-translation`, carries a term into `kl` and back:
+**Normal forms.** The presentation's first representation, `skm-basis`, computes the BE2 basis
+normal form for any parities. Its certificate depends on the context: with every colour even it is
+`lean` (BE2's Nondegeneracy Conjecture holds for even data, odd-lean
+`EvenBridge.nondegeneracyConjecture_of_isEven`), with an odd colour `conditional` on the conjecture
+(see `design.md`). A representation may declare such a certificate for all-even contexts as
+`even_certificate`, next to `certificate`.
+
+With every colour even and these scalars, `U(g)` is also the Khovanov–Lauda 2-category (Brundan,
+On the definition of Kac–Moody 2-category, arXiv:1501.00350, main theorem), and the second
+representation, `kl-translation` (chosen with `--strategy kl-translation`), carries a term into
+`kl` and back:
 
 | `be2` | `kl` |
 |---|---|
@@ -183,12 +191,11 @@ and the presentation's first representation, `kl-translation`, carries a term in
 | `cap`, `capl` | `cap`, `capd` |
 | `lcross` | `cap_1 psi_2 cup_{3,a}` |
 
-Normal forms are KL's (below), written back in `be2`'s names; a leftward crossing comes back as the
-rotated crossing. The conformance checker checks every relation of `be2` through the translation.
-With an odd colour the translation does not apply, and the second representation, `skm-basis`,
-computes the normal form (conditional on BE2's Nondegeneracy Conjecture, see `design.md`). Its
-basis is KL's, drawn in `be2`'s names: caps `cap` (clockwise end on the right) or `capl`, cups
-`cup` or `cupl`, sideways crossings `lcross`, one dot exponent per arc at its left end, and real
+Its normal forms are KL's (below), written back in `be2`'s names; a leftward crossing comes back as
+the rotated crossing. They coincide with those of `skm-basis` (the tests check this for every
+relation), and the conformance checker checks every relation of `be2` through both. With an odd
+colour the translation does not apply. The basis of `skm-basis` is KL's, drawn in `be2`'s names:
+caps `cap` (clockwise end on the right) or `capl`, cups `cup` or `cupl`, sideways crossings `lcross`, one dot exponent per arc at its left end, and real
 bubbles at the bottom right, clockwise when `⟨i, μ⟩ ≥ 0` and counterclockwise otherwise, with
 their dots on the upward leg. For an odd colour the bubbles of the basis are those of even
 degree index and at most one `δ` (index 1). The third, `quiver-hecke-basis`, remains for upward

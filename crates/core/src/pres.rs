@@ -124,6 +124,23 @@ pub struct RepresentationDecl {
     /// For kind `translation`: the translation holds only when every colour is even.
     pub even_only: bool,
     pub certificate: Certificate,
+    /// The certificate in a context whose colours are all even, when it is stronger there (the
+    /// conjecture behind `certificate` is a theorem for even data).
+    pub even_certificate: Option<Certificate>,
+}
+
+impl RepresentationDecl {
+    /// The certificate that holds in a context: `even_certificate` when every colour is even and
+    /// one is declared, `certificate` otherwise.
+    pub fn certificate_in<R: crate::ring::Ring>(
+        &self,
+        ctx: &crate::context::Context<R>,
+    ) -> &Certificate {
+        match &self.even_certificate {
+            Some(c) if ctx.colours.iter().all(|col| !col.odd) => c,
+            _ => &self.certificate,
+        }
+    }
 }
 
 /// A family of bubbles, written `name_{a,m}` for a colour `a` and an integer label `m`: for
@@ -427,6 +444,8 @@ struct RawRep {
     #[serde(default)]
     even_only: bool,
     certificate: RawCert,
+    #[serde(default)]
+    even_certificate: Option<RawCert>,
 }
 
 #[derive(Deserialize)]
@@ -437,6 +456,16 @@ struct RawCert {
     reference: String,
     #[serde(default)]
     hypotheses: String,
+}
+
+impl From<RawCert> for Certificate {
+    fn from(c: RawCert) -> Self {
+        Certificate {
+            status: c.status,
+            reference: c.reference,
+            hypotheses: c.hypotheses,
+        }
+    }
 }
 
 fn words(s: &str) -> Vec<String> {
@@ -628,11 +657,8 @@ impl Presentation {
                 target: r.target,
                 images: r.images,
                 even_only: r.even_only,
-                certificate: Certificate {
-                    status: r.certificate.status,
-                    reference: r.certificate.reference,
-                    hypotheses: r.certificate.hypotheses,
-                },
+                certificate: r.certificate.into(),
+                even_certificate: r.even_certificate.map(Certificate::from),
             })
             .collect();
         let lean = match raw.lean {
@@ -884,13 +910,16 @@ impl Presentation {
                     .collect();
                 o.push_str(&format!("images = {{ {} }}\n", im.join(", ")));
             }
-            let c = &r.certificate;
-            o.push_str(&format!("certificate.status = {}\n", q(&c.status)));
-            if !c.reference.is_empty() {
-                o.push_str(&format!("certificate.reference = {}\n", q(&c.reference)));
-            }
-            if !c.hypotheses.is_empty() {
-                o.push_str(&format!("certificate.hypotheses = {}\n", q(&c.hypotheses)));
+            let certs = std::iter::once(("certificate", &r.certificate))
+                .chain(r.even_certificate.iter().map(|c| ("even_certificate", c)));
+            for (key, c) in certs {
+                o.push_str(&format!("{key}.status = {}\n", q(&c.status)));
+                if !c.reference.is_empty() {
+                    o.push_str(&format!("{key}.reference = {}\n", q(&c.reference)));
+                }
+                if !c.hypotheses.is_empty() {
+                    o.push_str(&format!("{key}.hypotheses = {}\n", q(&c.hypotheses)));
+                }
             }
         }
         if let Some(l) = &self.lean {

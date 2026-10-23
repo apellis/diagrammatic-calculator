@@ -412,28 +412,35 @@
           }
         },
         "certificate": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "status"
-          ],
-          "properties": {
-            "status": {
-              "enum": [
-                "lean",
-                "literature",
-                "conditional",
-                "assumed",
-                "unknown"
-              ]
-            },
-            "reference": {
-              "type": "string"
-            },
-            "hypotheses": {
-              "type": "string"
-            }
-          }
+          "$ref": "#/$defs/certificate"
+        },
+        "even_certificate": {
+          "description": "The certificate in a context whose colours are all even, when it is stronger there than certificate (a theorem for even data, a conjecture in general).",
+          "$ref": "#/$defs/certificate"
+        }
+      }
+    },
+    "certificate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "lean",
+            "literature",
+            "conditional",
+            "assumed",
+            "unknown"
+          ]
+        },
+        "reference": {
+          "type": "string"
+        },
+        "hypotheses": {
+          "type": "string"
         }
       }
     },

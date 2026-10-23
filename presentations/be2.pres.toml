@@ -256,6 +256,17 @@ lhs = "cap_1 x_2^{-h(a) - 1} cup_{1,a*} e()"
 rhs = "e()"
 
 [[representations]]
+name = "skm-basis"
+kind = "skm-basis"
+roles = { cap_ef = "cap", cap_fe = "capl", cup_ef = "cupl", cup_fe = "cup", lcross = "lcross", psi = "psi", psid = "psid", x = "x", xd = "xd" }
+certificate.status = "conditional"
+certificate.reference = "Brundan-Ellis, Super Kac-Moody 2-categories (arXiv:1701.04133v2), Theorem 8.1 and Section 8 (Nondegeneracy Conjecture); odd-lean: SKM theorem_8_1, EvenBridge.nondegeneracyConjecture_of_isEven"
+certificate.hypotheses = "t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1. Every step of the computation is a relation of U(g), so equal normal forms are equal in U(g). That distinct normal forms differ is the Nondegeneracy Conjecture, open for odd colours and proved for even data; in each degree computed the candidate basis is checked to evaluate to independent upward diagrams with bubbles (a necessary condition), and a failure is reported as an error"
+even_certificate.status = "lean"
+even_certificate.reference = "odd-lean: EvenBridge.nondegeneracyConjecture_of_isEven (Brundan-Ellis, Super Kac-Moody 2-categories, arXiv:1701.04133v2, the Nondegeneracy Conjecture of Section 8 for purely even data, through Khovanov-Lauda arXiv:0807.3250v1 Theorem 1.2, categorification-lean KL3.Diagram.calculusNondeg) and SKM theorem_8_1 (Theorem 8.1, spanning)"
+even_certificate.hypotheses = "every colour even; t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1; a symmetrizable Cartan datum with finitely many colours; any commutative ground ring. Every step of the computation is a relation of U(g), so equal normal forms are equal in U(g), and distinct normal forms differ by the theorem. In each degree computed the candidate basis is still checked to evaluate to independent upward diagrams with bubbles, and a failure is reported as an error"
+
+[[representations]]
 name = "kl-translation"
 kind = "translation"
 target = "kl"
@@ -264,14 +275,6 @@ images = { cap = "cap_1 e(a a*)", capl = "cap_1 e(a* a)", cup = "cup_{1,a*} e()"
 certificate.status = "literature"
 certificate.reference = "Brundan, On the definition of Kac-Moody 2-category (arXiv:1501.00350), main theorem: for even colours U(g) as defined by Rouquier with these scalars is the Khovanov-Lauda 2-category; the KL normal form then rests on KL III nondegeneracy (categorification-lean KL3 calculusNondeg)"
 certificate.hypotheses = "every colour even; t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1; each relation of this presentation is checked through the translation by the conformance checker"
-
-[[representations]]
-name = "skm-basis"
-kind = "skm-basis"
-roles = { cap_ef = "cap", cap_fe = "capl", cup_ef = "cupl", cup_fe = "cup", lcross = "lcross", psi = "psi", psid = "psid", x = "x", xd = "xd" }
-certificate.status = "conditional"
-certificate.reference = "Brundan-Ellis, Super Kac-Moody 2-categories (arXiv:1701.04133v2), Theorem 8.1 and Section 8 (Nondegeneracy Conjecture); odd-lean: SKM theorem_8_1, EvenBridge.nondegeneracyConjecture_of_isEven"
-certificate.hypotheses = "t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1. Every step of the computation is a relation of U(g), so equal normal forms are equal in U(g). That distinct normal forms differ is the Nondegeneracy Conjecture, open for odd colours and proved for even data; in each degree computed the candidate basis is checked to evaluate to independent upward diagrams with bubbles (a necessary condition), and a failure is reported as an error"
 
 [[representations]]
 name = "quiver-hecke-basis"
