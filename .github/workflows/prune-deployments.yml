@@ -2,7 +2,8 @@
 # production deployment. Each deployment keeps its own static files and server code, bound to the
 # production database and storage, at its own <hash>.diagcalc.pages.dev address; old ones would
 # serve code without later fixes. Run by hand (Actions, this workflow, Run workflow); with
-# "dry run" it only lists what it would delete. Deployments newer than production (one being
+# "dry run" it only lists what it would delete. A push that changes .github/prune-deployments
+# also runs it: the file's first word, "list" or "delete", says which. Deployments newer than production (one being
 # made right now) are never touched.
 name: Prune old deployments
 
@@ -13,6 +14,9 @@ on:
         description: List only, delete nothing
         type: boolean
         default: true
+  push:
+    branches: [master]
+    paths: [.github/prune-deployments]
 
 permissions:
   contents: read
@@ -25,8 +29,21 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      DRY_RUN: ${{ inputs.dry_run }}
+      DRY_RUN: ${{ github.event_name == 'push' || inputs.dry_run }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'push'
+        with:
+          persist-credentials: false
+          sparse-checkout: .github
+      - name: Mode of a push run
+        if: github.event_name == 'push'
+        run: |
+          mode=$(awk 'NR==1 {print $1}' .github/prune-deployments)
+          case "$mode" in
+            delete) echo DRY_RUN=false >> "$GITHUB_ENV" ;;
+            *) echo DRY_RUN=true >> "$GITHUB_ENV" ;;
+          esac
       - name: Delete deployments older than production
         run: |
           set -euo pipefail
@@ -41,7 +58,7 @@ jobs:
           while :; do
             body=$(get "$api/deployments?per_page=25&page=$page")
             n=$(echo "$body" | jq '.result | length')
-            [ "$n" -gt 0 ] || break
+            [ "$n" -gt 0 ] && [ "$page" -le 200 ] || break
             echo "$body" | jq -r --arg p "$prod" --arg t "$prod_time" \
               '.result[] | select(.id != $p and .created_on < $t) | "\(.id) \(.created_on) \(.environment)"' >> old.txt
             page=$((page + 1))
@@ -49,7 +66,7 @@ jobs:
           count=$(wc -l < old.txt)
           if [ "$DRY_RUN" = true ]; then
             echo "::notice::dry run: $count deployments would be deleted"
-            cat old.txt
+            awk '{print $3}' old.txt | sort | uniq -c | while read -r k e; do echo "::notice::$k $e"; done
             exit 0
           fi
           deleted=0

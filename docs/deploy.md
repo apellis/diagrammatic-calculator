@@ -91,8 +91,9 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
 - **Old deployments.** Every deployment keeps its own files and server code, bound to the
   production database and storage, at its own `<hash>.diagcalc.pages.dev` address. The site is
   served without Cloudflare Access, so delete old ones: GitHub, Actions, "Prune old deployments",
-  Run workflow (first with "dry run" to see the list). It keeps the production deployment and
-  anything newer.
+  Run workflow (first with "dry run" to see the list), or push a change to
+  `.github/prune-deployments` whose first word is `list` or `delete`. It keeps the production
+  deployment and anything newer.
 - **Rate limit.** Cloudflare, the zone, Security, WAF, Rate limiting rules (once the site is on the
   custom domain; `pages.dev` cannot have rules): one rule on URI path starting with `/api/` and
   method not GET, for example 60 requests per minute per IP, action Block for 1 minute.
@@ -100,7 +101,8 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
   token at Cloudflare Pages: Edit plus D1: Edit, and remove Workers R2 Storage: Edit and DNS: Edit
   once the bucket and the DMARC record exist (the run summary says when they do).
 - **Protected environment.** The deploy job runs in the GitHub environment `production`. GitHub,
-  Settings, Environments, `production`: under Deployment branches allow `master` only, then move
-  the secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `D1_DATABASE_ID` from the
-  repository's secrets into the environment's. Settings, Branches: protect `master` (no force
-  pushes, no deletion).
+  Settings, Environments, `production`: under Deployment branches allow `master` only. The secrets
+  can stay repository secrets (a job in the environment reads both); moving them into the
+  environment would also hide them from other workflows, but needs their values, so it can wait
+  until the token is next rotated. Settings, Branches: protect `master` (no force pushes, no
+  deletion).
