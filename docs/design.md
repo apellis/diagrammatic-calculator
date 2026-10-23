@@ -597,9 +597,15 @@ cell; a result already frozen is reused), and the timeline entry lists the snaps
 Activity tab shows the summary as formatted text and each key diagram drawn from its snapshot, with
 Open for the snapshot dialog, so a later edit never changes what a milestone reported.
 
-OpenAI is called through its Responses API (`store: false`), which, unlike chat completions,
-accepts function tools from reasoning models; a local OpenAI-compatible server speaks the
-chat-completions protocol. The provider, model, effort and key are set on the settings page
+OpenAI is called through its Responses API (`store: false`); a local OpenAI-compatible server
+speaks the chat-completions protocol. Both stream through the SSE parser in
+`src/ai/provider-stream.ts`, including text, tool calls and usage. The Responses adapter requests
+encrypted reasoning and retains the ordered provider output in memory alongside each assistant
+content array, so later tool/user turns replay the original reasoning and tool arguments. This
+continuation data is not rendered, serialized or synchronized; it lasts only as long as the
+conversation. Compatible servers returning JSON instead of SSE still work; a server rejecting
+the streaming request reports its error rather than silently retrying a potentially billed call.
+The provider, model, effort and key are set on the settings page
 (`#/settings`, reached from the document list or from the panel, which links there while no
 provider is set up); the panel itself only chats. "Check the connection" there makes the kind of call the chat
 makes (for OpenAI a Responses request of a few tokens to the chosen model; for Anthropic and a
@@ -641,11 +647,10 @@ reopen, accept, undo, discard) and the AI panel against a recorded model: reques
 Messages API are answered with scripted streamed turns, so a what-if on a branch runs end to end,
 including the request's headers, caching and thinking settings.
 
-**Not yet.** In the AI panel: the chat itself is kept only while the page is open (the timeline
-is kept with the document), pinned watches' trends cover the session only, OpenAI and compatible
-servers are not streamed, OpenAI reasoning is not carried between turns, and whether OpenAI
-accepts calls from a browser page is decided by the in-app check in a real browser (the
-development container cannot reach OpenAI).
+**Session boundaries.** The chat itself is kept only while the page is open (the timeline is
+kept with the document), and pinned watches' trends cover the session only. Provider reachability
+is checked in the person's browser; transport tests with recorded responses do not establish
+that a particular key or provider accepts live browser calls.
 
 ## Accounts and sharing (phase 6)
 

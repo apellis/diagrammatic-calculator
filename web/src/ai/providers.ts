@@ -7,6 +7,7 @@
 // and translated for the others.
 import Anthropic from '@anthropic-ai/sdk';
 import type { ToolDef } from './tools';
+import { readChat, readResponses, type ResponseOutput } from './provider-stream';
 
 export type ProviderId = 'anthropic' | 'openai' | 'compatible';
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -228,13 +229,18 @@ const blockedMessage = (name: string, detail?: string) =>
 
 type ChatMessage =
   | { role: 'system' | 'user'; content: string }
-  | { role: 'assistant'; content: string | null; tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[] }
+  | { role: 'assistant'; content: string | null; refusal?: string; tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[] }
   | { role: 'tool'; tool_call_id: string; content: string };
+
+// As with Responses below, preserve wire arguments in memory rather than re-encoding JSON.
+const chatHistory = new WeakMap<object, ChatMessage>();
 
 /** The conversation in the chat-completions format. */
 export function toChat(system: string, messages: Anthropic.MessageParam[]): ChatMessage[] {
   const out: ChatMessage[] = [{ role: 'system', content: system }];
   for (const m of messages) {
+    const original = m.role === 'assistant' && typeof m.content !== 'string' ? chatHistory.get(m.content) : undefined;
+    if (original) { out.push(original); continue; }
     const blocks = typeof m.content === 'string' ? [{ type: 'text' as const, text: m.content }] : m.content;
     if (m.role === 'user') {
       for (const b of blocks) {
@@ -272,6 +278,8 @@ export function chatCompletions(key: string, s: AISettings): Provider {
           body: JSON.stringify({
             model: s.model,
             messages: toChat(r.system, r.messages),
+            stream: true,
+            stream_options: { include_usage: true },
             tools: r.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } })),
           }),
         });
@@ -280,17 +288,19 @@ export function chatCompletions(key: string, s: AISettings): Provider {
         throw new BrowserBlocked(blockedMessage(name, (e as Error).message));
       }
       if (!res.ok) throw new Error(`${name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
-      const j = (await res.json()) as {
-        choices: { finish_reason: string; message: { content?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
-      };
+      const { body: j, streamed } = await readChat(res, r);
       const choice = j.choices[0];
       const content: Anthropic.ContentBlock[] = [];
       if (choice.message.content) {
-        r.onText(choice.message.content);
+        if (!streamed) r.onText(choice.message.content);
         content.push({ type: 'text', text: choice.message.content, citations: null } as Anthropic.TextBlock);
       }
+      if (choice.message.refusal) {
+        if (!streamed) r.onText(choice.message.refusal);
+        content.push({ type: 'text', text: choice.message.refusal, citations: null });
+      }
       for (const c of choice.message.tool_calls ?? []) {
+        if (!c.id || !c.function.name || (c.type && c.type !== 'function')) throw new Error('Provider returned an invalid tool call.');
         let input: unknown;
         try {
           input = JSON.parse(c.function.arguments || '{}');
@@ -300,21 +310,38 @@ export function chatCompletions(key: string, s: AISettings): Provider {
         content.push({ type: 'tool_use', id: c.id, name: c.function.name, input } as Anthropic.ToolUseBlock);
       }
       const stop: Anthropic.StopReason =
-        choice.finish_reason === 'tool_calls' ? 'tool_use' : choice.finish_reason === 'length' ? 'max_tokens' : choice.finish_reason === 'content_filter' ? 'refusal' : 'end_turn';
-      return { content, stop, usage: { input: j.usage?.prompt_tokens ?? 0, output: j.usage?.completion_tokens ?? 0, cacheRead: 0, cacheWrite: 0 } };
+        choice.message.refusal || choice.finish_reason === 'content_filter' ? 'refusal'
+        : choice.finish_reason === 'tool_calls' ? 'tool_use' : choice.finish_reason === 'length' ? 'max_tokens' : 'end_turn';
+      const cached = j.usage?.prompt_tokens_details?.cached_tokens ?? 0;
+      chatHistory.set(content, {
+        role: 'assistant', content: choice.message.content ?? null,
+        ...(choice.message.refusal ? { refusal: choice.message.refusal } : {}),
+        ...(choice.message.tool_calls?.length ? { tool_calls: choice.message.tool_calls.map((c) => ({ id: c.id, type: 'function' as const, function: { ...c.function } })) } : {}),
+      });
+      return { content, stop, usage: { input: Math.max(0, (j.usage?.prompt_tokens ?? 0) - cached), output: j.usage?.completion_tokens ?? 0, cacheRead: cached, cacheWrite: 0 } };
     },
   };
 }
 
 type ResponseItem =
+  | ResponseOutput
   | { role: 'user' | 'assistant'; content: string }
   | { type: 'function_call'; call_id: string; name: string; arguments: string }
   | { type: 'function_call_output'; call_id: string; output: string };
+
+// The agent and chat panel retain each content array by reference for the lifetime of the
+// conversation. Keep the exact provider output alongside it, not in Anthropic blocks, storage,
+// or UI text. Recreating a Provider between requests must not lose the continuation. Clearing
+// the conversation releases this state; serialization intentionally does not persist it.
+// https://developers.openai.com/api/docs/guides/reasoning#preserve-reasoning-without-stored-responses
+const responseHistory = new WeakMap<object, ResponseOutput[]>();
 
 /** The conversation as input items of OpenAI's Responses API. */
 export function toResponses(messages: Anthropic.MessageParam[]): ResponseItem[] {
   const out: ResponseItem[] = [];
   for (const m of messages) {
+    const original = m.role === 'assistant' && typeof m.content !== 'string' ? responseHistory.get(m.content) : undefined;
+    if (original) { out.push(...original); continue; }
     const blocks = typeof m.content === 'string' ? [{ type: 'text' as const, text: m.content }] : m.content;
     for (const b of blocks) {
       if (b.type === 'text' && b.text) out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: b.text });
@@ -349,6 +376,8 @@ export function openaiResponses(key: string, s: AISettings): Provider {
             input: toResponses(r.messages),
             tools: r.tools.map((t) => ({ type: 'function', name: t.name, description: t.description, parameters: t.input_schema, strict: false })),
             store: false,
+            stream: true,
+            include: ['reasoning.encrypted_content'],
           }),
         });
       } catch (e) {
@@ -356,16 +385,7 @@ export function openaiResponses(key: string, s: AISettings): Provider {
         throw new BrowserBlocked(blockedMessage(name, (e as Error).message));
       }
       if (!res.ok) throw new Error(`${name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
-      const j = (await res.json()) as {
-        status?: string;
-        incomplete_details?: { reason?: string } | null;
-        output?: (
-          | { type: 'message'; content?: { type: string; text?: string; refusal?: string }[] }
-          | { type: 'function_call'; call_id: string; name: string; arguments: string }
-          | { type: string }
-        )[];
-        usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
-      };
+      const { body: j, streamed } = await readResponses(res, r);
       const content: Anthropic.ContentBlock[] = [];
       let refused = false;
       for (const item of j.output ?? []) {
@@ -374,10 +394,11 @@ export function openaiResponses(key: string, s: AISettings): Provider {
             if (c.type === 'refusal') refused = true;
             const text = c.type === 'output_text' ? c.text : c.type === 'refusal' ? c.refusal : undefined;
             if (!text) continue;
-            r.onText(text);
+            if (!streamed) r.onText(text);
             content.push({ type: 'text', text, citations: null } as Anthropic.TextBlock);
           }
         } else if (item.type === 'function_call' && 'call_id' in item) {
+          if (!item.call_id || !item.name || typeof item.arguments !== 'string') throw new Error('Provider returned an invalid tool call.');
           let input: unknown;
           try {
             input = JSON.parse(item.arguments || '{}');
@@ -394,7 +415,11 @@ export function openaiResponses(key: string, s: AISettings): Provider {
         : content.some((b) => b.type === 'tool_use') ? 'tool_use'
         : 'end_turn';
       const u = j.usage;
-      return { content, stop, usage: { input: u?.input_tokens ?? 0, output: u?.output_tokens ?? 0, cacheRead: u?.input_tokens_details?.cached_tokens ?? 0, cacheWrite: 0 } };
+      // Like OpenAI's toResponseInputItems: created_by is output-only provenance.
+      // No SDK-only parsed fields exist here because these are raw wire items.
+      responseHistory.set(content, (j.output ?? []).map(({ created_by: _createdBy, ...item }) => item));
+      const cached = u?.input_tokens_details?.cached_tokens ?? 0;
+      return { content, stop, usage: { input: Math.max(0, (u?.input_tokens ?? 0) - cached), output: u?.output_tokens ?? 0, cacheRead: cached, cacheWrite: 0 } };
     },
   };
 }
