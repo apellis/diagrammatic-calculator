@@ -19,21 +19,21 @@ keeps it), and new findings are added here.
 4. **Confirming `context_set` on one's own documents.** The AI may change the context of a document
    it is working in without asking. Proposal: keep as is (it is an undoable edit to your own
    document) or confirm each change.
-5. **Personal e-mail address in one old commit.** Decide before the repository is made public
-   (rewriting history would be needed to remove it).
 
 ## Before going public
 
 Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
 
-- Delete the Cloudflare Access application(s), then open the site in a private window to check
-  that there is no Cloudflare login.
 - Google sign-in, published: verify `diagcalc.pages.dev` (or the custom domain) in Google Search
   Console, set the consent screen's homepage to the About page and its privacy policy to
   `/privacy`, submit for brand verification, then publish. Until then only test users can sign
   in.
 - Custom domain `diagcalc.ape.computer`, when wanted: add its callback URL to the OAuth client,
   then change `APP_ORIGIN`; add the WAF rate limit on `/api/` writes; Resend for share e-mails.
+- Before that, ask GitHub Support to remove the pre-rewrite history (master was rewritten on
+  23 October to replace a personal e-mail address with the owner's noreply address): the refs of
+  pull requests #1 and #2 and the cached old commits. Delete the branch `wip/odd-normal-form`
+  (old history; its work landed on master).
 - Make the repository public, with the licence already in place.
 
 Polish (all remaining UX polish happens before going public):
