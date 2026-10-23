@@ -385,6 +385,15 @@ fn lean_chains(path: &str, check: bool) -> Result<bool, String> {
         .map_err(|e| e.to_string())?;
     let mut current = true;
     for (rel, text) in files {
+        // the exporter checks every name; this keeps any path it returns inside `dir` regardless
+        let inside = std::path::Path::new(&rel)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)));
+        if !inside {
+            return Err(format!(
+                "refusing to write {rel}: not a plain relative path"
+            ));
+        }
         let file = dir.join(&rel);
         if check {
             if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) {

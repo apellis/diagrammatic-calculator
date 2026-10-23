@@ -11,6 +11,49 @@ use crate::term::{Layer, Letter, Object, Term, Word};
 use crate::text::{self, Ast};
 use std::collections::BTreeMap;
 
+/// The most strands a weight may have (`nu=…`, `Lambda=…`): far beyond what can be computed
+/// with, and small enough that a shared or imported context cannot make reading it run away.
+pub const MAX_STRANDS: u32 = 64;
+/// The most objects (sequences of colours) a weight may have.
+pub const MAX_OBJECTS: u64 = 100_000;
+
+/// The number of strands a weight's text asks for (`2i+j` is 3), checked against
+/// [`MAX_STRANDS`] without knowing the colours; malformed text is left to `parse_weight`.
+fn weight_strands(w: &str) -> Result<()> {
+    let mut total: u64 = 0;
+    for part in w.split('+') {
+        let part = part.trim();
+        let digits: String = part.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let k: u64 = if digits.is_empty() {
+            1
+        } else {
+            digits.parse().unwrap_or(u64::MAX)
+        };
+        total = total.saturating_add(k);
+    }
+    if total > u64::from(MAX_STRANDS) {
+        return Err(Error::limit(format!(
+            "the weight {w} has more than {MAX_STRANDS} strands"
+        )));
+    }
+    Ok(())
+}
+
+/// The number of sequences of colours with multiplicities `m` (a multinomial coefficient),
+/// or `None` past `u64`.
+fn sequence_count(m: &[u32]) -> Option<u64> {
+    let mut count: u64 = 1;
+    let mut n: u64 = 0;
+    for &k in m {
+        for i in 1..=u64::from(k) {
+            n += 1;
+            // count · n / i stays an integer: it is a product of binomial coefficients so far
+            count = count.checked_mul(n)? / i;
+        }
+    }
+    Some(count)
+}
+
 /// The choices that instantiate a presentation, as written on a workspace's `context` line:
 /// `context klr type=A2 nu=2i+j ring=QQ`.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -90,10 +133,16 @@ impl ContextSpec {
                 Error::invalid(format!("context entry '{w}' should be key=value"))
             })?;
             match k {
-                "type" => spec.cartan_type = Some(v.into()),
+                "type" => {
+                    crate::cartan::check_type_size(v)?;
+                    spec.cartan_type = Some(v.into())
+                }
                 "colours" | "colors" => spec.colour_names = Some(list(v)),
                 "odd" => spec.odd = list(v),
-                "nu" | "n" => spec.weight = Some(v.into()),
+                "nu" | "n" => {
+                    weight_strands(v)?;
+                    spec.weight = Some(v.into())
+                }
                 "ring" => spec.ring = v.into(),
                 "scalars" => spec.scalars = list(v),
                 "Lambda" | "lambda" => spec.lambda = Some(v.into()),
@@ -313,6 +362,11 @@ impl<R: Ring> Context<R> {
         if let Some(w) = ctx.spec.weight.clone() {
             let m = ctx.parse_weight(&w)?;
             if ctx.pres.objects == ObjectSpec::Weight {
+                if sequence_count(&m).is_none_or(|n| n > MAX_OBJECTS) {
+                    return Err(Error::limit(format!(
+                        "the weight {w} has more than {MAX_OBJECTS} sequences of colours"
+                    )));
+                }
                 ctx.objects = sequences(&m);
             }
             ctx.weight = Some(m);
@@ -429,8 +483,10 @@ impl<R: Ring> Context<R> {
         if s.is_empty() { "0".into() } else { s }
     }
 
-    /// Reads `2i+j` (or a bare number for a one-colour presentation).
+    /// Reads `2i+j` (or a bare number for a one-colour presentation), of at most
+    /// [`MAX_STRANDS`] strands.
     pub fn parse_weight(&self, w: &str) -> Result<Vec<u32>> {
+        weight_strands(w)?;
         let mut m = vec![0u32; self.colours.len()];
         if let Ok(n) = w.trim().parse::<u32>() {
             if self.colours.len() != 1 {
@@ -448,7 +504,8 @@ impl<R: Ring> Context<R> {
             let k: u32 = if digits.is_empty() {
                 1
             } else {
-                digits.parse().unwrap()
+                // at most MAX_STRANDS (checked above), so it fits
+                digits.parse().unwrap_or(u32::MAX)
             };
             let c = self
                 .colour_index(name)

@@ -61,6 +61,7 @@ impl Cartan {
     /// in `G2` the first is short (`a_12 = -3`, `a_21 = -1`). Here `a_ij = 2(α_i, α_j)/(α_i, α_i)`,
     /// and the symmetrizer is normalized so that short roots have `(α, α) = 2`.
     pub fn of_type(name: &str) -> Result<Cartan> {
+        check_type_size(name)?;
         let bad = || {
             Error::invalid(format!(
                 "unknown Cartan type {name}; the types are An (n ≥ 1), Bn and Cn (n ≥ 2), Dn (n ≥ 4), \
@@ -143,6 +144,28 @@ impl Cartan {
         c.validate()?;
         Ok(c)
     }
+}
+
+/// The largest rank of a Cartan type (in all, for a product such as `A2xB3`).
+pub const MAX_RANK: usize = 32;
+
+/// Refuses a Cartan type whose rank, read from its name, exceeds [`MAX_RANK`], before anything
+/// of that size is built. Names that are not of the form letter-and-number pass, for `of_type`
+/// to reject.
+pub fn check_type_size(name: &str) -> Result<()> {
+    let mut total: usize = 0;
+    for part in name.split('x') {
+        let digits = part.get(1..).unwrap_or("");
+        if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+            total = total.saturating_add(digits.parse().unwrap_or(usize::MAX));
+        }
+    }
+    if total > MAX_RANK {
+        return Err(Error::limit(format!(
+            "the Cartan type {name} has rank above {MAX_RANK}"
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

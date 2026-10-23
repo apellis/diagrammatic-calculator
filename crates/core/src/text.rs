@@ -218,13 +218,31 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>> {
     Ok(out)
 }
 
+/// The deepest nesting of parentheses, function arguments and sum bodies a term may have: far
+/// beyond any real term, and shallow enough that parsing and everything after it (which recurse
+/// along the nesting) stay well inside the stack, also in WebAssembly.
+pub const MAX_NESTING: usize = 100;
+
 struct Parser {
     toks: Vec<(Tok, usize)>,
     pos: usize,
     end: usize,
+    depth: usize,
 }
 
 impl Parser {
+    /// Goes one level deeper, refusing to go past [`MAX_NESTING`].
+    fn enter(&mut self, off: usize) -> Result<()> {
+        self.depth += 1;
+        if self.depth > MAX_NESTING {
+            return Err(Error::syntax(
+                format!("nested more than {MAX_NESTING} levels deep"),
+                off,
+            ));
+        }
+        Ok(())
+    }
+
     fn peek(&self) -> Option<&Tok> {
         self.toks.get(self.pos).map(|t| &t.0)
     }
@@ -411,7 +429,9 @@ impl Parser {
                     let parse =
                         |t: &str| parse_term_int(t).map_err(|e| Error::syntax(e.message, off));
                     let (lo, hi) = (parse(lo)?, parse(hi)?);
+                    self.enter(off)?;
                     let body = self.comp()?;
+                    self.depth -= 1;
                     return Ok(Ast::Range {
                         var,
                         lo,
@@ -425,11 +445,13 @@ impl Parser {
                 {
                     // Function application, for parameter polynomials such as Q_ab(x_1, x_2).
                     self.pos += 1;
+                    self.enter(off)?;
                     let mut args = vec![self.sum()?];
                     while self.eat(',') {
                         args.push(self.sum()?);
                     }
                     self.expect(')')?;
+                    self.depth -= 1;
                     Some(args)
                 } else {
                     None
@@ -438,8 +460,10 @@ impl Parser {
             }
             Some(Tok::Sym('(')) => {
                 self.pos += 1;
+                self.enter(off)?;
                 let a = self.sum()?;
                 self.expect(')')?;
+                self.depth -= 1;
                 Ok(a)
             }
             Some(t) => Err(Error::syntax(format!("unexpected {}", describe(&t)), off)),
@@ -467,6 +491,7 @@ pub fn parse(src: &str) -> Result<Ast> {
         toks,
         pos: 0,
         end: src.len(),
+        depth: 0,
     };
     if p.peek().is_none() {
         return Err(Error::syntax("empty term", 0));

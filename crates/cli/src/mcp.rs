@@ -1,12 +1,72 @@
 //! `diagcalc mcp`: the operations as an MCP server over stdio (JSON-RPC 2.0, one message per
 //! line). Each operation is a tool named after it with `.` replaced by `_`; its input schema is
 //! the operation's request schema with the shared definitions inlined.
+//!
+//! Each call runs on its own thread with a large stack and a time limit (a client may be driven
+//! by a model that read untrusted text), and a response over the size limit is replaced by an
+//! error, so no single call can stop the server or flood the client.
 
 use diagcalc_core::ops;
 use serde_json::{Map, Value, json};
 use std::io::{BufRead, Write};
+use std::sync::mpsc;
+use std::time::Duration;
 
 const PROTOCOL: &str = "2025-06-18";
+
+/// The stack of the thread a call runs on (the parser bounds nesting; this is headroom).
+const CALL_STACK: usize = 256 << 20;
+/// How long a call may run before the server answers that it stopped; the environment variable
+/// `DIAGCALC_MCP_TIMEOUT` (seconds) changes it. The computation itself cannot be interrupted and
+/// finishes in the background.
+const CALL_SECONDS: u64 = 120;
+/// The largest response sent, in bytes of JSON.
+pub const MAX_RESPONSE: usize = 32 << 20;
+
+fn error(kind: &str, message: String) -> Value {
+    json!({ "status": "error", "kind": kind, "message": message })
+}
+
+/// Runs an operation within the limits above.
+fn limited_call(op: &'static str, args: Value) -> Value {
+    let secs = std::env::var("DIAGCALC_MCP_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .unwrap_or(CALL_SECONDS);
+    let (tx, rx) = mpsc::channel();
+    let spawned = std::thread::Builder::new()
+        .name(format!("call {op}"))
+        .stack_size(CALL_STACK)
+        .spawn(move || {
+            let _ = tx.send(ops::call(op, &args));
+        });
+    if let Err(e) = spawned {
+        return error("limit", format!("cannot start the computation: {e}"));
+    }
+    let out = match rx.recv_timeout(Duration::from_secs(secs)) {
+        Ok(v) => v,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            return error("limit", format!("stopped after {secs} s"));
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            return error(
+                "invalid",
+                "the computation failed (an internal error)".into(),
+            );
+        }
+    };
+    let size = out.to_string().len();
+    if size > MAX_RESPONSE {
+        return error(
+            "limit",
+            format!(
+                "the response has {size} bytes, more than the limit of {MAX_RESPONSE}; ask for less"
+            ),
+        );
+    }
+    out
+}
 
 fn tool_name(op: &str) -> String {
     op.replace('.', "_")
@@ -92,7 +152,7 @@ fn handle(msg: &Value) -> Option<Value> {
                         .get("arguments")
                         .cloned()
                         .unwrap_or_else(|| json!({}));
-                    let out = ops::call(op, &args);
+                    let out = limited_call(op, args);
                     let is_error = out["status"] == "error";
                     Ok(json!({
                         "content": [{ "type": "text", "text": serde_json::to_string_pretty(&out).unwrap() }],

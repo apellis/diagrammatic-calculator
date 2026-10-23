@@ -696,7 +696,18 @@ pub fn parse_term_int(s: &str) -> Result<TermInt> {
     })
 }
 
+/// The longest integer expression or condition read (an exponent, a sum's bounds, a condition in
+/// a presentation): it bounds how deep the recursive parser and the evaluation of what it builds
+/// can go.
+pub const MAX_EXPR_LEN: usize = 1000;
+
 fn parser<'a>(s: &str, vars: &'a [String]) -> Result<P<'a>> {
+    if s.len() > MAX_EXPR_LEN {
+        return Err(Error::syntax(
+            format!("expression longer than {MAX_EXPR_LEN} characters"),
+            MAX_EXPR_LEN,
+        ));
+    }
     Ok(P {
         toks: lex(s)?,
         pos: 0,

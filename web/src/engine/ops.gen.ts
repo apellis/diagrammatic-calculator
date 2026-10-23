@@ -635,7 +635,13 @@ export interface ExportLeanRequest1 {
    * The other side; without it the theorem states that the term equals its normal form.
    */
   rhs?: string;
+  /**
+   * The theorem's name: a letter, then letters, digits and _ (diagcalc_chain if empty).
+   */
   name?: string;
+  /**
+   * Its docstring; comment delimiters in it are broken up.
+   */
   doc?: string;
   max_steps?: number;
 }

@@ -1,8 +1,10 @@
 // The engine as the app sees it: typed operation calls answered by WebAssembly workers.
 //
 // Two lanes. The interactive lane is one worker for quick operations (parsing a cell, describing
-// a context); its calls run in order. The job lane is a pool of workers for evaluations that can
-// take long; a job can be cancelled, or stopped at its time limit, by replacing its worker.
+// a context); its calls run in order, each stopped after INTERACTIVE_TIMEOUT_MS (a shared or
+// imported document must not be able to freeze it). The job lane is a pool of workers for
+// evaluations that can take long; a job can be cancelled, or stopped at its time limit. Stopping
+// a call replaces its worker.
 import wasmUrl from './pkg/diagcalc_wasm_bg.wasm?url';
 import type { OpName, OpTypes } from './ops.gen';
 import type { FromWorker, ToWorker } from './worker';
@@ -19,11 +21,14 @@ export function limitMessage(ms: number): string {
   return s % 60 === 0 && s >= 120 ? `stopped at the ${s / 60}-minute limit` : `stopped at the ${s}-second limit`;
 }
 
+/** The time limit of every interactive call, unless the caller gives another. */
+export const INTERACTIVE_TIMEOUT_MS = 10_000;
+
 export interface CallOptions {
   /** 'interactive' for quick operations, 'job' (the default) for evaluations. */
   lane?: 'interactive' | 'job';
   signal?: AbortSignal;
-  /** Stop the job after this many milliseconds (job lane only). */
+  /** Stop the call after this many milliseconds (interactive calls: INTERACTIVE_TIMEOUT_MS by default). */
   timeoutMs?: number;
 }
 
@@ -137,7 +142,7 @@ export class Engine {
         started: 0,
         resolve: resolve as (o: Outcome<unknown>) => void,
         signal: opts.signal,
-        timeoutMs: lane === 'job' ? opts.timeoutMs : undefined,
+        timeoutMs: lane === 'job' ? opts.timeoutMs : (opts.timeoutMs ?? INTERACTIVE_TIMEOUT_MS),
       };
       // a call cancelled while it waits leaves the queue at once
       opts.signal?.addEventListener('abort', () => {
