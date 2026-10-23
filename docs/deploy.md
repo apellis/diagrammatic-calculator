@@ -17,16 +17,19 @@ The deploy workflow provisions what it can itself (see "What the deploy does"); 
 that need a person, done once.
 
 1. Cloudflare, My Profile, API Tokens: edit the token stored as `CLOUDFLARE_API_TOKEN` and add the
-   account permissions D1: Edit and Workers R2 Storage: Edit, and the zone permission DNS: Edit for
-   `ape.computer` (keep Cloudflare Pages: Edit). If R2 was never used on the account, open R2 in the
+   account permissions D1: Edit and Workers R2 Storage: Edit (called "Write" in the new token
+   editor; keep Cloudflare Pages: Edit). Once `ape.computer` is on Cloudflare, also the zone
+   permission DNS: Edit for it, for the DMARC record. If R2 was never used on the account, open R2 in the
    dashboard once and enable it.
 2. Google Cloud console, Google Auth Platform: create the consent screen (external audience, app
    name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only)
    and publish it. Then Clients: create an OAuth client of type Web application with the authorized
-   redirect URI `https://diagcalc.ape.computer/api/auth/callback`.
+   redirect URI `https://diagcalc.pages.dev/api/auth/callback` (the redirect URI is derived from the
+   host the app is served from; add `https://diagcalc.ape.computer/api/auth/callback` when the
+   custom domain moves over).
 3. Cloudflare, Workers & Pages, `diagcalc`, Settings, Variables and Secrets, Production: add the
    secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 2.
-4. Resend: add the domain `send.ape.computer` and put the records it lists (SPF, DKIM, return-path
+4. (Share e-mails only; can wait for the custom domain.) Resend: add the domain `send.ape.computer` and put the records it lists (SPF, DKIM, return-path
    MX) into the `ape.computer` zone (Resend's automatic Cloudflare setup does this); wait until it
    shows verified. Then API Keys: create a key with sending access to `send.ape.computer` only, and
    add it as the Pages secret `RESEND_API_KEY` (as in step 3).

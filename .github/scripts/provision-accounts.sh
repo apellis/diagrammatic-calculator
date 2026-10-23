@@ -109,7 +109,7 @@ fi
 r=$(cf GET "$API/zones?name=$ZONE")
 zone=$(printf '%s' "$r" | jq -r '.result[0].id // ""' 2>/dev/null)
 if [ -z "$zone" ]; then
-  summary "DMARC: zone $ZONE not visible to the API token; add the zone permission DNS: Edit for $ZONE ($(printf '%s' "$r" | errors))."
+  summary "DMARC: skipped (zone $ZONE not on this account or not visible to the token; needed only for share e-mails)."
 else
   r=$(cf GET "$API/zones/$zone/dns_records?type=TXT&name=$DMARC_NAME")
   if ! printf '%s' "$r" | ok; then
