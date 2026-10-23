@@ -26,6 +26,7 @@ pub mod perm;
 pub mod poly;
 pub mod pool;
 pub mod pres;
+pub mod progress;
 pub mod quotient;
 pub mod ratfun;
 pub mod render;

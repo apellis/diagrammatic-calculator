@@ -371,6 +371,51 @@ export type WorkspaceRunResponse =
       cells: WorkspaceRunCell[];
     }
   | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "WorkspaceTraceResponse".
+ */
+export type WorkspaceTraceResponse =
+  | {
+      status: 'ok';
+      word: string;
+      /**
+       * The summand with its coefficient in the watch's value.
+       */
+      text: string;
+      /**
+       * The contributions, which add up to the summand: each the product of some terms of the definitions (factors, with multiplicity) and what that product gives in the summand. A contribution with no factors comes from the watch's own terms.
+       */
+      sources: {
+        factors: {
+          /**
+           * The definition's name.
+           */
+          name: string;
+          /**
+           * The definition's cell ID.
+           */
+          cell: string | null;
+          /**
+           * The term's place among the definition's summands (as written), from 1.
+           */
+          term: number;
+          /**
+           * The term, with its coefficient.
+           */
+          text: string;
+          /**
+           * How many times the product uses it.
+           */
+          power: number;
+        }[];
+        /**
+         * The contribution: the summand's word with the part of its coefficient this product gives.
+         */
+        text: string;
+      }[];
+    }
+  | OpError;
 
 export interface Operations {
   context?: Context;
@@ -419,6 +464,8 @@ export interface Operations {
   WorkspaceRunRequest?: WorkspaceRunRequest;
   WorkspaceRunCell?: WorkspaceRunCell;
   WorkspaceRunResponse?: WorkspaceRunResponse;
+  WorkspaceTraceRequest?: WorkspaceTraceRequest;
+  WorkspaceTraceResponse?: WorkspaceTraceResponse;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -1043,6 +1090,32 @@ export interface WorkspaceRunCell {
   error_kind?: 'syntax' | 'invalid' | 'precondition' | 'limit';
   message?: string;
 }
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "WorkspaceTraceRequest".
+ */
+export interface WorkspaceTraceRequest {
+  /**
+   * The text of a .dcw file holding the watch and the definitions it uses.
+   */
+  workspace: string;
+  /**
+   * The watch's cell ID.
+   */
+  cell: string;
+  /**
+   * The summand's word, as workspace.run gives it in 'summands'.
+   */
+  word: string;
+  /**
+   * The text of a presentation file the context names, when it is not shipped.
+   */
+  presentation?: string;
+  /**
+   * Names to add to the context's scalars, as in workspace.run.
+   */
+  scalars?: string[];
+}
 
 /** Each operation's request and response types, by operation name. */
 export interface OpTypes {
@@ -1062,6 +1135,7 @@ export interface OpTypes {
   'term.render': { request: TermRenderRequest; response: TermRenderResponse };
   'workspace.parse': { request: WorkspaceParseRequest; response: WorkspaceParseResponse };
   'workspace.run': { request: WorkspaceRunRequest; response: WorkspaceRunResponse };
+  'workspace.trace': { request: WorkspaceTraceRequest; response: WorkspaceTraceResponse };
 }
 
 export type OpName = keyof OpTypes;

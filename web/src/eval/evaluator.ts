@@ -6,7 +6,7 @@
 // any state reached again by undo, is a cache hit. A cell is evaluated by running a small
 // workspace holding just the definitions it needs and itself, as a job that is cancelled when
 // its inputs change again.
-import type { CallOptions, Outcome } from '../engine/engine';
+import type { CallOptions, Outcome, Sizes } from '../engine/engine';
 import type { OpName, OpTypes, WorkspaceParseCell, WorkspaceRunCell } from '../engine/ops.gen';
 import type { CellData } from '../doc/model';
 import { hash } from './hash';
@@ -20,7 +20,7 @@ export interface Calls {
 export type CellValue =
   | WorkspaceRunCell
   | { kind: 'error'; status: 'error'; message: string; error_kind?: string }
-  | { kind: 'exploded'; status: 'exploded'; message: string };
+  | { kind: 'exploded'; status: 'exploded'; message: string; diagnostics?: Sizes };
 
 export type Status =
   /** the value shown is the value of the current inputs */
@@ -67,6 +67,8 @@ export class Evaluator {
   private jobs = new Map<string, AbortController>();
   /** The workspace each job runs, by key: the cell as the command-line tool would take it. */
   private workspaces = new Map<string, string>();
+  /** The scalars each job's workspace runs with, by key. */
+  private scalars = new Map<string, string[]>();
   /** Time limits asked for once, by cell id, for the next job of that cell. */
   private limits = new Map<string, number>();
   private states = new Map<string, CellState>();
@@ -114,6 +116,18 @@ export class Evaluator {
   workspaceOf(id: string): string | undefined {
     const key = this.states.get(id)?.key;
     return key ? this.workspaces.get(key) : undefined;
+  }
+
+  /**
+   * Which terms of the definitions a watch uses produced one summand of its value
+   * (`workspace.trace`), computed as a job like the value itself.
+   */
+  trace(id: string, word: string, signal?: AbortSignal): Promise<Outcome<OpTypes['workspace.trace']['response']>> {
+    const key = this.states.get(id)?.key;
+    const workspace = key && this.workspaces.get(key);
+    if (!workspace) return Promise.resolve({ status: 'done', ms: 0, response: { status: 'error', kind: 'invalid', message: 'the cell has no value to trace yet' } });
+    const timeoutMs = this.opts.timeoutMs ?? 120_000;
+    return this.engine.call('workspace.trace', { workspace, cell: id, word, scalars: this.scalars.get(key!) ?? [] }, { signal, timeoutMs });
   }
 
   parse(text: string): Promise<Parsed> {
@@ -172,6 +186,9 @@ export class Evaluator {
           const hit = await this.cache.get(s.key);
           if (gen !== this.generation) return;
           if (hit !== undefined) {
+            // kept for tracing a summand and for the command line, as for a computed value
+            this.workspaces.set(s.key, this.miniWorkspace(context, cells, deps, i));
+            this.scalars.set(s.key, scalars[i]);
             this.show(s, old, s.key, hit as Stored);
           } else {
             s.status = old?.value && old.valueKey !== s.key ? 'stale' : 'running';
@@ -193,6 +210,7 @@ export class Evaluator {
     for (const [key, a] of this.jobs) if (!wanted.has(key)) { a.abort(); this.jobs.delete(key); }
     const live = new Set([...this.states.values()].map((s) => s.key));
     for (const key of this.workspaces.keys()) if (!live.has(key)) this.workspaces.delete(key);
+    for (const key of this.scalars.keys()) if (!live.has(key)) this.scalars.delete(key);
   }
 
   /** The workspace that evaluates cell i: the definitions it needs, in order, then the cell. */
@@ -210,6 +228,7 @@ export class Evaluator {
 
   private start(key: string, workspace: string, id: string, scalars: string[]) {
     this.workspaces.set(key, workspace);
+    this.scalars.set(key, scalars);
     if (this.jobs.has(key)) return;
     const abort = new AbortController();
     this.jobs.set(key, abort);
@@ -230,7 +249,10 @@ export class Evaluator {
           return;
         }
         if (o.status === 'exploded') {
-          stored = { value: { kind: 'exploded', status: 'exploded', message: `${o.message[0].toUpperCase()}${o.message.slice(1)}.` }, ms: o.ms };
+          stored = {
+            value: { kind: 'exploded', status: 'exploded', message: `${o.message[0].toUpperCase()}${o.message.slice(1)}.`, ...(o.diagnostics ? { diagnostics: o.diagnostics } : {}) },
+            ms: o.ms,
+          };
         } else {
           const r = o.response;
           if (r.status !== 'ok') stored = { value: { kind: 'error', status: 'error', message: r.message, error_kind: r.kind }, ms: o.ms };

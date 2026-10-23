@@ -409,6 +409,10 @@ impl<R: Ring> Context<R> {
                 next = self.add(&next, &self.compose(&upper, &lower));
             }
             cur = next;
+            if crate::progress::active() {
+                crate::progress::stage("expanding products");
+                self.report_sizes(&cur);
+            }
         }
         Ok(cur)
     }

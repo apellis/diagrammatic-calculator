@@ -1114,6 +1114,10 @@ fn straighten_impl<R: Ring>(
             )));
         }
         count += 1;
+        if count.is_multiple_of(256) && crate::progress::active() {
+            crate::progress::reached(|s| s.steps = Some(count));
+            ctx.report_sizes(&chain.end);
+        }
         rewrite(ctx, rules, &mut chain, &w, m)?;
         if let Some(mut q) = next {
             let step = chain.steps.last().unwrap();

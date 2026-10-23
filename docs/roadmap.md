@@ -38,8 +38,6 @@ Polish (all remaining UX polish happens before going public):
   instructions to the AI; milestones with key diagrams in the timeline.
 - Occurrence IDs are carried through canvas gestures only: text typed by hand, terms written by
   the AI and accepted branches give their new summands fresh IDs; strands are numbered per summand.
-- Clicking a summand to see which terms of the definitions produced it.
-- Size diagnostics when a job is stopped at its time limit.
 
 Certificates:
 

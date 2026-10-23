@@ -1,0 +1,12 @@
+{
+  "op": "workspace.trace",
+  "request": {
+    "workspace": "diagcalc-workspace/1\ncontext nilhecke nu=2 ring=QQ\ndef a := x_1 + psi_1  # id=d1\nwatch a a  # id=w2\n",
+    "cell": "w2",
+    "word": "psi_1 x_2"
+  },
+  "expect": {
+    "status": "ok",
+    "text": "psi_1 x_2"
+  }
+}

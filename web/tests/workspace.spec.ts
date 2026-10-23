@@ -343,3 +343,24 @@ test('an expanded cell shows its text once; the normal form only when it differs
   await page.keyboard.press('Enter');
   await expect(cell(page, 0).getByTestId('textform')).toHaveAttribute('data-text', 'a := 2 psi_1 e(iij)');
 });
+
+test('clicking a summand of a watch shows which terms of the definitions produced it', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 e(iij) + psi_1 e(iij)');
+  await addCell(page, 'watch a a');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText(/terms/);
+  const summand = cell(page, 1).locator('.summand[data-word="psi_1 x_2 e(iij)"]');
+  await summand.click();
+  await expect(summand).toHaveAttribute('aria-pressed', 'true');
+  const trace = cell(page, 1).getByTestId('trace');
+  // x_1 psi_1 = psi_1 x_2 + 1 on e(ii): the product of a's two terms
+  await expect(trace.getByTestId('trace-source')).toHaveCount(1);
+  await expect(trace.getByTestId('trace-source')).toContainText('a 1');
+  await expect(trace.getByTestId('trace-source')).toContainText('a 2');
+  // a square uses one term twice
+  await cell(page, 1).locator('.summand[data-word="x_1^2 e(iij)"]').click();
+  await expect(trace.getByTestId('trace-source')).toHaveCount(1);
+  await expect(trace.locator('sup')).toHaveText('2');
+  await trace.getByTestId('trace-close').click();
+  await expect(cell(page, 1).getByTestId('trace')).toHaveCount(0);
+});

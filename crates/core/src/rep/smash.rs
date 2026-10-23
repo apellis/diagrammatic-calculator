@@ -427,11 +427,21 @@ impl<R: Ring> Evaluator<R> for Smash<'_, R> {
         let alg = self.alg(n);
         let mut val = self.value(&alg, t)?;
         let mut out = Term::zero();
+        let mut peeled = 0usize;
         while let Some(((i, w), r)) = val
             .iter()
             .max_by_key(|((i, w), _)| (w.length(), std::cmp::Reverse((i.clone(), w.clone()))))
             .map(|(k, r)| (k.clone(), r.clone()))
         {
+            if peeled.is_multiple_of(16) && crate::progress::active() {
+                // the value in the representation: its summands and largest polynomial
+                let largest = val.values().map(|r| r.num.terms.len()).max().unwrap_or(0);
+                crate::progress::reached(|s| {
+                    s.terms = val.len();
+                    s.polynomial = Some(largest);
+                });
+            }
+            peeled += 1;
             let word = w.reduced_word();
             // each (i, w) is peeled at most once: later steps only touch shorter permutations
             let bw = basis_word(

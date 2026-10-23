@@ -13,7 +13,19 @@ import type { FromWorker, ToWorker } from './worker';
 export type Outcome<R> =
   | { status: 'done'; response: R; ms: number }
   | { status: 'cancelled'; ms: number }
-  | { status: 'exploded'; ms: number; message: string };
+  | { status: 'exploded'; ms: number; message: string; diagnostics?: Sizes };
+
+/** The sizes a computation reached (core `progress::Sizes`): a stopped job's size diagnostics. */
+export interface Sizes {
+  stage: string;
+  cell?: string;
+  terms: number;
+  layers: number;
+  dots: number;
+  basis?: number;
+  polynomial?: number;
+  steps?: number;
+}
 
 /** What a job stopped at its time limit says: "stopped at the 120-second limit". */
 export function limitMessage(ms: number): string {
@@ -40,6 +52,8 @@ interface Pending {
   resolve: (o: Outcome<unknown>) => void;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** The last sizes the call reported. */
+  sizes?: Sizes;
 }
 
 class Slot {
@@ -61,6 +75,16 @@ class Slot {
       this.worker.onmessage = (e: MessageEvent<FromWorker>) => {
         const m = e.data;
         if (m.type === 'ready') return resolve(m.version);
+        if (m.type === 'progress') {
+          if (this.current?.id === m.id) {
+            try {
+              this.current.sizes = JSON.parse(m.sizes) as Sizes;
+            } catch {
+              // a malformed report is ignored
+            }
+          }
+          return;
+        }
         if (m.type === 'result') this.finish({ status: 'done', response: JSON.parse(m.response), ms: m.ms });
         else if (m.type === 'failed') {
           this.finish({
@@ -86,7 +110,7 @@ class Slot {
     p.started = performance.now();
     if (p.timeoutMs) {
       this.timer = setTimeout(() => {
-        this.stop({ status: 'exploded', ms: performance.now() - p.started, message: limitMessage(p.timeoutMs!) });
+        this.stop({ status: 'exploded', ms: performance.now() - p.started, message: limitMessage(p.timeoutMs!), ...(p.sizes ? { diagnostics: p.sizes } : {}) });
       }, p.timeoutMs);
     }
     p.signal?.addEventListener('abort', () => {

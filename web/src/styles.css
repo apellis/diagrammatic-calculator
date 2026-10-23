@@ -219,6 +219,15 @@ table.kv.provenance { font-size: 12px; margin-top: 4px; max-width: 70ch; }
 .summand.new { border-color: var(--good); background: var(--good-soft); }
 .summand.gone { opacity: 0.3; text-decoration: line-through; }
 .summand:hover { background: var(--sunken); }
+.summand[role='button'] { cursor: pointer; }
+.summand.picked { border-color: var(--accent); }
+.trace { margin-top: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.trace .row { justify-content: space-between; }
+.trace-list { margin: 4px 0 0; padding-left: 18px; }
+.trace-list li { margin: 2px 0; }
+.trace-factor { white-space: nowrap; }
+.diagnostics { font-size: 13px; margin-top: 4px; }
+.diagnostics ul { margin: 2px 0 0; padding-left: 18px; }
 .textform { font-size: 14px; background: var(--sunken); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
 .changed { font-size: 12.5px; }
 .changed summary { cursor: pointer; color: var(--muted); }

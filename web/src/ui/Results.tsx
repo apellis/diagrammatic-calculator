@@ -1,7 +1,8 @@
 // How each kind of result is shown.
 import { createEffect, createSignal, For, Match, on, onCleanup, Show, Switch } from 'solid-js';
 import type { CellState, CellValue } from '../eval/evaluator';
-import type { Provenance, Summand, WorkspaceRunCell } from '../engine/ops.gen';
+import type { Outcome, Sizes } from '../engine/engine';
+import type { Provenance, Summand, WorkspaceRunCell, WorkspaceTraceResponse } from '../engine/ops.gen';
 import katex from 'katex';
 import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
@@ -231,10 +232,17 @@ function DefBadge() {
   );
 }
 
-function SummandView(props: { s: Summand; cls?: string; first: boolean; onFocus?: (word: string) => void }) {
+/** Asks which terms of the definitions produced a summand of a watch (`workspace.trace`). */
+export type Tracer = (word: string, signal: AbortSignal) => Promise<Outcome<WorkspaceTraceResponse>>;
+
+function SummandView(props: { s: Summand; cls?: string; first: boolean; onFocus?: (word: string) => void; onPick?: (word: string) => void; picked?: boolean }) {
   const sign = () => (props.s.negative ? '−' : props.first ? '' : '+');
+  const hints = () => [props.onPick && 'click: where it comes from', props.onFocus && 'double-click: open the canvas'].filter(Boolean).join('; ');
   return (
-    <span class={`summand ${props.cls ?? ''}`} title={props.onFocus ? `${props.s.text}\n(double-click to open the canvas)` : props.s.text} data-word={props.s.word}
+    <span class={`summand ${props.cls ?? ''}`} classList={{ picked: !!props.picked }} title={hints() ? `${props.s.text}\n(${hints()})` : props.s.text} data-word={props.s.word}
+      role={props.onPick ? 'button' : undefined} tabindex={props.onPick ? 0 : undefined} aria-pressed={props.onPick ? !!props.picked : undefined}
+      onClick={() => props.onPick?.(props.s.word)}
+      onKeyDown={(e) => { if (props.onPick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); props.onPick(props.s.word); } }}
       onDblClick={() => props.onFocus?.(props.s.word)}>
       <Show when={sign() || props.s.coefficient}>
         <span class="c">{sign()}<Show when={props.s.coefficient}>{(c) => <>{sign() ? ' ' : ''}<Typeset text={c()} /></>}</Show></span>
@@ -244,8 +252,65 @@ function SummandView(props: { s: Summand; cls?: string; first: boolean; onFocus?
   );
 }
 
+/**
+ * Where one summand of a watch comes from: the products of terms of the definitions that
+ * contribute to it, each with its contribution; they add up to the summand.
+ */
+function TraceView(props: { word: string; text: string; trace: Tracer; onClose: () => void }) {
+  const [res, setRes] = createSignal<{ state: 'running' } | { state: 'done'; r: WorkspaceTraceResponse } | { state: 'failed'; message: string }>({ state: 'running' });
+  createEffect(on(() => props.word, (word) => {
+    setRes({ state: 'running' });
+    const abort = new AbortController();
+    void props.trace(word, abort.signal).then((o) => {
+      if (abort.signal.aborted) return;
+      if (o.status === 'done') setRes({ state: 'done', r: o.response });
+      else setRes({ state: 'failed', message: o.status === 'exploded' ? o.message : 'cancelled' });
+    });
+    onCleanup(() => abort.abort());
+  }));
+  const factor = (f: { name: string; term: number; text: string; power: number }) => `${f.name}, term ${f.term}${f.power > 1 ? ` (used ${f.power} times)` : ''}`;
+  return (
+    <div class="trace" data-testid="trace" role="region" aria-label="Where the summand comes from">
+      <div class="row">
+        <span>Where <Typeset text={props.text} /> comes from</span>
+        <button class="small" onClick={() => props.onClose()} aria-label="Close" data-testid="trace-close">×</button>
+      </div>
+      <Switch>
+        <Match when={res().state === 'running'}><div class="hint">Tracing…</div></Match>
+        <Match when={res().state === 'failed' && res()}>{(x) => <div class="error">{(x() as { message: string }).message}</div>}</Match>
+        <Match when={res().state === 'done' && (res() as { r: WorkspaceTraceResponse }).r}>
+          {(r) => (
+            <Show when={r().status === 'ok' && (r() as Extract<WorkspaceTraceResponse, { status: 'ok' }>)} fallback={<div class="error">{(r() as { message?: string }).message}</div>}>
+              {(t) => (
+                <ul class="trace-list">
+                  <For each={t().sources}>
+                    {(src) => (
+                      <li data-testid="trace-source">
+                        <Show when={src.factors.length} fallback={<span class="hint">the watch's own terms</span>}>
+                          <For each={src.factors}>
+                            {(f, i) => <>{i() > 0 ? ' · ' : ''}<span class="trace-factor" title={factor(f)}><Typeset text={f.text} /><Show when={f.power > 1}><sup>{f.power}</sup></Show> <span class="hint">({f.name} {f.term})</span></span></>}
+                          </For>
+                        </Show>
+                        <span class="hint"> give </span><Typeset text={src.text} />
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              )}
+            </Show>
+          )}
+        </Match>
+      </Switch>
+    </div>
+  );
+}
+
 /** A sum of diagrams, outlining summands that are new since the previous value and showing the vanished ones briefly. */
-export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey?: string; onFocus?: (word: string) => void; source?: string }) {
+export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey?: string; onFocus?: (word: string) => void; source?: string; trace?: Tracer }) {
+  const [picked, setPicked] = createSignal<string | null>(null);
+  // a new value closes the trace: its summand may be gone
+  createEffect(on(() => props.valueKey, () => setPicked(null), { defer: true }));
+  const pick = (w: string) => setPicked(picked() === w ? null : w);
   const prevSummands = () => (ok(props.previous) ? props.previous.summands ?? [] : []);
   const words = () => new Set((props.r.summands ?? []).map((s) => s.word));
   const prevWords = () => new Set(prevSummands().map((s) => s.word));
@@ -265,12 +330,15 @@ export function Sum(props: { r: Ok; previous?: CellValue; text: string; valueKey
     <div class="result">
       <div class="sum" role="img" aria-label={props.text}>
         <Show when={terms() > 0} fallback={<span class="summand"><span class="c">0</span></span>}>
-          <For each={props.r.summands}>{(s, i) => <SummandView s={s} first={i() === 0} cls={added().has(s.word) ? 'new' : ''} onFocus={props.onFocus} />}</For>
+          <For each={props.r.summands}>{(s, i) => <SummandView s={s} first={i() === 0} cls={added().has(s.word) ? 'new' : ''} onFocus={props.onFocus} onPick={props.trace && pick} picked={picked() === s.word} />}</For>
         </Show>
         <Show when={fading()}>
           <For each={gone()}>{(s) => <SummandView s={s} first={false} cls="gone" />}</For>
         </Show>
       </div>
+      <Show when={props.trace ? (props.r.summands ?? []).find((s) => s.word === picked()) : undefined}>
+        {(s) => <TraceView word={s().word} text={s().text} trace={props.trace!} onClose={() => setPicked(null)} />}
+      </Show>
       <Show when={shown() < terms()}>
         <div class="hint">Showing {shown()} of {terms()} terms; the text form below has all of them.</div>
       </Show>
@@ -401,8 +469,22 @@ function Running(props: { s: CellState; onStop?: () => void }) {
   );
 }
 
-/** A cell stopped at the time limit: what happened, and ways to go on. */
-function Exploded(props: { message: string; onRunLonger?: () => void; commandLine?: () => string | undefined }) {
+/** Thousands separated by thin spaces: 1 234 567. */
+const big = (n: number) => n.toLocaleString('en-US').replace(/,/g, '\u2009');
+
+/** The sizes a stopped job had reached, one item each (docs/spec.md, Long jobs). */
+export function sizeLines(d: Sizes): string[] {
+  const out = [`stage: ${d.stage}`, `${big(d.terms)} ${d.terms === 1 ? 'summand' : 'summands'} at most`];
+  if (d.layers) out.push(`${big(d.layers)} generators in the longest summand`);
+  if (d.dots) out.push(`${big(d.dots)} dots in one summand at most`);
+  if (d.basis !== undefined) out.push(`largest basis of a morphism space: ${big(d.basis)}`);
+  if (d.polynomial !== undefined) out.push(`largest polynomial: ${big(d.polynomial)} terms`);
+  if (d.steps !== undefined) out.push(`${big(d.steps)} rewriting steps`);
+  return out;
+}
+
+/** A cell stopped at the time limit: what happened, how big it had got, and ways to go on. */
+function Exploded(props: { message: string; diagnostics?: Sizes; onRunLonger?: () => void; commandLine?: () => string | undefined }) {
   const [copied, setCopied] = createSignal(false);
   const copy = async () => {
     const c = props.commandLine?.();
@@ -413,10 +495,18 @@ function Exploded(props: { message: string; onRunLonger?: () => void; commandLin
   return (
     <div class="exploded" data-testid="exploded">
       <div class="error">{props.message}</div>
+      <Show when={props.diagnostics}>
+        {(d) => (
+          <div class="diagnostics" data-testid="diagnostics">
+            <span class="hint">Sizes reached:</span>
+            <ul><For each={sizeLines(d())}>{(l) => <li>{l}</li>}</For></ul>
+          </div>
+        )}
+      </Show>
       <div class="row" style={{ 'margin-top': '6px', 'flex-wrap': 'wrap' }}>
         <Show when={props.onRunLonger}><button onClick={() => props.onRunLonger!()}>Run for up to 10 minutes</button></Show>
         <Show when={props.commandLine?.()}><button onClick={copy}>Copy command-line command</button></Show>
-        <span class="hint" role="status">{copied() ? 'Copied: the command-line tool has no time limit.' : 'The command-line tool has no time limit. Size diagnostics are not available in the browser yet.'}</span>
+        <span class="hint" role="status">{copied() ? 'Copied: the command-line tool has no time limit.' : 'The command-line tool has no time limit.'}</span>
       </div>
     </div>
   );
@@ -425,6 +515,8 @@ function Exploded(props: { message: string; onRunLonger?: () => void; commandLin
 export function ResultView(props: {
   s: CellState;
   onFocus?: (word?: string) => void;
+  /** Traces a summand of a watch back to the terms of the definitions. */
+  trace?: Tracer;
   onStop?: () => void;
   onRunLonger?: () => void;
   commandLine?: () => string | undefined;
@@ -438,7 +530,7 @@ export function ResultView(props: {
       <Match when={props.s.parsed?.kind === 'note'}><NoteView text={props.s.parsed!.note ?? ''} /></Match>
       <Match when={props.s.status === 'running'}><Running s={props.s} onStop={props.onStop} /></Match>
       <Match when={v()?.status === 'error'}><div class="error">{(v() as { message: string }).message === 'cancelled' ? 'Stopped before it finished. Recompute to run it again.' : (v() as { message: string }).message}</div></Match>
-      <Match when={v()?.status === 'exploded'}><Exploded message={(v() as { message: string }).message} onRunLonger={props.onRunLonger} commandLine={props.commandLine} /></Match>
+      <Match when={v()?.status === 'exploded'}><Exploded message={(v() as { message: string }).message} diagnostics={(v() as { diagnostics?: Sizes }).diagnostics} onRunLonger={props.onRunLonger} commandLine={props.commandLine} /></Match>
       <Match when={ok(v()) && (v() as Ok)} keyed>
         {(res) => {
           return (
@@ -448,7 +540,7 @@ export function ResultView(props: {
                 <Running s={props.s} onStop={props.onStop} />
               </Show>
               <Switch>
-                <Match when={res.kind === 'watch'}><Sum r={res} previous={props.s.previous} text={res.normal_form ?? ''} valueKey={props.s.valueKey} onFocus={props.onFocus && (() => props.onFocus!())} source={source()} /></Match>
+                <Match when={res.kind === 'watch'}><Sum r={res} previous={props.s.previous} text={res.normal_form ?? ''} valueKey={props.s.valueKey} onFocus={props.onFocus && (() => props.onFocus!())} source={source()} trace={props.s.status === 'fresh' ? props.trace : undefined} /></Match>
                 <Match when={res.kind === 'def'}><Sum r={res} text={`${res.name} := ${res.term}`} valueKey={props.s.valueKey} onFocus={props.onFocus} source={source()} /></Match>
                 <Match when={res.kind === 'check'}><CheckView r={res} /></Match>
                 <Match when={res.kind === 'solve'}><SolveView r={res} /></Match>

@@ -34,6 +34,27 @@ describe('evaluator', () => {
     expect(ev.state('n4')!.status).toBe('static');
   });
 
+  it('traces a summand of a watch to the terms of the definitions, also for a cached value', async () => {
+    const { ev, cache, engine } = setup();
+    const cells = [
+      { id: 'd1', text: 'def a := x_1 e(iij) + psi_1 e(iij)' },
+      { id: 'w2', text: 'watch a a' },
+    ];
+    await ev.update(ctx, cells);
+    await settle();
+    const o = await ev.trace('w2', 'psi_1 x_2 e(iij)');
+    expect(o.status).toBe('done');
+    const r = (o as { response: { status: string; sources: { factors: { name: string; term: number }[]; text: string }[] } }).response;
+    expect(r.status).toBe('ok');
+    expect(r.sources.map((s) => s.factors.map((f) => `${f.name}${f.term}`).join(' '))).toEqual(['a1 a2']);
+    // a fresh evaluator reading the cache can trace too
+    const again = new Evaluator(engine, cache, { engineId: 'test', summands: 10 }, () => {});
+    await again.update(ctx, cells);
+    await settle();
+    const p = await again.trace('w2', 'psi_1 x_2 e(iij)');
+    expect(p.status === 'done' && p.response.status).toBe('ok');
+  });
+
   it('recomputes only downstream cells, and undo is a cache hit', async () => {
     const { ev, engine } = setup();
     const cells = [

@@ -176,7 +176,10 @@ impl<'a, R: Ring> Session<'a, R> {
 
     /// `simplify`, with the first `shown` summands drawn when it is given.
     pub fn simplify_shown(&self, t: &CTerm<R>, shown: Option<usize>) -> Result<Value> {
+        crate::progress::stage("normal form");
+        self.ctx.report_sizes(t);
         let nf = self.eval.normal_form(t)?;
+        self.ctx.report_sizes(&nf);
         // a normal form of zero proves the term zero when every step is a relation; that a
         // nonzero normal form is the term's own (and nonzero) rests on the certificate
         let proven = nf.is_zero() && self.eval.rewrites_by_relations();
@@ -674,6 +677,7 @@ impl RingVisitor for RunWorkspace<'_> {
             .collect::<Result<_>>()?;
         let mut out = Vec::new();
         for (i, cell) in ws.cells.iter().enumerate() {
+            crate::progress::begin("elaborating", cell.id.as_deref());
             let sc = &mut scoped[which[i]];
             let ctx = sc.s.ctx;
             let strategy = cell
@@ -814,6 +818,188 @@ pub fn run_workspace_with(
     with_status(run())
 }
 
+/// The most terms of the definitions a watch uses that `workspace.trace` follows.
+pub const TRACE_TERMS: usize = 120;
+
+/// `workspace.trace`: which terms of the definitions a watch uses produced one summand of its
+/// value. Each term of each definition the watch names is multiplied by its own new scalar (a
+/// tag); the watch is evaluated with them, and the coefficient of the summand, a polynomial in the
+/// tags, is split by its monomials in them: each monomial names the terms of the definitions
+/// (with multiplicity) whose product contributed, and its coefficient is that contribution. The
+/// contributions add up to the summand. Monomials without tags come from the watch's own terms.
+struct TraceWorkspace<'a> {
+    ws: &'a Workspace,
+    presentation: Option<&'a str>,
+    scalars: &'a [String],
+    cell: &'a str,
+    word: &'a str,
+}
+
+impl RingVisitor for TraceWorkspace<'_> {
+    type Out = Value;
+    fn visit<R: Ring>(self, base: R) -> Result<Value> {
+        let ws = self.ws;
+        let deps = Dependencies::of(ws);
+        let i = ws
+            .cells
+            .iter()
+            .position(|c| c.id.as_deref() == Some(self.cell))
+            .ok_or_else(|| Error::invalid(format!("there is no cell '{}'", self.cell)))?;
+        let CellBody::Watch { term } = &ws.cells[i].body else {
+            return Err(Error::invalid("only the summands of a watch are traced"));
+        };
+        let mut direct = deps.defs[i].clone();
+        direct.sort_unstable();
+        direct.dedup();
+        let pres = load_presentation(&ws.context, self.presentation)?;
+        let mut spec = ws.context.clone();
+        for u in self.scalars.iter().chain(&deps.unknowns[i]) {
+            if !spec.scalars.contains(u) {
+                spec.scalars.push(u.clone());
+            }
+        }
+        let strategy = ws.cells[i]
+            .options
+            .iter()
+            .find(|(k, _)| k == "strategy")
+            .map(|(_, v)| v.clone());
+        // the definitions as written, to count and print their terms
+        let plain = Context::new(pres.clone(), spec.clone(), base.clone())?;
+        let mut sc = Scoped {
+            s: Session::new(&plain, None)?,
+            terms: BTreeMap::new(),
+        };
+        let mut defs: Vec<(usize, CTerm<R>)> = Vec::new();
+        for &j in &direct {
+            defs.push((j, sc.def(ws, &deps, j)?));
+        }
+        let count: usize = defs.iter().map(|(_, t)| t.len()).sum();
+        if count > TRACE_TERMS {
+            return Err(Error::limit(format!(
+                "the definitions this watch uses have {count} terms; tracing follows at most {TRACE_TERMS}"
+            )));
+        }
+        // one tag per term, named so that no scalar of the workspace can be one
+        let first_tag = spec.scalars.len();
+        for k in 0..count {
+            spec.scalars.push(format!("trace__{k}"));
+        }
+        let ctx = Context::new(pres, spec, base)?;
+        let mut sc = Scoped {
+            s: Session::new(&ctx, None)?,
+            terms: BTreeMap::new(),
+        };
+        if let Some(name) = &strategy {
+            sc.s.eval = evaluator_for(
+                &ctx,
+                ctx.pres
+                    .representations
+                    .iter()
+                    .find(|d| &d.name == name)
+                    .ok_or_else(|| Error::invalid(format!("no representation named '{name}'")))?,
+            )?;
+        }
+        let mut tagged = BTreeMap::new();
+        let mut labels: Vec<Value> = Vec::new();
+        let mut k = 0;
+        for (j, written) in &defs {
+            let t = sc.def(ws, &deps, *j)?;
+            let name = ws.cells[*j].defines().unwrap_or_default().to_string();
+            let mut terms = Vec::new();
+            for (n, (w, c)) in t.terms.iter().enumerate() {
+                let tag = ctx.coeff.var(first_tag + k);
+                terms.push((w.clone(), ctx.coeff.mul(c, &tag)));
+                let shown = written
+                    .terms
+                    .get(n)
+                    .cloned()
+                    .unwrap_or((w.clone(), c.clone()));
+                labels.push(json!({
+                    "name": name,
+                    "cell": ws.cells[*j].id,
+                    "term": n + 1,
+                    "text": plain.fmt_term(&crate::term::Term { terms: vec![shown] }),
+                }));
+                k += 1;
+            }
+            tagged.insert(name, crate::term::Term { terms });
+        }
+        sc.s.defs = tagged;
+        let t = sc.s.term(term)?;
+        let nf = sc.s.eval.normal_form(&t)?;
+        let Some((w, c)) = nf.terms.iter().find(|(w, _)| ctx.fmt_word(w) == self.word) else {
+            return Err(Error::invalid(format!(
+                "the value of {} has no summand {}",
+                self.cell, self.word
+            )));
+        };
+        // split the coefficient by its exponents in the tags
+        let mut parts: BTreeMap<Vec<i32>, Vec<(crate::poly::Monomial, R::Elem)>> = BTreeMap::new();
+        let mut total = Vec::new();
+        for (m, a) in &c.terms {
+            let tags: Vec<i32> = m.0[first_tag..].to_vec();
+            let mut rest = m.clone();
+            for e in rest.0[first_tag..].iter_mut() {
+                *e = 0;
+            }
+            total.push((rest.clone(), a.clone()));
+            parts.entry(tags).or_default().push((rest, a.clone()));
+        }
+        let total = ctx.coeff.normalize(total);
+        let sources: Vec<Value> = parts
+            .into_iter()
+            .rev()
+            .map(|(tags, terms)| {
+                let coeff = ctx.coeff.normalize(terms);
+                let single = crate::term::Term {
+                    terms: vec![(w.clone(), coeff)],
+                };
+                let factors: Vec<Value> = tags
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, e)| **e > 0)
+                    .map(|(k, e)| {
+                        let mut v = labels[k].clone();
+                        v["power"] = json!(e);
+                        v
+                    })
+                    .collect();
+                // the text of the contribution, in the context without tags
+                json!({ "factors": factors, "text": ctx.fmt_term(&single) })
+            })
+            .collect();
+        Ok(json!({
+            "word": self.word,
+            "text": ctx.fmt_term(&crate::term::Term { terms: vec![(w.clone(), total)] }),
+            "sources": sources,
+        }))
+    }
+}
+
+/// `workspace.trace`: see [`TraceWorkspace`].
+pub fn trace_workspace(
+    src: &str,
+    presentation: Option<&str>,
+    scalars: &[String],
+    cell: &str,
+    word: &str,
+) -> Value {
+    with_status((|| {
+        let ws = Workspace::parse(src)?;
+        let ring = ws.context.ring.clone();
+        with_ring(
+            &ring,
+            TraceWorkspace {
+                ws: &ws,
+                presentation,
+                scalars,
+                cell,
+                word,
+            },
+        )
+    })())
+}
+
 fn cell_json(c: &Cell) -> Value {
     let kind = match &c.body {
         CellBody::Def { .. } => "def",
@@ -919,12 +1105,13 @@ pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 16] = [
+pub const OPERATIONS: [&str; 17] = [
     "simplify",
     "check",
     "term.render",
     "presentation.check",
     "workspace.run",
+    "workspace.trace",
     "workspace.parse",
     "context.describe",
     "relations.match",
@@ -939,7 +1126,7 @@ pub const OPERATIONS: [&str; 16] = [
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 16] = [
+pub const SCHEMAS: [(&str, &str); 17] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -956,6 +1143,10 @@ pub const SCHEMAS: [(&str, &str); 16] = [
     (
         "workspace.run",
         include_str!("../../../spec/ops/workspace.run.schema.json"),
+    ),
+    (
+        "workspace.trace",
+        include_str!("../../../spec/ops/workspace.trace.schema.json"),
     ),
     (
         "workspace.parse",
@@ -1084,6 +1275,20 @@ pub fn call(op: &str, input: &Value) -> Value {
                     str_field("presentation").as_deref(),
                     shown,
                     &scalars,
+                )
+            }
+            "workspace.trace" => {
+                let scalars: Vec<String> = match input.get("scalars") {
+                    None => vec![],
+                    Some(v) => serde_json::from_value(v.clone())
+                        .map_err(|_| Error::invalid("'scalars' must be a list of names"))?,
+                };
+                trace_workspace(
+                    &need("workspace")?,
+                    str_field("presentation").as_deref(),
+                    &scalars,
+                    &need("cell")?,
+                    &need("word")?,
                 )
             }
             "workspace.parse" => parse_workspace(
@@ -1290,6 +1495,36 @@ solve a = 0 for c  # id=s5
         // a is not zero, whatever c is
         assert_eq!(cells[4]["outcome"], "none", "{v}");
         assert!(cells.iter().all(|c| c.get("warnings").is_none()), "{v}");
+    }
+
+    #[test]
+    fn tracing_a_summand() {
+        let src = "diagcalc-workspace/1
+context nilhecke nu=2 ring=QQ
+def a := x_1 + psi_1  # id=d1
+watch a a + 3 x_1 psi_1  # id=w2
+";
+        let v = trace_workspace(src, None, &[], "w2", "psi_1 x_2");
+        assert_eq!(v["status"], "ok", "{v}");
+        assert_eq!(v["text"], "4 psi_1 x_2", "{v}");
+        let sources = v["sources"].as_array().unwrap();
+        assert_eq!(sources.len(), 2, "{v}");
+        // x_1 psi_1 = psi_1 x_2 + 1: from a's two terms, and from the watch's own term
+        let from_a = &sources[0];
+        assert_eq!(from_a["text"], "psi_1 x_2", "{v}");
+        let f = from_a["factors"].as_array().unwrap();
+        assert_eq!(f.len(), 2, "{v}");
+        assert!(
+            f.iter()
+                .all(|x| x["name"] == "a" && x["cell"] == "d1" && x["power"] == 1)
+        );
+        assert_eq!(sources[1]["factors"], json!([]), "{v}");
+        assert_eq!(sources[1]["text"], "3 psi_1 x_2", "{v}");
+        // a square uses one term twice
+        let v = trace_workspace(src, None, &[], "w2", "x_1^2");
+        assert_eq!(v["sources"][0]["factors"][0]["power"], 2, "{v}");
+        let v = trace_workspace(src, None, &[], "d1", "x_1");
+        assert_eq!(v["status"], "error", "{v}");
     }
 
     #[test]

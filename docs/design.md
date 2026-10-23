@@ -403,6 +403,21 @@ colour when it rests on an assumption or a finite quotient or truncation, whose 
 The badge's hypotheses and reference keep the presentation file's text and are shown typeset
 (`src/ui/prose.ts`: short formulas through KaTeX, Lean names in the fixed-width font).
 
+**Tracing a summand.** Clicking a summand of a fresh watch (or Enter on it) asks `workspace.trace`
+which terms of the definitions produced it. The core multiplies each term of each definition the
+watch uses directly by its own new scalar, evaluates the watch, and reads the summand's
+coefficient off by those scalars: each monomial in them is one product of definition terms, and
+its coefficient (with the scalars set to 1) is that product's share, so the shares add up to the
+summand. Above 120 definition terms it declines rather than guess. Tracing is exact and runs on
+the job lane; a cached value is traced from the inputs it was computed from.
+
+**Size diagnostics.** A job stopped at its time limit reports the sizes it had reached, since the
+worker is ended and cannot answer. The core keeps a running record (`progress.rs`: stage, cell,
+most summands, layers and dots in a summand, largest basis solved in, largest polynomial,
+rewriting steps), with nothing measured unless a host installs a sink; the WebAssembly build's
+`enable_progress` sends it to the worker's `diagcalcProgress`, which posts it to the page at each
+change of stage and at most every 150 ms, and the engine attaches the last record to the timeout.
+
 **Tests.** Unit tests (`npm test`, Vitest) run the evaluator and the document model in Node
 against the real WebAssembly engine. The Playwright suite (`npx playwright test`) drives the app in
 Chromium: typing and editing cells, watch diffs, solve and check cells, context changes, history
@@ -568,12 +583,10 @@ reopen, accept, undo, discard) and the AI panel against a recorded model: reques
 Messages API are answered with scripted streamed turns, so a what-if on a branch runs end to end,
 including the request's headers, caching and thinking settings.
 
-**Not yet.** Clicking a summand to see which terms of the definitions produced it, and size diagnostics when a job is stopped at
-its time limit (it reports the time and points to the command-line tool). In the AI panel: the
-chat itself is kept only while the page is open (the timeline is kept with the document), pinned
-watches' trends cover the session only, OpenAI and compatible servers are not streamed, OpenAI
-reasoning is not carried between turns, and whether
-OpenAI accepts calls from a browser page is decided by the in-app check in a real browser (the
+**Not yet.** In the AI panel: the chat itself is kept only while the page is open (the timeline
+is kept with the document), pinned watches' trends cover the session only, OpenAI and compatible
+servers are not streamed, OpenAI reasoning is not carried between turns, and whether OpenAI
+accepts calls from a browser page is decided by the in-app check in a real browser (the
 development container cannot reach OpenAI).
 
 ## Accounts and sharing (phase 6)

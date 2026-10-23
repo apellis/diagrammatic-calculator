@@ -10,6 +10,26 @@ pub fn version() -> String {
 /// shared document cannot make the page hold or copy hundreds of megabytes.
 pub const MAX_RESPONSE: usize = 32 << 20;
 
+#[wasm_bindgen]
+extern "C" {
+    /// The host's receiver of progress reports (`globalThis.diagcalcProgress`), set by the job
+    /// workers before they call `enable_progress`.
+    #[wasm_bindgen(js_namespace = globalThis, js_name = diagcalcProgress)]
+    fn progress_out(sizes: &str);
+}
+
+/// Sends the sizes each computation reaches (`diagcalc_core::progress`) to
+/// `globalThis.diagcalcProgress` as JSON, so a job stopped at its time limit can say how big it
+/// got.
+#[wasm_bindgen]
+pub fn enable_progress() {
+    diagcalc_core::progress::set_sink(Some(Box::new(|s| {
+        if let Ok(json) = serde_json::to_string(s) {
+            progress_out(&json);
+        }
+    })));
+}
+
 /// Runs an operation: `op` names it (see `spec/ops/`), `request` is its JSON request, and the
 /// JSON response comes back as a string.
 #[wasm_bindgen]

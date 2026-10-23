@@ -218,6 +218,7 @@ impl<'a, R: Ring> KlBasis<'a, R> {
         let mu = self.mu()?;
         let degree = self.ctx.word_degree(&terms[0].0);
         let words = basis::basis_between(self.ctx, &self.roles, src, tgt, degree)?;
+        crate::progress::reached(|s| s.basis = Some(words.len()));
         let bent: Group<R::Elem> = terms
             .iter()
             .map(|(w, c)| (bend(&self.roles, w), c.clone()))

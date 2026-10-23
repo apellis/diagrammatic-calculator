@@ -541,6 +541,8 @@ function DocView(props: {
   };
   const stop = (id: string) => ev?.cancel(id);
   const runLonger = (id: string) => ev?.rerun(id, 600_000);
+  const trace = (id: string) => (word: string, signal: AbortSignal) =>
+    ev ? ev.trace(id, word, signal) : Promise.resolve({ status: 'cancelled' as const, ms: 0 });
   const commandLine = (id: string) => {
     const ws = ev?.workspaceOf(id);
     return ws && `cat > cell.dcw <<'EOF'\n${ws}EOF\ndiagcalc run cell.dcw\n`;
@@ -795,7 +797,7 @@ function DocView(props: {
                         onRemove={() => doc.removeCell(c.id)} onMove={(d) => doc.moveCell(c.id, i() + d)}
                         onPin={() => pin(c.id)} onRerun={() => ev?.rerun(c.id)} onCopyTikz={() => copyTikz(c.id)}
                         onCanvas={(w) => openCanvas(c.id, w)} validate={validate} onInsertBelow={() => insertBelow(c.id)}
-                        onStop={() => stop(c.id)} onRunLonger={() => runLonger(c.id)} commandLine={() => commandLine(c.id)} />
+                        onStop={() => stop(c.id)} onRunLonger={() => runLonger(c.id)} commandLine={() => commandLine(c.id)} trace={trace(c.id)} />
                     )}
                   </Show>
                 </>

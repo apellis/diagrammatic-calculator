@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/workspace.trace.schema.json",
+  "title": "workspace.trace: which terms of the definitions a watch uses produced one summand of its value",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["workspace", "cell", "word"],
+      "properties": {
+        "workspace": { "description": "The text of a .dcw file holding the watch and the definitions it uses.", "type": "string" },
+        "cell": { "description": "The watch's cell ID.", "type": "string" },
+        "word": { "description": "The summand's word, as workspace.run gives it in 'summands'.", "type": "string" },
+        "presentation": { "description": "The text of a presentation file the context names, when it is not shipped.", "type": "string" },
+        "scalars": { "description": "Names to add to the context's scalars, as in workspace.run.", "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "word", "text", "sources"],
+          "properties": {
+            "status": { "const": "ok" },
+            "word": { "type": "string" },
+            "text": { "description": "The summand with its coefficient in the watch's value.", "type": "string" },
+            "sources": {
+              "description": "The contributions, which add up to the summand: each the product of some terms of the definitions (factors, with multiplicity) and what that product gives in the summand. A contribution with no factors comes from the watch's own terms.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["factors", "text"],
+                "properties": {
+                  "factors": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["name", "cell", "term", "text", "power"],
+                      "properties": {
+                        "name": { "description": "The definition's name.", "type": "string" },
+                        "cell": { "description": "The definition's cell ID.", "type": ["string", "null"] },
+                        "term": { "description": "The term's place among the definition's summands (as written), from 1.", "type": "integer", "minimum": 1 },
+                        "text": { "description": "The term, with its coefficient.", "type": "string" },
+                        "power": { "description": "How many times the product uses it.", "type": "integer", "minimum": 1 }
+                      }
+                    }
+                  },
+                  "text": { "description": "The contribution: the summand's word with the part of its coefficient this product gives.", "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        { "$ref": "common.schema.json#/$defs/error" }
+      ]
+    }
+  }
+}

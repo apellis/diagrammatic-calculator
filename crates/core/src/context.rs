@@ -968,6 +968,19 @@ impl<R: Ring> Context<R> {
         self.canonical_impl(w, true)
     }
 
+    /// Reports the sizes of a term as reached (`progress`), when a host is listening.
+    pub fn report_sizes(&self, t: &crate::elab::CTerm<R>) {
+        if crate::progress::active() {
+            crate::progress::reached(|s| {
+                crate::progress::term_sizes(
+                    t,
+                    |g| self.pres.generators[g as usize].draw == "dot",
+                    s,
+                )
+            });
+        }
+    }
+
     /// [`Context::canonical`] with, for each layer of the result, its index in `w` (no moves).
     pub fn canonical_origin(&self, w: &Word) -> Reordered {
         self.canonical_impl(w, false)

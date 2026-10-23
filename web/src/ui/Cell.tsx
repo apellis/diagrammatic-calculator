@@ -4,7 +4,7 @@ import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import type { CellState } from '../eval/evaluator';
 import { kindOf } from '../doc/model';
 import { Editor } from './Editor';
-import { NoteView, ResultView, Summary, summary } from './Results';
+import { NoteView, ResultView, Summary, summary, type Tracer } from './Results';
 import { Typeset } from './Typeset';
 import { toTex } from './tex';
 
@@ -45,6 +45,8 @@ export interface CellProps {
   onRunLonger?: () => void;
   /** The cell's workspace for the command-line tool, after it was stopped at the limit. */
   commandLine?: () => string | undefined;
+  /** Traces a summand of a watch back to the terms of the definitions. */
+  trace?: Tracer;
 }
 
 /** Moves the focus from a cell's head to the next or previous cell's head. */
@@ -171,7 +173,7 @@ export function Cell(props: CellProps) {
             </div>
           </Show>
           <Show when={props.state && !props.isNew && ((kind() !== 'note' && kind() !== 'comment') || editing())}>
-            <ResultView s={props.state!} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} />
+            <ResultView s={props.state!} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} trace={props.trace} />
           </Show>
           {/* a new cell has nothing to recompute, pin or move until it is committed */}
           <Show when={!props.isNew} fallback={
