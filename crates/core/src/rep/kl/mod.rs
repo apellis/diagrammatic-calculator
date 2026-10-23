@@ -12,7 +12,7 @@
 mod basis;
 mod eval;
 mod mono;
-mod up;
+pub(crate) mod up;
 
 use super::{Evaluator, PolyVector, Provenance, role, strand_ring};
 use crate::context::Context;

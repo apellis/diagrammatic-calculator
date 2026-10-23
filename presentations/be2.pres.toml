@@ -266,6 +266,14 @@ certificate.reference = "Brundan, On the definition of Kac-Moody 2-category (arX
 certificate.hypotheses = "every colour even; t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1; each relation of this presentation is checked through the translation by the conformance checker"
 
 [[representations]]
+name = "skm-basis"
+kind = "skm-basis"
+roles = { cap_ef = "cap", cap_fe = "capl", cup_ef = "cupl", cup_fe = "cup", lcross = "lcross", psi = "psi", psid = "psid", x = "x", xd = "xd" }
+certificate.status = "conditional"
+certificate.reference = "Brundan-Ellis, Super Kac-Moody 2-categories (arXiv:1701.04133v2), Theorem 8.1 and Section 8 (Nondegeneracy Conjecture); odd-lean: SKM theorem_8_1, EvenBridge.nondegeneracyConjecture_of_isEven"
+certificate.hypotheses = "t_ij = 1, s_ij^pq = 0, c_{lambda,i} = 1. Every step of the computation is a relation of U(g), so equal normal forms are equal in U(g). That distinct normal forms differ is the Nondegeneracy Conjecture, open for odd colours and proved for even data; in each degree computed the candidate basis is checked to evaluate to independent upward diagrams with bubbles (a necessary condition), and a failure is reported as an error"
+
+[[representations]]
 name = "quiver-hecke-basis"
 kind = "quiver-hecke-basis"
 roles = { crossing = "psi", dot = "x" }

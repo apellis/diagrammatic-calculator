@@ -185,8 +185,14 @@ and the presentation's first representation, `kl-translation`, carries a term in
 
 Normal forms are KL's (below), written back in `be2`'s names; a leftward crossing comes back as the
 rotated crossing. The conformance checker checks every relation of `be2` through the translation.
-With an odd colour the translation does not apply, and the second representation,
-`quiver-hecke-basis`, covers upward diagrams only (conditional, see `design.md`).
+With an odd colour the translation does not apply, and the second representation, `skm-basis`,
+computes the normal form (conditional on BE2's Nondegeneracy Conjecture, see `design.md`). Its
+basis is KL's, drawn in `be2`'s names: caps `cap` (clockwise end on the right) or `capl`, cups
+`cup` or `cupl`, sideways crossings `lcross`, one dot exponent per arc at its left end, and real
+bubbles at the bottom right, clockwise when `⟨i, μ⟩ ≥ 0` and counterclockwise otherwise, with
+their dots on the upward leg. For an odd colour the bubbles of the basis are those of even
+degree index and at most one `δ` (index 1). The third, `quiver-hecke-basis`, remains for upward
+diagrams.
 
 ## nilHecke and odd nilHecke algebras
 

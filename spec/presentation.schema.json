@@ -384,6 +384,7 @@
             "nil-coxeter",
             "odd-nil-coxeter",
             "kl-basis",
+            "skm-basis",
             "quiver-hecke-basis",
             "translation"
           ]
@@ -404,7 +405,7 @@
           "type": "boolean"
         },
         "roles": {
-          "description": "Generator names by role: dot and crossing for klr-polynomial, quiver-hecke-basis and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis.",
+          "description": "Generator names by role: dot and crossing for klr-polynomial, quiver-hecke-basis and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis, and also lcross for skm-basis.",
           "type": "object",
           "additionalProperties": {
             "type": "string"

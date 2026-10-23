@@ -112,7 +112,7 @@ pub struct Certificate {
 pub struct RepresentationDecl {
     pub name: String,
     /// Built-in action kind: `klr-polynomial`, `nil-coxeter`, `odd-nil-coxeter`, `kl-basis`,
-    /// `quiver-hecke-basis`, `translation`.
+    /// `skm-basis`, `quiver-hecke-basis`, `translation`.
     pub kind: String,
     /// Generator names by role (`dot`, `crossing`).
     pub roles: BTreeMap<String, String>,

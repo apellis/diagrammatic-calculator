@@ -107,9 +107,9 @@ Rouquier and Khovanov–Lauda definitions (arXiv:1501.00350) and KL III nondegen
 conformance checker checks every relation of `be2` through it, in types A1, A2, B2 and G2 at every
 test weight. A translation that does not apply in a context (odd colours, no `mu=`) is skipped:
 the session uses the first representation that applies, and the conformance report lists the
-skipped one as unchecked. For odd colours the relations that define the leftward cups and caps
-and the downward dots and crossings are checked by typing only, until the Lean export covers
-them or the odd normal form (a super version of the KL evaluation) exists.
+skipped one as unchecked. For odd colours the relations are checked through the BE2 basis normal
+form below, and those that define the leftward cups and caps and the downward dots and crossings
+also against odd-lean by the Lean export.
 
 ### The KL basis normal form (`rep/kl`, representation kind `kl-basis`)
 
@@ -141,6 +141,40 @@ The normal form solves `Φ(f) = Σ a_k Φ(b_k)` by fraction-free elimination. Th
 checked to be independent each time, and the target to lie in their span. Bubble slides assume
 the default `Q = klq2`; the strategy refuses any other `Q`. Bubble variables are allocated four
 per colour and doubled when an index overflows.
+
+### The BE2 basis normal form (`rep/skm`, representation kind `skm-basis`)
+
+The super version of the KL evaluation, for `be2` with any parities (Brundan–Ellis,
+arXiv:1701.04133v2). The structure is the KL one: bend, evaluate run by run into upward diagrams
+with bubbles, solve against the basis of reduced matchings. What changes:
+
+- **Upward diagrams.** Values live in the quiver Hecke superalgebra (`ψ_ŵ x^a`, odd dots for odd
+  colours, Koszul signs when odd dots pass each other) tensored with the bubbles of the reference
+  region. For an odd colour the clockwise bubbles of even index are polynomial variables and the
+  bubble of index 1, `δ`, is odd with `δ² = 0` (BE2 (2.18)); the odd indices are `δ` times the even
+  ones.
+- **Bubble slides** use `τ = Σ (2r+1) x^{2r} t^{2r}` for an odd colour across its own strand, KL's
+  series otherwise (BE2 Section 7, with `t_ij = 1`, `s_ij^pq = 0`); `τ` is even, so `δ` slides
+  freely. Counterclockwise bubbles come from the infinite Grassmannian relation with the sign
+  `(−1)^{p r}`.
+- **Leftward cups and caps** are odd for an odd colour `i` with `⟨i, μ⟩` even (the same in every
+  region, since an odd colour pairs evenly with every simple root). Straightening a run tracks
+  every odd atom (dots, odd turns, bubbles) by height and multiplies by the Koszul sign of the
+  order the upward diagram lists them in; zigzags contribute their own sign.
+- **Downward dots and crossings** are first written with leftward cups and caps:
+  `xd = 2δ − (rotated dot)` for an odd colour and the rotated dot for an even one, and the
+  downward crossing is the rotated upward one up to `(−1)^{p(a)p(b)(⟨a,λ⟩+⟨b,λ⟩+1)}`.
+- **Sorting decompositions** carry BE2's signs `(−1)^{p(i)p(j)(⟨i,λ⟩+1)}` and the odd versions of
+  the curl terms.
+
+Every step is a relation of `U(g)`, so equal normal forms are equal there. The basis words are
+checked to evaluate to independent vectors in every degree computed (a necessary condition for
+the Nondegeneracy Conjecture; a failure would contradict it and is reported as an error), and the
+target to lie in their span (BE2 Theorem 8.1). The certificate is `conditional`, as for the quiver
+Hecke basis. For even colours the session still uses the translation into `kl`, whose
+certificate is a theorem; the tests check that the two agree. Basis evaluations are cached per
+source, target and degree, and bubble series per strand list; a diagram with three strands, one
+of them downward, takes seconds, and that cost grows quickly with the width.
 
 ## Finite-dimensional quotients
 

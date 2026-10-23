@@ -113,6 +113,8 @@ pub struct PolyRing<R: Ring> {
     pub odd: Vec<bool>,
     /// Laurent variables may carry negative exponents.
     pub laurent: Vec<bool>,
+    /// Exterior variables square to zero (odd generators of an exterior algebra).
+    pub exterior: Vec<bool>,
 }
 
 impl<R: Ring> PolyRing<R> {
@@ -124,6 +126,7 @@ impl<R: Ring> PolyRing<R> {
             names: names.iter().map(|s| s.to_string()).collect(),
             odd: vec![false; n],
             laurent: vec![false; n],
+            exterior: vec![false; n],
         }
     }
 
@@ -468,10 +471,14 @@ impl<R: Ring> Ring for PolyRing<R> {
             });
         }
         let skew = !self.is_commutative();
+        let ext = self.exterior.iter().any(|&e| e);
         let mut terms = Vec::with_capacity(a.terms.len() * b.terms.len());
         for (ma, ca) in &a.terms {
             for (mb, cb) in &b.terms {
                 let m = Monomial(ma.0.iter().zip(&mb.0).map(|(x, y)| x + y).collect());
+                if ext && m.0.iter().zip(&self.exterior).any(|(&e, &x)| x && e > 1) {
+                    continue;
+                }
                 let mut c = self.base.mul(ca, cb);
                 if skew && self.monomial_mul_sign(ma, mb) {
                     c = self.base.neg(&c);

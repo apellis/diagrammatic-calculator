@@ -1,8 +1,8 @@
 //! The super Kac-Moody 2-category of Brundan-Ellis: normal forms through the translation into
-//! the Khovanov-Lauda presentation for even colours, and the upward basis for odd ones.
+//! the Khovanov-Lauda presentation for even colours, and the conditional basis normal form for
+//! odd ones.
 
 use diagcalc_core::context::{Context, ContextSpec};
-use diagcalc_core::error::ErrorKind;
 use diagcalc_core::rep;
 use diagcalc_core::ring::Rationals;
 
@@ -35,18 +35,19 @@ fn even_colours_normalize_through_the_kl_presentation() {
 }
 
 #[test]
-fn odd_colours_use_the_upward_basis_and_say_where_it_stops() {
-    let c = be2("be2 type=A1 odd=i mu=2");
+fn odd_colours_use_the_conditional_basis_normal_form() {
+    let c = be2("be2 type=A1 odd=i mu=-1");
     // the translation holds for even colours only
-    assert_eq!(
-        rep::first_applicable(&c).unwrap().name,
-        "quiver-hecke-basis"
-    );
-    assert_eq!(nf(&c, "psi_1 psi_1 e(ii)"), "0");
+    assert_eq!(rep::first_applicable(&c).unwrap().name, "skm-basis");
     let ev = rep::evaluators(&c).unwrap().remove(0);
-    let t = c.parse_term("cap_1 x_2 cup_{1,i*} e()").unwrap();
-    let e = ev.normal_form(&t).unwrap_err();
-    assert_eq!(e.kind, ErrorKind::Precondition);
+    assert_eq!(ev.provenance().certificate.status, "conditional");
+    assert_eq!(nf(&c, "psi_1 psi_1 e(ii)"), "0");
+    // the bubble of index 1 is odd and squares to zero (BE2 (2.18)); the one of index 2 does not
+    assert_eq!(nf(&c, "cap_1 x_2 cup_{1,i*} cap_1 x_2 cup_{1,i*} e()"), "0");
+    assert_eq!(
+        nf(&c, "cap_1 x_2^2 cup_{1,i*} cap_1 x_2^2 cup_{1,i*} e()"),
+        "cap_1 x_2^2 cup_{1,i*} cap_1 x_2^2 cup_{1,i*} e()"
+    );
 }
 
 #[test]

@@ -84,7 +84,7 @@ pub(super) fn ups(cols: &[u16]) -> Object {
 
 /// A reduced word of `w` (crossing positions, bottom first) whose first crossings carry the
 /// strand ending at the rightmost top position there: `ψ_{k} … ψ_{n−2}`, then a word of the rest.
-pub(super) fn adapted_r(w: &Perm) -> Vec<usize> {
+pub(crate) fn adapted_r(w: &Perm) -> Vec<usize> {
     let n = w.n();
     if n <= 1 {
         return vec![];
@@ -111,7 +111,7 @@ pub(super) fn adapted_r(w: &Perm) -> Vec<usize> {
 }
 
 /// The mirror of [`adapted_r`]: the strand ending at top position 0 moves there first.
-pub(super) fn adapted_l(w: &Perm) -> Vec<usize> {
+pub(crate) fn adapted_l(w: &Perm) -> Vec<usize> {
     let n = w.n();
     if n <= 1 {
         return vec![];

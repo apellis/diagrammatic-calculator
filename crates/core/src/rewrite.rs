@@ -652,7 +652,7 @@ pub struct Layout {
 
 /// A move on a word in the crossings, listed top first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Op {
+pub(crate) enum Op {
     /// Letters `i, i + 1` on distant strands exchange (free: an interchange).
     Commute(usize),
     /// Letters `i, i + 1, i + 2` read `j k j` with `|j − k| = 1`; they become `k j k`.
@@ -668,7 +668,7 @@ struct Plan {
     ops: Vec<Op>,
 }
 
-fn perm_of(n: usize, top_first: &[usize]) -> Perm {
+pub(crate) fn perm_of(n: usize, top_first: &[usize]) -> Perm {
     let mut p = Perm::identity(n);
     for &k in top_first.iter().rev() {
         p = p.left_mul_simple(k);
@@ -698,7 +698,7 @@ fn bring_to_front(a: &mut [usize], off: usize, k: usize, ops: &mut Vec<Op>) {
 
 /// The moves from the word `a` (top first, on `n` strands) to the canonical reduced word of its
 /// permutation, or, if `a` is not reduced, to the first square from the bottom.
-fn plan(n: usize, a: &[usize]) -> Vec<Op> {
+pub(crate) fn plan(n: usize, a: &[usize]) -> Vec<Op> {
     let mut a = a.to_vec();
     let mut ops = Vec::new();
     let r = a.len();

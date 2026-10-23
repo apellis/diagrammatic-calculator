@@ -6,6 +6,7 @@
 
 pub mod kl;
 pub mod nilcoxeter;
+pub mod skm;
 pub mod smash;
 pub mod straighten;
 pub mod translate;
@@ -298,6 +299,11 @@ pub fn evaluator<'a, R: Ring + 'a>(
             prov(Strategy::BasisNormalForm),
         )?),
         "kl-basis" => Box::new(kl::KlBasis::new(
+            ctx,
+            decl,
+            prov(Strategy::BasisNormalForm),
+        )?),
+        "skm-basis" => Box::new(skm::SkmBasis::new(
             ctx,
             decl,
             prov(Strategy::BasisNormalForm),

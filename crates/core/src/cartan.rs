@@ -54,13 +54,37 @@ impl Cartan {
         Ok(())
     }
 
-    /// A finite or affine type by name: `A1`…`A9`, `B2`…`B9`, `C2`…, `D4`…, `G2`, `F4`.
+    /// A finite or affine type by name: `A1`…`A9`, `B2`…`B9`, `C2`…, `D4`…, `G2`, `F4`, or a
+    /// product of these written with `x` (`A1xA1`, block diagonal, colours in order).
     ///
     /// Bourbaki numbering. In type `B_n` the last simple root is short; in `C_n` the last is long;
     /// in `G2` the first is short (`a_12 = -3`, `a_21 = -1`). Here `a_ij = 2(α_i, α_j)/(α_i, α_i)`,
     /// and the symmetrizer is normalized so that short roots have `(α, α) = 2`.
     pub fn of_type(name: &str) -> Result<Cartan> {
         let bad = || Error::invalid(format!("unknown Cartan type {name}"));
+        if name.contains('x') {
+            let parts = name
+                .split('x')
+                .map(Cartan::of_type)
+                .collect::<Result<Vec<_>>>()?;
+            let n: usize = parts.iter().map(Cartan::rank).sum();
+            let (mut a, mut d) = (vec![vec![0i64; n]; n], Vec::with_capacity(n));
+            let mut off = 0;
+            for p in &parts {
+                for (i, row) in p.a.iter().enumerate() {
+                    a[off + i][off..off + row.len()].copy_from_slice(row);
+                }
+                d.extend_from_slice(&p.d);
+                off += p.rank();
+            }
+            let c = Cartan {
+                name: name.to_string(),
+                a,
+                d,
+            };
+            c.validate()?;
+            return Ok(c);
+        }
         let (letter, n) = name.split_at(1);
         let n: usize = n.parse().map_err(|_| bad())?;
         let mut a = vec![vec![0i64; n]; n];
