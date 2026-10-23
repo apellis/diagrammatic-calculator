@@ -797,7 +797,7 @@ function DocView(props: {
         )}
       </Show>
       <Show when={(() => { const m = modal(); return m && typeof m === 'object' && 'version' in m ? m.version : null; })()} keyed>
-        {(n) => <VersionView n={n} at={doc.at(n)} dcw={(s) => doc.toDcw(s)} onClose={() => setModal(null)}
+        {(n) => <VersionView n={n} at={doc.at(n)} dcw={(s) => doc.toDcw(s)} current={doc.toDcw()} onClose={() => setModal(null)}
           onRestore={(s) => { doc.replace(s.context, s.cells, `restore version ${n}`); setModal(null); }}
           onBranch={(s) => {
             setModal(null);
@@ -875,10 +875,33 @@ function BranchView(props: { name: string; cmp: Comparison; onClose: () => void;
   );
 }
 
+/**
+ * A line diff from `a` to `b` (longest common subsequence): each line kept (' '), removed ('−')
+ * or added ('+').
+ */
+export function lineDiff(a: string[], b: string[]): [' ' | '−' | '+', string][] {
+  const n = a.length;
+  const m = b.length;
+  const l: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) l[i][j] = a[i] === b[j] ? l[i + 1][j + 1] + 1 : Math.max(l[i + 1][j], l[i][j + 1]);
+  const out: [' ' | '−' | '+', string][] = [];
+  let [i, j] = [0, 0];
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      out.push([' ', a[i++]]);
+      j++;
+    } else if (j < m && (i === n || l[i][j + 1] >= l[i + 1][j])) out.push(['+', b[j++]]);
+    else out.push(['−', a[i++]]);
+  }
+  return out;
+}
+
 function VersionView(props: {
   n: number;
   at: { context: string; cells: CellData[] } | null;
   dcw: (s: { context: string; cells: CellData[] }) => string;
+  /** The document now, as .dcw text, to compare the version with. */
+  current: string;
   onClose: () => void;
   onRestore: (s: { context: string; cells: CellData[] }) => void;
   onBranch: (s: { context: string; cells: CellData[] }) => void;
@@ -889,7 +912,14 @@ function VersionView(props: {
         <Show when={props.at} fallback={<div class="error">This version cannot be read.</div>}>
           {(s) => (
             <>
-              <pre class="textform">{props.dcw(s())}</pre>
+              <Show when={props.dcw(s()) !== props.current} fallback={<p class="hint">The document is the same as this version now.</p>}>
+                <p class="hint" style={{ margin: '0 0 6px' }}>What changed since this version: lines marked − are in the version only, lines marked + are in the document now.</p>
+              </Show>
+              <pre class="textform diff" data-testid="version-diff">
+                <For each={lineDiff(props.dcw(s()).split('\n'), props.current.split('\n'))}>
+                  {([k, line]) => <div class={k === '+' ? 'add' : k === '−' ? 'del' : undefined}>{k} {line}</div>}
+                </For>
+              </pre>
               <div class="row" style={{ 'margin-top': '10px' }}>
                 <button class="primary" onClick={() => props.onRestore(s())}>Restore this version</button>
                 <button onClick={() => props.onBranch(s())}>Open as a branch</button>

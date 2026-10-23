@@ -92,7 +92,11 @@ test('history: versions, read-only view and restore', async ({ page }) => {
   // the version before the second cell was added
   await items.nth(1).click();
   await expect(page.getByRole('dialog')).toContainText('watch x_1 e(ij)');
-  await expect(page.getByRole('dialog')).not.toContainText('x_2');
+  // compared with the document now: the second cell is the one line added since
+  const diff = page.getByTestId('version-diff');
+  await expect(diff.locator('.add')).toHaveCount(1);
+  await expect(diff.locator('.add')).toContainText('watch x_2 e(ij)');
+  await expect(diff.locator('.del')).toHaveCount(0);
   await page.getByRole('button', { name: 'Restore this version' }).click();
   await expect(page.locator('.cell[data-cell]')).toHaveCount(1);
   await expect(items.first()).toHaveAttribute('data-note', /^restore version/);
