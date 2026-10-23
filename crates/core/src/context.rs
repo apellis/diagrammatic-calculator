@@ -187,6 +187,9 @@ pub struct Context<R: Ring> {
     pub params_ring: PolyRing<R>,
     /// Parameter values by name and ordered pair of colours.
     pub params: BTreeMap<String, ParamTable<R::Elem>>,
+    /// Whether some generator's parity reads its region (`h(a)`); otherwise a layer's parity is
+    /// read from its generator and colours alone, without rebuilding the objects of a word.
+    parity_reads_region: bool,
 }
 
 /// A word reached from another by interchange moves.
@@ -304,7 +307,9 @@ impl<R: Ring> Context<R> {
             coeff,
             params_ring,
             params: BTreeMap::new(),
+            parity_reads_region: false,
         };
+        ctx.parity_reads_region = ctx.pres.generators.iter().any(|g| g.parity.uses_pairing());
         if let Some(w) = ctx.spec.weight.clone() {
             let m = ctx.parse_weight(&w)?;
             if ctx.pres.objects == ObjectSpec::Weight {
@@ -719,6 +724,22 @@ impl<R: Ring> Context<R> {
 
     /// The parity of each layer of `w`, bottom first.
     pub fn layer_parities(&self, w: &Word) -> Vec<bool> {
+        if !self.parity_reads_region {
+            // Parities that do not read the region need no objects (the common case).
+            return w
+                .layers
+                .iter()
+                .map(|l| {
+                    let b: Vec<usize> = l.binding.iter().map(|&c| c as usize).collect();
+                    self.pres.generators[l.generator as usize]
+                        .parity
+                        .eval(&b, self)
+                        .unwrap_or(0)
+                        .rem_euclid(2)
+                        == 1
+                })
+                .collect();
+        }
         let mut obj = w.source.clone();
         let mut out = Vec::with_capacity(w.layers.len());
         for l in &w.layers {
@@ -896,11 +917,23 @@ impl<R: Ring> Context<R> {
     }
 
     /// Sorts by levels until nothing moves: the level of a generator without inputs depends on
-    /// which neighbours precede it, so one pass need not reach a word that sorts to itself.
+    /// which neighbours precede it, so one pass need not reach a word that sorts to itself. Without
+    /// such generators every level is fixed by the strands a layer uses (and the gaps between
+    /// them), which interchange does not change, so one pass is already stable.
     fn canonical_impl(&self, w: &Word, track: bool) -> Reordered {
-        let mut acc = self.canonical_pass(w, track);
+        // A layer's parity does not change under interchange: compute it once and carry it.
+        let odd = self.layer_parities(w);
+        let mut acc = self.canonical_pass(w, &odd, track);
+        let repeat = w
+            .layers
+            .iter()
+            .any(|l| self.source_len(l.generator as usize) == 0);
+        if !repeat {
+            return acc;
+        }
         for _ in 0..w.layers.len() + 4 {
-            let next = self.canonical_pass(&acc.word, track);
+            let odd_now: Vec<bool> = acc.origin.iter().map(|&i| odd[i]).collect();
+            let next = self.canonical_pass(&acc.word, &odd_now, track);
             if next.word == acc.word {
                 break;
             }
@@ -914,9 +947,8 @@ impl<R: Ring> Context<R> {
         acc
     }
 
-    fn canonical_pass(&self, w: &Word, track: bool) -> Reordered {
+    fn canonical_pass(&self, w: &Word, odd: &[bool], track: bool) -> Reordered {
         let levels = self.levels(w);
-        let odd = self.layer_parities(w);
         let mut items: Vec<(Layer, u32, usize)> = w
             .layers
             .iter()

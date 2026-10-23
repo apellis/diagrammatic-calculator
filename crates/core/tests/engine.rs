@@ -385,3 +385,92 @@ fn a_generator_that_fits_nowhere_is_an_error_not_zero() {
     assert!(c.parse_term("psi_1 e(ij)").is_ok());
     assert!(c.parse_term("psi_2 e(iji) + x_1").is_ok());
 }
+
+/// Canonical layering undoes interchange moves, with the Koszul sign of the moves: words are
+/// scrambled by random interchanges of a canonical word, then brought back. Without generators
+/// that have no inputs (one sorting pass) the scrambled word returns to the start with the sign of
+/// the moves. With cups (repeated passes) the level of a cup depends on its neighbours, so the
+/// result need only be stable and agree with its recorded moves and their signs.
+#[test]
+fn canonical_layering_undoes_interchanges() {
+    fn check<R: Ring>(c: &Context<R>, s: &str, seed: u64) {
+        let t = c.parse_term(s).unwrap();
+        let start = t.terms[0].0.clone();
+        let (canon, sign) = c.canonical(&start);
+        assert_eq!(
+            (&canon, sign),
+            (&start, false),
+            "{s}: parsed words are canonical"
+        );
+        let unique = start
+            .layers
+            .iter()
+            .all(|l| c.source_len(l.generator as usize) > 0);
+        let mut odd = c.layer_parities(&start);
+        let mut w = start.clone();
+        let mut flipped = false;
+        let mut moves = 0;
+        let mut x = seed;
+        for _ in 0..400 {
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let i = ((x >> 33) as usize) % (w.layers.len() - 1);
+            if let Some((lo, up)) = c.swap_adjacent(&w.layers[i], &w.layers[i + 1]) {
+                flipped ^= odd[i] && odd[i + 1];
+                w.layers[i] = lo;
+                w.layers[i + 1] = up;
+                odd.swap(i, i + 1);
+                moves += 1;
+            }
+        }
+        assert!(moves > 0, "{s}: no interchange possible");
+        assert_eq!(c.target(&w), c.target(&start), "{s}");
+        let r = c.canonical_tracked(&w);
+        assert_eq!(c.canonical(&w), (r.word.clone(), r.sign), "{s}: tracked");
+        // replaying the recorded moves reaches the result with its sign
+        let (mut v, mut odd_v, mut sign_v) = (w.clone(), c.layer_parities(&w), false);
+        for &i in &r.swaps {
+            let (lo, up) = c.swap_adjacent(&v.layers[i], &v.layers[i + 1]).unwrap();
+            sign_v ^= odd_v[i] && odd_v[i + 1];
+            v.layers[i] = lo;
+            v.layers[i + 1] = up;
+            odd_v.swap(i, i + 1);
+        }
+        assert_eq!((&v, sign_v), (&r.word, r.sign), "{s}: replayed moves");
+        assert_eq!(c.canonical(&r.word), (r.word.clone(), false), "{s}: stable");
+        if unique {
+            assert_eq!(r.word, start, "{s}: scrambled {}", c.fmt_word(&w));
+            assert_eq!(r.sign, flipped, "{s}: sign of the moves");
+        }
+    }
+    let c = ctx("odd-nilhecke nu=4", Integers);
+    for seed in 1..6 {
+        check(
+            &c,
+            "x_1 x_3 psi_1 x_4 psi_3 x_2 x_1 psi_3 x_4 e(iiii)",
+            seed,
+        );
+    }
+    let c = ctx("klr type=A2 nu=2i+j", Integers);
+    check(&c, "x_1 x_3 psi_2 x_3 x_1 psi_1 x_2 e(iji)", 3);
+    let c = ctx("be2 type=A1 odd=i mu=-1", Rationals);
+    for seed in 1..6 {
+        check(&c, "x_1 x_2 psi_1 x_1 x_2 e(i i)", seed);
+        check(
+            &c,
+            "cap_1 x_2 cup_{1,i*} cap_1 x_2^2 cup_{1,i*} cap_1 x_2 cup_{1,i*} x_1 e(i)",
+            seed,
+        );
+    }
+    let c = ctx("be2 type=A2 mu=i", Rationals);
+    check(&c, "cap_3 psi_2 cup_{1,j*} lcross_1 x_1 x_2 e(j* i)", 5);
+    let c = ctx("kl type=A1 mu=-2", Rationals);
+    for seed in 1..4 {
+        check(
+            &c,
+            "cap_1 x_2 cup_{1,i*} cap_1 x_2^3 cup_{1,i*} x_1 psi_1 x_2 e(i i)",
+            seed,
+        );
+    }
+}
