@@ -23,25 +23,31 @@ export async function addCell(page: Page, text: string) {
 export const cell = (page: Page, n: number) => page.locator('.cell[data-cell]:not([data-cell="new"])').nth(n);
 
 /**
- * Milliseconds from just before `act` until the summary of cell `n` reads `want`, measured in the
- * page with a mutation observer (so Playwright's polling does not count).
+ * Milliseconds from the person's input (the first `input` event that `act` causes: a click or a
+ * key) until the summary of cell `n` reads `want`, measured in the page with the event's own time
+ * stamp and a mutation observer, so neither Playwright's round trips nor its polling count.
  */
-export async function timeUntil(page: Page, n: number, want: string, act: () => Promise<void>): Promise<number> {
-  await page.evaluate(([n, want]) => {
+export async function timeUntil(page: Page, n: number, want: string, input: 'click' | 'keydown', act: () => Promise<void>): Promise<number> {
+  await page.evaluate(([n, want, input]) => {
     const w = window as unknown as { __t: Promise<number> };
     const el = () => document.querySelectorAll('.cell[data-cell]:not([data-cell="new"])')[n as number]?.querySelector('[data-testid=summary]');
-    const start = performance.now();
-    w.__t = new Promise((resolve) => {
+    let start: number | null = null;
+    const onInput = (e: Event) => {
+      if (start === null && e.isTrusted) start = e.timeStamp;
+    };
+    document.addEventListener(input as string, onInput, { capture: true });
+    w.__t = new Promise((resolve, reject) => {
       const check = () => {
-        if (el()?.textContent === want) {
-          obs.disconnect();
-          resolve(performance.now() - start);
-        }
+        if (el()?.textContent !== want) return;
+        obs.disconnect();
+        document.removeEventListener(input as string, onInput, { capture: true });
+        if (start === null) reject(new Error(`the summary changed before any ${input}`));
+        else resolve(performance.now() - start);
       };
       const obs = new MutationObserver(check);
       obs.observe(document.body, { subtree: true, childList: true, characterData: true });
     });
-  }, [n, want] as const);
+  }, [n, want, input] as const);
   await act();
   return page.evaluate(() => (window as unknown as { __t: Promise<number> }).__t);
 }

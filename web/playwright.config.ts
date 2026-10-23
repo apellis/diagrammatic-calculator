@@ -15,7 +15,12 @@ export default defineConfig({
     baseURL: 'http://localhost:4173',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], launchOptions: { executablePath } } }],
+  projects: [
+    { name: 'chromium', grepInvert: /@timing/, use: { ...devices['Desktop Chrome'], launchOptions: { executablePath } } },
+    // tests that measure time run alone, once every other test has finished (with --no-deps they
+    // run without waiting for the others, for example `npx playwright test --project timing --no-deps`)
+    { name: 'timing', grep: /@timing/, dependencies: ['chromium'], workers: 1, use: { ...devices['Desktop Chrome'], launchOptions: { executablePath } } },
+  ],
   webServer: {
     command: 'npx vite preview --port 4173 --strictPort',
     port: 4173,
