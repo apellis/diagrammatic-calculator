@@ -13,9 +13,6 @@ keeps it), and new findings are added here.
 2. **Normal-form display.** Normal forms print the canonical layering (x₁⁴x₂x₁x₂x₁x₂x₃…), which is
    correct but hard to read. Proposal: an optional view with commuting dots gathered into monomials;
    the text form stays as it is.
-3. **Confirming `context_set` on one's own documents.** The AI may change the context of a document
-   it is working in without asking. Proposal: keep as is (it is an undoable edit to your own
-   document) or confirm each change.
 
 ## Before going public
 
@@ -35,7 +32,6 @@ Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
 
 Polish (all remaining UX polish happens before going public):
 
-- Settings: a shortcuts setting, as the spec lists.
 - AI panel: claims in replies linked to the operation that produced them; comments on a cell as
   instructions to the AI; milestones with key diagrams in the timeline.
 - Occurrence IDs numbered document-wide in creation order (now numbered per summand from the
@@ -44,13 +40,9 @@ Polish (all remaining UX polish happens before going public):
 - Size diagnostics when a job is stopped at its time limit.
 - Certificate hypotheses and references are printed as raw ASCII from the presentation files
   (`Q_ab != 0`); typeset them.
-- Canvas: with zoom, the diagram can drift out of view.
-- Persist a linked file across reloads; import `.dch` files.
 - Clearing this browser's copies on sign-out (for shared computers); a list of the files kept with
   a document.
 - Sessions do not end when the user's Google access is revoked; they end at the idle limit.
-- Possibly flaky browser tests: `canvas.spec.ts` braid (line 104) and odd dots interchange (line
-  205) each failed once locally under four workers; `access.spec.ts` "at phone width" once in CI.
 
 Certificates:
 

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { addCell, cell, newDoc, typeCell } from './helpers';
+import { addCell, cell, newDoc, setContext, typeCell } from './helpers';
 
 const canvas = (page: Page) => page.locator('.canvas');
 const frames = (page: Page) => canvas(page).locator('.frame');
@@ -204,10 +204,7 @@ test('inserting from the palette and removing with Delete change the element', a
 
 test('interchanging odd dots shows the sign, box selection narrows relations, and a watch of definitions is written out', async ({ page }) => {
   await newDoc(page);
-  await page.getByTestId('context').click();
-  await page.getByLabel('Context').fill('odd-nilhecke nu=2');
-  await page.getByLabel('Context').press('Enter');
-  await page.locator('.cm-content').click();
+  await setContext(page, 'odd-nilhecke nu=2');
   await typeCell(page, 'def d := x_1 x_2');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
   await openCanvas(page);
@@ -293,10 +290,7 @@ test('a crossing with no move to make still follows a sideways drag a little and
 
 test('the middle crossing of the idempotent of NH3 makes the braid move', async ({ page }) => {
   await newDoc(page);
-  await page.getByTestId('context').click();
-  await page.getByLabel('Context').fill('nilhecke nu=3');
-  await page.getByLabel('Context').press('Enter');
-  await page.locator('.cm-content').click();
+  await setContext(page, 'nilhecke nu=3');
   await typeCell(page, 'def e := x_1^2 x_2 psi_1 psi_2 psi_1');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
   await openCanvas(page, false);

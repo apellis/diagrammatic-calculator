@@ -48,3 +48,53 @@ test('with no AI set up, the panel links to Settings, whose Back returns to the 
   await page.getByTestId('settings-back').click();
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
 });
+
+test('Settings lists the shortcuts and rebinds the main ones, refusing clashes; the new keys work in a document', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('open-settings').click();
+  const keys = page.getByTestId('shortcuts');
+  await expect(keys.getByTestId('keys-palette')).toHaveText(/K$/);
+  await expect(keys.locator('tr.fixed')).toContainText(['Undo']);
+
+  // a clash with another action is refused and the old keys stay
+  await keys.getByTestId('rebind-palette').click();
+  await page.keyboard.press('ControlOrMeta+j');
+  await expect(keys.getByTestId('rebind-error')).toContainText('AI panel');
+  await expect(keys.getByTestId('keys-palette')).toHaveText(/K$/);
+  // a plain key for an action that works while typing is refused too
+  await page.keyboard.press('p');
+  await expect(keys.getByTestId('rebind-error')).toContainText('while you type');
+  await page.keyboard.press('ControlOrMeta+Shift+p');
+  await expect(keys.getByTestId('rebind-palette')).toHaveText('Change');
+  await expect(keys.getByTestId('keys-palette')).toHaveText(/P$/);
+  await expect(keys.getByTestId('keys-palette')).toHaveText(/Shift|⇧/);
+  // a key for an action outside editors may be bare
+  await keys.getByTestId('rebind-canvas').click();
+  await page.keyboard.press('g');
+  await expect(keys.getByTestId('keys-canvas')).toHaveText('G');
+
+  // kept across a reload, and in force in a document
+  await page.reload();
+  await expect(page.getByTestId('keys-palette')).toHaveText(/P$/);
+  await page.getByTestId('settings-back').click();
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+Shift+p');
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  await expect(palette).toBeVisible();
+  await expect(palette).toContainText('Open the active cell in the canvas');
+  await page.keyboard.press('Escape');
+  await cell(page, 0).locator('.sum').click();
+  await page.keyboard.press('g');
+  await expect(page.locator('.canvas')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // reset brings the defaults back
+  await page.goto('/#/settings');
+  await page.getByTestId('shortcuts-reset').click();
+  await expect(page.getByTestId('keys-palette')).toHaveText(/K$/);
+  await expect(page.getByTestId('keys-canvas')).toHaveText('F');
+});

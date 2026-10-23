@@ -272,6 +272,29 @@ function log(host: ToolHost, e: Omit<TimelineEntry, 'time' | 'author'>) {
   host.main.log({ ...e, ...(b ? { branch: b.name } : {}) });
 }
 
+const ASK_CONTEXT = 'diagcalc.ai.askBeforeContext';
+
+/**
+ * Whether the AI's context changes on the person's own documents wait for the person (a setting
+ * of this browser, off by default; on someone else's document every change waits anyway).
+ */
+export function askBeforeContext(): boolean {
+  try {
+    return localStorage.getItem(ASK_CONTEXT) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setAskBeforeContext(on: boolean) {
+  try {
+    if (on) localStorage.setItem(ASK_CONTEXT, '1');
+    else localStorage.removeItem(ASK_CONTEXT);
+  } catch {
+    // storage blocked: the default (no confirmation) stays
+  }
+}
+
 /** Tools that change the document (or its branches), and so wait for the person on someone else's document. */
 const WRITES = new Set(['cell_add', 'cell_update', 'cell_move', 'context_set', 'branch_create', 'branch_discard', 'watch_pin']);
 
@@ -313,13 +336,12 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
     log(host, { kind: 'tool', text: n ?? summary, detail: summary, version: doc.versions().length + 1 });
     return ok(summary, content);
   };
-  if (WRITES.has(name) && host.foreign() && !confirmed) {
+  const foreign = WRITES.has(name) && host.foreign();
+  if ((foreign || (name === 'context_set' && askBeforeContext())) && !confirmed) {
     const what = describeWrite(name, a);
     host.propose({ kind: 'write', target: what, note: n ?? what }, () => void runWorkspace(host, name, a, true));
-    return ok(
-      `proposed: ${what}`,
-      `This document belongs to someone else, so the change (${what}) is only proposed; the person will accept or reject it. Do not wait for the answer.`,
-    );
+    const why = foreign ? 'This document belongs to someone else, so' : 'The person asked to confirm every change of the context, so';
+    return ok(`proposed: ${what}`, `${why} the change (${what}) is only proposed; the person will accept or reject it. Do not wait for the answer.`);
   }
   switch (name) {
     case 'workspace_read': {

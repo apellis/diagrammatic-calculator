@@ -10,6 +10,7 @@ import type { Calls } from '../eval/evaluator';
 import type { RelationsMatchResponse } from '../engine/ops.gen';
 import { isMac, mod } from '../app';
 import { Typeset } from './Typeset';
+import { isAction, keysOf } from './shortcuts';
 import { ValueBadge } from './Results';
 import { patterns } from './theme';
 import type { CellValue } from '../eval/evaluator';
@@ -116,7 +117,9 @@ export function Canvas(props: CanvasProps) {
   const [menu, setMenu] = createSignal<{ summand: number; rect?: Rect; matches: Match[]; previews: (Layout[] | null)[] } | null>(null);
   const [inserting, setInserting] = createSignal(false);
   const [help, setHelp] = createSignal(false);
-  const [view, setView] = createSignal({ x: 24, y: 16, z: 1 });
+  /** The board's pan (pixels) and zoom; every change is clamped by `keepInView`. */
+  const [view, setViewRaw] = createSignal({ x: 24, y: 16, z: 1 });
+  const setView = (v: { x: number; y: number; z: number }) => setViewRaw(keepInView(v));
   const [ghost, setGhost] = createSignal<{ summand: number; layer: number; dx: number; dy: number } | null>(null);
   const [boxDrag, setBoxDrag] = createSignal<{ summand: number; a: [number, number]; b: [number, number] } | null>(null);
   const [drop, setDrop] = createSignal<{ summand: number; x: number; y: number; width: number } | null>(null);
@@ -368,6 +371,8 @@ export function Canvas(props: CanvasProps) {
     matches?: Match[]; move?: ReturnType<typeof pullMove>; resultAsked?: boolean;
     /** The drawn order last asked for while dragging up or down. */
     asked?: number[];
+    /** The pointer's last offset from the start, kept while a sideways drag waits for the matches. */
+    last?: [number, number];
   } | null = null;
   let pan: { x: number; y: number; vx: number; vy: number } | null = null;
 
@@ -394,6 +399,14 @@ export function Canvas(props: CanvasProps) {
         if (o.status !== 'done' || o.response.status !== 'ok') return;
         d.matches = o.response.matches;
         d.move = pullMove(l, d.matches, pc.layer);
+        // a sideways drag that got ahead of the answer goes on from where the pointer is now,
+        // without waiting for it to move again
+        if (drag === d && !d.mode && d.last) {
+          const [dx, dy] = d.last;
+          d.mode = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+          if (d.mode === 'h') pullSideways(d, dx);
+          else moveUpDown(d, dy);
+        }
       });
     }
     svg.setPointerCapture(e.pointerId);
@@ -430,6 +443,7 @@ export function Canvas(props: CanvasProps) {
     } else if (drag.layer !== undefined) {
       if (!drag.mode) {
         // sideways makes a move of crossings; wait for the matches before deciding
+        drag.last = [dx, dy];
         if (Math.abs(dx) > Math.abs(dy) && drag.matches === undefined) return;
         drag.mode = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
       }
@@ -486,7 +500,7 @@ export function Canvas(props: CanvasProps) {
       const base = d.additive && sel().summand === d.k ? sel().layers : [];
       setSel({ summand: d.k, layers: [...new Set([...base, ...inside])], kept: true });
       const n = sel().layers.length;
-      say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; ${K}L: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
+      say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; ${keysOf('ask')}: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
       return;
     }
     const pc = piece(l, d.layer);
@@ -666,7 +680,7 @@ export function Canvas(props: CanvasProps) {
     e.preventDefault();
     const v = view();
     if (e.ctrlKey || e.metaKey) {
-      const r = root.getBoundingClientRect();
+      const r = viewport.getBoundingClientRect();
       const [cx, cy] = [e.clientX - r.left, e.clientY - r.top];
       const z = Math.max(0.3, Math.min(4, v.z * Math.exp(-e.deltaY * 0.01)));
       setView({ x: cx - ((cx - v.x) * z) / v.z, y: cy - ((cy - v.y) * z) / v.z, z });
@@ -706,19 +720,55 @@ export function Canvas(props: CanvasProps) {
     const n = layers.length;
     say(n ? `${n} piece${n > 1 ? 's' : ''} selected. Tab moves on without changing the selection; X adds or removes the piece at the ring; Esc clears.` : 'Nothing selected.');
   };
+  /**
+   * A pan and zoom with the drawing still in view: at least `KEEP` pixels of the board (or all
+   * of it, when it is smaller) stay inside the visible canvas on each axis, however far one pans
+   * or zooms, so the diagram can never drift out of sight.
+   */
+  function keepInView(v: { x: number; y: number; z: number }) {
+    if (!board?.isConnected || !viewport) return v;
+    const [bw, bh] = [board.offsetWidth * v.z, board.offsetHeight * v.z];
+    const [vw, vh] = [viewport.clientWidth, viewport.clientHeight];
+    if (!vw || !vh) return v;
+    const clamp = (p: number, size: number, room: number) => {
+      const keep = Math.min(KEEP, size, room);
+      return Math.max(keep - size, Math.min(room - keep, p));
+    };
+    return { x: clamp(v.x, bw, vw), y: clamp(v.y, bh, vh), z: v.z };
+  }
+  /** The summand `k`'s frame, panned (not zoomed) just enough to be wholly in view where it fits. */
+  const reveal = (k: number) => {
+    const frame = board?.querySelector<HTMLElement>(`[data-summand="${k + 1}"]`);
+    if (!frame || !viewport) return;
+    const v = view();
+    const margin = 12;
+    const shift = (start: number, size: number, room: number) => {
+      const end = start + size;
+      if (size + 2 * margin > room) return margin - start; // larger than the view: show its start
+      if (start < margin) return margin - start;
+      if (end > room - margin) return room - margin - end;
+      return 0;
+    };
+    const dx = shift(v.x + frame.offsetLeft * v.z, frame.offsetWidth * v.z, viewport.clientWidth);
+    const dy = shift(v.y + frame.offsetTop * v.z, frame.offsetHeight * v.z, viewport.clientHeight);
+    if (dx || dy) setView({ ...v, x: v.x + dx, y: v.y + dy });
+  };
+  // a new drawing can be smaller than the last (a summand gone): clamp the pan again; and the
+  // summand moved to with the keyboard is panned into view
+  createEffect(on(layouts, () => requestAnimationFrame(() => setView(view())), { defer: true }));
+  createEffect(on(() => sel().summand, (k) => requestAnimationFrame(() => reveal(k)), { defer: true }));
   const fit = () => {
     const frame = board.querySelector<HTMLElement>(`[data-summand="${sel().summand + 1}"]`);
     if (!frame) return setView({ x: 24, y: 16, z: 1 });
-    const r = root.getBoundingClientRect();
-    const z = Math.max(0.5, Math.min(3, Math.min((r.width - 60) / frame.offsetWidth, (r.height - 120) / frame.offsetHeight)));
-    setView({ x: (r.width - frame.offsetWidth * z) / 2 - frame.offsetLeft * z, y: 50 - frame.offsetTop * z, z });
+    const [w, h] = [viewport.clientWidth, viewport.clientHeight];
+    const z = Math.max(0.5, Math.min(3, Math.min((w - 48) / frame.offsetWidth, (h - 48) / frame.offsetHeight)));
+    setView({ x: (w - frame.offsetWidth * z) / 2 - frame.offsetLeft * z, y: (h - frame.offsetHeight * z) / 2 - frame.offsetTop * z, z });
   };
 
   /** Zooms about the middle of the view. */
   const zoomBy = (f: number) => {
     const v = view();
-    const r = root.getBoundingClientRect();
-    const [cx, cy] = [r.width / 2, r.height / 2];
+    const [cx, cy] = [viewport.clientWidth / 2, viewport.clientHeight / 2];
     const z = Math.max(0.3, Math.min(4, v.z * f));
     setView({ x: cx - ((cx - v.x) * z) / v.z, y: cy - ((cy - v.y) * z) / v.z, z });
   };
@@ -809,7 +859,7 @@ export function Canvas(props: CanvasProps) {
       if (l) setSel({ summand: s.summand, layers: [...l.order], kept: true });
       return;
     }
-    if (mod(e) && e.key.toLowerCase() === 'l') {
+    if (isAction(e, 'ask')) {
       handled();
       return props.onAsk?.();
     }
@@ -905,7 +955,10 @@ export function Canvas(props: CanvasProps) {
 
   onMount(() => {
     root.focus({ preventScroll: true });
-    const fit = () => setRowWidth(Math.max(320, viewport.clientWidth - 48));
+    const fit = () => {
+      setRowWidth(Math.max(320, viewport.clientWidth - 48));
+      setView(view());
+    };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(viewport);
@@ -1295,6 +1348,9 @@ export function occurrenceIds(l?: Layout): Map<number, string> {
 /** A label as typeset: a minus sign rather than a hyphen before a number. */
 const minus = (t?: string) => t?.replace(/(^|[^A-Za-z0-9_])-(?=[0-9])/g, '$1−');
 
+/** Pixels of the drawing that always stay in view, however far the canvas is panned or zoomed. */
+const KEEP = 80;
+
 /** How near (in units) a dragged dot must come to a crossing on its strand before the crossing glows. */
 const REACH = 0.75;
 /** How far (in units) a crossing must be pulled sideways to arm its move. */
@@ -1321,7 +1377,7 @@ const GESTURES: [string, string, string][] = [
   ['Pan', 'space-drag, scroll', '⇧ arrows'],
   ['Zoom', `${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
   ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, g other piece, s strand; numbered from the bottom of each summand)', 'hover a piece; IDs', 'L'],
-  ['Ask the AI about the selection', '', `${K}L`],
+  ['Ask the AI about the selection', '', keysOf('ask')],
   ['Leave the canvas for the toolbar and palette', 'click', '⇧Tab from the first piece'],
   ['Back to the document', '← Back', 'Esc (after clearing the selection)'],
 ];

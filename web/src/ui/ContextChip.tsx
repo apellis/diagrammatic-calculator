@@ -34,7 +34,9 @@ export function ContextChip(props: { context: string; scalars: string[]; onSet: 
     if (o.status !== 'done') return;
     const r = o.response;
     if (r.status !== 'ok') return; // the form shows the engine's message
-    close(true);
+    // focus goes back to the chip only from the popover: if the person has moved on (a click in a
+    // cell while the engine was checking the line), it stays where they put it
+    close(!!wrap?.contains(document.activeElement));
     props.onSet(r.context);
   };
   return (

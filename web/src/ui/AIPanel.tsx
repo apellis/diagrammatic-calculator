@@ -7,8 +7,8 @@ import type { Doc, TimelineEntry } from '../doc/model';
 import { run, userMessage, type AgentEvent } from '../ai/agent';
 import { ANTHROPIC_MODELS, isSetUp, loadKey, loadSettings, provider } from '../ai/providers';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
-import { isMac } from '../app';
 import { markdown } from './markdown';
+import { keysOf } from './shortcuts';
 
 type Part =
   | { type: 'text'; text: string }
@@ -17,7 +17,6 @@ type Part =
   | { type: 'stopped'; reason: string };
 type Entry = { role: 'user'; text: string; selection?: string } | { role: 'assistant'; parts: Part[] };
 
-const K = isMac ? '⌘' : 'Ctrl+';
 const NOTICE = 'diagcalc.ai.noticeSeen';
 
 export interface AIPanelProps {
@@ -157,7 +156,7 @@ export function AIPanel(props: AIPanelProps) {
           <button classList={{ on: tab() === 'activity' }} onClick={() => setTab('activity')} data-testid="activity-tab">Activity</button>
         </div>
         <a class="ghost model-link" href="#/settings" title="Provider, model and key: in Settings" data-testid="ai-model">{ready() ? modelName() || 'choose a model' : 'not set up'}</a>
-        <button class="ghost" title={`Hide (${K}J)`} onClick={props.onClose} aria-label="Hide the AI panel">×</button>
+        <button class="ghost" title={`Hide (${keysOf('ai')})`} onClick={props.onClose} aria-label="Hide the AI panel">×</button>
       </div>
 
       <Show when={!noticeSeen()}>
@@ -205,7 +204,7 @@ export function AIPanel(props: AIPanelProps) {
           <div class="ai-log" ref={log} data-testid="chat">
             <Show when={!entries.length}>
               <div class="hint">
-                Ask about the workspace, or select pieces in the canvas and press {K}L. The AI calls the calculator's operations; it never does algebra itself.
+                Ask about the workspace, or select pieces in the canvas and press {keysOf('ask')}. The AI calls the calculator's operations; it never does algebra itself.
                 What-if questions run on a scratch branch you can accept or discard.
               </div>
             </Show>

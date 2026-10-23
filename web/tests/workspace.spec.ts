@@ -133,10 +133,96 @@ test('export to .dcw and import it back', async ({ page }) => {
   expect(text).toBe('diagcalc-workspace/1\ncontext klr type=A2 nu=2i+j ring=QQ\ndef a := psi_1 e(iji)  # id=df1\ncheck idempotent(a a)  # id=ck2\n');
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import .dcw…' }).click();
+  await page.getByRole('button', { name: 'Import .dcw or .dch…' }).click();
   await (await chooser).setFiles({ name: 'mine.dcw', mimeType: 'text/plain', buffer: Buffer.from(text) });
   await expect(page.locator('.topbar .name')).toHaveText('mine');
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('holds');
+});
+
+test('a history file (.dch) imports as a document with its versions, snapshots and AI timeline', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'watch x_1 psi_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('2 terms, degree 0');
+  await cell(page, 0).getByRole('button', { name: 'Pin result' }).click();
+  await page.getByLabel('Snapshot name').fill('first');
+  await page.getByLabel('Snapshot name').press('Enter');
+  await addCell(page, 'def a := x_2 e(iij)');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('Export history');
+  const download = page.waitForEvent('download');
+  await page.keyboard.press('Enter');
+  const text = await (await (await download).createReadStream()).toArray().then((b) => Buffer.concat(b).toString());
+  const exported = JSON.parse(text) as { versions: { note: string; author: string }[] };
+  expect(exported.versions.length).toBeGreaterThanOrEqual(2);
+
+  await page.goto('/');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import .dcw or .dch…' }).click();
+  await (await chooser).setFiles({ name: 'history.dch', mimeType: 'application/json', buffer: Buffer.from(text) });
+  await expect(page.locator('.topbar .name')).toHaveText('Untitled');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term');
+  // every version is there again with its note
+  await page.getByRole('tab', { name: 'History' }).click();
+  await expect(page.locator('.outline .oitem')).toHaveCount(exported.versions.length);
+  await expect(page.locator(`.outline .oitem[data-note=${JSON.stringify(exported.versions[0].note)}]`)).toHaveCount(1);
+  await page.getByRole('tab', { name: 'Snapshots' }).click();
+  await expect(page.locator('.outline .oitem', { hasText: 'first' })).toHaveCount(1);
+  // new cells take numbers the history never used
+  await addCell(page, 'watch a');
+  await expect(cell(page, 2)).toHaveAttribute('data-cell', 'wt3');
+});
+
+test('a document linked to a file goes on saving to it after a reload, once the browser allows it again', async ({ page }) => {
+  // the picker hands out a file of the page's private file system; a flag makes the browser ask
+  // for permission again, as it does on a new visit
+  await page.addInitScript(() => {
+    const w = window as unknown as { showSaveFilePicker: () => Promise<FileSystemFileHandle> };
+    w.showSaveFilePicker = async () => (await navigator.storage.getDirectory()).getFileHandle('linked.dcw', { create: true });
+    if (sessionStorage.getItem('ask-again')) {
+      const p = FileSystemHandle.prototype as unknown as Record<string, unknown>;
+      let granted = false;
+      p.queryPermission = async () => (granted ? 'granted' : 'prompt');
+      p.requestPermission = async () => ((granted = true), 'granted');
+    }
+  });
+  const read = () => page.evaluate(async () => (await (await (await navigator.storage.getDirectory()).getFileHandle('linked.dcw')).getFile()).text());
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('Save to a file on disk');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('linked')).toHaveText('↔ linked.dcw');
+  await expect.poll(read).toContain('def a := x_1 e(iij)  # id=df1');
+
+  // a reload keeps the link, and saving goes on
+  await page.reload();
+  await expect(page.getByTestId('linked')).toHaveText('↔ linked.dcw');
+  await addCell(page, 'watch a');
+  await expect.poll(read).toContain('watch a  # id=wt2');
+
+  // when the browser asks again, saving pauses until the person allows it
+  await page.evaluate(() => sessionStorage.setItem('ask-again', '1'));
+  await page.reload();
+  await expect(page.getByTestId('relink')).toContainText('linked.dcw');
+  await addCell(page, 'check zero(a)');
+  await expect(cell(page, 2).getByTestId('summary')).not.toHaveText('');
+  expect(await read()).not.toContain('check zero(a)');
+  await page.getByTestId('relink').click();
+  await expect(page.getByTestId('linked')).toHaveText('↔ linked.dcw');
+  await expect.poll(read).toContain('check zero(a)  # id=ck3');
+
+  // unlinked, it stays unlinked after a reload
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('Stop saving to the file');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('linked')).toHaveCount(0);
+  await page.reload();
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await expect(page.getByTestId('linked')).toHaveCount(0);
+  await expect(page.getByTestId('relink')).toHaveCount(0);
 });
 
 test('pinning a result keeps a snapshot', async ({ page }) => {

@@ -1,6 +1,8 @@
 // Settings for this device: the appearance, and the AI provider with its key.
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { AISettingsForm } from './AISettingsForm';
+import { askBeforeContext, setAskBeforeContext } from '../ai/tools';
+import { ACTIONS, FIXED, changed, comboOf, keysOf, label, rebind, resetAll, type ActionId } from './shortcuts';
 import { SignOutEverywhere } from './Account';
 import { loadTheme, patterns, savePatterns, saveTheme, type Theme } from './theme';
 
@@ -31,7 +33,12 @@ export function SettingsPage(props: { from?: string }) {
         <h3>AI assistant</h3>
         <p class="muted">The assistant uses your own key with the provider you choose. Every message goes from this browser straight to that provider.</p>
         <AISettingsForm />
+        <label class="row" style={{ 'margin-top': '12px' }}>
+          <input type="checkbox" checked={askBeforeContext()} onChange={(e) => setAskBeforeContext(e.currentTarget.checked)} data-testid="ask-context" />
+          Ask before the AI changes a document's context (on documents of others it always asks)
+        </label>
       </section>
+      <Shortcuts />
       <SignOutEverywhere />
     </div>
   );
@@ -64,5 +71,68 @@ function ThemeSwitch() {
         )}
       </For>
     </div>
+  );
+}
+
+/**
+ * The keyboard shortcuts: every one listed, and the main ones rebindable. "Change" listens for the
+ * next key combination; Esc cancels.
+ */
+function Shortcuts() {
+  const [listening, setListening] = createSignal<ActionId | null>(null);
+  const [error, setError] = createSignal('');
+  const listen = (id: ActionId) => {
+    setError('');
+    setListening(listening() === id ? null : id);
+  };
+  const onKey = (id: ActionId, e: KeyboardEvent) => {
+    if (listening() !== id) return;
+    if (e.key === 'Tab') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') return setListening(null);
+    const c = comboOf(e);
+    if (!c) return; // a modifier on its own: wait for the key
+    const why = rebind(id, c);
+    setError(why ?? '');
+    if (!why) setListening(null);
+  };
+  return (
+    <section data-testid="shortcuts">
+      <h3>Keyboard shortcuts</h3>
+      <p class="muted">The main shortcuts of a document can be changed. Choose Change, then press the new keys; Esc keeps the old ones.</p>
+      <table class="kv keys">
+        <thead><tr><th>Action</th><th>Keys</th><th /></tr></thead>
+        <tbody>
+          <For each={ACTIONS}>
+            {(a) => (
+              <tr data-action={a.id}>
+                <td>{a.name}</td>
+                <td><kbd data-testid={`keys-${a.id}`}>{keysOf(a.id)}</kbd></td>
+                <td class="row">
+                  <button onClick={() => listen(a.id)} onKeyDown={(e) => onKey(a.id, e)} onBlur={() => listening() === a.id && setListening(null)}
+                    aria-pressed={listening() === a.id} data-testid={`rebind-${a.id}`}>
+                    {listening() === a.id ? 'Press the new keys…' : 'Change'}
+                  </button>
+                  <Show when={changed(a.id)}>
+                    <button class="ghost" onClick={() => { rebind(a.id, null); setError(''); }} title={`Back to ${label(a.default)}`}>Reset</button>
+                  </Show>
+                </td>
+              </tr>
+            )}
+          </For>
+          <For each={FIXED}>
+            {([name, combos]) => (
+              <tr class="fixed"><td>{name}</td><td><kbd>{combos.map(label).join(', ')}</kbd></td><td class="hint">fixed</td></tr>
+            )}
+          </For>
+        </tbody>
+      </table>
+      <Show when={error()}><div class="error small" role="alert" data-testid="rebind-error">{error()}</div></Show>
+      <div class="row" style={{ 'margin-top': '8px' }}>
+        <button onClick={() => { resetAll(); setError(''); setListening(null); }} data-testid="shortcuts-reset">Reset all shortcuts</button>
+        <span class="hint">The canvas's own keys are listed with ? in the canvas.</span>
+      </div>
+    </section>
   );
 }

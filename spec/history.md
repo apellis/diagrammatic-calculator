@@ -1,7 +1,9 @@
 # History file (`.dch`)
 
 An optional companion of a `.dcw` file: the version history, pinned snapshots and AI activity
-timeline of a document, as JSON. The web app exports it (Export history); reading it back is not built yet.
+timeline of a document, as JSON. The web app exports it (Export history) and imports it as a new document, rebuilding each
+version with its author, note and time, the snapshots and the timeline; entries it cannot read are
+left out, and the import says how many.
 
 ```json
 {

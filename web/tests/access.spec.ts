@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addCell, cell, newDoc, typeCell } from './helpers';
+import { addCell, cell, newDoc, setContext, typeCell } from './helpers';
 
 /** The page is no wider than the window: nothing scrolls sideways. */
 async function fitsWidth(page: import('@playwright/test').Page) {
@@ -76,10 +76,7 @@ test('cells, the outline and the document list are reachable and operable by key
 
 test('a conditional certificate is named, and says which verdict rests on it', async ({ page }) => {
   await newDoc(page);
-  await page.getByTestId('context').click();
-  await page.getByLabel('Context').fill('be2 type=A1 odd=i mu=-1');
-  await page.getByLabel('Context').press('Enter');
-  await page.locator('.cm-content').click();
+  await setContext(page, 'be2 type=A1 odd=i mu=-1');
   await typeCell(page, 'check zero(psi_1 psi_1 e(ii))');
   await addCell(page, 'check zero(x_1 e(i))');
   await addCell(page, 'watch x_1 e(i)');
@@ -101,10 +98,7 @@ test('a conditional certificate is named, and says which verdict rests on it', a
 
 test('a long computation shows how long it has run and stops from its cell', async ({ page }) => {
   await newDoc(page);
-  await page.getByTestId('context').click();
-  await page.getByLabel('Context').fill('nilhecke nu=6');
-  await page.getByLabel('Context').press('Enter');
-  await page.locator('.cm-content').click();
+  await setContext(page, 'nilhecke nu=6');
   const sum = '(x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + psi_1 + psi_3 + psi_5)';
   await typeCell(page, `watch ${Array(24).fill(sum).join(' ')}`);
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('computing…');

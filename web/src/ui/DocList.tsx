@@ -1,6 +1,6 @@
 import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
 import { createDoc, deleteDoc, duplicateDoc, isPersisted, listDocs, openDoc, type DocInfo } from '../doc/store';
-import { parseDcw } from '../doc/dcw';
+import { fillFromHistory, isDch, parseDch, parseDcw } from '../doc/dcw';
 import { ago, engine, pickFile } from '../app';
 import { account, api, ours, syncAll, takeSignInOutcome, user } from '../account/account';
 import { ApiError, type CloudDoc } from '../account/api';
@@ -33,10 +33,27 @@ const dismissedRecently = () => {
   }
 };
 
-export async function importText(name: string, text: string): Promise<string> {
+/**
+ * Makes a document from a file: a workspace (.dcw), or a history (.dch), whose versions, snapshots
+ * and AI timeline come back as they were. Returns the new document's ID, and a note when part of a
+ * history could not be read.
+ */
+export async function importText(name: string, text: string): Promise<{ id: string; note?: string }> {
+  if (isDch(text)) {
+    const h = await parseDch(text);
+    const id = await createDoc(h.name ?? name.replace(/\.dch$/, ''), (d) => fillFromHistory(d, h));
+    const n = h.skipped;
+    return { id, note: n ? `${n} ${n === 1 ? 'entry' : 'entries'} of the history could not be read and ${n === 1 ? 'was' : 'were'} left out.` : undefined };
+  }
   const ws = await parseDcw(text);
-  return createDoc(name.replace(/\.dcw$/, ''), (d) => d.replace(ws.context, ws.cells, `import ${name}`));
+  return { id: await createDoc(name.replace(/\.dcw$/, ''), (d) => d.replace(ws.context, ws.cells, `import ${name}`)) };
 }
+
+/** What an import has to say about the document it made, shown when the document opens. */
+export const importNotes = new Map<string, string>();
+
+/** The files the import buttons offer. */
+export const IMPORTABLE = '.dcw,.dch,text/plain,application/json';
 
 export function DocList() {
   const [docs, { refetch }] = createResource(listDocs);
@@ -131,10 +148,12 @@ export function DocList() {
     }
   };
   const doImport = async () => {
-    const f = await pickFile('.dcw,text/plain');
+    const f = await pickFile(IMPORTABLE);
     if (!f) return;
     try {
-      open(await importText(f.name, f.text));
+      const r = await importText(f.name, f.text);
+      if (r.note) importNotes.set(r.id, r.note);
+      open(r.id);
     } catch (e) {
       setError(`${f.name}: ${(e as Error).message}`);
     }
@@ -214,7 +233,7 @@ export function DocList() {
       </Show>
       <div class="row toolbar">
         <button class="primary" onClick={() => setCreating({ name: 'Untitled', line: 'klr type=A2 nu=2i+j ring=QQ' })}>New document</button>
-        <button onClick={doImport}>Import .dcw…</button>
+        <button onClick={doImport} title="A workspace (.dcw), or a history (.dch) with its versions">Import .dcw or .dch…</button>
         <div class="grow" />
         <input placeholder="Search" value={query()} onInput={(e) => setQuery(e.currentTarget.value)} aria-label="Search documents" />
       </div>

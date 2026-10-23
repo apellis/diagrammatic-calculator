@@ -375,7 +375,14 @@ its text as one entry of a `.dcw` file), pinned snapshots and the version histor
 one step through `Doc.step`, so it is one undo step (Yjs `UndoManager`) and one version, recorded
 with a Yjs snapshot so any version opens read-only and can be restored. Documents are stored in
 IndexedDB (`y-indexeddb`) with an index for the document list; `.dcw` export and import go through
-`workspace.parse`, so the file is canonical. A `.dch` file holds the history (`spec/history.md`).
+`workspace.parse`, so the file is canonical. A `.dch` file holds the history (`spec/history.md`);
+importing one rebuilds the document version by version (`src/doc/dcw.ts`): each version's
+workspace becomes the document's state, recorded as a version with its author, note and time; the
+snapshots and the AI timeline come along, entries that cannot be read are left out and counted in
+a message, and new cells take numbers no version used. A document linked to a file on disk (Chrome,
+Edge) keeps the file handle in IndexedDB (`diagcalc-links`), so after a reload it saves to the file
+again at once if the browser still allows writing, and otherwise shows "resume saving" in the top
+bar until the person allows it (browsers ask once per visit).
 
 **Evaluation.** `src/eval/evaluator.ts`. A cell's result is keyed by a hash of its inputs: the
 engine build, the context, the unknowns it mentions, its text and the keys of the definitions it
@@ -416,7 +423,9 @@ the nearest height and strand position for `term.edit`. Every gesture writes the
 one step with a note, or stores a hint. Hints (`Doc.hints`, keyed by cell and summand word, an
 order and look-only offsets) are part of the undo scope but never of the term. Each gesture has a
 key: Tab between pieces, arrows slide a dot, ⌥-arrows interchange, R lists relations and 1–9 applies
-one, I then a digit inserts, Delete removes, F fits; `?` lists them.
+one, I then a digit inserts, Delete removes, F fits; `?` lists them. However far one pans or zooms, at least 80 pixels of the drawing stay in view on each axis (the
+pan is clamped, again whenever the drawing or the window changes size), and a summand reached
+with the arrow keys is panned into view.
 
 Inside the canvas, the top bar's ← and the breadcrumb (document name › cell) go back to the
 document, as do the canvas's own "← Back to the document" button and Esc; from the document, ←
@@ -516,6 +525,16 @@ System, the default, follows the operating system's `prefers-color-scheme`; Ligh
 choice is kept in local storage (`diagcalc.theme`) and applied by an inline script in
 `index.html` before the first paint, so a page never flashes in the other theme.
 
+It also lists the keyboard shortcuts (`src/ui/shortcuts.ts`). The main ones (command palette, AI
+panel, ask the AI, scratch branch, export, import, insert a cell below, open the canvas, the
+shortcut sheet) can be rebound: Change listens for the next combination, which is refused when it
+is fixed (undo, redo, commit, Esc, Tab, select all), already taken, a plain key for an action that
+also works while typing in a cell, or a key needed for moving around. Only bindings that differ
+from the defaults are kept, in local storage (`diagcalc.shortcuts`); every key handler, the
+palette and the sheets read them. The AI section has "Ask before the AI changes a document's
+context" (`diagcalc.ai.askBeforeContext`, off by default): when on, `context_set` on one's own
+document becomes a proposal like the changes the AI makes to someone else's document.
+
 **Tests (4b).** Unit tests for the canvas geometry, branches and merging, AI tool schemas,
 validation and the chat-completions translation. Playwright drives the gestures (drag-slide,
 keyboard paths, insert and remove, odd interchange signs, look-only moves), branches (leave,
@@ -523,8 +542,7 @@ reopen, accept, undo, discard) and the AI panel against a recorded model: reques
 Messages API are answered with scripted streamed turns, so a what-if on a branch runs end to end,
 including the request's headers, caching and thinking settings.
 
-**Not yet.** Clicking a summand to see which terms of the definitions produced it, persisting
-a linked file across reloads, importing `.dch` files, and size diagnostics when a job is stopped at
+**Not yet.** Clicking a summand to see which terms of the definitions produced it, and size diagnostics when a job is stopped at
 its time limit (it reports the time and points to the command-line tool). In the AI panel: the
 chat itself is kept only while the page is open (the timeline is kept with the document), pinned
 watches' trends cover the session only, OpenAI and compatible servers are not streamed, OpenAI

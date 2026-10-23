@@ -398,3 +398,39 @@ test('OpenAI goes through the Responses API: a tool call, its result sent back, 
   expect(input.some((x) => x.type === 'function_call' && x.call_id === 'call_1')).toBe(true);
   expect(input.some((x) => x.type === 'function_call_output' && x.call_id === 'call_1')).toBe(true);
 });
+
+test('with "Ask before the AI changes a document\'s context" on, its context change waits for the person', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 e(iij)');
+  await recordedModel(page, [
+    () => sse([{ type: 'tool_use', name: 'context_set', input: { context: 'nilhecke nu=2', note: 'try the nilHecke algebra' } }], 'tool_use'),
+    () => sse([{ type: 'text', text: 'Proposed the nilHecke context.' }], 'end_turn'),
+    () => sse([{ type: 'tool_use', name: 'context_set', input: { context: 'nilhecke nu=3', note: 'three strands' } }], 'tool_use'),
+    () => sse([{ type: 'text', text: 'Changed the context.' }], 'end_turn'),
+  ]);
+  await enterKey(page);
+  await page.goto(page.url().replace(/#.*/, '#/settings'));
+  await page.getByTestId('ask-context').check();
+  await page.goBack();
+  const chip = page.getByTestId('context').locator('.ctx');
+  await expect(chip).toHaveAttribute('data-text', /^klr/);
+
+  await page.getByLabel('Message to the AI').fill('Try nilHecke.');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('chat')).toContainText('Proposed the nilHecke context.');
+  const proposal = page.getByTestId('proposal');
+  await expect(proposal).toContainText('set the context to “nilhecke nu=2”');
+  await expect(chip).toHaveAttribute('data-text', /^klr/);
+  await proposal.getByRole('button', { name: 'Allow' }).click();
+  await expect(chip).toHaveAttribute('data-text', /^nilhecke nu=2/);
+
+  // off again: the AI changes it straight away
+  await page.goto(page.url().replace(/#.*/, '#/settings'));
+  await page.getByTestId('ask-context').uncheck();
+  await page.goBack();
+  await page.getByLabel('Message to the AI').fill('Three strands.');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('chat')).toContainText('Changed the context.');
+  await expect(chip).toHaveAttribute('data-text', /^nilhecke nu=3/);
+  await expect(page.getByTestId('proposal')).toHaveCount(0);
+});

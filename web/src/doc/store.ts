@@ -179,6 +179,7 @@ export async function deleteDoc(id: string) {
   await persistence.clearData();
   const db = await index();
   await req(db.transaction(INDEX, 'readwrite').objectStore(INDEX).delete(id));
+  await saveLink(id, null);
 }
 
 export async function markExported(id: string) {
@@ -195,4 +196,41 @@ export async function askPersistence(): Promise<boolean> {
 
 export async function isPersisted(): Promise<boolean> {
   return (await navigator.storage?.persisted?.()) ?? false;
+}
+
+// Files on disk linked to documents (Chrome, Edge): the file handle is kept in its own small
+// database, so a linked document goes on saving to its file after a reload. The browser asks the
+// person again for permission to write before the first save of a new visit.
+const LINKS_DB = 'diagcalc-links';
+let linksDb: Promise<IDBDatabase> | null = null;
+function links(): Promise<IDBDatabase> {
+  linksDb ??= new Promise((resolve, reject) => {
+    const open = indexedDB.open(LINKS_DB, 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('links');
+    open.onsuccess = () => resolve(open.result);
+    open.onerror = () => reject(open.error);
+  });
+  return linksDb;
+}
+
+/** The file a document is linked to, if any (and if this browser can keep file handles). */
+export async function loadLink(id: string): Promise<FileSystemFileHandle | undefined> {
+  try {
+    const db = await links();
+    return (await req(db.transaction('links').objectStore('links').get(id))) as FileSystemFileHandle | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Links a document to a file, or unlinks it (null). */
+export async function saveLink(id: string, h: FileSystemFileHandle | null): Promise<void> {
+  try {
+    const db = await links();
+    const store = db.transaction('links', 'readwrite').objectStore('links');
+    if (h) await req(store.put(h, id));
+    else await req(store.delete(id));
+  } catch {
+    // the link lasts while the page is open
+  }
 }

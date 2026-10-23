@@ -1,7 +1,7 @@
 // A document's workspace: top bar, outline and cells, kept in step with the document and the
 // evaluator.
 import { createEffect, createResource, createSignal, For, on, onCleanup, onMount, Show, type Signal } from 'solid-js';
-import { createCleanCopy, openDoc, markExported, type OpenDoc } from '../doc/store';
+import { createCleanCopy, loadLink, openDoc, markExported, saveLink, type OpenDoc } from '../doc/store';
 import { kindOf, type CellData, type Comparison, type Doc, type Inputs } from '../doc/model';
 import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
@@ -13,9 +13,10 @@ import { Typeset } from './Typeset';
 import { ResultView, Brief } from './Results';
 import { Dialog } from './Dialog';
 import { Palette, type Command } from './Palette';
-import { importText } from './DocList';
+import { IMPORTABLE, importNotes, importText } from './DocList';
 import { Canvas, type Generator, type Selection } from './Canvas';
 import { AIPanel } from './AIPanel';
+import { isAction, keysOf, type ActionId } from './shortcuts';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { isSetUp, loadKey, loadSettings } from '../ai/providers';
 import { account, api, user } from '../account/account';
@@ -372,6 +373,11 @@ function DocView(props: {
     refresh();
   });
   if (!doc.cells.length) setAdding(0);
+  const note = importNotes.get(props.o.info.id);
+  if (note) {
+    importNotes.delete(props.o.info.id);
+    setMessage(note);
+  }
 
   // saving straight to a file on disk (Chrome, Edge)
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -380,12 +386,41 @@ function DocView(props: {
     if (!h || onBranch()) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
-      const w = await h.createWritable();
-      await w.write((await exportDcw(doc)).text);
-      await w.close();
-      void markExported(props.o.info.id);
+      try {
+        const w = await h.createWritable();
+        await w.write((await exportDcw(doc)).text);
+        await w.close();
+        void markExported(props.o.info.id);
+      } catch (e) {
+        setMessage(`Cannot save to ${h.name}: ${(e as Error).message}`);
+      }
     }, 800);
   }
+  // a document linked on an earlier visit: saving goes on at once if the browser still allows it,
+  // otherwise after the person allows it again (browsers ask once per visit)
+  const [relink, setRelink] = createSignal<FileSystemFileHandle | null>(null);
+  if (!linked()) {
+    void loadLink(props.o.info.id).then(async (h) => {
+      if (!h || linked()) return;
+      if ((await filePermission(h, false)) === 'granted') setLinked(h);
+      else setRelink(h);
+    });
+  }
+  const allowRelink = async () => {
+    const h = relink();
+    if (!h) return;
+    if ((await filePermission(h, true)) !== 'granted') return setMessage(`Saving to ${h.name} stays paused: the browser was not allowed to write to it.`);
+    setRelink(null);
+    setLinked(h);
+    scheduleFileSave();
+    setMessage(`Saving to ${h.name} after every step.`);
+  };
+  const unlink = () => {
+    setLinked(null);
+    setRelink(null);
+    void saveLink(props.o.info.id, null);
+    setMessage('No longer saving to a file.');
+  };
 
   const toggle = (id: string) => {
     if (opened === id) opened = null;
@@ -541,29 +576,39 @@ function DocView(props: {
     }
   };
   const importFile = async () => {
-    const f = await pickFile('.dcw,text/plain');
-    if (f) location.hash = `#/doc/${await importText(f.name, f.text)}`;
+    const f = await pickFile(IMPORTABLE);
+    if (!f) return;
+    try {
+      const r = await importText(f.name, f.text);
+      if (r.note) importNotes.set(r.id, r.note);
+      location.hash = `#/doc/${r.id}`;
+    } catch (e) {
+      setMessage(`${f.name}: ${(e as Error).message}`);
+    }
   };
   const linkFile = async () => {
     const pick = (window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
     if (!pick) return setMessage('This browser cannot save straight to a file; use Export instead.');
     const h = await pick({ suggestedName: fileName(name(), 'dcw'), types: [{ description: 'Workspace', accept: { 'text/plain': ['.dcw'] } }] });
     setLinked(h);
+    setRelink(null);
+    void saveLink(props.o.info.id, h);
     scheduleFileSave();
-    setMessage(`Saving to ${h.name} after every step while this page is open.`);
+    setMessage(`Saving to ${h.name} after every step; the link is kept for the next visit.`);
   };
 
   const commands = (): Command[] => [
     ...['def', 'watch', 'solve', 'check', 'note'].map((k) => ({ name: `New ${k} cell`, run: () => addAt(cells().length, k) })),
-    { name: 'Insert a cell below the active cell', keys: isMac ? '⌥Enter' : 'Alt+Enter', run: () => insertBelow(active()) },
+    { name: 'Insert a cell below the active cell', keys: keysOf('insert'), run: () => insertBelow(active()) },
     { name: 'Rename document', run: () => setRenaming(true) },
     { name: 'Undo', keys: `${K}Z`, run: () => doc.undo() },
     { name: 'Redo', keys: isMac ? '⇧⌘Z' : 'Ctrl+Y', run: () => doc.redo() },
-    { name: 'Export workspace (.dcw)', keys: isMac ? '⇧⌘S' : 'Ctrl+Shift+S', run: exportFile },
+    { name: 'Export workspace (.dcw)', keys: keysOf('export'), run: exportFile },
     { name: 'Export history (.dch)', run: () => download(fileName(name(), 'dch'), exportDch(doc), 'application/json') },
-    { name: 'Import a workspace as a new document', keys: `${K}O`, run: importFile },
+    { name: 'Import a workspace or history file as a new document', keys: keysOf('import'), run: importFile },
     { name: 'Save to a file on disk after every step', run: linkFile },
-    { name: 'Start a scratch branch', keys: `${K}B`, run: () => setBranchName(defaultBranchName()) },
+    ...(linked() || relink() ? [{ name: 'Stop saving to the file on disk', run: unlink }] : []),
+    { name: 'Start a scratch branch', keys: keysOf('branch'), run: () => setBranchName(defaultBranchName()) },
     ...(props.sync?.cloudId && user() ? [{ name: 'Share this document', run: share }] : []),
     ...(onBranch()
       ? [
@@ -575,27 +620,30 @@ function DocView(props: {
     { name: 'Cancel running computations', run: () => ev?.cancelAll() },
     { name: 'Clear the result cache', run: async () => { await cache.clear(); setMessage('Result cache cleared; results are computed again as needed.'); } },
     { name: 'Show or hide the outline', run: () => setOutline(!outline()) },
-    { name: 'Open the active cell in the canvas', keys: 'F', run: () => active() && openCanvas(active()!) },
-    { name: 'Show or hide the AI panel', keys: `${K}J`, run: props.onToggleAI },
-    { name: 'Ask the AI about the selection', keys: `${K}L`, run: props.onAsk },
-    { name: 'Keyboard shortcuts', keys: '?', run: () => setModal('keys') },
+    { name: 'Open the active cell in the canvas', keys: keysOf('canvas'), run: () => active() && openCanvas(active()!) },
+    { name: 'Show or hide the AI panel', keys: keysOf('ai'), run: props.onToggleAI },
+    { name: 'Ask the AI about the selection', keys: keysOf('ask'), run: props.onAsk },
+    { name: 'Keyboard shortcuts', keys: keysOf('keys'), run: () => setModal('keys') },
+    { name: 'Change the keyboard shortcuts (Settings)', run: () => (location.hash = '#/settings') },
     { name: 'All documents', run: () => (location.hash = '#/') },
   ];
 
   const onKey = (e: KeyboardEvent) => {
-    const inEditor = (e.target as HTMLElement).closest?.('.cm-editor, input, textarea');
-    if (mod(e) && e.key.toLowerCase() === 'k') { e.preventDefault(); setModal(modal() === 'palette' ? null : 'palette'); return; }
-    if (mod(e) && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); void exportFile(); return; }
-    if (mod(e) && e.key.toLowerCase() === 'o') { e.preventDefault(); void importFile(); return; }
-    if (mod(e) && e.key.toLowerCase() === 'b') { e.preventDefault(); setBranchName(defaultBranchName()); return; }
-    if (mod(e) && e.key.toLowerCase() === 'j') { e.preventDefault(); props.onToggleAI(); return; }
-    if (mod(e) && e.key.toLowerCase() === 'l') { e.preventDefault(); props.onAsk(); return; }
+    const inEditor = !!(e.target as HTMLElement).closest?.('.cm-editor, input, textarea');
+    const is = (id: ActionId) => isAction(e, id, inEditor);
+    // the shortcuts of the settings page (Settings, Keyboard shortcuts)
+    if (is('palette')) { e.preventDefault(); setModal(modal() === 'palette' ? null : 'palette'); return; }
+    if (is('export')) { e.preventDefault(); void exportFile(); return; }
+    if (is('import')) { e.preventDefault(); void importFile(); return; }
+    if (is('branch')) { e.preventDefault(); setBranchName(defaultBranchName()); return; }
+    if (is('ai')) { e.preventDefault(); props.onToggleAI(); return; }
+    if (is('ask')) { e.preventDefault(); props.onAsk(); return; }
     if (inEditor) return;
     if (mod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doc.redo() : doc.undo(); return; }
     if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); doc.redo(); return; }
-    if (e.key === '?') setModal('keys');
-    if ((e.key === 'f' || e.key === 'F') && !mod(e) && active() && !canvas()) { e.preventDefault(); openCanvas(active()!); return; }
-    if (e.key === 'Enter' && e.altKey && !mod(e)) { e.preventDefault(); insertBelow(active()); return; }
+    if (is('keys')) { e.preventDefault(); setModal('keys'); return; }
+    if (is('canvas') && active() && !canvas()) { e.preventDefault(); openCanvas(active()!); return; }
+    if (is('insert')) { e.preventDefault(); insertBelow(active()); return; }
     if (e.key === 'Escape') { setModal(null); setBranchName(null); if (!canvas()) setActive(null); }
   };
   onMount(() => window.addEventListener('keydown', onKey));
@@ -656,7 +704,7 @@ function DocView(props: {
         <ContextChip context={context()} scalars={scalars()} onSet={(c) => c !== context() && doc.setContext(c)} />
         <Show when={props.branching.current} fallback={<>
           <span class="branch-start" style={{ position: 'relative' }}>
-            <button class="ghost" title={`Try something on a scratch branch, then accept or discard it (${K}B)`} aria-expanded={branchName() !== null}
+            <button class="ghost" title={`Try something on a scratch branch, then accept or discard it (${keysOf('branch')})`} aria-expanded={branchName() !== null}
               data-testid="branch-start" onClick={() => setBranchName(branchName() === null ? defaultBranchName() : null)}>⑂ Branch</button>
             <Show when={branchName() !== null}>
               <div class="pop branch-pop" role="dialog" aria-label="Start a scratch branch">
@@ -688,7 +736,11 @@ function DocView(props: {
         </Show>
         <div class="grow" />
         <span class="hint topbar-msg" role="status" onClick={() => setMessage('')}>{message()}</span>
-        <Show when={linked() && !onBranch()}><span class="hint" title="Saved after every step">↔ {linked()!.name}</span></Show>
+        <Show when={linked() && !onBranch()}><span class="hint" title="Saved to this file after every step" data-testid="linked">↔ {linked()!.name}</span></Show>
+        <Show when={relink() && !onBranch()}>
+          <button class="ghost" onClick={() => void allowRelink()} data-testid="relink"
+            title="This document saves to a file on disk; the browser needs your permission again for this visit">↔ {relink()!.name}: resume saving</button>
+        </Show>
         <Show when={props.sync}>
           {(s) => (
             <>
@@ -705,8 +757,8 @@ function DocView(props: {
           title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'}
           aria-label={jobs() ? `Cancel ${jobs()} ${jobs() === 1 ? 'computation' : 'computations'}` : 'No computations running'}
           onClick={() => jobs() && ev?.cancelAll()} />
-        <button class="ghost" classList={{ on: props.aiOpen }} onClick={props.onToggleAI} title={`AI panel (${K}J)`} data-testid="ai-toggle">AI</button>
-        <button class="ghost" onClick={() => setModal('palette')} title={`Commands (${K}K)`} aria-label="Commands">⋯</button>
+        <button class="ghost" classList={{ on: props.aiOpen }} onClick={props.onToggleAI} title={`AI panel (${keysOf('ai')})`} data-testid="ai-toggle">AI</button>
+        <button class="ghost" onClick={() => setModal('palette')} title={`Commands (${keysOf('palette')})`} aria-label="Commands">⋯</button>
       </header>
       <div class="layout" classList={{ 'no-outline': !outline() }}>
         <Show when={outline()}>
@@ -1048,16 +1100,16 @@ function Keys(props: { onClose: () => void }) {
     ['Edit a cell: its typeset text opens as plain text in a fixed-width font', 'Enter on the text', 'click the text'],
     ['Commit the cell being edited (Enter adds a line in a note)', `Enter or ${K}Enter`, ''],
     ['Stop editing, close a dialog', 'Esc', ''],
-    ['Insert a cell below', isMac ? '⌥Enter' : 'Alt+Enter', 'hover between cells, + cell'],
+    ['Insert a cell below', keysOf('insert'), 'hover between cells, + cell'],
     ['At the start of a new cell: choose its kind', '/', ''],
     ['Show a result’s text, selected, to copy', '', 'click the result'],
     ['Undo, redo (outside a cell editor)', `${K}Z, ${isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z or Ctrl+Y'}`, ''],
-    ['Command palette', `${K}K`, '⋯'],
-    ['Import a workspace, export this one', `${K}O, ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, ''],
-    ['Start a scratch branch: try something, then accept or discard it', `${K}B`, '⑂ Branch'],
-    ['Show or hide the AI panel; ask the AI about the selection', `${K}J, ${K}L`, 'AI'],
-    ['Open the active definition or watch in the focus canvas (? there lists its gestures)', 'F', 'Canvas'],
-    ['This sheet', '?', ''],
+    ['Command palette', keysOf('palette'), '⋯'],
+    ['Import a workspace, export this one', `${keysOf('import')}, ${keysOf('export')}`, ''],
+    ['Start a scratch branch: try something, then accept or discard it', keysOf('branch'), '⑂ Branch'],
+    ['Show or hide the AI panel; ask the AI about the selection', `${keysOf('ai')}, ${keysOf('ask')}`, 'AI'],
+    ['Open the active definition or watch in the focus canvas (? there lists its gestures)', keysOf('canvas'), 'Canvas'],
+    ['This sheet', keysOf('keys'), ''],
   ];
   return (
     <Dialog label="Keyboard shortcuts" onClose={props.onClose}>
@@ -1070,6 +1122,7 @@ function Keys(props: { onClose: () => void }) {
             )}</For>
           </tbody>
         </table>
+        <p class="hint" style={{ margin: '8px 0 0' }}>The main shortcuts can be changed in <a href="#/settings" onClick={props.onClose}>Settings</a>.</p>
     </Dialog>
   );
 }
@@ -1082,4 +1135,18 @@ function TurnArrow(props: { redo?: boolean }) {
       <path d="M2.2 13.2 L5 16.2 L7.8 13.2" />
     </svg>
   );
+}
+
+/** Whether the page may write to a file (asking the person when `ask`, which needs a click). */
+async function filePermission(h: FileSystemFileHandle, ask: boolean): Promise<PermissionState> {
+  const f = h as FileSystemFileHandle & {
+    queryPermission?: (d: { mode: 'readwrite' }) => Promise<PermissionState>;
+    requestPermission?: (d: { mode: 'readwrite' }) => Promise<PermissionState>;
+  };
+  try {
+    const p = (await f.queryPermission?.({ mode: 'readwrite' })) ?? 'granted';
+    return p === 'granted' || !ask ? p : ((await f.requestPermission?.({ mode: 'readwrite' })) ?? 'denied');
+  } catch {
+    return 'denied';
+  }
 }

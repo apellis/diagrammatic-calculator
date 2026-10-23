@@ -1,11 +1,25 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Opens a new empty document (KLR, type A2, ν = 2i+j) and returns once its first cell editor is ready. */
+/** Opens a new empty document (KLR, type A2, ν = 2i+j) and returns once its first cell editor has the focus. */
 export async function newDoc(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'New document' }).click();
   await page.getByRole('dialog', { name: 'New document' }).getByRole('button', { name: 'Create' }).click();
-  await expect(page.locator('.cm-content')).toBeVisible();
+  // focused, not only shown: keys typed before the editor takes the focus would be lost
+  await expect(page.locator('.cm-content')).toBeFocused();
+}
+
+/**
+ * Sets the document's context with the chip and waits until the chip shows it, then puts the
+ * cursor back in the new cell's editor (the engine checks the line before it is set, so typing
+ * straight away would race it).
+ */
+export async function setContext(page: Page, line: string) {
+  await page.getByTestId('context').click();
+  await page.getByLabel('Context').fill(line);
+  await page.getByLabel('Context').press('Enter');
+  await expect(page.getByTestId('context').locator('.ctx')).toHaveAttribute('data-text', new RegExp(`^${line.split(' ')[0]}\\b`));
+  await page.locator('.cm-content').click();
 }
 
 /** Types a cell into the open editor of a new cell and commits it. */
