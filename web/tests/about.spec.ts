@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
 
-test('the About page shows the build and links the privacy policy, which the start page does not', async ({ page, context }) => {
+test('the About page shows the build and links the tip page and the privacy policy, which the start page does not', async ({ page, context }) => {
   await page.goto('/');
   await expect(page.locator('a[href="/privacy"]')).toHaveCount(0);
   await page.getByTestId('open-about').click();
   await expect(page).toHaveURL(/#\/about$/);
+  await expect(page.getByTestId('about-tip')).toHaveAttribute('href', 'https://buy.stripe.com/bJe28reyVa2081W86gaEE01');
   await expect(page.getByTestId('about-commit')).toHaveText(/^[0-9a-f]{7}$|^unknown$/);
 
   const opened = context.waitForEvent('page');
