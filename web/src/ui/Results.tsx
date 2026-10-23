@@ -3,6 +3,7 @@ import { createEffect, createSignal, For, Match, on, onCleanup, Show, Switch } f
 import type { CellState, CellValue } from '../eval/evaluator';
 import type { Provenance, Summand, WorkspaceRunCell } from '../engine/ops.gen';
 import katex from 'katex';
+import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
 
 type Ok = WorkspaceRunCell;
@@ -335,8 +336,8 @@ function SolveView(props: { r: Ok }) {
 /** A note's text, with $…$ and $$…$$ as mathematics; `inline` for one line in a cell's head. */
 export function NoteView(props: { text: string; inline?: boolean }) {
   const part = (part: string) => {
-    if (part.startsWith('$$')) return katex.renderToString(part.slice(2, -2), { displayMode: !props.inline, throwOnError: false });
-    if (part.startsWith('$') && part.length > 1) return katex.renderToString(part.slice(1, -1), { throwOnError: false });
+    if (part.startsWith('$$')) return katex.renderToString(part.slice(2, -2), { ...KATEX_SAFE, displayMode: !props.inline, throwOnError: false });
+    if (part.startsWith('$') && part.length > 1) return katex.renderToString(part.slice(1, -1), { ...KATEX_SAFE, throwOnError: false });
     return part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   };
   const split = (t: string) => t.split(/(\$\$[^$]+\$\$|\$[^$]+\$)/).map(part).join('');

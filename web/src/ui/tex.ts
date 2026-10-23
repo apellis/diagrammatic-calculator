@@ -139,6 +139,13 @@ export function ringTex(r: string): string {
   return toTex(r);
 }
 
+/**
+ * KaTeX settings for text from documents (which anyone with edit access may write): no commands
+ * that make links, classes, styles or HTML attributes (`trust: false`, also KaTeX's default), and
+ * bounds on sizes (`\rule{1000em}{1000em}` would cover the page) and on macro expansion.
+ */
+export const KATEX_SAFE = { trust: false, maxSize: 20, maxExpand: 200 } as const;
+
 const cache = new Map<string, string | null>();
 
 /** KaTeX's HTML for some LaTeX, or null when KaTeX cannot read it (the caller shows the text). */
@@ -147,7 +154,7 @@ export function render(tex: string, display = false): string | null {
   let html = cache.get(key);
   if (html === undefined) {
     try {
-      html = katex.renderToString(tex, { displayMode: display, throwOnError: true, strict: 'ignore' });
+      html = katex.renderToString(tex, { ...KATEX_SAFE, displayMode: display, throwOnError: true, strict: 'ignore' });
     } catch {
       html = null;
     }
