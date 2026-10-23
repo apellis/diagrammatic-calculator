@@ -324,3 +324,13 @@ strands) carries one arrowhead: on its first plain vertical stretch, else below 
 crossing, else on its cup or cap. A strand that does not start at the bottom, such as a bubble,
 has its colour written beside that arrowhead, and the weight of the rightmost region is written
 to the right of the diagram, in the context's `mu=` notation.
+
+Colour. In SVG, every line, dot, arrowhead and colour label of a strand carries the class `k<n>`,
+where `n` is the place of the strand's colour in the context's colour list, from 0 (`klr type=A2`:
+`k0` for `i`, `k1` for `j`). A standalone SVG has no style sheet and stays black. The web app
+colours `k<n>` from one palette shared with the canvas: eight colours, cycling after the eighth,
+each with a contrast of at least 3:1 against the page, the panels and the highlight of new
+summands, in both themes. With strand patterns (Settings › Appearance) the strands of the second
+to sixth colours are also dashed, in cells and on the canvas (the first stays solid, and the six
+patterns repeat from the seventh colour). TikZ is unchanged: black, with the colour written under
+each strand.

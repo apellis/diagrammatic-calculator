@@ -841,12 +841,19 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
         let off = (height - pic.height) / 2.0;
         let px = |dx: f64| num(x + dx * U);
         let py = |dy: f64| num(base - (dy + off) * U);
-        for p in &pic.prims {
+        for (p, tag) in pic.prims.iter().zip(&pic.tags) {
+            // a strand's lines, dots, arrowheads and label carry its colour's class (`k0` for the
+            // context's first colour); a page's style sheet may colour them, plain SVG stays black
+            let k = tag
+                .strand
+                .and_then(|s| pic.strands.get(s))
+                .map(|s| format!(" class=\"k{}\"", s.colour))
+                .unwrap_or_default();
             let line = match p {
                 Prim::Strand { x0, y0, x1, y1 } => {
                     let ym = (y0 + y1) / 2.0;
                     format!(
-                        "<path d=\"M {} {} C {} {} {} {} {} {}\"/>",
+                        "<path{k} d=\"M {} {} C {} {} {} {} {} {}\"/>",
                         px(*x0),
                         py(*y0),
                         px(*x0),
@@ -860,7 +867,7 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
                 Prim::Turn { x0, x1, y, up } => {
                     let d = if *up { -0.6 } else { 0.6 };
                     format!(
-                        "<path d=\"M {} {} C {} {} {} {} {} {}\"/>",
+                        "<path{k} d=\"M {} {} C {} {} {} {} {} {}\"/>",
                         px(*x0),
                         py(*y),
                         px(*x0),
@@ -872,7 +879,7 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
                     )
                 }
                 Prim::Dot { x, y } => format!(
-                    "<circle cx=\"{}\" cy=\"{}\" r=\"3\" fill=\"currentColor\"/>",
+                    "<circle{k} cx=\"{}\" cy=\"{}\" r=\"3\" fill=\"currentColor\"/>",
                     px(*x),
                     py(*y)
                 ),
@@ -893,7 +900,7 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
                     esc(label)
                 ),
                 Prim::Label { x, y, text } => format!(
-                    "<text x=\"{}\" y=\"{}\" font-size=\"11\" font-style=\"italic\" text-anchor=\"middle\" stroke=\"none\" fill=\"currentColor\">{}</text>",
+                    "<text{k} x=\"{}\" y=\"{}\" font-size=\"11\" font-style=\"italic\" text-anchor=\"middle\" stroke=\"none\" fill=\"currentColor\">{}</text>",
                     px(*x),
                     num(base - (y + off) * U + 13.0),
                     esc(text)
@@ -904,12 +911,12 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
                         .map(|(a, b)| format!("{},{}", px(*a), py(*b)))
                         .collect();
                     format!(
-                        "<polygon points=\"{}\" fill=\"currentColor\" stroke=\"none\"/>",
+                        "<polygon{k} points=\"{}\" fill=\"currentColor\" stroke=\"none\"/>",
                         pts.join(" ")
                     )
                 }
                 Prim::Note { x, y, text } => format!(
-                    "<text x=\"{}\" y=\"{}\" font-size=\"11\" font-style=\"italic\" text-anchor=\"middle\" stroke=\"none\" fill=\"currentColor\">{}</text>",
+                    "<text{k} x=\"{}\" y=\"{}\" font-size=\"11\" font-style=\"italic\" text-anchor=\"middle\" stroke=\"none\" fill=\"currentColor\">{}</text>",
                     px(*x),
                     num(base - (y + off) * U + 4.0),
                     esc(text)
@@ -950,6 +957,13 @@ mod tests {
         assert!(tz.starts_with("-2\\;"), "{tz}");
         let s = svg(&ctx, &t);
         assert!(s.starts_with("<svg") && s.contains("<circle"), "{s}");
+        // strands carry their colour's class: x_2 is on the i strand (colour 0) after the crossing
+        assert!(
+            s.contains("<path class=\"k0\"") && s.contains("<path class=\"k1\""),
+            "{s}"
+        );
+        assert!(s.contains("<circle class=\"k0\""), "{s}");
+        assert!(s.contains("<text class=\"k0\""), "{s}");
     }
 
     #[test]

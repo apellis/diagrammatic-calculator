@@ -234,6 +234,17 @@ fn parse_cell(
             if !is_ident(name) {
                 return Err(Error::invalid(format!("'{name}' is not a check")));
             }
+            // the final ')' must close the check's own '(', not one inside its arguments
+            let depth = args.chars().fold(0i32, |d, c| match c {
+                '(' => d + 1,
+                ')' => d - 1,
+                _ => d,
+            });
+            if depth > 0 {
+                return Err(Error::invalid(format!(
+                    "unclosed '{name}(': the last ')' closes a parenthesis inside its arguments"
+                )));
+            }
             let args = split_top_level(args)
                 .iter()
                 .map(|a| text::parse(a))
@@ -464,6 +475,13 @@ step 3.\"\"\"  # id=n6
             .unwrap_err();
         assert!(e.message.starts_with("line 3"), "{}", e.message);
         assert!(Workspace::parse("context nilhecke\n").is_err());
+        // an unclosed check names the check, not the idempotent whose ')' ends the line
+        let e = Cell::parse("check idempotent(x_1 e(iji)").unwrap_err();
+        assert!(
+            e.message.contains("unclosed 'idempotent('"),
+            "{}",
+            e.message
+        );
     }
 
     #[test]

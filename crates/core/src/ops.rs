@@ -861,7 +861,15 @@ impl RingVisitor for Describe<'_> {
             "ring": ctx.spec.ring,
             "colours": ctx.colours.iter().map(|c| json!({ "name": c.name, "odd": c.odd, "oriented": c.oriented })).collect::<Vec<_>>(),
             "objects": ctx.objects.iter().map(|o| ctx.fmt_object(o)).collect::<Vec<_>>(),
-            "generators": ctx.pres.generators.iter().map(|g| json!({ "name": g.name, "draw": g.draw, "inputs": g.source.len(), "outputs": g.target.len() })).collect::<Vec<_>>(),
+            "generators": ctx.pres.generators.iter().map(|g| json!({
+                "name": g.name,
+                "written": g.written,
+                "draw": g.draw,
+                "inputs": g.source.len(),
+                "outputs": g.target.len(),
+                "source": crate::pres::print_pattern(&g.source, &g.vars),
+                "target": crate::pres::print_pattern(&g.target, &g.vars),
+            })).collect::<Vec<_>>(),
             "relations": ctx.pres.relations.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
             "representations": ctx.pres.representations.iter().map(|d| json!({
                 "name": d.name,

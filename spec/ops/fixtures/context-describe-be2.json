@@ -1,0 +1,92 @@
+{
+  "op": "context.describe",
+  "request": {
+    "context": "be2 type=A1 odd=i mu=-1"
+  },
+  "expect": {
+    "status": "ok",
+    "generators": [
+      {
+        "draw": "dot",
+        "inputs": 1,
+        "name": "x",
+        "outputs": 1,
+        "source": "a",
+        "target": "a",
+        "written": "x"
+      },
+      {
+        "draw": "dot",
+        "inputs": 1,
+        "name": "xd",
+        "outputs": 1,
+        "source": "a*",
+        "target": "a*",
+        "written": "x"
+      },
+      {
+        "draw": "crossing",
+        "inputs": 2,
+        "name": "psi",
+        "outputs": 2,
+        "source": "a b",
+        "target": "b a",
+        "written": "psi"
+      },
+      {
+        "draw": "crossing",
+        "inputs": 2,
+        "name": "psid",
+        "outputs": 2,
+        "source": "a* b*",
+        "target": "b* a*",
+        "written": "psi"
+      },
+      {
+        "draw": "cup",
+        "inputs": 0,
+        "name": "cup",
+        "outputs": 2,
+        "source": "",
+        "target": "a* a",
+        "written": "cup"
+      },
+      {
+        "draw": "cup",
+        "inputs": 0,
+        "name": "cupl",
+        "outputs": 2,
+        "source": "",
+        "target": "a a*",
+        "written": "cup"
+      },
+      {
+        "draw": "cap",
+        "inputs": 2,
+        "name": "cap",
+        "outputs": 0,
+        "source": "a a*",
+        "target": "",
+        "written": "cap"
+      },
+      {
+        "draw": "cap",
+        "inputs": 2,
+        "name": "capl",
+        "outputs": 0,
+        "source": "a* a",
+        "target": "",
+        "written": "cap"
+      },
+      {
+        "draw": "crossing",
+        "inputs": 2,
+        "name": "lcross",
+        "outputs": 2,
+        "source": "a* b",
+        "target": "b a*",
+        "written": "lcross"
+      }
+    ]
+  }
+}

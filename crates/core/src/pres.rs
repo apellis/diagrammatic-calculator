@@ -500,7 +500,8 @@ fn pattern(s: &str, vars: &[String]) -> Vec<PatLetter> {
         .collect()
 }
 
-fn print_pattern(p: &[PatLetter], vars: &[String]) -> String {
+/// A source or target pattern as written in the presentation file: `a* b`.
+pub fn print_pattern(p: &[PatLetter], vars: &[String]) -> String {
     p.iter()
         .map(|l| {
             let n = match &l.colour {

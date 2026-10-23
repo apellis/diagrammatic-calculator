@@ -90,7 +90,10 @@
                   "draw",
                   "inputs",
                   "name",
-                  "outputs"
+                  "outputs",
+                  "written",
+                  "source",
+                  "target"
                 ],
                 "properties": {
                   "name": {
@@ -106,6 +109,18 @@
                   "outputs": {
                     "description": "How many strands leave it.",
                     "type": "integer"
+                  },
+                  "written": {
+                    "description": "The name typed and printed; several generators may share one (a dot on an upward or a downward strand).",
+                    "type": "string"
+                  },
+                  "source": {
+                    "description": "The strands entering it, left to right, as in the presentation file: colour variables or colours, a trailing * for a downward strand; empty for none.",
+                    "type": "string"
+                  },
+                  "target": {
+                    "description": "The strands leaving it, written as source.",
+                    "type": "string"
                   }
                 }
               }

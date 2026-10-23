@@ -73,6 +73,18 @@ export type ContextDescribeResponse =
          * How many strands leave it.
          */
         outputs: number;
+        /**
+         * The name typed and printed; several generators may share one (a dot on an upward or a downward strand).
+         */
+        written: string;
+        /**
+         * The strands entering it, left to right, as in the presentation file: colour variables or colours, a trailing * for a downward strand; empty for none.
+         */
+        source: string;
+        /**
+         * The strands leaving it, written as source.
+         */
+        target: string;
       }[];
       relations: string[];
       representations: {
