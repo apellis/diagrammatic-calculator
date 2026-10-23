@@ -194,7 +194,7 @@ test('a multi-step AI request undoes as one step; pinned watches sit at the top 
     () => sse([
       { type: 'tool_use', name: 'cell_add', input: { text: 'watch e e - e', note: 'is e idempotent?' } },
       { type: 'tool_use', name: 'cell_add', input: { text: 'check idempotent(e)', note: 'ask for a verdict too' } },
-      { type: 'tool_use', name: 'watch_pin', input: { id: 'w2' } },
+      { type: 'tool_use', name: 'watch_pin', input: { id: 'wt2' } },
       { type: 'tool_use', name: 'milestone_write', input: { title: 'e is idempotent', summary: 'e e - e = 0 and the check holds.' } },
     ], 'tool_use'),
     () => sse([{ type: 'text', text: 'Added a watch and a check; e is idempotent.' }], 'end_turn'),

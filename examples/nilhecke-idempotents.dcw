@@ -2,8 +2,8 @@ diagcalc-workspace/1
 context nilhecke nu=3 ring=QQ
 
 # The primitive idempotent of NH_3 and the relations it rests on
-def e := psi_1 psi_2 psi_1 x_1^2 x_2  # id=d1
-watch e e - e  # id=w2
-check idempotent(e)  # id=k3
-check equal(x_1 psi_1, psi_1 x_2 + 1)  strategy=nil-coxeter-basis  # id=k4
-check zero(psi_1 psi_1)  # id=k5
+def e := psi_1 psi_2 psi_1 x_1^2 x_2  # id=df1
+watch e e - e  # id=wt2
+check idempotent(e)  # id=ck3
+check equal(x_1 psi_1, psi_1 x_2 + 1)  strategy=nil-coxeter-basis  # id=ck4
+check zero(psi_1 psi_1)  # id=ck5

@@ -107,10 +107,15 @@ export function kindOf(text: string): CellKind | null {
 }
 
 /**
- * The letter of a cell ID by kind. A comment's is r (remark), not c, which names crossings among the
- * occurrence IDs of a diagram (docs/spec.md, IDs).
+ * The two letters of a cell ID by kind. Occurrence IDs of a diagram are one letter and a number
+ * (d dot, c crossing, u cup, n cap, b bubble, g other piece, s strand; docs/spec.md, IDs), so a cell
+ * ID never reads as one. Documents and files from before the two-letter prefixes keep their
+ * one-letter IDs (d1, w2, …), which are read as they are; numbers are shared by every kind.
  */
-export const LETTER: Record<CellKind, string> = { def: 'd', watch: 'w', solve: 's', check: 'k', note: 'n', comment: 'r' };
+export const LETTER: Record<CellKind, string> = { def: 'df', watch: 'wt', solve: 'sv', check: 'ck', note: 'nt', comment: 'rm' };
+
+/** The number of a cell ID (`df12` and the older `d12` both give 12), or 0 if it has none. */
+export const idNumber = (id: string | undefined): number => Number(/^[A-Za-z]*(\d+)$/.exec(id ?? '')?.[1] ?? 0) || 0;
 
 export const DEFAULT_CONTEXT = 'klr type=A2 nu=2i+j ring=QQ';
 
@@ -283,7 +288,7 @@ export class Doc {
       d.cells.insert(0, cells.map(toMap));
       for (const [k, h] of Object.entries(hints)) d.hints.set(k, h);
       if (snapshots.length) d.snapshots.push(snapshots);
-      d.counters.set('nextId', Math.max(this.nextId(), 1 + Math.max(0, ...cells.map((c) => Number(c.id.slice(1)) || 0))));
+      d.counters.set('nextId', Math.max(this.nextId(), 1 + Math.max(0, ...cells.map((c) => idNumber(c.id)))));
     }, HISTORY);
     d.record('clean copy', LOCAL.author);
     return d;
@@ -292,7 +297,7 @@ export class Doc {
   /** The next cell number; if the counter is malformed, one past every number in use. */
   private nextId(): number {
     const n = this.counters.get('nextId');
-    return Number.isSafeInteger(n) && n! > 0 ? n! : 1 + Math.max(0, ...this.list().map((c) => Number(c.id.slice(1)) || 0));
+    return Number.isSafeInteger(n) && n! > 0 ? n! : 1 + Math.max(0, ...this.list().map((c) => idNumber(c.id)));
   }
 
   // changing: each call is one step
@@ -420,7 +425,7 @@ export class Doc {
       this.meta.set('context', context);
       this.cells.delete(0, this.cells.length);
       this.cells.insert(0, cells.map(toMap));
-      const max = Math.max(0, ...cells.map((c) => Number(c.id.slice(1)) || 0));
+      const max = Math.max(0, ...cells.map((c) => idNumber(c.id)));
       this.counters.set('nextId', Math.max(max + 1, this.nextId()));
     });
   }

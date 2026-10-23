@@ -17,7 +17,8 @@ cell     := "def " name " := " term
           | "check " name "(" term ("," term)* ")"
           | "note " '"""' text '"""'                text may span lines
 options  := ("  " key "=" value)*                    e.g. view=diagrams, strategy=nil-coxeter-basis
-id       := letter digits                            d def, w watch, s solve, k check, n note
+id       := letters digits                           df def, wt watch, sv solve, ck check, nt note
+                                                     (one-letter IDs from older files, d1, w2, are read as they are)
 ```
 
 Rings: `ZZ`, `QQ`, `GF(p)`, `ZZ[I]`; polynomials `ZZ[q]`, `QQ[q]`; Laurent polynomials
@@ -26,7 +27,9 @@ letters other than `u`, `v`, `w`, `x` and `e`, and no scalar may share its name.
 
 Terms are in the text term format (`text-term.md`). Only inputs are stored, never results.
 Printing writes canonical terms, two spaces before each option and before `# id=`, and keeps
-blank lines and whole-line comments. `diagcalc fmt` also numbers cells that have no ID.
+blank lines and whole-line comments. `diagcalc fmt` also numbers cells that have no ID: the kind's two letters and the next number
+not used by any cell (one count for every kind). Occurrence IDs in a diagram are one letter and a
+number (d dot, c crossing, …), so no cell ID reads as one.
 
 Checks: `equal(a, b)`, `zero(a)`, `idempotent(e)`, `orthogonal(e, f)`, `homogeneous(a)`,
 `central(z)` (commutes with every generator and lies in the sum of the `e(i) A e(i)`) and

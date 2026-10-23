@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { Doc } from './model';
+import { Doc, idNumber } from './model';
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
@@ -32,6 +32,18 @@ describe('document model', () => {
     d.undo();
     const b = d.addCell('watch x_1');
     expect(b).not.toBe(a);
+  });
+
+  it('gives cells two-letter IDs and keeps counting after old one-letter ones', () => {
+    const d = new Doc();
+    const texts = ['def a := x_1', 'watch a', 'solve a = 0 for c', 'check zero(a)', 'note """n"""', '# a remark'];
+    expect(texts.map((t) => d.addCell(t))).toEqual(['df1', 'wt2', 'sv3', 'ck4', 'nt5', 'rm6']);
+    d.replace('nilhecke nu=2', [{ id: 'd7', text: 'def a := x_1' }, { id: 'w12', text: 'watch a' }], 'restore an old file');
+    expect(d.addCell('check zero(a)')).toBe('ck13');
+    expect(d.list().map((c) => c.id)).toEqual(['d7', 'w12', 'ck13']);
+    expect(idNumber('df12')).toBe(12);
+    expect(idNumber('d12')).toBe(12);
+    expect(idNumber('preview1x')).toBe(0);
   });
 
   it('opens old versions read-only', async () => {
@@ -149,7 +161,7 @@ describe('malformed shared content', () => {
     (evil.getArray('snapshots') as Y.Array<unknown>).push([{ name: 1 }]);
     (evil.getArray('timeline') as Y.Array<unknown>).push([{ time: 1e300, author: 'AI', kind: 'tool', text: 't' }, null]);
     evil.getMap('branches').set('b1', { id: 'b1' });
-    evil.getMap('hints').set('d1 x', { order: 'nope' });
+    evil.getMap('hints').set('df1 x', { order: 'nope' });
     evil.getMap('counters').set('nextId', 'many');
     return Y.encodeStateAsUpdate(evil);
   }
@@ -162,22 +174,22 @@ describe('malformed shared content', () => {
     expect(d.pinned).toEqual([]);
     expect(d.edited).toBeUndefined();
     expect(d.list()).toEqual([
-      { id: 'd1', text: 'def a := x_1' },
+      { id: 'df1', text: 'def a := x_1' },
       { id: 'd9', text: '' },
     ]);
     expect(d.at(99)).toBeNull();
     expect(d.snapshotList()).toEqual([]);
     expect(d.branchList()).toEqual([]);
     expect(d.openBranch('b1')).toBeNull();
-    expect(d.hint('d1', 'x')).toBeUndefined();
+    expect(d.hint('df1', 'x')).toBeUndefined();
     expect(d.problems()).toEqual(['a malformed name', 'a malformed context', '3 malformed cells', '1 malformed versions', '1 malformed snapshots', '1 malformed timeline entries', '1 malformed branches', '1 malformed layout hints']);
     // editing still works, with fresh IDs
     const id = d.addCell('watch a');
-    expect(id).toBe('w10');
+    expect(id).toBe('wt10');
     d.updateCell('d9', 'def b := x_2');
     d.moveCell('d9', 0);
     await settle();
-    expect(d.list().map((c) => c.id)).toEqual(['d9', 'd1', 'w10']);
+    expect(d.list().map((c) => c.id)).toEqual(['d9', 'df1', 'wt10']);
     d.replace('nilhecke nu=2', [{ id: 'd1', text: 'def a := x_1' }], 'restore');
     expect(d.list()).toEqual([{ id: 'd1', text: 'def a := x_1' }]);
   });
@@ -199,6 +211,6 @@ describe('malformed shared content', () => {
     expect(new TextDecoder().decode(bytes)).not.toContain('hunter2');
     expect(new TextDecoder().decode(Y.encodeStateAsUpdate(d.ydoc))).toContain('hunter2');
     // new cells in the copy get IDs the original never used
-    expect(c.addCell('watch a')).not.toBe('d1');
+    expect(idNumber(c.addCell('watch a'))).toBeGreaterThan(Math.max(...d.list().map((x) => idNumber(x.id))));
   });
 });

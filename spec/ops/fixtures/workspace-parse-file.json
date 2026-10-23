@@ -6,6 +6,6 @@
   "expect": {
     "status": "ok",
     "context": "nilhecke nu=2 ring=QQ",
-    "canonical": "diagcalc-workspace/1\ncontext nilhecke nu=2 ring=QQ\ndef a := psi_1 x_1  # id=d1\nwatch a a - a  # id=w2\nsolve a = 0 for c  # id=s3\n"
+    "canonical": "diagcalc-workspace/1\ncontext nilhecke nu=2 ring=QQ\ndef a := psi_1 x_1  # id=d1\nwatch a a - a  # id=wt2\nsolve a = 0 for c  # id=sv3\n"
   }
 }

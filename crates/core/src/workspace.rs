@@ -70,14 +70,17 @@ pub struct Workspace {
 }
 
 impl CellBody {
-    /// The letter cell IDs of this kind start with.
-    pub fn id_prefix(&self) -> Option<char> {
+    /// The two letters cell IDs of this kind start with. No generator-occurrence ID uses two
+    /// letters (those are one letter and a number: d dot, c crossing, u cup, n cap, b bubble,
+    /// g other piece, s strand), so a cell ID never reads as an occurrence. Files written before
+    /// the two-letter prefixes have one-letter IDs (d1, w2, …); they are read as they are.
+    pub fn id_prefix(&self) -> Option<&'static str> {
         match self {
-            CellBody::Def { .. } => Some('d'),
-            CellBody::Watch { .. } => Some('w'),
-            CellBody::Solve { .. } => Some('s'),
-            CellBody::Check { .. } => Some('k'),
-            CellBody::Note { .. } => Some('n'),
+            CellBody::Def { .. } => Some("df"),
+            CellBody::Watch { .. } => Some("wt"),
+            CellBody::Solve { .. } => Some("sv"),
+            CellBody::Check { .. } => Some("ck"),
+            CellBody::Note { .. } => Some("nt"),
             CellBody::Comment(_) | CellBody::Blank => None,
         }
     }
@@ -118,6 +121,13 @@ fn split_options(s: &str) -> (String, Vec<(String, String)>) {
             .to_string()
     };
     (body, opts)
+}
+
+/// The number of a cell ID: the digits after its letters (`df12` and the older `d12` give 12).
+pub fn id_number(id: &str) -> Option<u32> {
+    id.trim_start_matches(|c: char| c.is_ascii_alphabetic())
+        .parse()
+        .ok()
 }
 
 /// Splits a trailing `# id=…` comment off a line.
@@ -317,12 +327,13 @@ impl Workspace {
         Ok(Workspace { context, cells })
     }
 
-    /// Gives every cell without an ID a fresh one: its kind's letter and the next unused number.
+    /// Gives every cell without an ID a fresh one: its kind's prefix and the next unused number
+    /// (numbers are shared by every kind, and by old one-letter IDs).
     pub fn assign_ids(&mut self) {
         let mut next = 1 + self
             .cells
             .iter()
-            .filter_map(|c| c.id.as_ref()?.get(1..)?.parse::<u32>().ok())
+            .filter_map(|c| id_number(c.id.as_ref()?))
             .max()
             .unwrap_or(0);
         for c in &mut self.cells {
@@ -463,10 +474,17 @@ step 3.\"\"\"  # id=n6
         let src = "diagcalc-workspace/1\ncontext nilhecke nu=3\ndef a:=psi_1   x_1 # id=d4\nwatch a*a\n\n";
         let mut w = Workspace::parse(src).unwrap();
         w.assign_ids();
+        // an old one-letter ID is kept, and its number is not used again
         assert_eq!(
             w.print(),
-            "diagcalc-workspace/1\ncontext nilhecke nu=3 ring=QQ\ndef a := psi_1 x_1  # id=d4\nwatch a a  # id=w5\n"
+            "diagcalc-workspace/1\ncontext nilhecke nu=3 ring=QQ\ndef a := psi_1 x_1  # id=d4\nwatch a a  # id=wt5\n"
         );
+        let mut w = Workspace::parse("diagcalc-workspace/1\ncontext nilhecke nu=3\ndef a := x_1  # id=df7\nwatch a\ncheck zero(a)\nnote \"\"\"n\"\"\"\ndef b := a\nsolve a = 0 for c\n").unwrap();
+        w.assign_ids();
+        let ids: Vec<_> = w.cells.iter().map(|c| c.id.clone().unwrap()).collect();
+        assert_eq!(ids, ["df7", "wt8", "ck9", "nt10", "df11", "sv12"]);
+        assert_eq!(id_number("df12"), Some(12));
+        assert_eq!(id_number("d12"), Some(12));
     }
 
     #[test]

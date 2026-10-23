@@ -2,10 +2,10 @@ diagcalc-workspace/1
 context klr type=A2 nu=2i+j ring=ZZ
 
 # The corrected braid relation and the two idempotents of e(iji)
-watch psi_1 psi_2 psi_1 e(iji) - psi_2 psi_1 psi_2 e(iji)  # id=w1
-def a := psi_1 psi_2 psi_1 e(iji)  # id=d2
-def b := -psi_2 psi_1 psi_2 e(iji)  # id=d3
-check idempotent(a)  # id=k4
-check orthogonal(a, b)  # id=k5
-check equal(a + b, e(iji))  # id=k6
-check homogeneous(a)  # id=k7
+watch psi_1 psi_2 psi_1 e(iji) - psi_2 psi_1 psi_2 e(iji)  # id=wt1
+def a := psi_1 psi_2 psi_1 e(iji)  # id=df2
+def b := -psi_2 psi_1 psi_2 e(iji)  # id=df3
+check idempotent(a)  # id=ck4
+check orthogonal(a, b)  # id=ck5
+check equal(a + b, e(iji))  # id=ck6
+check homogeneous(a)  # id=ck7

@@ -130,7 +130,7 @@ test('export to .dcw and import it back', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+Shift+S');
   const file = await download;
   const text = await (await file.createReadStream()).toArray().then((b) => Buffer.concat(b).toString());
-  expect(text).toBe('diagcalc-workspace/1\ncontext klr type=A2 nu=2i+j ring=QQ\ndef a := psi_1 e(iji)  # id=d1\ncheck idempotent(a a)  # id=k2\n');
+  expect(text).toBe('diagcalc-workspace/1\ncontext klr type=A2 nu=2i+j ring=QQ\ndef a := psi_1 e(iji)  # id=df1\ncheck idempotent(a a)  # id=ck2\n');
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Import .dcw…' }).click();

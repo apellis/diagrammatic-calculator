@@ -22,8 +22,9 @@ check idempotent(a)                      # equal, zero, idempotent, orthogonal, 
 note """Text with $math$."""
 ```
 
-- Cell IDs: a letter for the kind and a number (`d3` def, `w4` watch, `s5` solve, `k6` check,
-  `n7` note). IDs never change and are never reused; refer to cells by ID.
+- Cell IDs: two letters for the kind and a number (`df3` def, `wt4` watch, `sv5` solve, `ck6`
+  check, `nt7` note; older documents may have one-letter IDs such as `d3`). IDs never change and
+  are never reused; refer to cells by ID.
 - The context names a presentation (`klr`, `nilhecke`, `odd-nilhecke`) and options: `type=A2`
   (Cartan type, colours `i, j, k, …` in Bourbaki order), `nu=2i+j` (or `n=3`), `ring=QQ`
   (`ZZ`, `QQ`, `GF(p)`, `ZZ[I]`, `QQ[q]`, `QQ(q)`, …), `Lambda=…`, `dotcap=…`, `degcap=…`

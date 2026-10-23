@@ -2,9 +2,9 @@ diagcalc-workspace/1
 context be2 type=A1 odd=i ring=QQ mu=-1
 
 # An odd colour in the super Kac-Moody 2-category of Brundan-Ellis (arXiv:1701.04133): odd dots anticommute, and the odd bubble squares to zero
-watch x_1 x_2 e(ii) + x_2 x_1 e(ii)  # id=w1
-check zero(psi_1 psi_1 e(ii))  # id=k2
-watch x_1 psi_1 e(ii) + psi_1 x_2 e(ii)  # id=w3
-check zero(cap_1 x_2 cup_{1,i*} cap_1 x_2 cup_{1,i*} e())  # id=k4
+watch x_1 x_2 e(ii) + x_2 x_1 e(ii)  # id=wt1
+check zero(psi_1 psi_1 e(ii))  # id=ck2
+watch x_1 psi_1 e(ii) + psi_1 x_2 e(ii)  # id=wt3
+check zero(cap_1 x_2 cup_{1,i*} cap_1 x_2 cup_{1,i*} e())  # id=ck4
 # The even bubble does not square to zero; that a normal form is not zero rests on the Nondegeneracy Conjecture, so it is marked conditional
-watch cap_1 x_2^2 cup_{1,i*} cap_1 x_2^2 cup_{1,i*} e()  # id=w5
+watch cap_1 x_2^2 cup_{1,i*} cap_1 x_2^2 cup_{1,i*} e()  # id=wt5

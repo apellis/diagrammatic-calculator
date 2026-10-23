@@ -145,18 +145,18 @@ The printer always writes a canonical form, so equal-looking text means equal te
 diagcalc-workspace/1
 context klr type=A2 nu=2i+j ring=QQ
 
-def e := c1 (x_1 psi_1 e(iij)) + c2 (psi_1 x_2 e(iij))   # id=d7
-watch e*e - e  view=diagrams group=idempotent             # id=w2
-solve e*e - e = 0 for c1, c2                              # id=s3
-check primitive(e)                                        # id=k4
-note """Candidate from the A2 search, step 3."""          # id=n5
+def e := c1 (x_1 psi_1 e(iij)) + c2 (psi_1 x_2 e(iij))   # id=df1
+watch e*e - e  view=diagrams group=idempotent             # id=wt2
+solve e*e - e = 0 for c1, c2                              # id=sv3
+check primitive(e)                                        # id=ck4
+note """Candidate from the A2 search, step 3."""          # id=nt5
 ```
 
 The live document is a Yjs CRDT; the `.dcw` file is its export and import format. A companion `.dch` file (optional) holds the full version history and the AI activity timeline, for headless runs that are replayed later.
 
 **4. Operation messages (JSON).** Every operation in the API is a JSON request and response with a JSON Schema in `spec/ops/`. The same schemas generate the TypeScript types, the MCP tool definitions and the AI tool definitions.
 
-**IDs.** Generator occurrences get short IDs by kind (d dot, c crossing, u cup, n cap, b bubble, s strand), numbered in creation order within a document (d3, c12); cells have IDs too. A rewrite's provenance map says what became of each ID. IDs are shown only on hover or with a labels toggle: people point at things, and the selection carries the references.
+**IDs.** Generator occurrences get short IDs by kind (d dot, c crossing, u cup, n cap, b bubble, s strand), numbered in creation order within a document (d3, c12); cells have IDs too, two letters for the kind and a number (df1 def, wt2 watch, sv3 solve, ck4 check, nt5 note; the numbers are shared by all kinds), so a cell ID never reads as an occurrence ID. Files written before the two-letter prefixes have one-letter cell IDs (d1, w2), which are read as they are. A rewrite's provenance map says what became of each ID. IDs are shown only on hover or with a labels toggle: people point at things, and the selection carries the references.
 
 ## Conventions
 

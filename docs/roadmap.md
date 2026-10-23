@@ -13,10 +13,7 @@ keeps it), and new findings are added here.
 2. **Normal-form display.** Normal forms print the canonical layering (x₁⁴x₂x₁x₂x₁x₂x₃…), which is
    correct but hard to read. Proposal: an optional view with commuting dots gathered into monomials;
    the text form stays as it is.
-3. **Cell-ID letters.** Cell IDs and generator-occurrence IDs share letters: `d` (definition / dot),
-   `s` (solve / strand), `n` (note / cap). Proposal: give cells two-letter prefixes or a different
-   alphabet.
-4. **Confirming `context_set` on one's own documents.** The AI may change the context of a document
+3. **Confirming `context_set` on one's own documents.** The AI may change the context of a document
    it is working in without asking. Proposal: keep as is (it is an undoable edit to your own
    document) or confirm each change.
 
