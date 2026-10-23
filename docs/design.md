@@ -519,3 +519,47 @@ each kind of caller on every route, link sharing, saving races, notifications an
 deleting documents and accounts, and that no user data reaches the log. The functions also build
 with `wrangler pages functions build`, and the migrations apply with
 `wrangler d1 migrations apply --local`.
+
+**The page.** `src/account/`. At start the page asks `GET /api/me` (five-second limit). When the
+answer is not the API's JSON (a static host, the development server, no network) or says accounts
+are not available, the page is the anonymous app, unchanged: no button, no request beyond that
+one. Otherwise the document list shows Sign in (a navigation to `/api/auth/login?return=` the
+current page) or the account's name and Sign out, and a failed or cancelled sign-in is reported
+once from the `?signin=` the server returns with.
+
+**Saving to the account.** The local copy in IndexedDB stays the working copy and the offline
+cache; its index entry gains a link to the account (the server's ID and version, the Yjs state
+vector of that version, the role, and a link token when it was opened by one). Syncing
+(`src/account/sync.ts`) fetches the server's content only when its version moved on, applies it
+with the origin `cloud` (so it is neither a step nor undoable), and saves only when this copy has
+updates the server's state vector lacks; a 409 means fetch, merge and save again. Viewers only
+fetch. On sign-in the document list syncs everything (`syncAll`): documents made here are saved to
+the account (each once, even if an open document tries at the same moment), the account's
+documents missing here are copied here, and changed copies are brought in step. A document that
+belongs to another account signed in earlier on this browser is left alone and tagged. An open
+document (`src/account/docsync.ts`) syncs when it opens, 1.5 s after a change, when the page is
+hidden, and every minute while visible, and the top bar says where it stands ("Saved to your
+account", "Saving…", "Offline: saved in this browser", "View only: changes stay in this browser").
+Exporting a `.dcw` also keeps a copy with the document in R2. Deleting an owned document deletes
+it from the account; removing a shared one only removes the copy here. Signing out keeps the
+copies in this browser.
+
+**Sharing.** The Share button opens a dialog: add a person by address as viewer or editor (with or
+without an e-mail), change or remove their access, and set the link (off, anyone can view, anyone
+signed in can edit), with the link to copy. Non-owners see who has access and can leave. "Shared
+with me" on the document list opens `#/s/<id>`, which finds or makes the local copy and goes on to
+`#/doc/<local id>`; `#/s/<id>/<token>` does the same through a link, without an account for
+viewing.
+
+**Browser tests.** `tests/accounts.spec.ts` runs the app against `tests/mockapi.ts`, an in-memory
+stand-in for the API with the same routes and rules (roles, CSRF token, versioned saves), shared by
+several browser contexts so they can be several devices and several people. It checks that with no
+API the app is unchanged, the sign-in round trip and its failure message, the phase 6 gate end to
+end (a document made anonymously survives sign-in, opens on a second device, and is shared
+read-only with a second account, whose edits stay local), opening by a view link without an
+account, signing out, and deleting from the account.
+
+**Not yet.** Real-time editing together (phase 7); until then two devices editing the same document
+merge on each save, but a cell both add while apart can get the same ID. Choosing to clear this
+browser's copies on sign-out (for shared computers). A list of the files kept with a document. The
+version history of a document merged from two devices interleaves both histories.

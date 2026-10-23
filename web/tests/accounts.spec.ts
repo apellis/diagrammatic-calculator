@@ -1,0 +1,172 @@
+import { expect, test, type Browser, type Page } from '@playwright/test';
+import { addCell, cell, newDoc, typeCell } from './helpers';
+import { MockAccounts, type Session, type User } from './mockapi';
+
+/** A browser of its own (its own storage: another device), served by the mock as `user`. */
+async function device(browser: Browser, mock: MockAccounts, user: User | null) {
+  const context = await browser.newContext();
+  const session: Session = { user, next: null };
+  await mock.attach(context, session);
+  return { page: await context.newPage(), session, context };
+}
+
+const saved = (page: Page) => expect(page.getByTestId('sync')).toHaveText('Saved to your account', { timeout: 15_000 });
+
+test('without an accounts API the app is the anonymous app, unchanged', async ({ page }) => {
+  // the preview server answers /api/me with the page itself, as a static host would
+  await page.goto('/');
+  await expect(page.locator('h1')).toHaveText('diagrammatic-calculator');
+  await expect(page.locator('.doclist > p.muted').first()).toHaveText('Exact computations in diagrammatic algebras. Documents live in this browser; export them to keep a copy.');
+  await expect(page.getByTestId('account')).toHaveCount(0);
+  await expect(page.getByTestId('shared-with-me')).toHaveCount(0);
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 e(iji)');
+  await expect(cell(page, 0).getByTestId('summary')).not.toHaveText('');
+  await expect(page.getByTestId('sync')).toHaveCount(0);
+  await expect(page.getByTestId('share')).toHaveCount(0);
+});
+
+test('signed out, Sign in leaves for Google and returns to the page; a failed sign-in says so', async ({ browser }) => {
+  const mock = new MockAccounts();
+  const { page } = await device(browser, mock, null);
+  await page.goto('/?signin=failed#/');
+  await expect(page.getByTestId('notice')).toHaveText('Signing in did not work. Please try again.');
+  await expect(page).toHaveURL(/\/#\/$/);
+  await expect(page.locator('.doclist > p.muted').first()).toContainText('Documents live in this browser');
+  await page.getByTestId('sign-in').click();
+  await expect.poll(() => mock.log.some((l) => l.path === 'auth/login')).toBe(true);
+  expect(mock.log.find((l) => l.path === 'auth/login')).toMatchObject({ method: 'GET' });
+  // the mock signed nobody in, so the page is back, signed out
+  await expect(page.getByTestId('sign-in')).toBeVisible();
+});
+
+test('the phase 6 gate: a document made anonymously survives sign-in, opens on a second device, and is shared read-only', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const mock = new MockAccounts();
+  const ada = mock.user('ada@example.org', 'Ada');
+  const bob = mock.user('bob@example.org', 'Bob');
+
+  // made anonymously
+  const a = await device(browser, mock, null);
+  await newDoc(a.page);
+  await typeCell(a.page, 'def a := x_1 e(iji)');
+  await expect(cell(a.page, 0).getByTestId('summary')).not.toHaveText('');
+  await a.page.goto('/#/');
+  await expect(a.page.locator('tr[data-doc]')).toHaveCount(1);
+
+  // signing in saves it to the account
+  a.session.next = ada;
+  await a.page.getByTestId('sign-in').click();
+  await expect(a.page.getByTestId('notice')).toHaveText('Saved 1 document from this browser to your account.');
+  await expect(a.page.getByTestId('account-name')).toHaveText('Ada');
+  await expect(a.page.locator('tr[data-doc][data-cloud]')).toHaveCount(1);
+  const doc = mock.only();
+  expect(doc.owner).toBe(ada.id);
+  expect(doc.version).toBe(1);
+  expect(mock.log.filter((l) => l.method !== 'GET').every((l) => l.csrf === `csrf-${ada.id}`)).toBe(true);
+
+  // an edit is saved to the account shortly after
+  await a.page.locator('tr[data-doc] td.open').click();
+  await saved(a.page);
+  await addCell(a.page, 'watch a a');
+  await expect.poll(() => mock.only().version, { timeout: 15_000 }).toBe(2);
+  await saved(a.page);
+
+  // a second device signed in to the same account has it
+  const b = await device(browser, mock, ada);
+  await b.page.goto('/');
+  await expect(b.page.locator('tr[data-doc]')).toHaveCount(1);
+  await b.page.locator('tr[data-doc] td.open').click();
+  await expect(b.page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(2);
+  await expect(cell(b.page, 0).locator('.head .text')).toHaveAttribute('data-text', /x_1 e\(iji\)/);
+  await saved(b.page);
+
+  // shared read-only with a second account
+  await a.page.getByTestId('share').click();
+  const dialog = a.page.getByRole('dialog', { name: 'Share' });
+  await dialog.getByLabel('E-mail address').fill('bob@example.org');
+  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(dialog.getByTestId('share-note')).toHaveText('Shared with bob@example.org, who was sent an e-mail.');
+  await expect(dialog.locator('tr[data-person="bob@example.org"]')).toHaveCount(1);
+  expect(mock.shares.get(doc.id)?.get('bob@example.org')).toBe('viewer');
+  expect(mock.mails).toEqual([{ to: 'bob@example.org', doc: doc.id }]);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+
+  const c = await device(browser, mock, bob);
+  await c.page.goto('/');
+  const shared = c.page.getByTestId('shared-with-me');
+  await expect(shared.locator(`tr[data-shared="${doc.id}"]`)).toContainText('can view');
+  await shared.locator('td.open').click();
+  await expect(c.page).toHaveURL(/#\/doc\//);
+  await expect(c.page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(2);
+  await expect(c.page.getByTestId('sync')).toHaveText('View only: changes stay in this browser');
+  // a viewer's edits stay in their browser
+  await addCell(c.page, 'watch x_2 e(iji)');
+  await c.page.waitForTimeout(2500);
+  expect(mock.log.some((l) => l.who === bob.email && l.method === 'PUT')).toBe(false);
+  expect(mock.only().version).toBe(2);
+  // and the owner's sharing controls are not theirs
+  await c.page.getByTestId('share').click();
+  await expect(c.page.getByRole('dialog', { name: 'Share' })).toContainText('Only the owner can change who has access.');
+
+  await a.context.close();
+  await b.context.close();
+  await c.context.close();
+});
+
+test('a view link opens the document without an account', async ({ browser }) => {
+  const mock = new MockAccounts();
+  const ada = mock.user('ada@example.org', 'Ada');
+  const a = await device(browser, mock, ada);
+  await newDoc(a.page);
+  await typeCell(a.page, 'def a := x_1 e(iji)');
+  await saved(a.page);
+  await a.page.getByTestId('share').click();
+  const dialog = a.page.getByRole('dialog', { name: 'Share' });
+  await dialog.getByTestId('link-role').selectOption('viewer');
+  const id = mock.only().id;
+  await expect(dialog.getByTestId('share-link')).toHaveValue(new RegExp(`/#/s/${id}/token${id}$`));
+  const url = await dialog.getByTestId('share-link').inputValue();
+
+  const d = await device(browser, mock, null);
+  await d.page.goto(url.replace(/^https?:\/\/[^/]+/, ''));
+  await expect(d.page).toHaveURL(/#\/doc\//);
+  await expect(d.page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(1);
+  await expect(d.page.getByTestId('sync')).toHaveText('View only: changes stay in this browser');
+  expect(mock.log.filter((l) => l.who === null && l.path.startsWith('docs/')).every((l) => l.link === `token${id}`)).toBe(true);
+
+  // without the link and without an account, the page asks to sign in
+  const e = await device(browser, mock, null);
+  await e.page.goto(`/#/s/${id}`);
+  await expect(e.page.getByTestId('open-shared')).toContainText('Sign in to open this document.');
+  await a.context.close();
+  await d.context.close();
+  await e.context.close();
+});
+
+test('signing out keeps the documents here; deleting an owned document deletes it from the account', async ({ browser }) => {
+  const mock = new MockAccounts();
+  const ada = mock.user('ada@example.org', 'Ada');
+  const a = await device(browser, mock, ada);
+  await newDoc(a.page);
+  await typeCell(a.page, 'def a := x_1 e(iji)');
+  await saved(a.page);
+  await a.page.goto('/#/');
+  await a.page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(a.page.getByTestId('sign-in')).toBeVisible();
+  expect(mock.log.find((l) => l.path === 'auth/logout')).toMatchObject({ method: 'POST', csrf: `csrf-${ada.id}` });
+  await expect(a.page.locator('tr[data-doc]')).toHaveCount(1);
+  await expect(a.page.getByTestId('shared-with-me')).toHaveCount(0);
+
+  a.session.next = ada;
+  await a.page.getByTestId('sign-in').click();
+  await expect(a.page.getByTestId('account-name')).toHaveText('Ada');
+  a.page.once('dialog', (dlg) => {
+    expect(dlg.message()).toContain('from your account and this browser');
+    void dlg.accept();
+  });
+  await a.page.locator('tr[data-doc]').getByRole('button', { name: 'Delete' }).click();
+  await expect(a.page.locator('tr[data-doc]')).toHaveCount(0);
+  expect(mock.docs.size).toBe(0);
+  await a.context.close();
+});

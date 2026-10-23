@@ -1,6 +1,6 @@
 // A document's workspace: top bar, outline and cells, kept in step with the document and the
 // evaluator.
-import { createResource, createSignal, For, onCleanup, onMount, Show, type Signal } from 'solid-js';
+import { createEffect, createResource, createSignal, For, on, onCleanup, onMount, Show, type Signal } from 'solid-js';
 import { openDoc, markExported, type OpenDoc } from '../doc/store';
 import { kindOf, type CellData, type Comparison, type Doc, type Inputs } from '../doc/model';
 import { Evaluator, type CellState } from '../eval/evaluator';
@@ -16,6 +16,9 @@ import { Canvas, type Generator, type Selection } from './Canvas';
 import { AIPanel } from './AIPanel';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { isSetUp, loadKey, loadSettings } from '../ai/providers';
+import { account, api, user } from '../account/account';
+import { DocSync } from '../account/docsync';
+import { ShareDialog, SyncBadge } from './Account';
 
 export function WorkspacePage(props: { id: string }) {
   const [od] = createResource(() => props.id, openDoc);
@@ -129,10 +132,29 @@ function Workspace(props: { o: OpenDoc }) {
       main.discardBranch(c.id);
     },
   };
+  // signed in, the document is kept in step with the account (and someone who opened it by its
+  // link without signing in gets others' changes)
+  const [sync, setSync] = createSignal<DocSync | null>(null);
+  createEffect(
+    on(account, (a) => {
+      const u = a.status === 'signed-in' ? a.user : null;
+      const s = sync();
+      if (s && s.user?.id !== u?.id) {
+        void s.stop();
+        setSync(null);
+      }
+      if (sync() || a.status === 'loading' || a.status === 'unavailable') return;
+      if (!u && !props.o.info.cloud?.token) return;
+      const next = new DocSync(props.o, u);
+      next.start();
+      setSync(next);
+    }),
+  );
   onCleanup(() => {
     flush();
     unwatch?.();
     main.branches.unobserve(onBranches);
+    void sync()?.stop();
     props.o.close();
   });
 
@@ -192,7 +214,7 @@ function Workspace(props: { o: OpenDoc }) {
         <Show when={current()?.doc ?? main} keyed>
           {(doc) => (
             <DocView o={props.o} doc={doc} branching={branching} linked={linked} aiOpen={aiOpen()} onToggleAI={toggleAI} onAsk={ask}
-              onSelection={setSelection} api={(a) => (view = a)} />
+              onSelection={setSelection} api={(a) => (view = a)} sync={sync()} />
           )}
         </Show>
       </div>
@@ -216,6 +238,8 @@ function DocView(props: {
   onAsk: () => void;
   onSelection: (s: Selection | null) => void;
   api: (a: ViewApi) => void;
+  /** The document's sync with the account, when there is one. */
+  sync: DocSync | null;
 }) {
   const doc = props.doc;
   const main = props.o.doc;
@@ -232,7 +256,7 @@ function DocView(props: {
   const [active, setActive] = createSignal<string | null>(null);
   const [adding, setAdding] = createSignal<number | null>(null);
   const [outline, setOutline] = createSignal(true);
-  const [modal, setModal] = createSignal<null | 'palette' | 'keys' | 'branch' | { version: number } | { snapshot: number }>(null);
+  const [modal, setModal] = createSignal<null | 'palette' | 'keys' | 'branch' | 'share' | { version: number } | { snapshot: number }>(null);
   const [linked, setLinked] = props.linked;
   const [message, setMessage] = createSignal('');
   const [canvas, setCanvas] = createSignal<{ id: string; word?: string } | null>(null);
@@ -446,6 +470,16 @@ function DocView(props: {
     download(fileName(name(), 'dcw'), text);
     void markExported(props.o.info.id);
     setMessage(canonical ? 'Exported.' : 'Exported as entered: some cells do not parse.');
+    // a copy of the file is kept with the document in the account
+    const s = props.sync;
+    if (s?.canEdit && s.cloudId && !onBranch()) {
+      try {
+        await api.putFile(s.cloudId, fileName(name(), 'dcw'), text);
+        setMessage(`${canonical ? 'Exported' : 'Exported as entered'}; a copy is kept with the document in your account.`);
+      } catch {
+        // the download itself succeeded
+      }
+    }
   };
   const importFile = async () => {
     const f = await pickFile('.dcw,text/plain');
@@ -469,6 +503,7 @@ function DocView(props: {
     { name: 'Import a workspace as a new document', keys: `${K}O`, run: importFile },
     { name: 'Save to a file on disk after every step', run: linkFile },
     { name: 'Start a scratch branch', keys: `${K}B`, run: () => newBranch() },
+    ...(props.sync?.cloudId && user() ? [{ name: 'Share this document', run: () => setModal('share') }] : []),
     ...(onBranch()
       ? [
           { name: 'Compare and accept this branch', run: () => setModal('branch') },
@@ -570,6 +605,16 @@ function DocView(props: {
         <div class="grow" />
         <Show when={message()}><span class="hint" onClick={() => setMessage('')}>{message()}</span></Show>
         <Show when={linked() && !onBranch()}><span class="hint" title="Saved after every step">↔ {linked()!.name}</span></Show>
+        <Show when={props.sync}>
+          {(s) => (
+            <>
+              <SyncBadge sync={s()} />
+              <Show when={s().cloudId && user()}>
+                <button class="ghost" onClick={() => setModal('share')} data-testid="share">Share</button>
+              </Show>
+            </>
+          )}
+        </Show>
         <button class="ghost" title={`Undo (${K}Z)`} disabled={!canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
         <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
         <span class={`light ${jobs() ? 'busy' : ''}`} title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'} data-testid="light"
@@ -628,6 +673,9 @@ function DocView(props: {
       </div>
       <Show when={modal() === 'palette'}><Palette commands={commands()} onClose={() => setModal(null)} /></Show>
       <Show when={modal() === 'keys'}><Keys onClose={() => setModal(null)} /></Show>
+      <Show when={modal() === 'share' && props.sync?.cloudId}>
+        {(id) => <ShareDialog cloudId={id()} name={name()} role={props.sync!.role ?? 'viewer'} onClose={() => setModal(null)} />}
+      </Show>
       <Show when={modal() === 'branch' && props.branching.compare()} keyed>
         {(cmp) => (
           <BranchView name={props.branching.current?.name ?? ''} cmp={cmp} onClose={() => setModal(null)}

@@ -4,6 +4,24 @@ import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { Doc } from './model';
 
+/** A local document's copy in an account (see src/account/sync.ts). */
+export interface CloudLink {
+  /** The document's ID on the server. */
+  id: string;
+  /** The account it was saved or opened with in this browser; null when opened by link without one. */
+  account: string | null;
+  role: 'owner' | 'editor' | 'viewer';
+  /** The server's version this copy last matched. */
+  version: number;
+  /** The Yjs state vector of that version, to tell whether this copy has anything new. */
+  sv?: Uint8Array;
+  /** When this copy last matched the server. */
+  synced?: number;
+  /** The link token, for a document opened by its link. */
+  token?: string;
+  owner?: { email: string; name: string };
+}
+
 export interface DocInfo {
   id: string;
   name: string;
@@ -11,6 +29,8 @@ export interface DocInfo {
   edited: number;
   /** When the document was last exported to a file, if ever. */
   exported?: number;
+  /** Set once the document is saved to an account or was opened from one. */
+  cloud?: CloudLink;
 }
 
 const INDEX_DB = 'diagcalc';
@@ -45,6 +65,23 @@ async function putInfo(info: DocInfo) {
   await req(db.transaction(INDEX, 'readwrite').objectStore(INDEX).put(info));
 }
 
+/** Changes some fields of a document's entry, leaving the others as they are stored now. */
+export async function updateInfo(id: string, patch: Partial<Omit<DocInfo, 'id'>>): Promise<DocInfo | undefined> {
+  const db = await index();
+  const tx = db.transaction(INDEX, 'readwrite');
+  const store = tx.objectStore(INDEX);
+  const cur = (await req(store.get(id))) as DocInfo | undefined;
+  if (!cur) return undefined;
+  const next = { ...cur, ...patch };
+  await req(store.put(next));
+  return next;
+}
+
+/** The local copy of a document saved in an account, if this browser has one. */
+export async function findByCloud(cloudId: string): Promise<DocInfo | undefined> {
+  return (await listDocs()).find((d) => d.cloud?.id === cloudId);
+}
+
 export async function getInfo(id: string): Promise<DocInfo | undefined> {
   const db = await index();
   return (await req(db.transaction(INDEX).objectStore(INDEX).get(id))) as DocInfo | undefined;
@@ -72,7 +109,7 @@ export async function openDoc(id: string): Promise<OpenDoc> {
     if (doc.name !== info.name || edited !== info.edited) {
       info.name = doc.name;
       info.edited = edited;
-      void putInfo(info);
+      void updateInfo(id, { name: info.name, edited });
     }
   };
   doc.meta.observe(sync);
@@ -91,6 +128,26 @@ export async function createDoc(name: string, fill?: (d: Doc) => void): Promise<
   await new Promise((r) => setTimeout(r, 0)); // let the history record the first steps
   const now = Date.now();
   await putInfo({ id, name: doc.name, created: now, edited: now });
+  await persistence.destroy();
+  void askPersistence();
+  return id;
+}
+
+/**
+ * Creates a local copy of a document from an account: its content as a Yjs update, applied as
+ * it is (the name comes from the content), and the link to the account.
+ */
+export async function createFromCloud(update: Uint8Array, cloud: CloudLink, fallbackName: string, origin: unknown): Promise<string> {
+  const id = newId();
+  const ydoc = new Y.Doc({ gc: false });
+  const persistence = new IndexeddbPersistence(dbName(id), ydoc);
+  await persistence.whenSynced;
+  if (update.length) Y.applyUpdate(ydoc, update, origin);
+  const doc = new Doc(ydoc);
+  if (!doc.meta.has('name')) doc.meta.set('name', fallbackName);
+  await new Promise((r) => setTimeout(r, 0));
+  const now = Date.now();
+  await putInfo({ id, name: doc.name, created: now, edited: (doc.meta.get('edited') as number) ?? now, cloud: { ...cloud, synced: now } });
   await persistence.destroy();
   void askPersistence();
   return id;
