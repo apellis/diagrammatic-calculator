@@ -17,6 +17,9 @@
   --on-accent: #ffffff;
   --field-border: #8a8a90;
   --backdrop: rgba(0, 0, 0, 0.3);
+  /* strand colours, by the colour's place in the context (3:1 on panel, sunken and good-soft) */
+  --strand-0: #2f6fdf; --strand-1: #b85c00; --strand-2: #1e8449; --strand-3: #9b3fb0;
+  --strand-4: #c0392b; --strand-5: #7a6a00; --strand-6: #11809a; --strand-7: #6b6b70;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
@@ -41,6 +44,8 @@
     --on-accent: #161618;
     --field-border: #70707a;
     --backdrop: rgba(0, 0, 0, 0.55);
+    --strand-0: #7ea2ff; --strand-1: #f0a050; --strand-2: #5cc98a; --strand-3: #d18ef0;
+    --strand-4: #ff8a80; --strand-5: #d0c060; --strand-6: #4cc4dc; --strand-7: #a0a0a8;
     color-scheme: dark;
   }
 }
@@ -63,6 +68,8 @@
   --field-border: #70707a;
   --backdrop: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
+  --strand-0: #7ea2ff; --strand-1: #f0a050; --strand-2: #5cc98a; --strand-3: #d18ef0;
+  --strand-4: #ff8a80; --strand-5: #d0c060; --strand-6: #4cc4dc; --strand-7: #a0a0a8;
 }
 * { box-sizing: border-box; }
 html, body, #app { margin: 0; height: 100%; }
@@ -172,7 +179,10 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
   position: absolute; left: 50%; top: -6px; transform: translateX(-50%); font-size: 11px; padding: 0 8px;
   opacity: 0; transition: opacity 0.1s;
 }
+/* faint while the pointer is over the cells, so the place to add one is visible before it is hovered */
+.cells:hover .insert button { opacity: 0.35; }
 .insert:hover button, .insert button:focus { opacity: 1; }
+@media (hover: none) { .insert button { opacity: 0.6; } }
 .running { gap: 8px; font-size: 13px; color: var(--muted); }
 .running button { font-size: 12.5px; padding: 1px 10px; }
 .kindmenu { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -250,6 +260,11 @@ kbd { font-size: 12px; white-space: nowrap; border: 1px solid var(--border); bor
 .doclist .open a:hover { text-decoration: underline; }
 .doclist .toolbar { flex-wrap: wrap; }
 .doclist td.actions { text-align: right; white-space: nowrap; }
+/* a row's Rename, Duplicate and Delete show on hover or focus, where there is a pointer that hovers */
+@media (hover: hover) {
+  .doclist tr td.actions button { opacity: 0; transition: opacity 0.1s; }
+  .doclist tr:hover td.actions button, .doclist tr:focus-within td.actions button { opacity: 1; }
+}
 .doclist .empty { padding: 10px 2px; line-height: 1.5; }
 a.button {
   color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
@@ -336,7 +351,8 @@ a.button.icon:hover { color: var(--text); }
 .frame.on { border-color: var(--accent); }
 .frame.new { border-color: var(--good); background: var(--good-soft); }
 .frame .c { font-family: serif; font-size: 18px; }
-.frame-head { min-height: 24px; }
+.frame-head { min-height: 24px; align-items: center; }
+.frame-head .badge, .frame-head .hint { font-size: 11.5px; line-height: 1.4; }
 .diagram { display: block; color: var(--text); touch-action: none; user-select: none; }
 .hit-piece { cursor: grab; }
 .hit-piece[data-draw='dot'] { cursor: ns-resize; }
@@ -354,6 +370,9 @@ a.button.icon:hover { color: var(--text); }
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: 10px;
   display: flex; flex-direction: column; gap: 6px;
 }
+.relmenu.wide { width: min(680px, calc(100% - 24px)); }
+table.gestures td { font-size: 12.5px; }
+table.gestures td:last-child { min-width: 10em; }
 .relitem { display: flex; align-items: flex-start; gap: 8px; text-align: left; padding: 6px 8px; }
 .mini { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; }
 .mini .summand { padding: 0 2px; }
@@ -463,3 +482,57 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
 .ai-compose > .row button { white-space: nowrap; }
 .ai-head .model-link { color: var(--muted); text-decoration: none; font-size: 12.5px; max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-head .model-link:hover { color: var(--text); text-decoration: underline; }
+
+/* the context as a form: new-document dialog and context chip */
+.modal.new-doc { width: min(640px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; }
+.ctx-name-field { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.ctx-form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.ctx-presentations { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ctx-presentations legend { font-size: 13px; padding: 0; margin-bottom: 4px; }
+.ctx-pres { display: grid; grid-template-columns: auto 7.5em 1fr; gap: 8px; align-items: baseline; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.ctx-pres:has(input:checked) { background: var(--accent-soft); }
+.ctx-pres .mono { font-size: 13px; }
+.ctx-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.ctx-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; min-width: 0; }
+.ctx-fields .hint { font-size: 11.5px; }
+.ctx-advanced summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 10px; }
+.ctx-advanced input { width: 100%; margin: 6px 0 4px; }
+.ctx-line { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; }
+@media (max-width: 560px) {
+  .ctx-fields { grid-template-columns: 1fr; }
+  .ctx-pres { grid-template-columns: auto 1fr; }
+  .ctx-pres .hint { grid-column: 2; }
+}
+
+/* engine drawings: a strand's lines, dots, arrowheads and label carry its colour's class */
+svg path.k0 { stroke: var(--strand-0); } svg :is(circle, polygon, text).k0 { fill: var(--strand-0); }
+svg path.k1 { stroke: var(--strand-1); } svg :is(circle, polygon, text).k1 { fill: var(--strand-1); }
+svg path.k2 { stroke: var(--strand-2); } svg :is(circle, polygon, text).k2 { fill: var(--strand-2); }
+svg path.k3 { stroke: var(--strand-3); } svg :is(circle, polygon, text).k3 { fill: var(--strand-3); }
+svg path.k4 { stroke: var(--strand-4); } svg :is(circle, polygon, text).k4 { fill: var(--strand-4); }
+svg path.k5 { stroke: var(--strand-5); } svg :is(circle, polygon, text).k5 { fill: var(--strand-5); }
+svg path.k6 { stroke: var(--strand-6); } svg :is(circle, polygon, text).k6 { fill: var(--strand-6); }
+svg path.k7 { stroke: var(--strand-7); } svg :is(circle, polygon, text).k7 { fill: var(--strand-7); }
+svg path.k8 { stroke: var(--strand-0); } svg :is(circle, polygon, text).k8 { fill: var(--strand-0); }
+svg path.k9 { stroke: var(--strand-1); } svg :is(circle, polygon, text).k9 { fill: var(--strand-1); }
+svg path.k10 { stroke: var(--strand-2); } svg :is(circle, polygon, text).k10 { fill: var(--strand-2); }
+svg path.k11 { stroke: var(--strand-3); } svg :is(circle, polygon, text).k11 { fill: var(--strand-3); }
+svg path.k12 { stroke: var(--strand-4); } svg :is(circle, polygon, text).k12 { fill: var(--strand-4); }
+svg path.k13 { stroke: var(--strand-5); } svg :is(circle, polygon, text).k13 { fill: var(--strand-5); }
+svg path.k14 { stroke: var(--strand-6); } svg :is(circle, polygon, text).k14 { fill: var(--strand-6); }
+svg path.k15 { stroke: var(--strand-7); } svg :is(circle, polygon, text).k15 { fill: var(--strand-7); }
+/* Settings › Appearance › strand patterns: dashes, so colour is not the only cue */
+:root[data-patterns] svg path.k1 { stroke-dasharray: 4.3 2.4; }
+:root[data-patterns] svg path.k2 { stroke-dasharray: 1.2 2.4; }
+:root[data-patterns] svg path.k3 { stroke-dasharray: 7.2 1.9 1.4 1.9; }
+:root[data-patterns] svg path.k4 { stroke-dasharray: 2.9 2.9; }
+:root[data-patterns] svg path.k5 { stroke-dasharray: 9.6 2.4; }
+:root[data-patterns] svg path.k7 { stroke-dasharray: 4.3 2.4; }
+:root[data-patterns] svg path.k8 { stroke-dasharray: 1.2 2.4; }
+:root[data-patterns] svg path.k9 { stroke-dasharray: 7.2 1.9 1.4 1.9; }
+:root[data-patterns] svg path.k10 { stroke-dasharray: 2.9 2.9; }
+:root[data-patterns] svg path.k11 { stroke-dasharray: 9.6 2.4; }
+:root[data-patterns] svg path.k13 { stroke-dasharray: 4.3 2.4; }
+:root[data-patterns] svg path.k14 { stroke-dasharray: 1.2 2.4; }
+:root[data-patterns] svg path.k15 { stroke-dasharray: 7.2 1.9 1.4 1.9; }
+.ctx-fields select { font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--field-border); border-radius: 6px; padding: 6px 8px; }

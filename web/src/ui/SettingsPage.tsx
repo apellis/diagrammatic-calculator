@@ -2,7 +2,7 @@
 import { createSignal, For } from 'solid-js';
 import { AISettingsForm } from './AISettingsForm';
 import { SignOutEverywhere } from './Account';
-import { loadTheme, saveTheme, type Theme } from './theme';
+import { loadTheme, patterns, savePatterns, saveTheme, type Theme } from './theme';
 
 const THEMES: { id: Theme; name: string }[] = [
   { id: 'light', name: 'Light' },
@@ -22,6 +22,10 @@ export function SettingsPage(props: { from?: string }) {
       <section>
         <h3>Appearance</h3>
         <ThemeSwitch />
+        <label class="row" style={{ 'margin-top': '12px' }}>
+          <input type="checkbox" checked={patterns()} onChange={(e) => savePatterns(e.currentTarget.checked)} data-testid="patterns" />
+          Strand patterns: dashes on strands of different colours, in cells and on the canvas, so colour is not the only cue
+        </label>
       </section>
       <section>
         <h3>AI assistant</h3>

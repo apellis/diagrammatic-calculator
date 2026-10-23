@@ -1,9 +1,10 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Opens a new empty document and returns once its first cell editor is ready. */
+/** Opens a new empty document (KLR, type A2, ν = 2i+j) and returns once its first cell editor is ready. */
 export async function newDoc(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'New document' }).click();
+  await page.getByRole('dialog', { name: 'New document' }).getByRole('button', { name: 'Create' }).click();
   await expect(page.locator('.cm-content')).toBeVisible();
 }
 

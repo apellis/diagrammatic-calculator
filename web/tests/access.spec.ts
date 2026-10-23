@@ -13,6 +13,9 @@ test('at phone width the pages fit the window and the cells show', async ({ page
   await expect(page.getByRole('button', { name: 'New document' })).toBeVisible();
   await fitsWidth(page);
   await page.getByRole('button', { name: 'New document' }).click();
+  await fitsWidth(page);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.locator('.cm-content')).toBeFocused();
   await typeCell(page, 'watch x_1 e(iji)');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term, degree 2');
   await expect(cell(page, 0)).toBeInViewport();
@@ -110,4 +113,46 @@ test('a long computation shows how long it has run and stops from its cell', asy
   await cell(page, 0).getByTestId('stop').click();
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('cancelled');
   await expect(page.getByTestId('light')).toBeDisabled();
+});
+
+test('a new document starts from a chosen presentation, with its options as fields', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New document' }).click();
+  const d = page.getByRole('dialog', { name: 'New document' });
+  await expect(d.getByLabel('Name')).toBeFocused();
+  await d.getByLabel('Name').fill('Odd bubbles');
+  await d.getByRole('radio', { name: /^be2/ }).check();
+  // a 2-category: the weight is μ, and the Cartan type and odd colours are fields
+  await expect(d.getByLabel('Context line')).toHaveValue('be2 type=A2 mu=i ring=QQ');
+  await d.getByLabel('Cartan type').fill('A1');
+  await d.getByLabel('Odd colours').fill('i');
+  await d.getByLabel(/Weight/).fill('-1');
+  await expect(d.getByLabel('Context line')).toHaveValue('be2 type=A1 mu=-1 ring=QQ odd=i');
+  // a bad value is refused with the engine's reason, and nothing is created
+  await d.getByLabel('Cartan type').fill('Z9');
+  await d.getByRole('button', { name: 'Create' }).click();
+  await expect(d.locator('.error')).toContainText('the types are');
+  await d.getByLabel('Cartan type').fill('A1');
+  await d.getByRole('button', { name: 'Create' }).click();
+  await expect(page.locator('.topbar .name')).toHaveText('Odd bubbles');
+  await expect(page.getByTestId('context').locator('.ctx')).toHaveAttribute('data-text', /^be2 type=A1 odd=i ring=QQ mu=-1$/);
+});
+
+test('strands are coloured by colour in cells, and the patterns setting dashes them everywhere', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'watch psi_2 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term, degree 1');
+  // the cell just added is open
+  const stroke = (k: string) => cell(page, 0).locator(`.summand path.${k}`).first().evaluate((e) => getComputedStyle(e).stroke);
+  expect(await stroke('k0')).toBe('rgb(47, 111, 223)');
+  expect(await stroke('k1')).toBe('rgb(184, 92, 0)');
+  const dash = () => cell(page, 0).locator('.summand path.k1').first().evaluate((e) => getComputedStyle(e).strokeDasharray);
+  expect(await dash()).toBe('none');
+  await page.goto('/#/settings');
+  await page.getByTestId('patterns').check();
+  await page.goBack();
+  const head = cell(page, 0).locator('.head');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  await expect(cell(page, 0).locator('.summand path.k1').first()).toBeVisible();
+  expect(await dash()).not.toBe('none');
 });

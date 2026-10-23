@@ -1,13 +1,14 @@
 import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
 import { createDoc, deleteDoc, duplicateDoc, isPersisted, listDocs, openDoc, type DocInfo } from '../doc/store';
 import { parseDcw } from '../doc/dcw';
-import { ago, pickFile } from '../app';
+import { ago, engine, pickFile } from '../app';
 import { account, api, ours, syncAll, takeSignInOutcome, user } from '../account/account';
 import { ApiError, type CloudDoc } from '../account/api';
 import { AccountBar, SharedWithMe, signInMessage } from './Account';
 import { NoteView } from './Results';
 import { Dialog } from './Dialog';
 import { ContextText } from './ContextChip';
+import { ContextForm } from './ContextForm';
 
 const examples = import.meta.glob('../../../examples/*.dcw', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -101,7 +102,17 @@ export function DocList() {
     refetch();
   };
 
-  const create = async () => open(await createDoc('Untitled', (d) => d.setContext('klr type=A2 nu=2i+j ring=QQ')));
+  /** The new-document dialog: a name and a context, checked by the engine before the document is made. */
+  const [creating, setCreating] = createSignal<{ name: string; line: string } | null>(null);
+  const create = async () => {
+    const c = creating();
+    if (!c) return;
+    const o = await engine.call('context.describe', { context: c.line }, { lane: 'interactive' });
+    if (o.status !== 'done' || o.response.status !== 'ok') return; // the form shows why
+    const context = o.response.context;
+    setCreating(null);
+    open(await createDoc(c.name.trim() || 'Untitled', (d) => d.setContext(context)));
+  };
   /** An example opened again gets a numbered name, so two copies are told apart. */
   const openExample = async (name: string, text: string) => {
     const names = new Set((docs() ?? []).map((d) => d.name));
@@ -184,7 +195,7 @@ export function DocList() {
         </div>
       </Show>
       <div class="row toolbar">
-        <button class="primary" onClick={create}>New document</button>
+        <button class="primary" onClick={() => setCreating({ name: 'Untitled', line: 'klr type=A2 nu=2i+j ring=QQ' })}>New document</button>
         <button onClick={doImport}>Import .dcw…</button>
         <div class="grow" />
         <input placeholder="Search" value={query()} onInput={(e) => setQuery(e.currentTarget.value)} aria-label="Search documents" />
@@ -248,6 +259,29 @@ export function DocList() {
             <div class="row">
               <button class="danger" onClick={() => void remove(d())}>Delete</button>
               <button onClick={() => setRemoving(null)}>Keep it</button>
+            </div>
+          </Dialog>
+        )}
+      </Show>
+      <Show when={creating()}>
+        {(c) => (
+          <Dialog label="New document" class="new-doc" onClose={() => setCreating(null)}>
+            <h3 style={{ margin: '0 0 10px' }}>New document</h3>
+            <label class="ctx-name-field">
+              <span>Name</span>
+              <input value={c().name} aria-label="Name" onInput={(e) => setCreating({ ...c(), name: e.currentTarget.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void create(); } }} />
+            </label>
+            <ContextForm line={c().line} onLine={(line) => setCreating({ ...c(), line })} onSubmit={() => void create()} />
+            <details class="ctx-advanced">
+              <summary>Context line</summary>
+              <input class="mono" value={c().line} aria-label="Context line" onInput={(e) => setCreating({ ...c(), line: e.currentTarget.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void create(); } }} />
+              <span class="hint">The presentation, then its options, as in a <code>.dcw</code> file; for example <code>be2 type=A1 odd=i mu=-1</code>, or a finite quotient with <code>dotcap=3</code> or <code>degcap=4</code>.</span>
+            </details>
+            <div class="row" style={{ 'margin-top': '12px', 'justify-content': 'flex-end' }}>
+              <button onClick={() => setCreating(null)}>Cancel</button>
+              <button class="primary" onClick={() => void create()}>Create</button>
             </div>
           </Dialog>
         )}

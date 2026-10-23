@@ -11,6 +11,7 @@ import type { RelationsMatchResponse } from '../engine/ops.gen';
 import { isMac, mod } from '../app';
 import { Typeset } from './Typeset';
 import { ValueBadge } from './Results';
+import { patterns } from './theme';
 import type { CellValue } from '../eval/evaluator';
 import {
   along, arrowPoints, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
@@ -22,6 +23,35 @@ export interface Generator {
   draw: string;
   inputs: number;
   outputs: number;
+  /** The name typed and printed, and the strands entering and leaving it (`a* b`), as the presentation writes them. */
+  written?: string;
+  source?: string;
+  target?: string;
+}
+
+/** A source or target pattern's strands, left to right: colour and orientation. */
+const strandsOf = (p = '') => p.split(/\s+/).filter(Boolean).map((w) => ({ colour: w.replace(/\*$/, ''), up: !w.endsWith('*') }));
+
+/**
+ * Which way a generator's strands run, in words: a cup or cap is rightward when its strand runs
+ * left to right along it.
+ */
+export function orientation(g: Generator): string {
+  const [src, tgt] = [strandsOf(g.source), strandsOf(g.target)];
+  if (g.draw === 'cup' && tgt.length === 2) return tgt[0].up ? 'leftward' : 'rightward';
+  if (g.draw === 'cap' && src.length === 2) return src[0].up ? 'rightward' : 'leftward';
+  if (!src.length) return '';
+  if (src.every((l) => l.up)) return src.length > 1 ? 'upward strands' : 'upward strand';
+  if (src.every((l) => !l.up)) return src.length > 1 ? 'downward strands' : 'downward strand';
+  return src.map((l) => (l.up ? 'up' : 'down')).join(' and ');
+}
+
+/** A generator's tooltip line: "cup, rightward: 1 → a* a". */
+export function describeGenerator(g: Generator): string {
+  const o = orientation(g);
+  const kind = g.draw === 'dot' ? `dot on ${o.startsWith('up') ? 'an' : 'a'} ${o}` : g.draw === 'crossing' ? `crossing of ${o}` : o ? `${g.draw}, ${o}` : g.draw;
+  const name = g.written && g.written !== g.name ? `${g.written} (${g.name})` : g.name;
+  return g.source === undefined ? name : `${name}: ${kind}, ${g.source || '1'} → ${g.target || '1'}`;
 }
 
 /** What is selected, as the AI receives it: references resolved when a message is sent. */
@@ -61,16 +91,11 @@ type Match = Extract<RelationsMatchResponse, { status: 'ok' }>['matches'][number
 
 const U = 44; // pixels per unit
 const SHOWN = 60;
-const PALETTE = ['#2f6fdf', '#d9822b', '#2c9a5a', '#b04ac0', '#c0392b', '#8a7a20', '#1f9bb0', '#7a7a80'];
+/** Strand colours, shared with the drawings in cells (styles.css, `--strand-0` …). */
+const STRANDS = 8;
 const DASHES = ['', '0.18 0.1', '0.05 0.1', '0.3 0.08 0.06 0.08', '0.12 0.12', '0.4 0.1'];
 const K = isMac ? '⌘' : 'Ctrl+';
 
-let patternsPref = false;
-try {
-  patternsPref = localStorage.getItem('diagcalc.patterns') === '1';
-} catch {
-  /* storage unavailable */
-}
 
 export function Canvas(props: CanvasProps) {
   const [layouts, setLayouts] = createSignal<Layout[]>([]);
@@ -83,7 +108,6 @@ export function Canvas(props: CanvasProps) {
   const [menu, setMenu] = createSignal<{ summand: number; rect?: Rect; matches: Match[]; previews: (Layout[] | null)[] } | null>(null);
   const [inserting, setInserting] = createSignal(false);
   const [help, setHelp] = createSignal(false);
-  const [patterns, setPatterns] = createSignal(patternsPref);
   const [view, setView] = createSignal({ x: 24, y: 16, z: 1 });
   const [ghost, setGhost] = createSignal<{ summand: number; layer: number; dx: number; dy: number } | null>(null);
   const [boxDrag, setBoxDrag] = createSignal<{ summand: number; a: [number, number]; b: [number, number] } | null>(null);
@@ -170,7 +194,7 @@ export function Canvas(props: CanvasProps) {
 
   const colourOf = (name: string) => {
     const i = props.colours.indexOf(name.replace(/\*$/, ''));
-    return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+    return `var(--strand-${(i < 0 ? 0 : i) % STRANDS})`;
   };
   const dashOf = (name: string) => {
     if (!patterns()) return undefined;
@@ -657,6 +681,34 @@ export function Canvas(props: CanvasProps) {
     setView({ x: (r.width - frame.offsetWidth * z) / 2 - frame.offsetLeft * z, y: 50 - frame.offsetTop * z, z });
   };
 
+  /** Zooms about the middle of the view. */
+  const zoomBy = (f: number) => {
+    const v = view();
+    const r = root.getBoundingClientRect();
+    const [cx, cy] = [r.width / 2, r.height / 2];
+    const z = Math.max(0.3, Math.min(4, v.z * f));
+    setView({ x: cx - ((cx - v.x) * z) / v.z, y: cy - ((cy - v.y) * z) / v.z, z });
+  };
+  /** Moves the insertion point by an arrow key: along a height, or to the next height up or down. */
+  const moveMark = (k: number, key: string) => {
+    const l = layouts()[k];
+    if (!l?.boundaries.length) return;
+    const heights = [...l.boundaries].sort((a, b) => a.y - b.y);
+    const m = mark()?.summand === k ? mark()! : null;
+    let i = m ? heights.reduce((best, c, j) => (Math.abs(c.y - m.y) < Math.abs(heights[best].y - m.y) ? j : best), 0) : heights.length - 1;
+    let x = m ? Math.round(m.x) : 0;
+    if (m) {
+      if (key === 'ArrowUp') i = Math.min(heights.length - 1, i + 1);
+      if (key === 'ArrowDown') i = Math.max(0, i - 1);
+      if (key === 'ArrowLeft') x -= 1;
+      if (key === 'ArrowRight') x += 1;
+    }
+    const b = heights[i];
+    x = Math.max(0, Math.min(b.object.length - 1, x));
+    setMark({ summand: k, x, y: b.y });
+    say(b.object.length ? `Insertion point: strand ${x + 1} of ${b.object.length}, height ${i + 1} of ${heights.length}. Press 1–9 to insert a generator there.` : 'No strand at this height.');
+  };
+
   const onKey = (e: KeyboardEvent) => {
     if ((e.target as HTMLElement).closest('input, textarea, .cm-editor')) return;
     const s = sel();
@@ -666,6 +718,16 @@ export function Canvas(props: CanvasProps) {
       e.preventDefault();
       e.stopPropagation();
     };
+    if (e.key === 'Tab' && (e.target as HTMLElement).closest('.canvas-bar, .palette-bar')) {
+      // the toolbar and the palette take Tab as usual; forward from the last generator comes back to the pieces
+      const gens = [...root.querySelectorAll<HTMLElement>('.palette-bar .gen')];
+      if (!e.shiftKey && e.target === gens.at(-1)) {
+        handled();
+        root.focus({ preventScroll: true });
+      }
+      return;
+    }
+    if ((e.target as HTMLElement).closest('.canvas-bar, .palette-bar, .relmenu') && (e.key === 'Enter' || e.key === ' ')) return;
     if (e.key === ' ') {
       space = true;
       return handled();
@@ -690,6 +752,22 @@ export function Canvas(props: CanvasProps) {
       if (g) insertGenerator(g);
       return;
     }
+    // while inserting, the arrows move the insertion point (the green ring)
+    if (inserting() && l && !mod(e) && !e.altKey && !e.shiftKey && e.key.startsWith('Arrow')) {
+      handled();
+      return moveMark(s.summand, e.key);
+    }
+    if (e.shiftKey && !mod(e) && e.key.startsWith('Arrow')) {
+      handled();
+      if (e.altKey) {
+        if (!one) return say('Select one piece first (click it, or Tab to it).');
+        const d: Record<string, [number, number]> = { ArrowLeft: [-0.1, 0], ArrowRight: [0.1, 0], ArrowUp: [0, 0.1], ArrowDown: [0, -0.1] };
+        return lookMove(s.summand, one.layer, d[e.key]);
+      }
+      const v = view();
+      const d: Record<string, [number, number]> = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] };
+      return setView({ ...v, x: v.x + d[e.key][0], y: v.y + d[e.key][1] });
+    }
     if (mod(e) && e.key.toLowerCase() === 'a') {
       handled();
       if (l) setSel({ summand: s.summand, layers: [...l.order] });
@@ -701,9 +779,40 @@ export function Canvas(props: CanvasProps) {
     }
     if (mod(e)) return;
     switch (e.key) {
-      case 'Tab':
+      case 'Tab': {
+        // Shift+Tab before the first piece leaves for the palette and the toolbar
+        const list = allPieces();
+        const first = !s.layers.length || (list[0] && list[0].k === s.summand && list[0].layer === s.layers[s.layers.length - 1]);
+        if (e.shiftKey && first) {
+          const out = root.querySelector<HTMLElement>('.palette-bar .gen:last-child') ?? root.querySelector<HTMLElement>('.canvas-bar button:last-of-type');
+          if (out) {
+            handled();
+            setSel({ summand: s.summand, layers: [] });
+            return out.focus();
+          }
+        }
         handled();
         return focusMove(e.shiftKey ? -1 : 1);
+      }
+      case 's':
+      case 'S': {
+        handled();
+        if (!l || !l.strands.length) return;
+        const n = l.strands.length;
+        const back = e.key === 'S';
+        const start = s.strand !== undefined ? (s.strand + (back ? -1 : 1) + n) % n : (one?.inputs[0] ?? one?.outputs[0] ?? 0);
+        setSel({ summand: s.summand, layers: onStrand(l, start), strand: start });
+        const c = l.strands[start]?.colour;
+        return say(`Strand ${start + 1} of ${n}${c ? ` (${c})` : ''} selected; S and Shift+S move to the next and previous strand.`);
+      }
+      case '+':
+      case '=':
+        handled();
+        return zoomBy(1.25);
+      case '-':
+      case '_':
+        handled();
+        return zoomBy(0.8);
       case 'r':
       case 'R':
         handled();
@@ -711,6 +820,7 @@ export function Canvas(props: CanvasProps) {
       case 'i':
       case 'I':
         handled();
+        if (!inserting()) say('Inserting: press 1–9 for a generator; the arrows move the insertion point first. Esc cancels.');
         return setInserting(!inserting());
       case 'f':
       case 'F':
@@ -929,19 +1039,44 @@ export function Canvas(props: CanvasProps) {
     </span>
   );
 
+  /** A generator drawn as it sits in a diagram, with arrows for the orientation of its strands. */
   const PaletteIcon = (p: { g: Generator }) => {
     const w = Math.max(p.g.inputs, p.g.outputs, 1);
+    const src = strandsOf(p.g.source);
+    const tgt = strandsOf(p.g.target);
+    const known = p.g.source !== undefined;
+    /** An arrowhead at (x, y), y upwards, pointing up or down; or left or right with `side`. */
+    const head = (x: number, y: number, dir: 'up' | 'down' | 'left' | 'right') => {
+      const s = 0.2;
+      const pts = dir === 'up' ? [[x - s, -y + s * 0.7], [x + s, -y + s * 0.7], [x, -y - s * 0.7]]
+        : dir === 'down' ? [[x - s, -y - s * 0.7], [x + s, -y - s * 0.7], [x, -y + s * 0.7]]
+        : dir === 'right' ? [[x - s * 0.7, -y - s], [x - s * 0.7, -y + s], [x + s * 0.7, -y]]
+        : [[x + s * 0.7, -y - s], [x + s * 0.7, -y + s], [x - s * 0.7, -y]];
+      return <polygon points={pts.map((q) => q.join(',')).join(' ')} fill="currentColor" />;
+    };
     return (
       <svg viewBox={`-0.4 -1.2 ${w - 1 + 0.8} 1.4`} width={(w - 1 + 0.8) * 22} height={1.4 * 22} aria-hidden="true">
         {p.g.draw === 'dot' ? (
           <>
             <path d="M 0 0 L 0 -1" stroke="currentColor" stroke-width={0.07} />
             <circle cx={0} cy={-0.5} r={0.13} fill="currentColor" />
+            {known && head(0, 0.85, src[0]?.up === false ? 'down' : 'up')}
           </>
         ) : p.g.draw === 'crossing' ? (
           <>
             <path d={path({ kind: 'strand', x0: 0, y0: 0, x1: 1, y1: 1 })} stroke="currentColor" stroke-width={0.07} fill="none" />
             <path d={path({ kind: 'strand', x0: 1, y0: 0, x1: 0, y1: 1 })} stroke="currentColor" stroke-width={0.07} fill="none" />
+            {known && src.length === 2 && <>{head(1, 0.9, src[0].up ? 'up' : 'down')}{head(0, 0.9, src[1].up ? 'up' : 'down')}</>}
+          </>
+        ) : p.g.draw === 'cup' && w === 2 ? (
+          <>
+            <path d="M 0 -1 C 0 -0.15, 1 -0.15, 1 -1" stroke="currentColor" stroke-width={0.07} fill="none" />
+            {known && tgt.length === 2 && head(0.5, 0.36, tgt[0].up ? 'left' : 'right')}
+          </>
+        ) : p.g.draw === 'cap' && w === 2 ? (
+          <>
+            <path d="M 0 0 C 0 -0.85, 1 -0.85, 1 0" stroke="currentColor" stroke-width={0.07} fill="none" />
+            {known && src.length === 2 && head(0.5, 0.64, src[0].up ? 'right' : 'left')}
           </>
         ) : (
           <rect x={-0.3} y={-0.8} width={w - 1 + 0.6} height={0.6} fill="none" stroke="currentColor" stroke-width={0.06} />
@@ -961,16 +1096,6 @@ export function Canvas(props: CanvasProps) {
           {(v) => <span class="canvas-badge row"><span class="hint">value</span><ValueBadge value={v() as Extract<CellValue, { status: 'ok' }>} compact /></span>}
         </Show>
         <span class="hint grow canvas-msg" data-testid="canvas-message" role="status">{message()}</span>
-        <label class="hint row" title="Strand patterns, so colours are not the only cue">
-          <input type="checkbox" checked={patterns()} onChange={(e) => {
-            setPatterns(e.currentTarget.checked);
-            try {
-              localStorage.setItem('diagcalc.patterns', e.currentTarget.checked ? '1' : '0');
-            } catch {
-              /* storage unavailable */
-            }
-          }} /> Strand patterns
-        </label>
         <button class="ghost" onClick={() => setHelp(!help())} title="Gestures and keys (?)" aria-label="Gestures and keys">?</button>
       </div>
       <Show when={props.expanded}>
@@ -980,7 +1105,8 @@ export function Canvas(props: CanvasProps) {
         <div class="palette-bar" aria-label="Generators">
           <For each={props.generators}>
             {(g, i) => (
-              <button class="gen" draggable={true} title={`Drag onto a strand to insert ${g.name}; or click a strand to set the insertion point, then click here (or press I, then ${i() + 1})`}
+              <button class="gen" draggable={true} data-generator={g.name} aria-label={describeGenerator(g)}
+                title={`${describeGenerator(g)}. Drag onto a strand to insert it; or click a strand to set the insertion point, then click here (or press I, then ${i() + 1})`}
                 classList={{ on: inserting() }}
                 onDragStart={(e) => {
                   currentDrag = g.name;
@@ -993,7 +1119,7 @@ export function Canvas(props: CanvasProps) {
                 }}
                 onClick={() => insertGenerator(g)}>
                 <PaletteIcon g={g} />
-                <span>{inserting() ? `${i() + 1} ` : ''}{g.name}</span>
+                <span>{inserting() ? `${i() + 1} ` : ''}<Typeset text={g.written ?? g.name} /></span>
               </button>
             )}
           </For>
@@ -1045,11 +1171,14 @@ export function Canvas(props: CanvasProps) {
             )}
           </Show>
           <Show when={help()}>
-            <div class="relmenu" role="dialog" aria-label="Gestures">
+            <div class="relmenu wide" role="dialog" aria-label="Gestures and keys">
               <div class="row"><strong class="grow">Gestures and keys</strong><button class="ghost" onClick={() => setHelp(false)} aria-label="Close the gestures">×</button></div>
-              <table class="kv"><tbody>
-                <For each={GESTURES}>{([k, v]) => <tr><td><kbd>{k}</kbd></td><td>{v}</td></tr>}</For>
-              </tbody></table>
+              <table class="kv keys gestures">
+                <thead><tr><th>Action</th><th>Pointer</th><th>Keys</th></tr></thead>
+                <tbody>
+                  <For each={GESTURES}>{([a, p, k]) => <tr><td>{a}</td><td>{p || '—'}</td><td>{k}</td></tr>}</For>
+                </tbody>
+              </table>
             </div>
           </Show>
         </div>
@@ -1069,24 +1198,24 @@ const PULL = 0.45;
 const rubber = (v: number, max: number) => max * Math.tanh(v / max);
 
 const ALT = isMac ? '⌥' : 'Alt+';
-const GESTURES: [string, string][] = [
-  ['drag a dot', 'slide it along its strand: a crossing glows as the dot nears it and rings once passed; letting go fires the dot-slide relation through the rung crossings'],
-  ['drag a piece up or down', 'interchange its height with pieces on other strands; the drawing follows as you drag, and a −1 badge shows when two odd pieces swap'],
-  ['drag a crossing sideways', 'the middle crossing of a braid triangle, towards the other two: the braid relation; either crossing of a stacked pair: pull them apart by the square relation. The crossings glow, ring when armed, and the result shows'],
-  [`${ALT}drag`, 'move a piece for looks only (a layout hint)'],
-  ['drag on empty space', 'box-select; then R lists the relations inside the box, Delete removes the selected pieces, ' + K + 'L asks the AI about them'],
-  ['click empty space', 'clear the selection'],
-  [`click, ${K}click`, 'select, add or remove from the selection'],
-  ['double-click a strand', 'select the whole strand'],
-  ['R, right-click', 'relations that apply to the selection; 1–9 applies one'],
-  ['drag from the palette', 'insert a generator on a strand'],
-  ['click a strand', 'set the insertion point there (a green ring); then click a generator in the palette, or I and its number'],
-  ['I, then 1–9', 'insert a generator at the insertion point, or above the selected piece'],
-  ['Delete', 'remove the selected pieces'],
-  ['↑ ↓', 'slide the selected dot through the next crossing'],
-  [`${ALT}↑ ${ALT}↓`, 'interchange the selected piece one place'],
-  ['Tab, ⇧Tab', 'move between pieces; ← → move between summands'],
-  [`${K}A, Esc`, 'select all, clear the selection (Esc again closes)'],
-  [`${K}L`, 'ask the AI about the selection'],
-  ['space-drag, scroll', `pan; ${K}scroll or pinch zooms; F fits the selected summand, 0 resets`],
+/** The canvas's actions, each with its pointer gesture and its keys. */
+const GESTURES: [string, string, string][] = [
+  ['Slide a dot through the next crossing on its strand (dot-slide relation)', 'drag the dot; a crossing glows as it nears and rings once passed', '↑ ↓ on a selected dot'],
+  ['Interchange a piece with pieces on other strands; a −1 badge shows when two odd pieces swap', 'drag it up or down', `${ALT}↑ ${ALT}↓`],
+  ['Braid relation (middle crossing of a triangle) or square relation (a stacked pair)', 'drag the crossing sideways; the result shows before you let go', 'R, then the relation’s number'],
+  ['Relations that apply to the selection, or inside a box', 'right-click', 'R, then 1–9 applies one'],
+  ['Select a piece; add or remove one', `click; ${K}click`, 'Tab, ⇧Tab'],
+  ['Select a whole strand', 'double-click the strand', 'S, ⇧S (next, previous strand)'],
+  ['Select several pieces', 'drag a box on empty space', `${K}A selects all`],
+  ['Clear the selection', 'click empty space', 'Esc'],
+  ['Set the insertion point (a green ring)', 'click a strand', 'I, then the arrows'],
+  ['Insert a generator', 'drag it from the palette, or click it after setting the insertion point', 'I, then 1–9; or Tab to the palette and Enter'],
+  ['Remove the selected pieces', '', 'Delete'],
+  ['Move a piece for looks only (a layout hint)', `${ALT}drag`, `${ALT}⇧ arrows`],
+  ['Move between summands', 'click a summand', '← →'],
+  ['Pan', 'space-drag, scroll', '⇧ arrows'],
+  ['Zoom', `${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
+  ['Ask the AI about the selection', '', `${K}L`],
+  ['Leave the canvas for the toolbar and palette', 'click', '⇧Tab from the first piece'],
+  ['Back to the document', '← Back', 'Esc (after clearing the selection)'],
 ];

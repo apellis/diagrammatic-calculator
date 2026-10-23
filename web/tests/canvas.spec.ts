@@ -370,3 +370,43 @@ test('summands fill rows as wide as the canvas, so new ones go below', async ({ 
     expect(b.x + b.width).toBeLessThanOrEqual(view.x + view.width);
   }
 });
+
+test('keyboard paths for strands, the insertion point, panning, zooming and leaving for the palette', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const msg = canvas(page).getByTestId('canvas-message');
+  // S selects a whole strand, and moves on to the next
+  await page.keyboard.press('s');
+  await expect(msg).toContainText('Strand 1 of 3');
+  await page.keyboard.press('s');
+  await expect(msg).toContainText('Strand 2 of 3');
+  await page.keyboard.press('Escape');
+  // I, then the arrows place the insertion point; a digit inserts there
+  await page.keyboard.press('i');
+  await page.keyboard.press('ArrowRight');
+  await expect(canvas(page).getByTestId('mark')).toBeVisible();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(msg).toContainText('strand 3 of 3');
+  const x = await canvas(page).locator('.palette-bar .gen', { hasText: 'x' }).first().evaluate((b) => [...b.parentElement!.children].indexOf(b) + 1);
+  await page.keyboard.press(String(x));
+  await expect(msg).toContainText('Insert x');
+  await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', /x_3/);
+  // + zooms and Shift+arrows pan
+  const board = canvas(page).locator('.canvas-board');
+  const before = await board.getAttribute('style');
+  await page.keyboard.press('+');
+  await expect(board).toHaveAttribute('style', /scale\(1\.25\)/);
+  await page.keyboard.press('Shift+ArrowLeft');
+  expect(await board.getAttribute('style')).not.toBe(before);
+  // Shift+Tab before the first piece leaves for the palette; Tab from its last generator comes back
+  await page.keyboard.press('Shift+Tab');
+  await expect(canvas(page).locator('.palette-bar .gen').last()).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(canvas(page)).toBeFocused();
+  // the sheet lists each action with its pointer gesture and its keys
+  await page.keyboard.press('?');
+  await expect(canvas(page).getByRole('dialog', { name: 'Gestures and keys' }).locator('th')).toHaveText(['Action', 'Pointer', 'Keys']);
+});
