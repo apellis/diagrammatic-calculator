@@ -410,3 +410,51 @@ test('keyboard paths for strands, the insertion point, panning, zooming and leav
   await page.keyboard.press('?');
   await expect(canvas(page).getByRole('dialog', { name: 'Gestures and keys' }).locator('th')).toHaveText(['Action', 'Pointer', 'Keys']);
 });
+
+test('occurrence IDs show on hover and with the IDs toggle; Tab and X select several pieces from the keyboard', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := x_1 x_3 psi_2 e(iji)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  const frame = frames(page).first();
+  const msg = canvas(page).getByTestId('canvas-message');
+  // each piece's tooltip starts with its ID: two dots and a crossing, numbered from the bottom
+  const titles = await frame.locator('.hit-piece title').allTextContents();
+  expect(titles.map((t) => t.split(':')[0]).sort()).toEqual(['c1', 'd1', 'd2']);
+  expect(titles.every((t) => !t.includes('layer'))).toBe(true);
+  // L (or the IDs button) writes them beside the pieces and over the strands
+  await expect(frame.getByTestId('occ-labels')).toHaveCount(0);
+  await page.keyboard.press('l');
+  await expect(canvas(page).getByTestId('labels-toggle')).toHaveAttribute('aria-pressed', 'true');
+  await expect(frame.getByTestId('occ-labels')).toHaveCount(1);
+  expect((await frame.locator('[data-occ]').allTextContents()).sort()).toEqual(['c1', 'd1', 'd2', 's1', 's2', 's3']);
+  await canvas(page).getByTestId('labels-toggle').click();
+  await expect(frame.getByTestId('occ-labels')).toHaveCount(0);
+  await canvas(page).focus();
+
+  // Tab selects one piece; X keeps it, then Tab moves the dashed ring and X adds the piece there
+  const selected = frame.locator('.hit-piece[stroke="var(--accent)"]');
+  await page.keyboard.press('Tab');
+  await expect(selected).toHaveCount(1);
+  await page.keyboard.press('x');
+  await expect(msg).toContainText('1 piece selected');
+  await page.keyboard.press('Tab');
+  await expect(selected).toHaveCount(1);
+  await expect(frame.getByTestId('ring')).toHaveCount(1);
+  await page.keyboard.press('x');
+  await expect(selected).toHaveCount(2);
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('x');
+  await expect(selected).toHaveCount(3);
+  // X again takes the piece at the ring out
+  await page.keyboard.press('x');
+  await expect(selected).toHaveCount(2);
+  await expect(msg).toContainText('2 pieces selected');
+  // the selection is what R and Delete act on; Esc clears it and the ring
+  await page.keyboard.press('Escape');
+  await expect(selected).toHaveCount(0);
+  await expect(frame.getByTestId('ring')).toHaveCount(0);
+  // the sheet lists the keys
+  await page.keyboard.press('?');
+  await expect(canvas(page).getByRole('dialog', { name: 'Gestures and keys' })).toContainText('X adds');
+});

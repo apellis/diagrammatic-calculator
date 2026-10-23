@@ -103,7 +103,15 @@ export function Canvas(props: CanvasProps) {
   const [error, setError] = createSignal('');
   const [message, setMessage] = createSignal('');
   const [busy, setBusy] = createSignal(false);
-  const [sel, setSel] = createSignal<{ summand: number; layers: number[]; strand?: number }>({ summand: 0, layers: [] });
+  /**
+   * The selection. `kept`: built up piece by piece (X, ⌘- or Ctrl-click, a box, S, ⌘A or Ctrl+A), so Tab moves the
+   * keyboard ring (`cursor`) without replacing it; otherwise the selection follows the ring.
+   */
+  const [sel, setSel] = createSignal<{ summand: number; layers: number[]; strand?: number; kept?: boolean }>({ summand: 0, layers: [] });
+  /** The piece the keyboard is on (Tab, ⇧Tab): drawn as a dashed ring while it is not simply the selection. */
+  const [cursor, setCursor] = createSignal<{ k: number; layer: number } | null>(null);
+  /** Occurrence IDs (d1, c2, s1, …) written beside the pieces and strands. */
+  const [labels, setLabels] = createSignal(false);
   const [fresh, setFresh] = createSignal(new Set<string>());
   const [menu, setMenu] = createSignal<{ summand: number; rect?: Rect; matches: Match[]; previews: (Layout[] | null)[] } | null>(null);
   const [inserting, setInserting] = createSignal(false);
@@ -218,6 +226,7 @@ export function Canvas(props: CanvasProps) {
   const write = (term: string, note: string) => {
     changed = true;
     pending = { term: props.term, words: new Set(layouts().map((l) => l.word)) };
+    setCursor(null);
     setSel({ summand: sel().summand, layers: [] });
     props.onWrite(term, note);
   };
@@ -475,7 +484,7 @@ export function Canvas(props: CanvasProps) {
       setMark(null);
       const inside = piecesIn(l, d.start, p);
       const base = d.additive && sel().summand === d.k ? sel().layers : [];
-      setSel({ summand: d.k, layers: [...new Set([...base, ...inside])] });
+      setSel({ summand: d.k, layers: [...new Set([...base, ...inside])], kept: true });
       const n = sel().layers.length;
       say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; ${K}L: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
       return;
@@ -485,9 +494,10 @@ export function Canvas(props: CanvasProps) {
     if (!d.moved) {
       setMark(null);
       const s = sel();
+      setCursor({ k: d.k, layer: d.layer });
       if (d.additive && s.summand === d.k) {
         const has = s.layers.includes(d.layer);
-        setSel({ summand: d.k, layers: has ? s.layers.filter((x) => x !== d.layer) : [...s.layers, d.layer] });
+        setSel({ summand: d.k, layers: has ? s.layers.filter((x) => x !== d.layer) : [...s.layers, d.layer], kept: true });
       } else setSel({ summand: d.k, layers: [d.layer] });
       return;
     }
@@ -606,6 +616,7 @@ export function Canvas(props: CanvasProps) {
     root.focus({ preventScroll: true });
     const frame = t.closest<HTMLElement>('.frame[data-summand]');
     setMenu(null);
+    setCursor(null);
     setSel({ summand: frame ? Number(frame.dataset.summand) - 1 : sel().summand, layers: [] });
   };
   const onDblClick = (k: number, e: MouseEvent) => {
@@ -669,9 +680,31 @@ export function Canvas(props: CanvasProps) {
     const list = allPieces();
     if (!list.length) return;
     const s = sel();
-    const cur = s.layers.length ? list.findIndex((x) => x.k === s.summand && x.layer === s.layers[s.layers.length - 1]) : -1;
+    const c = cursor();
+    const at = c ? list.findIndex((x) => x.k === c.k && x.layer === c.layer) : -1;
+    const cur = at >= 0 ? at : s.layers.length ? list.findIndex((x) => x.k === s.summand && x.layer === s.layers[s.layers.length - 1]) : -1;
     const next = list[(cur + by + list.length) % list.length];
-    setSel({ summand: next.k, layers: [next.layer] });
+    setCursor({ k: next.k, layer: next.layer });
+    // a kept selection stays as it is while the ring moves on
+    if (!s.kept) setSel({ summand: next.k, layers: [next.layer] });
+    else {
+      const id = occurrenceIds(layouts()[next.k]).get(next.layer);
+      say(`On ${id ?? 'a piece'}${s.summand === next.k && s.layers.includes(next.layer) ? ' (selected)' : ''}: X adds or removes it.`);
+    }
+  };
+  /** X: adds the piece at the ring to the selection, or takes it out; the selection is then kept while Tab moves on. */
+  const toggleAtCursor = () => {
+    const s = sel();
+    const c = cursor() ?? (s.layers.length ? { k: s.summand, layer: s.layers[s.layers.length - 1] } : null);
+    if (!c) return say('Tab to a piece first; X then keeps it selected while Tab moves on.');
+    setCursor(c);
+    let layers: number[];
+    if (s.summand !== c.k) layers = [c.layer];
+    else if (!s.kept) layers = s.layers.includes(c.layer) ? s.layers : [...s.layers, c.layer];
+    else layers = s.layers.includes(c.layer) ? s.layers.filter((x) => x !== c.layer) : [...s.layers, c.layer];
+    setSel({ summand: c.k, layers, kept: true });
+    const n = layers.length;
+    say(n ? `${n} piece${n > 1 ? 's' : ''} selected. Tab moves on without changing the selection; X adds or removes the piece at the ring; Esc clears.` : 'Nothing selected.');
   };
   const fit = () => {
     const frame = board.querySelector<HTMLElement>(`[data-summand="${sel().summand + 1}"]`);
@@ -738,7 +771,10 @@ export function Canvas(props: CanvasProps) {
       if (menu()) return setMenu(null);
       if (inserting()) return setInserting(false);
       if (mark()) return setMark(null);
-      if (s.layers.length) return setSel({ summand: s.summand, layers: [] });
+      if (s.layers.length || cursor()) {
+        setCursor(null);
+        return setSel({ summand: s.summand, layers: [] });
+      }
       return props.onClose();
     }
     if (menu() && /^[1-9]$/.test(e.key)) {
@@ -770,7 +806,7 @@ export function Canvas(props: CanvasProps) {
     }
     if (mod(e) && e.key.toLowerCase() === 'a') {
       handled();
-      if (l) setSel({ summand: s.summand, layers: [...l.order] });
+      if (l) setSel({ summand: s.summand, layers: [...l.order], kept: true });
       return;
     }
     if (mod(e) && e.key.toLowerCase() === 'l') {
@@ -801,10 +837,19 @@ export function Canvas(props: CanvasProps) {
         const n = l.strands.length;
         const back = e.key === 'S';
         const start = s.strand !== undefined ? (s.strand + (back ? -1 : 1) + n) % n : (one?.inputs[0] ?? one?.outputs[0] ?? 0);
-        setSel({ summand: s.summand, layers: onStrand(l, start), strand: start });
+        setSel({ summand: s.summand, layers: onStrand(l, start), strand: start, kept: true });
         const c = l.strands[start]?.colour;
-        return say(`Strand ${start + 1} of ${n}${c ? ` (${c})` : ''} selected; S and Shift+S move to the next and previous strand.`);
+        return say(`Strand ${start + 1} of ${n} (s${start + 1}${c ? `, ${c}` : ''}) selected; S and Shift+S move to the next and previous strand, Tab and X add or remove single pieces.`);
       }
+      case 'x':
+      case 'X':
+        handled();
+        return toggleAtCursor();
+      case 'l':
+      case 'L':
+        handled();
+        setLabels(!labels());
+        return say(labels() ? 'Occurrence IDs shown: d dots, c crossings, u cups, n caps, g other pieces, s strands, numbered from the bottom of each summand.' : 'Occurrence IDs hidden; hovering a piece still shows its ID.');
       case '+':
       case '=':
         handled();
@@ -839,6 +884,7 @@ export function Canvas(props: CanvasProps) {
       case 'ArrowLeft':
       case 'ArrowRight':
         handled();
+        setCursor(null);
         return setSel({ summand: Math.max(0, Math.min(layouts().length - 1, s.summand + (e.key === 'ArrowLeft' ? -1 : 1))), layers: [] });
       case 'ArrowUp':
       case 'ArrowDown': {
@@ -892,6 +938,25 @@ export function Canvas(props: CanvasProps) {
     const strandColour = (s?: number) => (s === undefined ? 'currentColor' : colourOf(l().strands[s]?.colour ?? ''));
     const strandDash = (s?: number) => (s === undefined ? undefined : dashOf(l().strands[s]?.colour ?? ''));
     const vb = () => `${-pad} ${-(l().height + pad)} ${l().width + 2 * pad} ${l().height + 2 * pad + 0.5}`;
+    const ids = createMemo(() => occurrenceIds(l()));
+    /** The piece the keyboard ring is on, when it is in this summand and not just the selection. */
+    const ring = () => {
+      const c = cursor();
+      if (!c || c.k !== p.k) return undefined;
+      if (!sel().kept && selected().has(c.layer) && selected().size === 1) return undefined;
+      return piece(l(), c.layer);
+    };
+    /** Where each strand's ID goes: beside the lower end of its lowest stretch, where it starts. */
+    const strandStarts = () => {
+      const low = new Map<number, { x: number; y: number }>();
+      for (const line of l().lines) {
+        if (line.kind !== 'strand' || line.strand === undefined) continue;
+        const [x, y] = line.y0! <= line.y1! ? [line.x0!, line.y0!] : [line.x1!, line.y1!];
+        const t = low.get(line.strand);
+        if (!t || y < t.y) low.set(line.strand, { x, y });
+      }
+      return [...low].map(([strand, t]) => ({ strand, ...t }));
+    };
     const snapped = () => (selected().size ? bounds(l(), [...selected()]) : undefined);
     const isLive = (layer?: number) => {
       const lv = live();
@@ -947,11 +1012,30 @@ export function Canvas(props: CanvasProps) {
                 x={pc.box[0] - 0.08 + o()[0]} y={-(pc.box[3] + 0.08 + o()[1])} width={pc.box[2] - pc.box[0] + 0.16} height={pc.box[3] - pc.box[1] + 0.16}
                 rx={0.08} fill={selected().has(pc.layer) ? 'var(--accent-soft)' : 'transparent'} fill-opacity={0.55}
                 stroke={selected().has(pc.layer) ? 'var(--accent)' : 'none'} stroke-width={0.03}>
-                <title>{pc.generator} (layer {pc.layer}{pc.odd ? ', odd' : ''}, degree {pc.degree})</title>
+                <title>{ids().get(pc.layer)}: {pc.generator} ({pc.draw}{pc.odd ? ', odd' : ''}, degree {pc.degree})</title>
               </rect>
             );
           }}
         </For>
+        <Show when={ring()}>
+          {(pc) => <rect class="ring" data-testid="ring" x={pc().box[0] - 0.16 + off(pc().layer)[0]} y={-(pc().box[3] + 0.16 + off(pc().layer)[1])}
+            width={pc().box[2] - pc().box[0] + 0.32} height={pc().box[3] - pc().box[1] + 0.32} rx={0.1} fill="none" stroke="var(--accent)" stroke-width={0.035} stroke-dasharray="0.09 0.06" pointer-events="none" />}
+        </Show>
+        <Show when={labels()}>
+          <g class="occ-labels" pointer-events="none" data-testid="occ-labels">
+            {/* a dot's ID to its left, another piece's to its right */}
+            <For each={l().pieces}>
+              {(pc) => {
+                const dot = pc.draw === 'dot';
+                const [x, y] = dot ? [pc.box[0] - 0.05, (pc.box[1] + pc.box[3]) / 2 - 0.08] : [pc.box[2] + 0.05, (pc.box[1] + pc.box[3]) / 2 - 0.08];
+                return <text x={x + off(pc.layer)[0]} y={-(y + off(pc.layer)[1])} font-size="0.24" text-anchor={dot ? 'end' : 'start'} fill="var(--muted)" data-occ={ids().get(pc.layer)}>{ids().get(pc.layer)}</text>;
+              }}
+            </For>
+            <For each={strandStarts()}>
+              {(t) => <text x={t.x + 0.08} y={-(t.y + 0.12)} font-size="0.24" fill={strandColour(t.strand)} data-occ={`s${t.strand + 1}`}>s{t.strand + 1}</text>}
+            </For>
+          </g>
+        </Show>
         <Show when={snapped()}>
           {(b) => <rect x={b()[0] - 0.15} y={-(b()[3] + 0.15)} width={b()[2] - b()[0] + 0.3} height={b()[3] - b()[1] + 0.3} fill="none" stroke="var(--accent)" stroke-width={0.025} stroke-dasharray="0.1 0.07" pointer-events="none" />}
         </Show>
@@ -1096,6 +1180,8 @@ export function Canvas(props: CanvasProps) {
           {(v) => <span class="canvas-badge row"><span class="hint">value</span><ValueBadge value={v() as Extract<CellValue, { status: 'ok' }>} compact /></span>}
         </Show>
         <span class="hint grow canvas-msg" data-testid="canvas-message" role="status">{message()}</span>
+        <button class="ghost" aria-pressed={labels()} classList={{ on: labels() }} onClick={() => setLabels(!labels())}
+          title="Show the occurrence IDs of pieces and strands (L)" data-testid="labels-toggle">IDs</button>
         <button class="ghost" onClick={() => setHelp(!help())} title="Gestures and keys (?)" aria-label="Gestures and keys">?</button>
       </div>
       <Show when={props.expanded}>
@@ -1187,6 +1273,25 @@ export function Canvas(props: CanvasProps) {
   );
 }
 
+/** The letter of an occurrence ID by how a piece is drawn (docs/spec.md, IDs); g for any other piece. */
+const OCCURRENCE: Record<string, string> = { dot: 'd', crossing: 'c', cup: 'u', cap: 'n', bubble: 'b' };
+
+/**
+ * Occurrence IDs of a summand's pieces by layer: the letter of the piece's kind and its number
+ * among the pieces of that kind, counted from the bottom of the canonical layering (d1, d2, c1).
+ */
+export function occurrenceIds(l?: Layout): Map<number, string> {
+  const out = new Map<number, string>();
+  if (!l) return out;
+  const count: Record<string, number> = {};
+  for (const pc of [...l.pieces].sort((a, b) => a.layer - b.layer)) {
+    const k = OCCURRENCE[pc.draw] ?? 'g';
+    count[k] = (count[k] ?? 0) + 1;
+    out.set(pc.layer, `${k}${count[k]}`);
+  }
+  return out;
+}
+
 /** A label as typeset: a minus sign rather than a hyphen before a number. */
 const minus = (t?: string) => t?.replace(/(^|[^A-Za-z0-9_])-(?=[0-9])/g, '$1−');
 
@@ -1206,7 +1311,7 @@ const GESTURES: [string, string, string][] = [
   ['Relations that apply to the selection, or inside a box', 'right-click', 'R, then 1–9 applies one'],
   ['Select a piece; add or remove one', `click; ${K}click`, 'Tab, ⇧Tab'],
   ['Select a whole strand', 'double-click the strand', 'S, ⇧S (next, previous strand)'],
-  ['Select several pieces', 'drag a box on empty space', `${K}A selects all`],
+  ['Select several pieces', `drag a box on empty space; ${K}click adds or removes one`, `Tab to a piece, X keeps it; Tab on, X adds (or removes) the piece at the dashed ring; ${K}A selects all`],
   ['Clear the selection', 'click empty space', 'Esc'],
   ['Set the insertion point (a green ring)', 'click a strand', 'I, then the arrows'],
   ['Insert a generator', 'drag it from the palette, or click it after setting the insertion point', 'I, then 1–9; or Tab to the palette and Enter'],
@@ -1215,6 +1320,7 @@ const GESTURES: [string, string, string][] = [
   ['Move between summands', 'click a summand', '← →'],
   ['Pan', 'space-drag, scroll', '⇧ arrows'],
   ['Zoom', `${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
+  ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, g other piece, s strand; numbered from the bottom of each summand)', 'hover a piece; IDs', 'L'],
   ['Ask the AI about the selection', '', `${K}L`],
   ['Leave the canvas for the toolbar and palette', 'click', '⇧Tab from the first piece'],
   ['Back to the document', '← Back', 'Esc (after clearing the selection)'],
