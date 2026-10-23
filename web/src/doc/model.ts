@@ -86,6 +86,8 @@ export interface TimelineEntry {
   version?: number;
   /** The branch it happened on, if not the document itself. */
   branch?: string;
+  /** A milestone's key diagrams: the `key`s of the snapshots that froze them. */
+  snapshots?: string[];
 }
 
 /** What a branch changes relative to the document, cell by cell. */
@@ -153,7 +155,8 @@ export function validEntry(v: unknown): v is TimelineEntry {
     isStr(v.text) &&
     (v.detail === undefined || isStr(v.detail)) &&
     (v.version === undefined || isNum(v.version)) &&
-    (v.branch === undefined || isStr(v.branch))
+    (v.branch === undefined || isStr(v.branch)) &&
+    (v.snapshots === undefined || (Array.isArray(v.snapshots) && v.snapshots.length <= 16 && v.snapshots.every(isStr)))
   );
 }
 export function validHint(v: unknown): v is Hint {

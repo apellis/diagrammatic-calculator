@@ -539,6 +539,28 @@ person accepts or rejects. Every request, step, note, milestone and proposal is 
 document's activity timeline (`Doc.timeline`). Pinned watches show at the top of the outline with
 their term counts over the session.
 
+Claims link to their operations: every tool result sent to the model carries a reference (`ref`:
+op1, op2, … in the order of the conversation's calls, a field of a JSON result or a prefix of a
+text one), and the system prompt asks the model to end each sentence that states a result with
+the reference of the call it comes from (`… simplifies to 0 [op4]`). The reply shows each
+reference as a small button (`markdown(…, {refs: true})`, never inside code); clicking it shows
+that call's input and full result below the paragraph, or says that no call of the conversation
+has that reference. The tool lines in the chat carry their references and results too.
+
+Comments on a cell: "Tell the AI" in an open cell's tools takes an instruction about that cell. It
+is the person's own message, so it is an instruction (unlike text in the workspace), sent as
+`[comment on cell <id>] <text>` with the cell's first line quoted as data. While the AI is busy it
+waits and goes with the next tool results, so the next turn sees it (`run`'s `interject`); while
+it is idle it starts a request of its own. The cell lists its comments (waiting or sent) while the
+page is open; the chat shows them, and the timeline records only that a comment was made, as it
+does for requests.
+
+Milestones: `milestone_write` takes up to four def or watch cells whose current values are the
+milestone's key diagrams. Each value is frozen as a snapshot (named after the milestone and the
+cell; a result already frozen is reused), and the timeline entry lists the snapshots' keys. The
+Activity tab shows the summary as formatted text and each key diagram drawn from its snapshot, with
+Open for the snapshot dialog, so a later edit never changes what a milestone reported.
+
 OpenAI is called through its Responses API (`store: false`), which, unlike chat completions,
 accepts function tools from reasoning models; a local OpenAI-compatible server speaks the
 chat-completions protocol. The provider, model, effort and key are set on the settings page

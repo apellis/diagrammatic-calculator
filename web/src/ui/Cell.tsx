@@ -7,6 +7,7 @@ import { Editor } from './Editor';
 import { NoteView, ResultView, Summary, summary, type Tracer } from './Results';
 import { Typeset } from './Typeset';
 import { toTex } from './tex';
+import type { CellComment } from './AIPanel';
 
 export const TEMPLATES: [string, string, number?][] = [
   ['def', 'def a := ', undefined],
@@ -47,6 +48,9 @@ export interface CellProps {
   commandLine?: () => string | undefined;
   /** Traces a summand of a watch back to the terms of the definitions. */
   trace?: Tracer;
+  /** The person's comments on this cell for the AI, and making one. */
+  comments?: CellComment[];
+  onComment?: (text: string) => void;
 }
 
 /** Moves the focus from a cell's head to the next or previous cell's head. */
@@ -58,6 +62,17 @@ function moveFocus(from: HTMLElement, delta: number) {
 
 export function Cell(props: CellProps) {
   const [draft, setDraft] = createSignal(props.text);
+  const [commenting, setCommenting] = createSignal(false);
+  const [commentDraft, setCommentDraft] = createSignal('');
+  let commentBox: HTMLTextAreaElement | undefined;
+  createEffect(on(commenting, (on) => on && queueMicrotask(() => commentBox?.focus())));
+  const sendComment = () => {
+    const t = commentDraft().trim();
+    if (!t) return;
+    props.onComment?.(t);
+    setCommentDraft('');
+    setCommenting(false);
+  };
   let editor: { set: (t: string, c?: number) => void; focus: () => void } | undefined;
   const kind = () => props.state?.parsed?.kind ?? kindOf(props.text) ?? (props.text ? 'def' : 'new');
   const head = () => {
@@ -188,10 +203,47 @@ export function Cell(props: CellProps) {
               <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>
                 <button class="ghost" onClick={() => props.onCanvas?.()} title="Open the focus canvas (F)" data-testid="open-canvas">Canvas</button>
               </Show>
+              <Show when={props.onComment}>
+                <button class="ghost" onClick={() => setCommenting(!commenting())} aria-expanded={commenting()} title="Comment on this cell for the AI: an instruction it gets at once"
+                  aria-label="Tell the AI: comment on this cell" data-testid="comment-ai">Tell the AI</button>
+              </Show>
               <div class="grow" />
               <span class="hint">{props.id}</span>
               <button class="ghost" onClick={props.onRemove}>Delete</button>
             </div>
+            <Show when={props.comments?.length}>
+              <ul class="cell-comments" data-testid="cell-comments">
+                <For each={props.comments}>
+                  {(c) => (
+                    <li>
+                      <span class="hint">For the AI ({c.state === 'waiting' ? 'waiting' : 'sent'}):</span> {c.text}
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+            <Show when={commenting()}>
+              <div class="comment-box">
+                <textarea ref={commentBox} rows={2} aria-label={`Comment on ${props.id} for the AI`} value={commentDraft()} onInput={(e) => setCommentDraft(e.currentTarget.value)}
+                  placeholder="An instruction to the AI about this cell; Enter sends."
+                  onKeyDown={(e) => {
+                    // Enter and Esc belong to this box, not to the cell around it
+                    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      sendComment();
+                    } else if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setCommenting(false);
+                    }
+                  }} />
+                <div class="row">
+                  <button class="primary" disabled={!commentDraft().trim()} onClick={sendComment} data-testid="comment-send">Send to the AI</button>
+                  <button class="ghost" onClick={() => setCommenting(false)}>Cancel</button>
+                  <span class="hint">It goes to the AI as your instruction about {props.id}, between its steps if it is busy.</span>
+                </div>
+              </div>
+            </Show>
           </Show>
         </div>
       </Show>

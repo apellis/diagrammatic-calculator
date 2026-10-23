@@ -34,8 +34,6 @@ Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
 
 Polish (all remaining UX polish happens before going public):
 
-- AI panel: claims in replies linked to the operation that produced them; comments on a cell as
-  instructions to the AI; milestones with key diagrams in the timeline.
 - Occurrence IDs are carried through canvas gestures only: text typed by hand, terms written by
   the AI and accepted branches give their new summands fresh IDs; strands are numbered per summand.
 

@@ -15,7 +15,7 @@ import { Dialog } from './Dialog';
 import { Palette, type Command } from './Palette';
 import { IMPORTABLE, importNotes, importText } from './DocList';
 import { Canvas, type Generator, type Selection } from './Canvas';
-import { AIPanel } from './AIPanel';
+import { AIPanel, type CellComment } from './AIPanel';
 import { isAction, keysOf, type ActionId } from './shortcuts';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { isSetUp, loadKey, loadSettings } from '../ai/providers';
@@ -52,6 +52,8 @@ export interface ViewApi {
   /** Cell states once every cell is computed (or after a time limit). */
   settled: () => Promise<Map<string, CellState>>;
   termContext: () => string;
+  /** Opens a snapshot (by its key) in the snapshot dialog. */
+  showSnapshot: (key: string) => void;
 }
 
 /** The document, or one of its branches, shown in the workspace view, with the AI panel beside it. */
@@ -219,6 +221,14 @@ function Workspace(props: { o: OpenDoc }) {
       d?.endAI();
     }
   };
+  // comments on cells for the AI, kept while the page is open, like the chat
+  const [comments, setComments] = createSignal<CellComment[]>([]);
+  let nextComment = 1;
+  const comment = (cell: string, cellText: string, text: string) => {
+    setComments([...comments(), { id: nextComment++, cell, cellText, text, state: 'waiting' }]);
+    setAiOpen(true);
+  };
+  const commentsSent = (ids: number[]) => setComments(comments().map((c) => (ids.includes(c.id) ? { ...c, state: 'sent' } : c)));
   const toggleAI = () => setAiOpen(!aiOpen());
   const ask = () => {
     setAiOpen(true);
@@ -231,14 +241,14 @@ function Workspace(props: { o: OpenDoc }) {
         <Show when={current()?.doc ?? main} keyed>
           {(doc) => (
             <DocView o={props.o} doc={doc} branching={branching} linked={linked} aiOpen={aiOpen()} onToggleAI={toggleAI} onAsk={ask}
-              onSelection={setSelection} api={(a) => (view = a)} sync={sync()} />
+              onSelection={setSelection} api={(a) => (view = a)} sync={sync()} comments={comments} onComment={comment} />
           )}
         </Show>
       </div>
       <Show when={aiOpen()}>
         <AIPanel host={host} main={main} proposals={proposals()} onDecide={decide} onBusy={onBusy} onClose={() => setAiOpen(false)}
           owner={props.o.info.cloud?.owner?.name || props.o.info.cloud?.owner?.email}
-          focusRef={(f) => (focusAI = f)} />
+          focusRef={(f) => (focusAI = f)} comments={comments} onCommentsSent={commentsSent} onSnapshot={(k) => view?.showSnapshot(k)} />
       </Show>
     </div>
   );
@@ -258,6 +268,9 @@ function DocView(props: {
   api: (a: ViewApi) => void;
   /** The document's sync with the account, when there is one. */
   sync: DocSync | null;
+  /** Comments on cells for the AI, and making one. */
+  comments: () => CellComment[];
+  onComment: (cell: string, cellText: string, text: string) => void;
 }) {
   const doc = props.doc;
   const main = props.o.doc;
@@ -306,6 +319,10 @@ function DocView(props: {
   };
   props.api({
     termContext,
+    showSnapshot: (key) => {
+      const i = snapshots().findIndex((s) => s.key === key);
+      if (i >= 0) setModal({ snapshot: i });
+    },
     settled: async () => {
       // give the evaluator a moment to see the latest step, then wait for every cell
       await new Promise((r) => setTimeout(r, 30));
@@ -797,7 +814,8 @@ function DocView(props: {
                         onRemove={() => doc.removeCell(c.id)} onMove={(d) => doc.moveCell(c.id, i() + d)}
                         onPin={() => pin(c.id)} onRerun={() => ev?.rerun(c.id)} onCopyTikz={() => copyTikz(c.id)}
                         onCanvas={(w) => openCanvas(c.id, w)} validate={validate} onInsertBelow={() => insertBelow(c.id)}
-                        onStop={() => stop(c.id)} onRunLonger={() => runLonger(c.id)} commandLine={() => commandLine(c.id)} trace={trace(c.id)} />
+                        onStop={() => stop(c.id)} onRunLonger={() => runLonger(c.id)} commandLine={() => commandLine(c.id)} trace={trace(c.id)}
+                        comments={props.comments().filter((x) => x.cell === c.id)} onComment={(t) => props.onComment(c.id, text, t)} />
                     )}
                   </Show>
                 </>

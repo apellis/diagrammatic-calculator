@@ -33,8 +33,36 @@ function emphasis(s: string): string {
     .replace(/(^|[^\w])_(?!\s)(.+?)(?<!\s)_(?!\w)/g, '$1<em>$2</em>');
 }
 
-/** HTML for a reply: paragraphs, headings, lists, fenced code, display mathematics. */
-export function markdown(src: string): string {
+/**
+ * References to tool calls in a reply (`[op3]`, `[op3, op5]`) as buttons carrying the reference,
+ * outside code. The page shows the call and its result when one is clicked.
+ */
+function claimRefs(html: string): string {
+  return html
+    .split(/(<pre>[\s\S]*?<\/pre>|<code>[\s\S]*?<\/code>)/)
+    .map((part, i) =>
+      i % 2
+        ? part
+        : part.replace(/\[(op\d+(?:\s*,\s*op\d+)*)\]/g, (_m, refs: string) =>
+            refs
+              .split(/\s*,\s*/)
+              .map((r) => `<button type="button" class="claim-ref" data-ref="${r}" title="Show the operation this comes from">${r}</button>`)
+              .join(''),
+          ),
+    )
+    .join('');
+}
+
+/**
+ * HTML for a reply: paragraphs, headings, lists, fenced code, display mathematics; with `refs`,
+ * references to tool calls become buttons (see `claimRefs`).
+ */
+export function markdown(src: string, opts: { refs?: boolean } = {}): string {
+  const html = blocks(src);
+  return opts.refs ? claimRefs(html) : html;
+}
+
+function blocks(src: string): string {
   const lines = src.replace(/\r\n?/g, '\n').split('\n');
   const out: string[] = [];
   let para: string[] = [];

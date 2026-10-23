@@ -44,7 +44,7 @@ async function modelList(route: Route, body: unknown = ANTHROPIC_LIST) {
   return true;
 }
 
-async function recordedModel(page: Page, turns: (() => string)[]) {
+async function recordedModel(page: Page, turns: (() => string | Promise<string>)[]) {
   const requests: { headers: Record<string, string>; body: Record<string, unknown> }[] = [];
   await page.route('https://api.anthropic.com/**', async (route: Route) => {
     const r = route.request();
@@ -53,7 +53,7 @@ async function recordedModel(page: Page, turns: (() => string)[]) {
     requests.push({ headers: await r.allHeaders(), body: r.postDataJSON() });
     const next = turns.shift();
     if (!next) return route.fulfill({ status: 500, headers: cors, body: 'no more recorded turns' });
-    await route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream' }, body: next() });
+    await route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream' }, body: await next() });
   });
   return requests;
 }
@@ -212,6 +212,91 @@ test('a multi-step AI request undoes as one step; pinned watches sit at the top 
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(1);
   await expect(page.getByTestId('pinned')).toHaveCount(0);
+});
+
+/** Opens a cell (its tools show) without starting to edit it. */
+async function expand(page: Page, i: number) {
+  const head = cell(page, i).locator('.head');
+  if ((await head.getAttribute('aria-expanded')) === 'true') return;
+  await head.focus();
+  await page.keyboard.press('Enter');
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+}
+
+test('claims link to the operations behind them, comments on cells reach the AI, milestones show their key diagrams', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 x_1 e(iij)');
+  await addCell(page, 'watch a');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term, degree 0');
+  const def = (await cell(page, 0).getAttribute('data-cell'))!;
+  const watch = (await cell(page, 1).getAttribute('data-cell'))!;
+  // the first answer is held until the person has commented, so the comment arrives mid-request
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  const requests = await recordedModel(page, [
+    async () => {
+      await held;
+      return sse([{ type: 'text', text: 'Checking.' }, { type: 'tool_use', name: 'simplify', input: { term: 'x_2 psi_1 e(iij) + e(iij) - psi_1 x_1 e(iij)' } }], 'tool_use');
+    },
+    () => sse([{ type: 'tool_use', name: 'milestone_write', input: { title: 'Slide checked', summary: 'The slide is an **equality**.', cells: [watch] } }], 'tool_use'),
+    () => sse([{ type: 'text', text: 'The difference simplifies to 0 [op1], so the slide holds; the milestone keeps the watch [op2].' }], 'end_turn'),
+    () => sse([{ type: 'text', text: 'Noted the comment on the watch.' }], 'end_turn'),
+  ]);
+  await enterKey(page);
+  await page.getByLabel('Message to the AI').fill('Does the slide hold?');
+  await page.keyboard.press('Enter');
+
+  await expand(page, 0);
+  await cell(page, 0).getByTestId('comment-ai').click();
+  await page.getByLabel(`Comment on ${def} for the AI`).fill('Keep the dot on the left strand.');
+  await page.keyboard.press('Enter');
+  await expect(cell(page, 0).getByTestId('cell-comments')).toContainText('(waiting): Keep the dot on the left strand.');
+  await expect(page.getByTestId('comments-waiting')).toContainText('waits for the AI to finish its step');
+  release();
+  const chat = page.getByTestId('chat');
+  await expect(chat).toContainText('the milestone keeps the watch');
+  await expect(cell(page, 0).getByTestId('cell-comments')).toContainText('(sent)');
+  await expect(chat.getByTestId('comment-on')).toHaveText(`comment on ${def}`);
+  // it went with the results of the first step, as the person's instruction tied to the cell
+  const after = requests[1].body.messages as { role: string; content: { type: string; text?: string; content?: string }[] }[];
+  const blocks = after.at(-1)!.content;
+  expect(blocks.map((b) => b.type)).toEqual(['tool_result', 'text']);
+  expect(JSON.parse(blocks[0].content!)).toMatchObject({ ref: 'op1', status: 'ok' });
+  expect(blocks[1].text).toBe(`[comment on cell ${def}] Keep the dot on the left strand.\n[the cell's text: "def a := psi_1 x_1 e(iij)"]`);
+  expect((requests[0].body.system as { text: string }[])[0].text).toContain('end it with the reference of the tool call');
+
+  // a claim's reference shows the call and its result
+  await chat.locator('.claim-ref[data-ref="op1"]').click();
+  const claim = chat.getByTestId('claim');
+  await expect(claim).toContainText('op1 simplify');
+  await expect(claim).toContainText('x_2 psi_1 e(iij) + e(iij) - psi_1 x_1 e(iij)');
+  await expect(claim.getByTestId('claim-result')).toContainText('"ref": "op1"');
+  await chat.locator('.claim-ref[data-ref="op2"]').click();
+  await expect(claim).toContainText('op2 milestone_write');
+  await expect(claim).toContainText('milestone written with 1 diagram');
+
+  // the milestone shows its key diagram, frozen as a snapshot
+  await page.getByTestId('activity-tab').click();
+  const milestone = page.getByTestId('timeline').locator('.tl-milestone');
+  await expect(milestone.locator('strong')).toHaveText('equality');
+  const diagram = milestone.getByTestId('milestone-diagram');
+  await expect(diagram).toContainText(`Slide checked (${watch})`);
+  await expect(diagram.locator('svg').first()).toBeVisible();
+  await diagram.getByRole('button', { name: 'Open' }).click();
+  const snap = page.getByRole('dialog', { name: `Snapshot Slide checked (${watch})` });
+  await expect(snap).toContainText('watch');
+  await page.keyboard.press('Escape');
+  await expect(snap).toHaveCount(0);
+
+  // a comment while the AI is idle starts a request of its own
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await expand(page, 1);
+  await cell(page, 1).getByTestId('comment-ai').click();
+  await page.getByLabel(`Comment on ${watch} for the AI`).fill('Pin this one.');
+  await page.getByTestId('comment-send').click();
+  await expect(chat).toContainText('Noted the comment on the watch.');
+  const last = requests[3].body.messages as { role: string; content: { type: string; text?: string }[] }[];
+  expect(last.at(-1)!.content).toEqual([{ type: 'text', text: `[comment on cell ${watch}] Pin this one.\n[the cell's text: "watch a"]` }]);
 });
 
 test('Cmd-L in the canvas asks about the selection, which travels with the message as references', async ({ page }) => {

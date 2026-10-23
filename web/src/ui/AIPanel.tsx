@@ -1,21 +1,46 @@
-// The AI panel: settings with the person's own key, the chat, proposals to accept or reject,
-// and the activity timeline of AI steps.
-import { createSignal, For, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
+// The AI panel: the chat (with each claim linked to the operation it comes from, and the
+// person's comments on cells), proposals to accept or reject, and the activity timeline of AI
+// steps with the key diagrams of its milestones.
+import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import type Anthropic from '@anthropic-ai/sdk';
-import type { Doc, TimelineEntry } from '../doc/model';
-import { run, userMessage, type AgentEvent } from '../ai/agent';
+import type { Doc, Snapshot, TimelineEntry } from '../doc/model';
+import type { CellState } from '../eval/evaluator';
+import { commentMessage, run, userMessage, type AgentEvent } from '../ai/agent';
 import { ANTHROPIC_MODELS, isSetUp, loadKey, loadSettings, provider } from '../ai/providers';
 import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { markdown } from './markdown';
+import { ResultView } from './Results';
 import { keysOf } from './shortcuts';
 
 type Part =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string }
-  | { type: 'tool'; id: string; name: string; input: string; summary?: string; isError?: boolean }
+  | { type: 'tool'; id: string; ref: string; name: string; input: string; summary?: string; result?: string; isError?: boolean }
   | { type: 'stopped'; reason: string };
-type Entry = { role: 'user'; text: string; selection?: string } | { role: 'assistant'; parts: Part[] };
+type Entry = { role: 'user'; text: string; selection?: string; cell?: string } | { role: 'assistant'; parts: Part[] };
+type ToolPart = Extract<Part, { type: 'tool' }>;
+
+/** A comment the person made on a cell for the AI; it waits until the AI can take it. */
+export interface CellComment {
+  id: number;
+  cell: string;
+  /** The cell's text when the comment was made. */
+  cellText: string;
+  text: string;
+  state: 'waiting' | 'sent';
+}
+
+/** A tool's input or result as text to read: JSON indented, long text clipped. */
+function readable(s: string, max = 6000): string {
+  let t = s;
+  try {
+    t = JSON.stringify(JSON.parse(s), (k, v) => (k === 'svg' ? undefined : v), 2);
+  } catch {
+    // not JSON: as it is
+  }
+  return t.length > max ? `${t.slice(0, max)}… [${t.length - max} more characters]` : t;
+}
 
 const NOTICE = 'diagcalc.ai.noticeSeen';
 
@@ -32,6 +57,11 @@ export interface AIPanelProps {
   focusRef?: (f: () => void) => void;
   /** Who owns the document, when it is someone else's. */
   owner?: string;
+  /** The person's comments on cells; waiting ones go to the AI as soon as it can take them. */
+  comments?: () => CellComment[];
+  onCommentsSent?: (ids: number[]) => void;
+  /** Opens a snapshot (a milestone's key diagram) by its key. */
+  onSnapshot?: (key: string) => void;
 }
 
 export function AIPanel(props: AIPanelProps) {
@@ -47,6 +77,7 @@ export function AIPanel(props: AIPanelProps) {
   const [busy, setBusy] = createSignal(false);
   const [usage, setUsage] = createSignal<{ input: number; output: number; cacheRead: number } | null>(null);
   const [timeline, setTimeline] = createSignal<TimelineEntry[]>(props.main.timelineList());
+  const [snapshots, setSnapshots] = createSignal<Snapshot[]>(props.main.snapshotList());
   const [tab, setTab] = createSignal<'chat' | 'activity'>('chat');
   const messages: Anthropic.MessageParam[] = [];
   let abort: AbortController | null = null;
@@ -54,9 +85,12 @@ export function AIPanel(props: AIPanelProps) {
   let log!: HTMLDivElement;
 
   const onTimeline = () => setTimeline(props.main.timelineList());
+  const onSnapshots = () => setSnapshots(props.main.snapshotList());
   props.main.timeline.observe(onTimeline);
+  props.main.snapshots.observe(onSnapshots);
   onCleanup(() => {
     props.main.timeline.unobserve(onTimeline);
+    props.main.snapshots.unobserve(onSnapshots);
     abort?.abort();
   });
   onMount(() => props.focusRef?.(() => box?.focus()));
@@ -67,21 +101,28 @@ export function AIPanel(props: AIPanelProps) {
 
   const scroll = () => requestAnimationFrame(() => log && (log.scrollTop = log.scrollHeight));
 
-  const send = async () => {
-    const text = draft().trim();
-    if (!text || busy() || !ready()) return;
-    if (!noticeSeen()) return;
-    const sel = attach() ? selection() : null;
-    const doc = props.host.doc();
-    messages.push({ role: 'user', content: userMessage(text, { context: doc.context, branch: props.host.branch()?.name ?? null, version: doc.versions().length }, sel) });
-    setEntries(entries.length, { role: 'user', text, selection: sel ? selectionLabel(sel) : undefined });
+  /** The assistant entry the running request writes into. */
+  let at = -1;
+  const waiting = () => (props.comments?.() ?? []).filter((c) => c.state === 'waiting');
+  /** Takes the waiting comments: shown in the chat, logged, and returned as the person's messages. */
+  const takeComments = (): string[] => {
+    const cs = waiting();
+    if (!cs.length) return [];
+    props.onCommentsSent?.(cs.map((c) => c.id));
+    for (const c of cs) {
+      setEntries(entries.length, { role: 'user', text: c.text, cell: c.cell });
+      // the comment's text stays in this chat, like a request's
+      if (!props.host.foreign()) props.main.log({ kind: 'request', author: 'you', text: `Commented on ${c.cell} for the AI.` });
+    }
+    return cs.map((c) => commentMessage({ id: c.cell, text: c.cellText }, c.text));
+  };
+
+  /** Runs one request whose user message is already in `messages`. */
+  const request = async () => {
     setEntries(entries.length, { role: 'assistant', parts: [] });
-    const at = entries.length - 1;
-    setDraft('');
+    at = entries.length - 1;
     setBusy(true);
     props.onBusy(true);
-    // the request's text stays in this chat: the document (shared with others) only records that one was made
-    if (!props.host.foreign()) props.main.log({ kind: 'request', author: 'you', text: 'Asked the AI.' });
     abort = new AbortController();
     const parts = (f: (ps: Part[]) => void) => setEntries(at, produce((e) => { if (e.role === 'assistant') f(e.parts); }));
     const add = (part: Part) => parts((ps) => ps.push(part));
@@ -98,13 +139,18 @@ export function AIPanel(props: AIPanelProps) {
           append(e.type, e.delta);
           break;
         case 'tool':
-          add({ type: 'tool', id: e.id, name: e.name, input: JSON.stringify(e.input) });
+          add({ type: 'tool', id: e.id, ref: e.ref, name: e.name, input: JSON.stringify(e.input) });
           break;
         case 'result':
           parts((ps) => {
-            const p = ps.find((x) => x.type === 'tool' && x.id === e.id) as Extract<Part, { type: 'tool' }> | undefined;
-            if (p) Object.assign(p, { summary: e.summary, isError: e.isError });
+            const p = ps.find((x) => x.type === 'tool' && x.id === e.id) as ToolPart | undefined;
+            if (p) Object.assign(p, { summary: e.summary, result: e.content, isError: e.isError });
           });
+          break;
+        case 'comments':
+          // the comments were shown when taken; the AI's answer continues below them
+          setEntries(entries.length, { role: 'assistant', parts: [] });
+          at = entries.length - 1;
           break;
         case 'usage':
           setUsage((u) => ({ input: (u?.input ?? 0) + e.input, output: (u?.output ?? 0) + e.output, cacheRead: (u?.cacheRead ?? 0) + e.cacheRead }));
@@ -119,13 +165,43 @@ export function AIPanel(props: AIPanelProps) {
     };
     setUsage(null);
     try {
-      await run({ provider: provider(key(), settings()), host: props.host, messages, signal: abort.signal, emit, budget: settings().budget });
+      await run({ provider: provider(key(), settings()), host: props.host, messages, signal: abort.signal, emit, budget: settings().budget, interject: takeComments });
     } finally {
       abort = null;
       setBusy(false);
       props.onBusy(false);
       scroll();
     }
+  };
+
+  const send = async () => {
+    const text = draft().trim();
+    if (!text || busy() || !ready()) return;
+    if (!noticeSeen()) return;
+    const sel = attach() ? selection() : null;
+    const doc = props.host.doc();
+    messages.push({ role: 'user', content: userMessage(text, { context: doc.context, branch: props.host.branch()?.name ?? null, version: doc.versions().length }, sel) });
+    setEntries(entries.length, { role: 'user', text, selection: sel ? selectionLabel(sel) : undefined });
+    setDraft('');
+    // the request's text stays in this chat: the document (shared with others) only records that one was made
+    if (!props.host.foreign()) props.main.log({ kind: 'request', author: 'you', text: 'Asked the AI.' });
+    await request();
+  };
+
+  // comments made while the AI is idle start a request of their own
+  createEffect(() => {
+    if (busy() || !ready() || !noticeSeen() || !waiting().length) return;
+    untrack(() => {
+      const texts = takeComments();
+      messages.push({ role: 'user', content: texts.map((text) => ({ type: 'text' as const, text })) });
+      void request();
+    });
+  });
+
+  /** A tool call of this conversation by its reference. */
+  const toolByRef = (ref: string): ToolPart | undefined => {
+    for (const e of entries) if (e.role === 'assistant') for (const p of e.parts) if (p.type === 'tool' && p.ref === ref) return p;
+    return undefined;
   };
 
   const stop = () => abort?.abort();
@@ -192,7 +268,25 @@ export function AIPanel(props: AIPanelProps) {
                     <span class="grow">
                       {t.text}
                       <Show when={t.branch}><span class="branch-name small">⑂ {t.branch}</span></Show>
-                      <Show when={t.detail && t.kind !== 'note'}><div class="hint tl-detail">{t.detail}</div></Show>
+                      <Show when={t.detail && t.kind !== 'note' && t.kind !== 'milestone'}><div class="hint tl-detail">{t.detail}</div></Show>
+                      <Show when={t.kind === 'milestone'}>
+                        <Show when={t.detail}><div class="ai-text tl-summary" innerHTML={markdown(t.detail!)} /></Show>
+                        <For each={t.snapshots ?? []}>
+                          {(k) => (
+                            <Show when={snapshots().find((x) => x.key === k)} keyed fallback={<div class="hint">A key diagram of this milestone is no longer in the document.</div>}>
+                              {(snap) => (
+                                <div class="tl-diagram" data-testid="milestone-diagram">
+                                  <div class="row">
+                                    <span class="hint grow">{snap.name}</span>
+                                    <button class="ghost small" onClick={() => props.onSnapshot?.(k)}>Open</button>
+                                  </div>
+                                  <ResultView s={{ id: `milestone-${k}`, text: snap.cellText, status: 'fresh', value: snap.value as CellState['value'] }} />
+                                </div>
+                              )}
+                            </Show>
+                          )}
+                        </For>
+                      </Show>
                     </span>
                   </div>
                 )}
@@ -213,7 +307,8 @@ export function AIPanel(props: AIPanelProps) {
                 <Switch>
                   <Match when={e.role === 'user' && e}>
                     {(u) => (
-                      <div class="msg user">
+                      <div class="msg user" classList={{ comment: !!u().cell }}>
+                        <Show when={u().cell}><div class="hint" data-testid="comment-on">comment on {u().cell}</div></Show>
                         {u().text}
                         <Show when={u().selection}><div class="hint">with the selection: {u().selection}</div></Show>
                       </div>
@@ -225,15 +320,50 @@ export function AIPanel(props: AIPanelProps) {
                         <For each={a().parts}>
                           {(p) => (
                             <Switch>
-                              <Match when={p.type === 'text' && p}>{(t) => <div class="ai-text" innerHTML={markdown(t().text)} />}</Match>
+                              <Match when={p.type === 'text' && p}>
+                                {(t) => {
+                                  // a claim's reference shows the call it comes from and its result
+                                  const [shown, setShown] = createSignal<string | null>(null);
+                                  const onClick = (e: MouseEvent) => {
+                                    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-ref]');
+                                    if (b) setShown(shown() === b.dataset.ref ? null : b.dataset.ref!);
+                                  };
+                                  return (
+                                    <>
+                                      <div class="ai-text" innerHTML={markdown(t().text, { refs: true })} onClick={onClick} />
+                                      <Show when={shown()} keyed>
+                                        {(ref) => (
+                                          <div class="claim" data-testid="claim" role="region" aria-label={`Operation ${ref}`}>
+                                            <Show when={toolByRef(ref)} keyed fallback={<div class="hint">This reply cites {ref}, but no operation of this conversation has that reference.</div>}>
+                                              {(c) => (
+                                                <>
+                                                  <div class="row">
+                                                    <strong class="grow"><span class="mono">{ref}</span> <span class="toolname">{c.name}</span> <span class="hint">{c.summary ?? 'running…'}</span></strong>
+                                                    <button class="ghost" aria-label="Close" onClick={() => setShown(null)}>×</button>
+                                                  </div>
+                                                  <div class="hint">Called with</div>
+                                                  <pre class="textform">{readable(c.input)}</pre>
+                                                  <div class="hint">Result</div>
+                                                  <pre class="textform" classList={{ bad: !!c.isError }} data-testid="claim-result">{c.result === undefined ? 'not back yet' : readable(c.result)}</pre>
+                                                </>
+                                              )}
+                                            </Show>
+                                          </div>
+                                        )}
+                                      </Show>
+                                    </>
+                                  );
+                                }}
+                              </Match>
                               <Match when={p.type === 'thinking' && p}>
                                 {(t) => <details class="ai-thinking"><summary>Thinking</summary><div class="ai-text" innerHTML={markdown(t().text)} /></details>}
                               </Match>
                               <Match when={p.type === 'tool' && p}>
                                 {(t) => (
                                   <details class="ai-tool" classList={{ bad: !!t().isError, pending: !t().summary }}>
-                                    <summary><span class="toolname">{t().name}</span> <span class="hint">{t().summary ?? 'running…'}</span></summary>
+                                    <summary><span class="hint mono">{t().ref}</span> <span class="toolname">{t().name}</span> <span class="hint">{t().summary ?? 'running…'}</span></summary>
                                     <div class="textform">{t().input}</div>
+                                    <Show when={t().result !== undefined}><pre class="textform">{readable(t().result!)}</pre></Show>
                                   </details>
                                 )}
                               </Match>
@@ -275,6 +405,11 @@ export function AIPanel(props: AIPanelProps) {
       </Show>
 
       <div class="ai-compose">
+        <Show when={waiting().length}>
+          <div class="hint" data-testid="comments-waiting">
+            {waiting().length === 1 ? 'A comment on a cell waits' : `${waiting().length} comments on cells wait`} {!ready() ? 'until an AI provider is set up' : !noticeSeen() ? 'until you have read the note above' : 'for the AI to finish its step'}.
+          </div>
+        </Show>
         <Show when={selection()}>
           {(s) => (
             <label class="row hint" data-testid="ai-selection">

@@ -33,5 +33,6 @@ value as `workspace.run` returned it, provenance included.
 The timeline records the AI's activity: each request (`kind` `request`), tool call (`tool`), note
 (`note`), milestone summary (`milestone`), proposal for the person (`proposal`) and failure
 (`error`). `detail` holds more (a tool's input, a milestone's text), `version` the step a workspace
-change made, and `branch` the what-if branch it happened on, when not the document itself. Older
+change made, and `branch` the what-if branch it happened on, when not the document itself. A
+milestone's `snapshots` lists the `key`s of the snapshots that froze its key diagrams. Older
 files without `timeline` read as an empty timeline.

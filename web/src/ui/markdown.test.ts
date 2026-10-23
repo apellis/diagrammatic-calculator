@@ -40,4 +40,12 @@ describe('markdown', () => {
     expect(html).toMatch(/<em><span class="katex">.*<\/span> here<\/em>/);
     expect(html).not.toContain('**');
   });
+
+  it('turns references to tool calls into buttons, but not inside code, and only when asked', () => {
+    const html = markdown('It simplifies to 0 [op4]; both hold [op2, op3]. `[op5]`', { refs: true });
+    expect(html).toContain('0 <button type="button" class="claim-ref" data-ref="op4"');
+    expect(html.match(/data-ref="op[23]"/g)).toEqual(['data-ref="op2"', 'data-ref="op3"']);
+    expect(html).toContain('<code>[op5]</code>');
+    expect(markdown('x [op4]')).toBe('<p>x [op4]</p>');
+  });
 });

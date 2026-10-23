@@ -149,8 +149,17 @@ const WORKSPACE_TOOLS: ToolDef[] = [
   },
   {
     name: 'milestone_write',
-    description: 'Writes a short summary at a milestone into the activity timeline.',
-    input_schema: { type: 'object', required: ['title', 'summary'], properties: { title: { type: 'string' }, summary: { type: 'string' } } },
+    description:
+      'Writes a short summary at a milestone into the activity timeline, with its key diagrams: the current values of up to four def or watch cells, each frozen as a snapshot so a later edit does not change what the milestone reports.',
+    input_schema: {
+      type: 'object',
+      required: ['title', 'summary'],
+      properties: {
+        title: { type: 'string' },
+        summary: { type: 'string' },
+        cells: { type: 'array', items: { type: 'string' }, maxItems: 4, description: 'IDs of the def or watch cells whose values are the key diagrams.' },
+      },
+    },
   },
 ];
 
@@ -426,9 +435,25 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
       host.main.pinWatch(id, !a.unpin);
       return ok(`${a.unpin ? 'unpinned' : 'pinned'} ${id}`);
     }
-    case 'milestone_write':
-      log(host, { kind: 'milestone', text: a.title as string, detail: a.summary as string });
-      return ok('milestone written', host.foreign() ? 'Not written: this document belongs to someone else, so the activity timeline is left alone; tell the person in the chat instead.' : undefined);
+    case 'milestone_write': {
+      if (host.foreign()) return ok('milestone not written', 'Not written: this document belongs to someone else, so the activity timeline is left alone; tell the person in the chat instead.');
+      const ids = (a.cells as string[] | undefined) ?? [];
+      const states = ids.length ? await host.settled() : new Map<string, CellState>();
+      const keys: string[] = [];
+      for (const id of ids) {
+        const s = states.get(id);
+        const v = s?.value as { status?: string; kind?: string } | undefined;
+        if (doc.index(id) < 0) return fail(`There is no cell ${id}.`);
+        if (!s || s.status !== 'fresh' || !s.valueKey || v?.status !== 'ok' || !['def', 'watch'].includes(v.kind ?? '')) return fail(`${id} has no current value of a def or watch cell to show.`);
+        // the same result already frozen is not frozen twice
+        if (!host.main.snapshotList().some((x) => x.key === s.valueKey)) {
+          host.main.pin({ name: `${a.title as string} (${id})`, cellId: id, cellText: s.text, context: doc.context, version: doc.versions().length, key: s.valueKey, value: s.value, time: Date.now() });
+        }
+        keys.push(s.valueKey);
+      }
+      log(host, { kind: 'milestone', text: a.title as string, detail: a.summary as string, ...(keys.length ? { snapshots: keys } : {}) });
+      return ok(keys.length ? `milestone written with ${keys.length} ${keys.length === 1 ? 'diagram' : 'diagrams'}` : 'milestone written');
+    }
   }
   return fail(`There is no tool named ${name}.`);
 }

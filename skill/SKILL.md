@@ -95,7 +95,8 @@ workspace is a `.dcw` file run with `diagcalc run`.
 - **Branches:** `branch_create`, `branch_compare`, `branch_discard`, `branch_leave`;
   `branch_accept` proposes accepting into the document, which the person confirms.
 - **Following your work:** `timeline_note` (a one-line note), `watch_pin` (a watch that measures
-  progress), `milestone_write` (a short summary at a milestone).
+  progress), `milestone_write` (a short summary at a milestone, with up to four def or watch cells
+  whose current values are its key diagrams; each is frozen as a snapshot).
 
 Term operations take a `context`; leave it out to use the document's context with its scalars.
 Locations are a summand (numbered from 1 in printed order) and optionally a `rectangle` of its
