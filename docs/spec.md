@@ -312,7 +312,7 @@ The app is a static site on Cloudflare Pages at diagcalc.ape.computer; a server 
 - ape.computer's DNS moves to Cloudflare (free), with the Ghost records copied unchanged so the blog keeps working.
 - Pages deploys automatically from the main branch; every pull request gets a preview URL.
 - Cloudflare Access guards diagcalc.ape.computer with Google sign-in for an allowlist (free up to 50 users). Access holds no user data.
-- Response headers in `_headers`: cross-origin isolation (for multi-core WebAssembly), a strict Content Security Policy that allows only the chosen AI providers' API hosts, and long caching for hashed assets.
+- Response headers in `_headers`: cross-origin isolation (for multi-core WebAssembly) and a strict Content Security Policy: scripts, workers, styles, fonts and images from the site only (no inline script; WebAssembly compilation allowed), network requests to the site and the AI providers (Anthropic, OpenAI, and the https or local address of an OpenAI-compatible server the person names), no plugins, no `<base>`, and no framing. `Referrer-Policy: no-referrer` and `nosniff` on every file. Trusted Types are not enforced: Solid builds its templates through `innerHTML`, so a policy would have to allow everything.
 
 **Accounts phase (phase 6).**
 
@@ -321,6 +321,17 @@ The app is a static site on Cloudflare Pages at diagcalc.ape.computer; a server 
 - R2 holds document snapshots and exported files.
 - Email through Resend from a sending subdomain (for example send.ape.computer) with SPF, DKIM and DMARC: share notifications only.
 - Anonymous use stays free and unchanged.
+
+**Security of the accounts phase.** These rules hold whatever the client sends.
+
+- *Sessions* end after 30 days, or after 7 days without a request; the session ID is replaced once a day (the old one stays valid for a minute, for requests already under way). "Sign out everywhere" in Settings ends every session of the account.
+- *Origin.* The API answers only at the site's own address (`APP_ORIGIN`); sign-in redirects and links in e-mails use that address, never the host a request names. Previews get no database or storage.
+- *Storage.* A request body is refused past its limit before it is read in full. A document holds at most 50 exported files, and an owner's documents and files together at most 2 GiB, whoever writes them (an editor by link included). Deleting a document or an account removes its stored objects in bounded rounds that later requests finish if one runs out of time.
+- *Sharing.* A share sent to an address belongs to the first account that opens it with that address. People who hold only a link see neither the owner's address nor the list of shares; only the owner and direct editors see who a document is shared with.
+- *Share e-mails* name the sender by their verified Google address, keep the document title (which anyone can choose) out of the subject and strip anything in it that looks like a web address, and carry a one-click unsubscribe link. Accounts less than a day old send none. Limits per day: 20 per sender, 3 per recipient, 100 in all. The app says why when it sent none.
+- *Shared history.* A shared document carries its whole history, including text later deleted; the Share dialog says so and offers to share a clean copy (the current state with no history) instead. History is cooperative: anyone who can edit a document can rewrite its history. The app reads shared content defensively, so a malformed or hostile document still opens, and offers a repaired copy when it finds problems.
+- *AI on shared documents.* Document content reaches the model marked as data, never as instructions. On a document owned by someone else, the AI panel says so, every change the AI would make is shown for the person to allow first, and the AI writes no notes into the document. The prompts people type and the providers' error messages never go into the document. A request stops at a token limit the person sets (1 million by default).
+- *Engine limits.* Input that could make the engine run away is refused with a "limit" error: weights of more than 64 strands, Cartan data of rank above 32, more than 100,000 colour sequences, terms nested more than 100 deep, exponent expressions over 1,000 characters, responses over 32 MiB. An interactive request in the browser stops after 10 seconds (its worker is replaced); the WebAssembly memory is capped at 2 GiB; an MCP call stops after 120 seconds. Lean export accepts only plain identifiers as names and writes only inside its output directory.
 
 **Multiplayer (phase 7).** One Durable Object per open document runs the Yjs sync session over WebSockets, using hibernation so it costs nothing between edits; it persists the document to R2. Presence shows collaborators' cursors and selections. Undo reverts only your own steps. Each browser computes its own results; the cache key makes them identical.
 

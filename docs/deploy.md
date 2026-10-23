@@ -25,9 +25,9 @@ that need a person, done once.
    name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only).
    While Access is on, leave it in Testing and add the allowed people as test users; publishing
    needs a homepage and privacy policy on a verified domain and waits for the public release. Then Clients: create an OAuth client of type Web application with the authorized
-   redirect URI `https://diagcalc.pages.dev/api/auth/callback` (the redirect URI is derived from the
-   host the app is served from; add `https://diagcalc.ape.computer/api/auth/callback` when the
-   custom domain moves over).
+   redirect URI `https://diagcalc.pages.dev/api/auth/callback` (the redirect URI is built from the
+   variable `APP_ORIGIN` in `web/wrangler.toml`; when the custom domain moves over, add
+   `https://diagcalc.ape.computer/api/auth/callback` here first, then change `APP_ORIGIN`).
 3. Cloudflare, Workers & Pages, `diagcalc`, Settings, Variables and Secrets, Production: add the
    secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 2.
 4. (Share e-mails only; can wait for the custom domain.) Resend: add the domain `send.ape.computer` and put the records it lists (SPF, DKIM, return-path
@@ -46,9 +46,16 @@ Secrets take effect with the next deployment, which step 5 makes. Without `RESEN
 everything works except that sharing sends no e-mail. The sender address is the `EMAIL_FROM`
 variable in `web/wrangler.toml`.
 
+`APP_ORIGIN` in `web/wrangler.toml` is the site's address (now `https://diagcalc.pages.dev`). The
+API answers only requests that reach it there (others get 421), and sign-in redirects and links in
+share e-mails use it. Every deployment also has an address of its own (`<hash>.diagcalc.pages.dev`);
+those keep serving the static app but not the API.
+
 ## What the deploy does
 
-- Builds the app as before.
+- Builds the app in a job that has no access to the secrets, and passes the built site to the
+  deploy job, which installs Wrangler (without install scripts) before any secret is in its
+  environment. Every action is pinned to a commit; Dependabot proposes updates.
 - Runs `.github/scripts/provision-accounts.sh`, which creates, if missing and if the token allows:
   the D1 database `diagcalc`, the R2 bucket `diagcalc`, the Pages secret `SESSION_SECRET` (a fresh
   random value, never printed; an existing one is kept, since changing it signs everyone out) and
@@ -57,7 +64,8 @@ variable in `web/wrangler.toml`.
 - If the database and bucket exist: writes the database ID (looked up by name, or the secret
   `D1_DATABASE_ID` if set) into `web/wrangler.toml`, applies the migrations in `web/migrations/`
   with `wrangler d1 migrations apply diagcalc --remote` (wrangler records which have run), then
-  deploys with the D1 binding `DB`, the R2 binding `FILES` and the variable `EMAIL_FROM`.
+  deploys with the D1 binding `DB`, the R2 binding `FILES` and the variables `EMAIL_FROM` and
+  `APP_ORIGIN`. Preview deployments (any branch but `master`) get no bindings (`[env.preview]`).
 - Otherwise: removes `web/wrangler.toml` and deploys the site and functions with no bindings.
 
 A migration is never edited once it is on `master`; a schema change is the next numbered file.
@@ -67,7 +75,7 @@ A migration is never edited once it is on `master`; a schema change is the next 
 From `web/`, after `npm ci`, `npm run wasm` and `npm run build`:
 
 ```sh
-printf 'GOOGLE_CLIENT_ID=...\nGOOGLE_CLIENT_SECRET=...\nSESSION_SECRET=...\n' > .dev.vars   # not committed
+printf 'GOOGLE_CLIENT_ID=...\nGOOGLE_CLIENT_SECRET=...\nSESSION_SECRET=...\nAPP_ORIGIN=http://localhost:8788\n' > .dev.vars   # not committed
 npx wrangler@4.149.0 d1 migrations apply diagcalc --local
 npx wrangler@4.149.0 pages dev dist --port 8788
 ```
@@ -75,3 +83,23 @@ npx wrangler@4.149.0 pages dev dist --port 8788
 Signing in locally needs `http://localhost:8788/api/auth/callback` among the OAuth client's
 redirect URIs. The unit tests (`npm run test:server`) need none of this: they run the API against
 Miniflare's D1 and R2 with a fake Google and a fake Resend.
+
+## Hardening that needs a person
+
+These settings live in the Cloudflare and GitHub dashboards, not in the repository.
+
+- **Access on every deployment address.** Cloudflare Zero Trust, Access, Applications: make sure the
+  application covers `*.diagcalc.pages.dev` as well as `diagcalc.pages.dev` (and the custom domain
+  when it moves), so old and preview deployments are private too. Workers & Pages, `diagcalc`,
+  Deployments: delete old deployments you do not need.
+- **Rate limit.** Cloudflare, the zone, Security, WAF, Rate limiting rules (once the site is on the
+  custom domain; `pages.dev` cannot have rules): one rule on URI path starting with `/api/` and
+  method not GET, for example 60 requests per minute per IP, action Block for 1 minute.
+- **Separate tokens.** Instead of one `CLOUDFLARE_API_TOKEN` with every permission, keep the deploy
+  token at Cloudflare Pages: Edit plus D1: Edit, and remove Workers R2 Storage: Edit and DNS: Edit
+  once the bucket and the DMARC record exist (the run summary says when they do).
+- **Protected environment.** The deploy job runs in the GitHub environment `production`. GitHub,
+  Settings, Environments, `production`: under Deployment branches allow `master` only, then move
+  the secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `D1_DATABASE_ID` from the
+  repository's secrets into the environment's. Settings, Branches: protect `master` (no force
+  pushes, no deletion).
