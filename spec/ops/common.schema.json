@@ -47,7 +47,7 @@
           "type": "string"
         },
         "notes": {
-          "description": "What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra).",
+          "description": "What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra). Formulas are TeX between $ signs, as in a note cell.",
           "type": "array",
           "items": {
             "type": "string"

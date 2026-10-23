@@ -89,7 +89,8 @@ pub struct Quotient<'a, R: Ring> {
     pub gens: Vec<IdealGen<R>>,
     /// The highest degree computed, for each source object.
     caps: BTreeMap<Object, i64>,
-    /// What the quotient is and how its degrees were bounded, one sentence each.
+    /// What the quotient is and how its degrees were bounded, one sentence each, with formulas
+    /// as TeX between `$` signs (the provenance notes of `spec/ops/common.schema.json`).
     pub description: Vec<String>,
     /// True when the degree bound comes only from a user's truncation.
     pub truncated: bool,
@@ -206,9 +207,10 @@ impl<'a, R: Ring> Quotient<'a, R> {
                         q.symmetric = Some(2 * lam_nu - nu_nu);
                     }
                     q.description.push(format!(
-                "cyclotomic quotient by x_1^<h_(i_1), Lambda> e(i), Lambda = {l}; degrees up to \
-                 {top} = 2(Lambda, nu) - (nu, nu) - ({lo}), above which R^Lambda(nu) vanishes \
-                 (graded symmetric of degree 2(Lambda, nu) - (nu, nu))"
+                "cyclotomic quotient by $x_1^{{\\langle h_{{i_1}}, \\Lambda \\rangle}} e(i)$, \
+                 $\\Lambda = {l}$; degrees up to ${top} = 2(\\Lambda, \\nu) - (\\nu, \\nu) - \
+                 ({lo})$, above which $R^\\Lambda(\\nu)$ vanishes (graded symmetric of degree \
+                 $2(\\Lambda, \\nu) - (\\nu, \\nu)$)"
             ));
                 }
                 None => {
@@ -219,7 +221,8 @@ impl<'a, R: Ring> Quotient<'a, R> {
                         ));
                     }
                     q.description.push(format!(
-                        "quotient by x_1^<h_(i_1), Lambda> e(i), Lambda = {l}"
+                        "quotient by $x_1^{{\\langle h_{{i_1}}, \\Lambda \\rangle}} e(i)$, \
+                         $\\Lambda = {l}$"
                     ));
                 }
             }
@@ -235,8 +238,8 @@ impl<'a, R: Ring> Quotient<'a, R> {
                 *e = (*e).min(top);
             }
             q.description.push(format!(
-                "quotient by x_k^{cap} e(i) for every strand k; words with dot exponents below \
-                 {cap} span it"
+                "quotient by $x_k^{{{cap}}} e(i)$ for every strand $k$; words with dot exponents \
+                 below ${cap}$ span it"
             ));
         }
         if let Some(cap) = spec.degree_cap {

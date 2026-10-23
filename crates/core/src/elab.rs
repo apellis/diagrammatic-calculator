@@ -194,6 +194,43 @@ impl<R: Ring> Context<R> {
         Ok(())
     }
 
+    /// The idempotents `e(...)` and identities `1_...` written in a term whose object is not one
+    /// of the context's objects (with `nu=`, of another weight), as written, each once. Such a
+    /// piece is 0 here, and so is every product through it; `workspace.run` warns about them,
+    /// since the result is otherwise a silent 0. Definitions used by name are not followed (their
+    /// own cells warn), and an object that does not read is left to elaboration to report.
+    pub fn objects_outside(&self, ast: &Ast) -> Vec<String> {
+        fn walk<R: Ring>(ctx: &Context<R>, a: &Ast, out: &mut Vec<String>) {
+            match a {
+                Ast::Idem(r) | Ast::Id(r) => {
+                    let written = match a {
+                        Ast::Idem(_) => format!("e({r})"),
+                        _ => text::print(a),
+                    };
+                    if let Ok(obj) = ctx.read_object(r, &Scope::default())
+                        && !ctx.objects.contains(&obj)
+                        && !out.contains(&written)
+                    {
+                        out.push(written);
+                    }
+                }
+                Ast::Comp(xs) | Ast::Tensor(xs) => xs.iter().for_each(|x| walk(ctx, x, out)),
+                Ast::Sum(xs) => xs.iter().for_each(|(_, x)| walk(ctx, x, out)),
+                Ast::Pow(b, _) | Ast::PowExpr(b, _) => walk(ctx, b, out),
+                Ast::Range { body, .. } => walk(ctx, body, out),
+                Ast::Name {
+                    args: Some(args), ..
+                } => args.iter().for_each(|x| walk(ctx, x, out)),
+                _ => {}
+            }
+        }
+        let mut out = Vec::new();
+        if !self.objects.is_empty() {
+            walk(self, ast, &mut out);
+        }
+        out
+    }
+
     /// Reads colours as written in `e(...)` or `1_...`, resolving colour variables first.
     pub fn read_object(&self, raw: &str, scope: &Scope<R>) -> Result<Object> {
         let lookup = |name: &str| -> Option<u16> {

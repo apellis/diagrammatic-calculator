@@ -36,6 +36,11 @@ characteristic 0).
 A context with `Lambda`, `dotcap` or `degcap` computes in that finite quotient or truncation:
 results carry the quotient and the degrees computed under `provenance.notes`.
 
+A term that names an idempotent `e(...)` (or identity `1_...`) of an object outside the context,
+such as `e(ii)` with `nu=2i+j`, is 0 there, as is every product through it. `workspace.run` says
+so in the cell's `warnings` rather than returning a silent 0. Notes and warnings write formulas
+as TeX between `$` signs.
+
 `solve lhs = rhs for c1, c2` treats the unknowns as scalars of the context (definitions may use
 them; each cell's context has the unknowns that it, or the definitions it uses, mention, so a
 cell that mentions none keeps coefficients in the ground ring) and solves for every coefficient

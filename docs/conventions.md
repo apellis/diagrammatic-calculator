@@ -320,7 +320,7 @@ wherever it is entered (a click on typeset text opens it). Typesetting changes o
 | `solve … for c1, c2` | … for c₁, c₂ |
 | `ring=QQ`, `ZZ[I]`, `GF(5)`, `QQ(q)` | ℚ, ℤ[I], 𝔽₅, ℚ(q) |
 | `type=A2 nu=2i+j`, `mu=-1`, `Lambda=2i` | type A₂, ν = 2i+j, μ = −1, Λ = 2i (Greek option names as letters) |
-| a weight written beside a canvas drawing, `-1` | −1 (a minus sign, not a hyphen) |
+| a weight written beside a drawing (in a cell's SVG or on the canvas), `-1` | −1 (a minus sign, U+2212, not a hyphen; TikZ sets it in math mode) |
 
 ## Drawing
 

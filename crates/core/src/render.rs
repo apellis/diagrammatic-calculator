@@ -802,6 +802,25 @@ fn esc(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+/// Text as typeset: a minus sign (U+2212) rather than a hyphen before a digit, as in a region
+/// weight `−2` (`docs/conventions.md`, Display). TikZ needs no such change: its labels are in math
+/// mode.
+fn minus_signs(t: &str) -> String {
+    let mut out = String::with_capacity(t.len());
+    let mut prev: Option<char> = None;
+    let mut chars = t.chars().peekable();
+    while let Some(c) = chars.next() {
+        let word = prev.is_some_and(|p| p.is_alphanumeric() || p == '_');
+        if c == '-' && !word && chars.peek().is_some_and(|d| d.is_ascii_digit()) {
+            out.push('\u{2212}');
+        } else {
+            out.push(c);
+        }
+        prev = Some(c);
+    }
+    out
+}
+
 /// A term as a standalone SVG.
 pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
     const U: f64 = 24.0;
@@ -919,7 +938,7 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
                     "<text{k} x=\"{}\" y=\"{}\" font-size=\"11\" font-style=\"italic\" text-anchor=\"middle\" stroke=\"none\" fill=\"currentColor\">{}</text>",
                     px(*x),
                     num(base - (y + off) * U + 4.0),
-                    esc(text)
+                    esc(&minus_signs(text))
                 ),
             };
             body.push_str(&line);
@@ -992,6 +1011,13 @@ mod tests {
             })
             .collect();
         assert_eq!(notes, vec!["i", "-2"]);
+        // the SVG writes the weight with a minus sign
+        let s = svg(&ctx, &t);
+        assert!(
+            s.contains(">\u{2212}2</text>") && !s.contains(">-2<"),
+            "{s}"
+        );
+        assert_eq!(minus_signs("2i-1 -3 x-2"), "2i-1 \u{2212}3 x-2");
         let tz = tikz(&ctx, &t);
         assert!(tz.contains("\\fill (0,0.37) -- "), "{tz}");
         // an unoriented presentation draws no arrows

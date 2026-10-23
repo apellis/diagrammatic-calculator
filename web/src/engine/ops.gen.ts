@@ -430,7 +430,7 @@ export interface Provenance {
     | 'bounded search';
   method: string;
   /**
-   * What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra).
+   * What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra). Formulas are TeX between $ signs, as in a note cell.
    */
   notes?: string[];
   certificate: {
@@ -632,7 +632,7 @@ export interface Provenance1 {
     | 'bounded search';
   method: string;
   /**
-   * What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra).
+   * What the result says about how it was computed, such as the quotient and the degrees computed (finite-dimensional linear algebra). Formulas are TeX between $ signs, as in a note cell.
    */
   notes?: string[];
   certificate: {
@@ -975,6 +975,10 @@ export interface WorkspaceRunCell {
    */
   certified_by?: 'computation' | 'certificate';
   provenance?: Provenance;
+  /**
+   * Things the result does not show, one sentence each, formulas as TeX between $ signs: an idempotent e(...) or identity 1_... whose object is not one of the context's (of another weight nu), which is 0 here and makes every product through it 0.
+   */
+  warnings?: string[];
   /**
    * solve: 1 for a linear system, 2 for Gröbner bases.
    */

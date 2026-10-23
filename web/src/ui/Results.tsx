@@ -78,7 +78,23 @@ export function Summary(props: { state?: CellState; small?: boolean }) {
       </span>
       <Show when={running()}><Elapsed since={props.state?.since} /></Show>
       <Show when={c()?.mark}>{(m) => <span class="cond-mark" title={c()!.text}>{m()}</span>}</Show>
+      <Show when={props.state && ok(props.state.value) && props.state.value.warnings?.length}>
+        <span class="cond-mark warn-mark" data-testid="warn-mark" title={plain((props.state!.value as Ok).warnings!.join('\n'))}
+          aria-label="see warning">{props.small ? '⚠' : 'see warning'}</span>
+      </Show>
     </span>
+  );
+}
+
+/** Text with $…$ formulas, as plain text for a tooltip. */
+const plain = (t: string) => t.replace(/\$([^$]*)\$/g, '$1').replace(/\\nu\b/g, 'ν').replace(/\\Lambda\b/g, 'Λ');
+
+/** What a result does not show, such as an idempotent outside the weight that makes a term 0. */
+export function Warnings(props: { value: Ok }) {
+  return (
+    <For each={props.value.warnings ?? []}>
+      {(w) => <div class="warning-line" data-testid="warning"><span aria-hidden="true">⚠</span> <NoteView text={w} inline /></div>}
+    </For>
   );
 }
 
@@ -164,7 +180,7 @@ export function Badge(props: { p?: Provenance; value?: Ok; compact?: boolean }) 
             <span class="cond-text" data-testid="cond-text">{props.compact ? c()!.text.replace(/:.*$/, '') : c()!.text}</span>
           </Show>
           <Show when={!props.compact}>
-            <For each={p().notes ?? []}>{(n) => <span class="hint note-line">{n}</span>}</For>
+            <For each={p().notes ?? []}>{(n) => <span class="hint note-line" data-testid="prov-note"><NoteView text={n} inline /></span>}</For>
           </Show>
           <Show when={open()}>
             <div classList={{ pop: props.compact, 'prov-pop': props.compact }}>
@@ -176,7 +192,7 @@ export function Badge(props: { p?: Provenance; value?: Ok; compact?: boolean }) 
                 <tr><td>certificate</td><td>{STATUS[p().certificate.status] ?? p().certificate.status}</td></tr>
                 <Show when={p().certificate.reference}><tr><td>reference</td><td>{p().certificate.reference}</td></tr></Show>
                 <Show when={p().certificate.hypotheses}><tr><td>hypotheses</td><td>{p().certificate.hypotheses}</td></tr></Show>
-                <Show when={props.compact}><For each={p().notes ?? []}>{(n) => <tr><td>note</td><td>{n}</td></tr>}</For></Show>
+                <Show when={props.compact}><For each={p().notes ?? []}>{(n) => <tr><td>note</td><td><NoteView text={n} inline /></td></tr>}</For></Show>
               </tbody>
             </table>
             </div>
@@ -410,6 +426,7 @@ export function ResultView(props: {
                 <Match when={res.kind === 'check'}><CheckView r={res} /></Match>
                 <Match when={res.kind === 'solve'}><SolveView r={res} /></Match>
               </Switch>
+              <Warnings value={res} />
               <div class="row">
                 <ValueBadge value={res} />
                 <Show when={props.s.ms !== undefined}><span class="hint">{props.s.ms! < 1 ? '<1' : Math.round(props.s.ms!)} ms</span></Show>

@@ -738,6 +738,33 @@ impl RingVisitor for RunWorkspace<'_> {
                 CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => continue,
             };
             let mut value = with_status(r);
+            // pieces that are 0 because their object is not the context's: said, not silent
+            let asts: Vec<&crate::text::Ast> = match &cell.body {
+                CellBody::Def { term, .. } | CellBody::Watch { term } => vec![term],
+                CellBody::Check { args, .. } => args.iter().collect(),
+                CellBody::Solve { lhs, rhs, .. } => vec![lhs, rhs],
+                _ => vec![],
+            };
+            let mut outside: Vec<String> = Vec::new();
+            for a in asts {
+                for w in ctx.objects_outside(a) {
+                    if !outside.contains(&w) {
+                        outside.push(w);
+                    }
+                }
+            }
+            if value["status"] == "ok" && !outside.is_empty() {
+                let of = match &ctx.spec.weight {
+                    Some(nu) => format!("of weight $\\nu = {nu}$"),
+                    None => "of this context".to_string(),
+                };
+                value["warnings"] = json!(
+                    outside
+                        .iter()
+                        .map(|w| format!("${w}$ is $0$ here: its object is not one {of}"))
+                        .collect::<Vec<_>>()
+                );
+            }
             // the cell's kind takes the key; an error's kind moves to error_kind
             if let Some(o) = value.as_object_mut()
                 && let Some(k) = o.remove("kind")
@@ -1262,6 +1289,29 @@ solve a = 0 for c  # id=s5
         assert_eq!(cells[3]["provenance"]["method"], "nil-coxeter-basis");
         // a is not zero, whatever c is
         assert_eq!(cells[4]["outcome"], "none", "{v}");
+        assert!(cells.iter().all(|c| c.get("warnings").is_none()), "{v}");
+    }
+
+    #[test]
+    fn idempotents_outside_the_weight_are_named() {
+        let src = "diagcalc-workspace/1
+context klr type=A2 nu=2i+j ring=QQ
+watch e(ii) + x_1 e(iji)  # id=w1
+def a := psi_1 e(iij)  # id=d2
+check zero(e(jj) e(jj))  # id=k3
+";
+        let v = run_workspace(src, None);
+        assert_eq!(v["status"], "ok", "{v}");
+        let cells = v["cells"].as_array().unwrap();
+        assert_eq!(cells[0]["normal_form"], "x_1 e(iji)", "{v}");
+        assert_eq!(
+            cells[0]["warnings"],
+            json!(["$e(ii)$ is $0$ here: its object is not one of weight $\\nu = 2i+j$"]),
+            "{v}"
+        );
+        assert!(cells[1].get("warnings").is_none(), "{v}");
+        assert_eq!(cells[2]["holds"], true, "{v}");
+        assert_eq!(cells[2]["warnings"].as_array().unwrap().len(), 1, "{v}");
     }
 
     #[test]

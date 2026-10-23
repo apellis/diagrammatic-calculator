@@ -29,6 +29,7 @@
         "witness": { "type": ["string", "null"] },
         "certified_by": { "description": "check: as in check; watch: as in simplify.", "enum": ["computation", "certificate"] },
         "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "warnings": { "description": "Things the result does not show, one sentence each, formulas as TeX between $ signs: an idempotent e(...) or identity 1_... whose object is not one of the context's (of another weight nu), which is 0 here and makes every product through it 0.", "type": "array", "items": { "type": "string" } },
         "tier": { "description": "solve: 1 for a linear system, 2 for Gröbner bases.", "enum": [1, 2] },
         "outcome": { "description": "solve: what the solution set is.", "enum": ["none", "unique", "finite", "family", "limit_reached"] },
         "equations": { "description": "solve: the number of coefficient equations.", "type": "integer", "minimum": 0 },

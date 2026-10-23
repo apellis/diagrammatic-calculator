@@ -3,6 +3,7 @@ import { createEffect, createResource, createSignal, For, onCleanup, Show } from
 import { engine } from '../app';
 import { contextTex, ringTex, toTex } from './tex';
 import { Typeset } from './Typeset';
+import { NoteView } from './Results';
 import { ContextForm, PresentationTitle } from './ContextForm';
 
 export function ContextChip(props: { context: string; scalars: string[]; onSet: (c: string) => void }) {
@@ -68,7 +69,7 @@ export function ContextChip(props: { context: string; scalars: string[]; onSet: 
                   <tr><td>relations</td><td style={{ 'font-size': '12px' }}>{d().relations.join(', ')}</td></tr>
                   <tr><td>computed by</td><td>{d().provenance.strategy}, {d().provenance.method} ({d().provenance.certificate.status})</td></tr>
                   <Show when={props.scalars.length}><tr><td>unknowns</td><td><Typeset text={props.scalars.join(', ')} /></td></tr></Show>
-                  <For each={d().provenance.notes ?? []}>{(n) => <tr><td /><td class="hint">{n}</td></tr>}</For>
+                  <For each={d().provenance.notes ?? []}>{(n) => <tr><td /><td class="hint"><NoteView text={n} inline /></td></tr>}</For>
                 </tbody>
               </table>
             )}

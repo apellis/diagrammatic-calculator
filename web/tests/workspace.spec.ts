@@ -156,6 +156,25 @@ test('the gate example: idempotents of a cyclotomic quotient', async ({ page }) 
   await page.locator('[data-example="klr-a2-idempotents"]').click();
   const summaries = page.locator('.cell[data-cell] [data-testid=summary]');
   await expect(summaries).toHaveText(['', '2 terms', '2 terms, degree 0', '4 solutions', '1 term', '2 terms', 'holds', 'holds', 'holds', 'holds', 'holds', 'holds', '1 term, degree 0'], { timeout: 30_000 });
+  // the quotient's notes under the badge are typeset
+  const watch = page.locator('.cell[data-cell]').nth(2);
+  await watch.locator('.head').click();
+  await expect(watch.getByTestId('prov-note').first().locator('.katex').first()).toBeVisible();
+  await expect(watch.getByTestId('prov-note').first()).not.toContainText('<h_(i_1)');
+});
+
+test('an idempotent outside the weight ν is named in a warning, not a silent 0', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'watch e(ii) + x_1 e(iji)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term, degree 2');
+  await expect(cell(page, 0).getByTestId('warn-mark')).toBeVisible();
+  const warning = cell(page, 0).getByTestId('warning');
+  await expect(warning).toContainText('here: its object is not one of weight');
+  await expect(warning.locator('.katex')).toHaveCount(3);
+  // a term within the weight has no warning
+  await addCell(page, 'watch x_1 e(iji)');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term, degree 2');
+  await expect(cell(page, 1).getByTestId('warn-mark')).toHaveCount(0);
 });
 
 // Timed in a project of its own that runs after all the others (playwright.config.ts), so other
