@@ -1,0 +1,105 @@
+// The accounts API under /api/: sign-in, the session, documents and sharing. Every route checks
+// the session and the caller's role on the document; every state-changing request needs the
+// session's CSRF token.
+import { defaultDeps, ready, type Deps, type Env, type ReadyEnv } from './env';
+import { HttpError, empty, json, redirect } from './http';
+import { callback, csrfOk, csrfToken, currentSession, login, logout, type Session } from './auth';
+import * as docs from './docs';
+
+const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+interface Call {
+  req: Request;
+  env: ReadyEnv;
+  deps: Deps;
+  s: Session | null;
+  method: string;
+  path: string;
+  seg: string[];
+}
+
+export async function handle(req: Request, env: Env, deps: Deps = defaultDeps): Promise<Response> {
+  const path = new URL(req.url).pathname.replace(/^\/api\/?/, '').replace(/\/$/, '');
+  const seg = path.split('/').map((p) => {
+    try {
+      return decodeURIComponent(p);
+    } catch {
+      return '\u0000';
+    }
+  });
+  const method = req.method.toUpperCase();
+  // for the log: the route with IDs, names and addresses left out
+  const route = `${method} ${seg.map((p, i) => (seg[0] === 'docs' && i === 1 ? ':id' : i === 3 ? ':name' : p)).join('/')}`;
+  try {
+    if (!ready(env)) {
+      if (path === 'me' && method === 'GET') return json({ accounts: false, user: null });
+      if (path === 'auth/login') return redirect('/?signin=unavailable#/');
+      throw new HttpError(503, 'accounts are not available');
+    }
+    const s = await currentSession(req, env, deps);
+    if (UNSAFE.has(method)) {
+      if (!s) {
+        // signing out without a session only clears the cookie
+        if (path === 'auth/logout') return empty(204, await logout(env, null));
+        throw new HttpError(401, 'sign in first');
+      }
+      if (!(await csrfOk(req, env, s))) throw new HttpError(403, 'missing or wrong CSRF token');
+    }
+    return await dispatch({ req, env, deps, s, method, path, seg });
+  } catch (e) {
+    if (e instanceof HttpError) return json({ error: e.code, ...e.extra }, e.status);
+    // never log request data: only the route pattern and the kind of error
+    console.error(`api: ${route}: ${e instanceof Error ? e.name : 'error'}`);
+    return json({ error: 'internal error' }, 500);
+  }
+}
+
+async function dispatch({ req, env, deps, s, method, path, seg }: Call): Promise<Response> {
+  switch (`${method} ${path}`) {
+    case 'GET me':
+      return json({ accounts: true, user: s?.user ?? null, ...(s ? { csrf: await csrfToken(env, s) } : {}) });
+    case 'DELETE me':
+      await docs.deleteAccount(env, s!);
+      return empty(204, await logout(env, null));
+    case 'GET auth/login':
+      return login(req, env, deps);
+    case 'GET auth/callback':
+      return callback(req, env, deps);
+    case 'POST auth/logout':
+      return empty(204, await logout(env, s));
+    case 'GET docs':
+      return docs.listDocs(env, s);
+    case 'POST docs':
+      return docs.createDoc(req, env, s, deps);
+  }
+  if (seg[0] !== 'docs' || seg.length < 2 || seg.length > 4) throw new HttpError(404, 'no such route');
+
+  const a = await docs.access(env, seg[1], s, req.headers.get('x-link-token'));
+  const sub = seg.slice(2, 3).join('');
+  const name = seg[3];
+  switch (`${method} ${sub}${name === undefined ? '' : '/:name'}`) {
+    case 'GET ':
+      return docs.getDoc(a);
+    case 'PATCH ':
+      return docs.patchDoc(req, env, a, s);
+    case 'DELETE ':
+      return docs.deleteDoc(env, a, s);
+    case 'GET snapshot':
+      return docs.getSnapshot(env, a);
+    case 'PUT snapshot':
+      return docs.putSnapshot(req, env, a, s, deps);
+    case 'GET shares':
+      return docs.listShares(env, a, s);
+    case 'PUT shares':
+      return docs.putShare(req, env, a, s, deps);
+    case 'DELETE shares/:name':
+      return docs.deleteShare(env, a, s, name);
+    case 'GET files':
+      return docs.listFiles(env, a);
+    case 'GET files/:name':
+      return docs.getFile(env, a, name);
+    case 'PUT files/:name':
+      return docs.putFile(req, env, a, s, name);
+  }
+  throw new HttpError(405, 'method not allowed');
+}

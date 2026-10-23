@@ -3,3 +3,5 @@ dist/
 src/engine/pkg/
 test-results/
 playwright-report/
+.wrangler/
+.dev.vars

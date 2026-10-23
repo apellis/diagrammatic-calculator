@@ -418,3 +418,81 @@ watches' trends cover the session only, OpenAI and compatible servers are not st
 reasoning is not carried between turns, and whether
 OpenAI accepts calls from a browser page is decided by the in-app check in a real browser (the
 development container cannot reach OpenAI).
+
+## Accounts and sharing (phase 6)
+
+**Where the server runs.** Pages Functions (`web/functions/api/[[path]].ts`, one function for every
+path under `/api/`), not a separate Worker. They are served from the app's own origin, so the
+session cookie is first-party and needs no CORS; they deploy with the site in the same
+`wrangler pages deploy`, so the app and the API never disagree about versions and every preview
+deployment has its API; and Cloudflare Access already covers them. A Worker routed under the same
+host would give the same origin, but needs a route, its own deploy and its own configuration. The
+function is invoked only for `/api/*` (the generated `_routes.json`); static files are served
+without it, so they cost nothing and behave exactly as before. The code is in `web/server/`, plain
+TypeScript on Web APIs (`fetch`, Web Crypto), so the same modules run in Workers and, for tests, in
+Node.
+
+**Sign-in.** Google OpenID Connect, authorization code flow with PKCE. `/api/auth/login` makes a
+state, a nonce and a code verifier, keeps them in a short-lived cookie encrypted with AES-GCM
+(a key derived from `SESSION_SECRET` with HKDF), and sends the browser to Google with the state,
+nonce and S256 challenge. `/api/auth/callback` checks the state against the cookie, exchanges the
+code with the verifier and the client secret, and validates the ID token: an RS256 signature by a
+key from Google's JWKS (cached as long as Google's `Cache-Control` says, fetched again once for an
+unknown key ID), issuer, audience (our client ID, and `azp` when there are several audiences),
+expiry and issue time with a minute's skew, the nonce, and a verified e-mail address. The user is
+keyed by Google's `sub`; the address is refreshed at each sign-in.
+
+**Sessions and CSRF.** The session cookie `__Host-dc_session` is `HttpOnly; Secure;
+SameSite=Lax; Path=/`, holds a random 256-bit ID and its HMAC, and lasts 30 days; D1 stores only
+the SHA-256 of the ID, so the table alone cannot be used to sign in, and signing out deletes the
+row. Every POST, PUT, PATCH and DELETE needs the header `X-CSRF-Token`, an HMAC of the session ID
+that `GET /api/me` hands to the page, and is refused when `Origin` or `Sec-Fetch-Site` shows
+another site. Lax cookies already keep other sites' forms from carrying the session; the token
+covers the rest.
+
+**Data.** D1 (`web/migrations/`) holds `users`, `sessions`, `documents` (owner, name, times,
+version, size, the R2 key of the current snapshot, link role and token), `shares` (document,
+lower-case e-mail address, role) and `sent_mail` (only sender and time, for the daily limit). Shares
+are by address, so a document can be shared with someone who has never signed in. R2 holds each
+document's content, a Yjs update, under `docs/<id>/snapshots/<random>`, and exported files under
+`docs/<id>/files/<name>`. The server never reads a snapshot.
+
+**Saving.** `PUT /api/docs/:id/snapshot` carries `If-Match: "<version>"`. The content is written to
+a fresh R2 key, then D1 moves the version on only if it is still the one the page read; otherwise
+the fresh object is deleted and the answer is 409 with the current version. The page then fetches
+the current content, merges it into its own (Yjs merges without losing either side's steps) and
+saves again. A save that loses the race therefore never overwrites another, and the previous
+snapshot is deleted only after the new one is current.
+
+**Access.** Every document route first works out the caller's role: owner, a share to their
+address (editor or viewer), or the document's link (token in `X-Link-Token`, compared in constant
+time), taking the highest. Without one the answer is 404, so a document's existence is not
+revealed. Viewers read; editors also save, rename and keep files; only the owner shares, sets the
+link and deletes. A link can be read without an account, but editing through a link needs one, so
+every change has an author. Turning link sharing off and on issues a new token, which revokes old
+links. Someone may remove their own share.
+
+**Mail.** Only share notifications, through Resend, when `RESEND_API_KEY` and `EMAIL_FROM` are set:
+one message when someone is first added (not when a role changes), with the document's name and
+the inviter's name escaped, and at most 50 a day per sender. A refused message is reported to the
+page as not notified; sharing itself still succeeds.
+
+**Limits and logging.** Snapshots and files up to 16 MB, 1000 documents per owner, 100 shares per
+document. Responses are `no-store`. The API logs nothing about users: an internal error is logged
+as the route pattern (IDs and names replaced) and the error's kind.
+
+**Configuration.** Missing secrets or bindings make `GET /api/me` answer `{accounts: false}` and
+every other route 503, so a deploy without them is the anonymous app. `docs/deploy.md` lists the
+names and the steps.
+
+**Tests.** `npm run test:server` (its own Vitest configuration, `vitest.server.config.ts`, without
+the Solid plugin) runs the API in Node against Miniflare's D1 and R2, the same SQLite and object
+store as the Workers runtime, with the migrations applied as wrangler applies them. A fake Google
+checks the PKCE verifier, client secret and redirect URI at its token endpoint and signs real RS256
+ID tokens; a fake Resend records messages; a clock is injected. The tests cover the PKCE test
+vector of RFC 7636, every ID-token check, the whole sign-in and its failures (wrong state, missing
+or tampered cookie, reused code, replayed nonce), session expiry and sign-out, CSRF, the role of
+each kind of caller on every route, link sharing, saving races, notifications and their limit,
+deleting documents and accounts, and that no user data reaches the log. The functions also build
+with `wrangler pages functions build`, and the migrations apply with
+`wrangler d1 migrations apply --local`.

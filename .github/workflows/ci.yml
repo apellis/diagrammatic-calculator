@@ -84,6 +84,8 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Build the accounts API as Pages deploys it
+        run: npx -y wrangler@4.149.0 pages functions build --outdir "$RUNNER_TEMP/functions"
       - name: Cache the Playwright browser
         uses: actions/cache@v4
         with:

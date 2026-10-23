@@ -1,0 +1,21 @@
+# Cloudflare Pages configuration for the project "diagcalc": the static app in dist/ and the
+# accounts API in functions/ (see docs/deploy.md). Secrets (GOOGLE_CLIENT_ID,
+# GOOGLE_CLIENT_SECRET, SESSION_SECRET, RESEND_API_KEY) are set on the Pages project, never here.
+# The database ID below is a placeholder: the deploy workflow fills it in from the repository
+# secret D1_DATABASE_ID, and deploys without this file (so without accounts) while that is unset.
+name = "diagcalc"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"
+
+[vars]
+EMAIL_FROM = "diagrammatic-calculator <share@send.ape.computer>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "diagcalc"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "diagcalc"
