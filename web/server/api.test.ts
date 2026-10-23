@@ -205,6 +205,85 @@ describe('sessions and CSRF', () => {
   });
 });
 
+describe('security events from Google (RISC)', () => {
+  const TOKENS_REVOKED = 'https://schemas.openid.net/secevent/oauth/event-type/tokens-revoked';
+  const event = (type: string, sub: string, over: Record<string, unknown> = {}) =>
+    w.google.sign({
+      iss: 'https://accounts.google.com/',
+      aud: CLIENT_ID,
+      iat: Math.floor(w.clock / 1000),
+      jti: 'event-1',
+      events: { [type]: { subject: { subject_type: 'iss-sub', iss: 'https://accounts.google.com/', sub } } },
+      ...over,
+    });
+  const deliver = (token: string, b = w.browser()) => b.fetch('/api/google/risc', { method: 'POST', headers: { 'content-type': 'application/secevent+jwt' }, body: token });
+
+  it('ends every session of a person whose access Google revoked, and no one else\'s', async () => {
+    const a1 = await w.signedIn(ada);
+    const a2 = await w.signedIn(ada);
+    const b = await w.signedIn(bob);
+    const r = await deliver(await event(TOKENS_REVOKED, ada.sub));
+    expect(r.status).toBe(202);
+    expect((await a1.refresh()).user).toBeNull();
+    expect((await a2.refresh()).user).toBeNull();
+    expect((await b.refresh()).user?.email).toBe(bob.email);
+    // signing in again works as before
+    expect((await (await w.signedIn(ada)).refresh()).user?.email).toBe(ada.email);
+  });
+
+  it('acts on ended sessions and disabled accounts, and only acknowledges other events', async () => {
+    for (const type of ['sessions-revoked', 'account-disabled']) {
+      const a = await w.signedIn(ada);
+      expect((await deliver(await event(`https://schemas.openid.net/secevent/risc/event-type/${type}`, ada.sub))).status).toBe(202);
+      expect((await a.refresh()).user).toBeNull();
+    }
+    const a = await w.signedIn(ada);
+    for (const type of ['verification', 'account-enabled', 'account-credential-change-required']) {
+      expect((await deliver(await event(`https://schemas.openid.net/secevent/risc/event-type/${type}`, ada.sub))).status).toBe(202);
+    }
+    expect((await a.refresh()).user?.email).toBe(ada.email);
+  });
+
+  it('refuses tokens that are not Google\'s, not for this app, or malformed, and changes nothing', async () => {
+    const a = await w.signedIn(ada);
+    const other = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+    const forged = await w.google.sign(
+      { iss: 'https://accounts.google.com/', aud: CLIENT_ID, iat: Math.floor(w.clock / 1000), events: { [TOKENS_REVOKED]: { subject: { subject_type: 'iss-sub', sub: ada.sub } } } },
+      undefined,
+      other.privateKey,
+    );
+    const cases: [string, string][] = [
+      [forged, 'invalid_request'],
+      [await event(TOKENS_REVOKED, ada.sub, { aud: 'another-app' }), 'invalid_audience'],
+      [await event(TOKENS_REVOKED, ada.sub, { iss: 'https://evil.example.org/' }), 'invalid_issuer'],
+      [await event(TOKENS_REVOKED, ada.sub, { iat: Math.floor(w.clock / 1000) + 3600 }), 'invalid_request'],
+      [await event(TOKENS_REVOKED, ada.sub, { events: 'all' }), 'invalid_request'],
+      ['not a token', 'invalid_request'],
+      ['', 'invalid_request'],
+    ];
+    for (const [token, err] of cases) {
+      const r = await deliver(token);
+      expect(r.status).toBe(400);
+      expect(((await r.json()) as { err: string }).err).toBe(err);
+    }
+    // a subject named by another issuer is not a Google account here
+    const elsewhere = await w.google.sign({
+      iss: 'https://accounts.google.com/', aud: CLIENT_ID, iat: Math.floor(w.clock / 1000),
+      events: { [TOKENS_REVOKED]: { subject: { subject_type: 'iss-sub', iss: 'https://evil.example.org/', sub: ada.sub } } },
+    });
+    expect((await deliver(elsewhere)).status).toBe(202);
+    expect((await a.refresh()).user?.email).toBe(ada.email);
+  });
+
+  it('needs neither a session nor a CSRF token, as Google sends it', async () => {
+    const a = await w.signedIn(ada);
+    const stranger = w.browser();
+    stranger.extra = { 'sec-fetch-site': 'cross-site' };
+    expect((await deliver(await event(TOKENS_REVOKED, ada.sub), stranger)).status).toBe(202);
+    expect((await a.refresh()).user).toBeNull();
+  });
+});
+
 describe('documents', () => {
   let a: Browser;
   beforeAll(async () => {
@@ -264,6 +343,13 @@ describe('documents', () => {
     const f = await a.fetch(`/api/docs/${id}/files/notes.dcw`);
     expect(await f.text()).toBe(text);
     expect(f.headers.get('content-disposition')).toBe('attachment; filename="notes.dcw"');
+    // removing one frees its space
+    expect((await a.fetch(`/api/docs/${id}/files/other.dch`, { method: 'PUT', body: '{}' })).status).toBe(201);
+    expect((await a.fetch(`/api/docs/${id}/files/notes.dcw`, { method: 'DELETE' })).status).toBe(204);
+    const after = (await (await a.fetch(`/api/docs/${id}/files`)).json()) as { files: { name: string }[] };
+    expect(after.files.map((x) => x.name)).toEqual(['other.dch']);
+    expect((await w.DB.prepare('SELECT files_size AS n FROM documents WHERE id = ?').bind(id).first<{ n: number }>())!.n).toBe(2);
+    expect((await a.fetch(`/api/docs/${id}/files/notes.dcw`)).status).toBe(404);
   });
 
   it('are deleted with their shares and stored objects', async () => {
@@ -319,6 +405,9 @@ describe('sharing and access', () => {
     expect(await status(viewer, `${doc}/shares`)).toBe(403);
     expect(await status(editor, `${doc}/shares`)).toBe(200);
     expect(await status(viewer, `${doc}/files/a.dcw`, { method: 'PUT', body: 'x' })).toBe(403);
+    expect(await status(viewer, `${doc}/files`)).toBe(200);
+    expect(await status(viewer, `${doc}/files/a.dcw`, { method: 'DELETE' })).toBe(403);
+    expect(await status(stranger, `${doc}/files`)).toBe(404);
   });
 
   it('lists shared documents for their recipients, case-insensitively', async () => {

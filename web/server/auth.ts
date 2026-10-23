@@ -2,7 +2,7 @@
 import { appOrigin, type Deps, type ReadyEnv } from './env';
 import { equal, pkceChallenge, randomToken, seal, sha256, sign, unseal, verify } from './crypto';
 import { clearCookie, cookies, redirect, setCookie } from './http';
-import { GOOGLE_AUTH, GOOGLE_TOKEN, verifyIdToken } from './oidc';
+import { GOOGLE_AUTH, GOOGLE_ISSUERS, GOOGLE_TOKEN, TokenError, verifyIdToken, verifySecurityEvent } from './oidc';
 
 export const SESSION_COOKIE = '__Host-dc_session';
 export const FLOW_COOKIE = '__Host-dc_signin';
@@ -194,4 +194,47 @@ export async function logout(env: ReadyEnv, s: Session | null): Promise<string[]
 export async function logoutEverywhere(env: ReadyEnv, s: Session): Promise<string[]> {
   await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(s.user.id).run();
   return [clearCookie(SESSION_COOKIE)];
+}
+
+/**
+ * The events from Google's Cross-Account Protection (RISC) that end a person's sessions here: Google
+ * ended their sessions, revoked the tokens of this app (the person removed its access), or
+ * disabled the account. Other events (the stream's verification, an account enabled again, a
+ * suggested credential change) are acknowledged and need nothing.
+ */
+export const ENDING_EVENTS = [
+  'https://schemas.openid.net/secevent/risc/event-type/sessions-revoked',
+  'https://schemas.openid.net/secevent/oauth/event-type/tokens-revoked',
+  'https://schemas.openid.net/secevent/risc/event-type/account-disabled',
+];
+
+/** The largest security event token accepted. */
+const EVENT_BYTES = 16 * 1024;
+
+/**
+ * POST /api/google/risc: the receiver of Google's security events (push delivery). The body is a
+ * security event token; once it checks out, every session of the person it names is deleted, in
+ * every browser (as Sign out everywhere does). A delivery that comes again later at most signs
+ * them out once more. Nothing about the event is stored. Answers 202, or 400 for a token that
+ * does not check.
+ */
+export async function securityEvent(req: Request, env: ReadyEnv, deps: Deps): Promise<Response> {
+  const bad = (err: string) => Response.json({ err, description: 'the security event token was not accepted' }, { status: 400 });
+  const text = await req.text();
+  if (!text || text.length > EVENT_BYTES) return bad('invalid_request');
+  let event;
+  try {
+    event = await verifySecurityEvent(text.trim(), env.GOOGLE_CLIENT_ID, deps);
+  } catch (e) {
+    if (!(e instanceof TokenError)) throw e;
+    return bad(e.reason === 'issuer' ? 'invalid_issuer' : e.reason === 'audience' ? 'invalid_audience' : e.reason === 'unknown key' ? 'invalid_key' : 'invalid_request');
+  }
+  for (const type of ENDING_EVENTS) {
+    const subject = event.events[type]?.subject as { iss?: unknown; sub?: unknown } | undefined;
+    if (typeof subject?.sub !== 'string' || !subject.sub) continue;
+    // a subject is named by Google's issuer and the Google account ID that sign-in also uses
+    if (subject.iss !== undefined && (typeof subject.iss !== 'string' || !GOOGLE_ISSUERS.includes(subject.iss.replace(/\/$/, '')))) continue;
+    await env.DB.prepare('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE google_sub = ?)').bind(subject.sub).run();
+  }
+  return new Response(null, { status: 202 });
 }

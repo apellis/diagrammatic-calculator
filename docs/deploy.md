@@ -96,6 +96,17 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
   Run workflow (first with "dry run" to see the list), or push a change to
   `.github/prune-deployments` whose first word is `list` or `delete`. It keeps the production
   deployment and anything newer.
+- **Revoked Google access (Cross-Account Protection).** Without this, a session ends only at its
+  limits (30 days, or 7 without use) or when the person signs out. With it, Google tells the API
+  when it ends a person's sessions, when they remove this app's access in their Google account, or
+  when it disables their account, and the API ends all their sessions here (`POST
+  /api/google/risc`; nothing about the event is stored). Once, in the Google Cloud project of the
+  OAuth client: APIs & Services, enable the RISC API (accept its terms if asked); IAM & Admin,
+  Service accounts, create one with the role RISC Configuration Admin and a JSON key for it. Then,
+  from `web/`, run `node scripts/risc-register.mjs <key.json> https://diagcalc.pages.dev`: it
+  registers `<site>/api/google/risc` as the receiver and asks Google for a verification event.
+  Delete the key afterwards (or keep it outside the repository); run the script again with a new
+  key when `APP_ORIGIN` changes.
 - **Rate limit.** Cloudflare, the zone, Security, WAF, Rate limiting rules (once the site is on the
   custom domain; `pages.dev` cannot have rules): one rule on URI path starting with `/api/` and
   method not GET, for example 60 requests per minute per IP, action Block for 1 minute.

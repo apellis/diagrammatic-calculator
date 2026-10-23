@@ -436,6 +436,17 @@ export async function putFile(req: Request, env: ReadyEnv, a: Access, s: Session
   return json({ name, size: body.byteLength }, 201);
 }
 
+/** DELETE /api/docs/:id/files/:name: removes a kept file (editors and the owner). */
+export async function deleteFile(env: ReadyEnv, a: Access, s: Session | null, name: string): Promise<Response> {
+  need(a, 'editor', s);
+  if (!FILE_NAME.test(name)) throw new HttpError(404, 'no such file');
+  const prefix = `docs/${a.doc.id}/files/`;
+  await env.FILES.delete(prefix + name);
+  const page = await env.FILES.list({ prefix });
+  await env.DB.prepare('UPDATE documents SET files_size = ? WHERE id = ?').bind(page.objects.reduce((n, o) => n + o.size, 0), a.doc.id).run();
+  return empty();
+}
+
 export async function getFile(env: ReadyEnv, a: Access, name: string): Promise<Response> {
   if (!FILE_NAME.test(name)) throw new HttpError(404, 'no such file');
   const obj = await env.FILES.get(`docs/${a.doc.id}/files/${name}`);

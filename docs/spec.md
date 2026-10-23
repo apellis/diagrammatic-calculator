@@ -324,7 +324,7 @@ The app is a static site on Cloudflare Pages at diagcalc.ape.computer; a server 
 
 **Security of the accounts phase.** These rules hold whatever the client sends.
 
-- *Sessions* end after 30 days, or after 7 days without a request; the session ID is replaced once a day (the old one stays valid for a minute, for requests already under way). "Sign out everywhere" in Settings ends every session of the account.
+- *Sessions* end after 30 days, or after 7 days without a request; the session ID is replaced once a day (the old one stays valid for a minute, for requests already under way). "Sign out everywhere" in Settings ends every session of the account, and so does Google revoking the app's access, ending the person's Google sessions or disabling their account (Google's Cross-Account Protection events, once registered).
 - *Origin.* The API answers only at the site's own address (`APP_ORIGIN`); sign-in redirects and links in e-mails use that address, never the host a request names. Previews get no database or storage.
 - *Storage.* A request body is refused past its limit before it is read in full. A document holds at most 50 exported files, and an owner's documents and files together at most 2 GiB, whoever writes them (an editor by link included). Deleting a document or an account removes its stored objects in bounded rounds that later requests finish if one runs out of time.
 - *Sharing.* A share sent to an address belongs to the first account that opens it with that address. People who hold only a link see neither the owner's address nor the list of shares; only the owner and direct editors see who a document is shared with.

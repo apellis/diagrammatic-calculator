@@ -3,16 +3,35 @@
 // the site has no accounts API, so the anonymous app is unchanged.
 import { createResource, createSignal, For, onMount, Show } from 'solid-js';
 import { account, api, loadAccount, openFromAccount, signIn, signOut, signOutEverywhere, takeLinkToken, user } from '../account/account';
-import { ApiError, type CloudDoc, type MailOutcome, type Role } from '../account/api';
+import { ApiError, type CloudDoc, type KeptFile, type MailOutcome, type Role } from '../account/api';
 import { statusText, type DocSync } from '../account/docsync';
 import { findByCloud, updateInfo } from '../doc/store';
-import { ago } from '../app';
+import { ago, cache, download } from '../app';
+import { Dialog } from './Dialog';
 
 const message = (e: unknown) => (e instanceof ApiError ? e.code : e instanceof Error ? e.message : String(e));
 
-/** Sign in, or who is signed in and Sign out; nothing at all without accounts. */
-export function AccountBar() {
+/**
+ * Sign in, or who is signed in and Sign out; nothing at all without accounts. Signing out asks
+ * whether to also remove this account's documents from this browser (for a shared computer);
+ * `onSignedOut` hears how many were removed and kept.
+ */
+export function AccountBar(props: { onSignedOut?: (r: { removed: number; kept: number; cleared: boolean }) => void }) {
   const [busy, setBusy] = createSignal(false);
+  const [asking, setAsking] = createSignal(false);
+  const [clear, setClear] = createSignal(false);
+  const out = async () => {
+    setBusy(true);
+    try {
+      const cleared = clear();
+      const r = await signOut(cleared);
+      if (cleared) await cache.clear();
+      setAsking(false);
+      props.onSignedOut?.({ ...r, cleared });
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <Show when={account().status === 'anonymous' || account().status === 'signed-in'}>
       <span class="account row" data-testid="account">
@@ -27,20 +46,29 @@ export function AccountBar() {
           {(u) => (
             <>
               <span class="muted" title={u().email} data-testid="account-name">{u().name || u().email}</span>
-              <button
-                class="ghost"
-                disabled={busy()}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await signOut();
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
+              <button class="ghost" disabled={busy()} onClick={() => { setClear(false); setAsking(true); }} data-testid="sign-out">
                 Sign out
               </button>
+              <Show when={asking()}>
+                <Dialog label="Sign out" onClose={() => !busy() && setAsking(false)}>
+                  <h3 style={{ margin: '0 0 8px' }}>Sign out of {u().email}</h3>
+                  <label class="row" style={{ 'align-items': 'flex-start', gap: '8px' }}>
+                    <input type="checkbox" checked={clear()} onChange={(e) => setClear(e.currentTarget.checked)} data-testid="sign-out-clear" />
+                    <span>
+                      Also remove this account's documents from this browser (on a shared computer)
+                      <span class="hint" style={{ display: 'block' }}>
+                        They stay in your account and come back when you sign in again. A copy with changes your account does not have
+                        yet is kept here. Saved results are cleared too.
+                      </span>
+                    </span>
+                  </label>
+                  <div class="row" style={{ 'margin-top': '12px' }}>
+                    <div class="grow" />
+                    <button onClick={() => setAsking(false)} disabled={busy()}>Cancel</button>
+                    <button class="primary" onClick={out} disabled={busy()} data-testid="sign-out-confirm">{busy() ? 'Signing out…' : 'Sign out'}</button>
+                  </div>
+                </Dialog>
+              </Show>
             </>
           )}
         </Show>
@@ -291,5 +319,59 @@ export function ShareDialog(props: { cloudId: string; name: string; role: Role; 
         </div>
       </div>
     </div>
+  );
+}
+
+const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} kB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+
+/**
+ * The files kept with a document in the account (copies of its exports): each can be downloaded,
+ * opened as a new document, or removed by someone who can edit.
+ */
+export function FilesDialog(props: { cloudId: string; name: string; canEdit: boolean; token?: string; onClose: () => void; onOpen: (name: string, text: string) => Promise<void> }) {
+  const [files, { refetch }] = createResource(() => props.cloudId, (id) => api.files(id, props.token));
+  const [error, setError] = createSignal('');
+  const act = async (fn: () => Promise<void>) => {
+    setError('');
+    try {
+      await fn();
+    } catch (e) {
+      setError(message(e));
+    }
+  };
+  return (
+    <Dialog label="Files kept with this document" onClose={props.onClose}>
+      <h3 style={{ margin: '0 0 8px' }}>Files kept with “{props.name}”</h3>
+      <p class="hint" style={{ margin: '0 0 8px' }}>Each export of a document saved to an account keeps a copy of the file with it, here.</p>
+      <Show when={!files.loading} fallback={<p class="hint">Loading…</p>}>
+        <Show when={!files.error} fallback={<div class="error">The list cannot be read: {message(files.error)}</div>}>
+          <table class="kv" data-testid="kept-files">
+            <tbody>
+              <For each={files()} fallback={<tr><td class="muted">No files yet: Export keeps one here.</td></tr>}>
+                {(f: KeptFile) => (
+                  <tr data-file={f.name}>
+                    <td class="mono">{f.name}</td>
+                    <td class="muted">{size(f.size)}</td>
+                    <td class="muted">{ago(f.uploaded)}</td>
+                    <td class="row" style={{ 'justify-content': 'flex-end' }}>
+                      <button onClick={() => act(async () => download(f.name, await api.file(props.cloudId, f.name, props.token), f.name.endsWith('.dch') ? 'application/json' : 'text/plain'))}>Download</button>
+                      <button onClick={() => act(async () => props.onOpen(f.name, await api.file(props.cloudId, f.name, props.token)))}>Open as a new document</button>
+                      <Show when={props.canEdit}>
+                        <button class="ghost" onClick={() => act(async () => { await api.deleteFile(props.cloudId, f.name); refetch(); })}>Remove</button>
+                      </Show>
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </Show>
+      </Show>
+      <Show when={error()}><div class="error" style={{ 'margin-top': '8px' }}>{error()}</div></Show>
+      <div class="row" style={{ 'margin-top': '10px' }}>
+        <div class="grow" />
+        <button onClick={props.onClose}>Done</button>
+      </div>
+    </Dialog>
   );
 }

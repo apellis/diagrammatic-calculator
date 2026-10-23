@@ -114,6 +114,87 @@ test('the phase 6 gate: a document made anonymously survives sign-in, opens on a
   await c.context.close();
 });
 
+test('on a shared computer, signing out can remove the account\'s documents from the browser, keeping unsaved changes', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const mock = new MockAccounts();
+  const ada = mock.user('ada@example.org', 'Ada');
+  const bob = mock.user('bob@example.org', 'Bob');
+  const a = await device(browser, mock, ada);
+  await newDoc(a.page);
+  await typeCell(a.page, 'def a := x_1 e(iji)');
+  await saved(a.page);
+  const shared = mock.only().id;
+  mock.shares.set(shared, new Map([['bob@example.org', 'viewer']]));
+
+  // Bob has a document of his own, and a viewer's copy of Ada's with an edit of his
+  const b = await device(browser, mock, bob);
+  await newDoc(b.page);
+  await typeCell(b.page, 'def b := x_2 e(iji)');
+  await saved(b.page);
+  await b.page.goto('/#/');
+  await b.page.getByTestId('shared-with-me').locator(`tr[data-shared="${shared}"] td.open`).click();
+  await expect(b.page.getByTestId('sync')).toHaveText('View only: changes stay in this browser');
+  await addCell(b.page, 'watch x_2 e(iji)');
+  await b.page.goto('/#/');
+  await expect(b.page.locator('tr[data-doc]')).toHaveCount(2);
+
+  await b.page.getByTestId('sign-out').click();
+  const ask = b.page.getByRole('dialog', { name: 'Sign out' });
+  await ask.getByTestId('sign-out-clear').check();
+  await ask.getByTestId('sign-out-confirm').click();
+  await expect(b.page.getByTestId('sign-in')).toBeVisible();
+  await expect(b.page.getByTestId('notice')).toHaveText(
+    'Removed 1 document of the account from this browser. Kept 1 document with changes the account does not have; export or delete it if this computer is shared.',
+  );
+  await expect(b.page.locator('tr[data-doc]')).toHaveCount(1);
+  await expect(b.page.locator('tr[data-doc]')).toContainText('shared, can view');
+
+  // signing in again brings the account's document back
+  b.session.next = bob;
+  await b.page.getByTestId('sign-in').click();
+  await expect(b.page.getByTestId('account-name')).toHaveText('Bob');
+  await expect(b.page.locator('tr[data-doc]')).toHaveCount(2);
+  await a.context.close();
+  await b.context.close();
+});
+
+test('the files kept with a document are listed, and can be downloaded, opened and removed', async ({ browser }) => {
+  const mock = new MockAccounts();
+  const ada = mock.user('ada@example.org', 'Ada');
+  const a = await device(browser, mock, ada);
+  await newDoc(a.page);
+  await typeCell(a.page, 'def a := x_1 e(iji)');
+  await saved(a.page);
+  const exported = a.page.waitForEvent('download');
+  await a.page.keyboard.press('ControlOrMeta+Shift+S');
+  await exported;
+  await expect.poll(() => mock.only().files.size).toBe(1);
+  const name = [...mock.only().files.keys()][0];
+
+  await a.page.keyboard.press('ControlOrMeta+K');
+  await a.page.getByRole('option', { name: /Files kept with this document/ }).click();
+  const dialog = a.page.getByRole('dialog', { name: 'Files kept with this document' });
+  const row = dialog.locator(`tr[data-file="${name}"]`);
+  await expect(row).toContainText(name);
+  const down = a.page.waitForEvent('download');
+  await row.getByRole('button', { name: 'Download' }).click();
+  expect((await down).suggestedFilename()).toBe(name);
+  await row.getByRole('button', { name: 'Remove' }).click();
+  await expect(dialog.getByTestId('kept-files')).toContainText('No files yet');
+  expect(mock.only().files.size).toBe(0);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+
+  // a file kept with the document opens as a new document
+  mock.only().files.set('older.dcw', 'diagcalc-workspace/1\ncontext klr type=A2 nu=2i+j ring=QQ\nwatch x_2 e(iji)  # id=wt1\n');
+  await a.page.keyboard.press('ControlOrMeta+K');
+  await a.page.getByRole('option', { name: /Files kept with this document/ }).click();
+  const before = a.page.url();
+  await a.page.getByRole('dialog', { name: 'Files kept with this document' }).locator('tr[data-file="older.dcw"]').getByRole('button', { name: 'Open as a new document' }).click();
+  await expect(a.page).not.toHaveURL(before);
+  await expect(cell(a.page, 0).locator('.head .text')).toHaveAttribute('data-text', 'x_2 e(iji)');
+  await a.context.close();
+});
+
 test('a view link opens the document without an account', async ({ browser }) => {
   const mock = new MockAccounts();
   const ada = mock.user('ada@example.org', 'Ada');
@@ -170,7 +251,8 @@ test('signing out keeps the documents here; deleting an owned document deletes i
   await typeCell(a.page, 'def a := x_1 e(iji)');
   await saved(a.page);
   await a.page.goto('/#/');
-  await a.page.getByRole('button', { name: 'Sign out' }).click();
+  await a.page.getByTestId('sign-out').click();
+  await a.page.getByRole('dialog', { name: 'Sign out' }).getByTestId('sign-out-confirm').click();
   await expect(a.page.getByTestId('sign-in')).toBeVisible();
   expect(mock.log.find((l) => l.path === 'auth/logout')).toMatchObject({ method: 'POST', csrf: `csrf-${ada.id}` });
   await expect(a.page.locator('tr[data-doc]')).toHaveCount(1);

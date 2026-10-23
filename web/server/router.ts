@@ -3,7 +3,7 @@
 // session's CSRF token.
 import { appOrigin, defaultDeps, ready, type Deps, type Env, type ReadyEnv } from './env';
 import { HttpError, empty, json, redirect } from './http';
-import { callback, csrfOk, csrfToken, currentSession, login, logout, logoutEverywhere, rotate, type Session } from './auth';
+import { callback, csrfOk, csrfToken, currentSession, login, logout, logoutEverywhere, rotate, securityEvent, type Session } from './auth';
 import * as docs from './docs';
 import { unsubscribe } from './mail';
 
@@ -41,6 +41,8 @@ export async function handle(req: Request, env: Env, deps: Deps = defaultDeps): 
     if (new URL(req.url).origin !== appOrigin(env, req)) throw new HttpError(421, 'this address does not serve the accounts API');
     // one-click unsubscribe from a share notification: no session, as mail clients send it
     if (path === 'mail/unsubscribe' && (method === 'GET' || method === 'POST')) return await unsubscribe(req, env, deps);
+    // Google's security events (Cross-Account Protection): signed by Google, not sent by a browser
+    if (path === 'google/risc' && method === 'POST') return await securityEvent(req, env, deps);
     const s = await currentSession(req, env, deps);
     if (UNSAFE.has(method)) {
       if (!s) {
@@ -110,6 +112,8 @@ async function dispatch({ req, env, deps, s, method, path, seg }: Call): Promise
       return docs.getFile(env, a, name);
     case 'PUT files/:name':
       return docs.putFile(req, env, a, s, name);
+    case 'DELETE files/:name':
+      return docs.deleteFile(env, a, s, name);
   }
   throw new HttpError(405, 'method not allowed');
 }

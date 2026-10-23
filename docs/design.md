@@ -581,6 +581,18 @@ that `GET /api/me` hands to the page, and is refused when `Origin` or `Sec-Fetch
 another site. Lax cookies already keep other sites' forms from carrying the session; the token
 covers the rest.
 
+**Revoked access.** `POST /api/google/risc` receives Google's security events (Cross-Account
+Protection, push delivery), the one route that takes neither a session nor a CSRF token. The body is
+a security event token, checked like an ID token: an RS256 signature by a key from Google's JWKS
+(the keys Google's RISC discovery document names), issuer Google, audience our client ID, issued
+no later than now (such tokens have no expiry). For the events sessions-revoked, tokens-revoked
+(the person removed this app's access) and account-disabled, every session of the Google account
+it names is deleted, as "Sign out everywhere" does; other events are acknowledged with 202. Nothing
+about an event is stored, so a delivery Google repeats at most signs the person out again. This
+costs one request per event and nothing between them, where re-checking with Google at each
+session rotation would need a refresh token kept for every user. It works once the owner registers
+the receiver (`docs/deploy.md`, "Revoked Google access"); until then sessions end at their limits.
+
 **Data.** D1 (`web/migrations/`) holds `users`, `sessions`, `documents` (owner, name, times,
 version, size, the R2 key of the current snapshot, link role and token), `shares` (document,
 lower-case e-mail address, role) and `sent_mail` (only sender and time, for the daily limit). Shares
@@ -620,8 +632,9 @@ names and the steps.
 the Solid plugin) runs the API in Node against Miniflare's D1 and R2, the same SQLite and object
 store as the Workers runtime, with the migrations applied as wrangler applies them. A fake Google
 checks the PKCE verifier, client secret and redirect URI at its token endpoint and signs real RS256
-ID tokens; a fake Resend records messages; a clock is injected. The tests cover the PKCE test
-vector of RFC 7636, every ID-token check, the whole sign-in and its failures (wrong state, missing
+ID tokens and security event tokens; a fake Resend records messages; a clock is injected. The
+tests cover the PKCE test vector of RFC 7636, every ID-token check, Google's security events and
+their checks, the whole sign-in and its failures (wrong state, missing
 or tampered cookie, reused code, replayed nonce), session expiry and sign-out, CSRF, the role of
 each kind of caller on every route, link sharing, saving races, notifications and their limit,
 deleting documents and accounts, and that no user data reaches the log. The functions also build
@@ -648,9 +661,14 @@ belongs to another account signed in earlier on this browser is left alone and t
 document (`src/account/docsync.ts`) syncs when it opens, 1.5 s after a change, when the page is
 hidden, and every minute while visible, and the top bar says where it stands ("Saved to your
 account", "Saving…", "Offline: saved in this browser", "View only: changes stay in this browser").
-Exporting a `.dcw` also keeps a copy with the document in R2. Deleting an owned document deletes
-it from the account; removing a shared one only removes the copy here. Signing out keeps the
-copies in this browser.
+Exporting a `.dcw` also keeps a copy with the document in R2; "Files kept with this document" in
+the command palette lists them, to download, open as a new document or (for editors) remove.
+Deleting an owned document deletes it from the account; removing a shared one only removes the
+copy here. Signing out keeps the copies in this browser, unless the person ticks "Also remove this
+account's documents from this browser" (for a shared computer): every copy is first synced, then
+removed, except one that still has changes the account lacks (its state vector is ahead of the
+server's, as with a viewer's own edits or a failed save), which is kept and counted in the notice;
+the result cache is cleared too.
 
 **Sharing.** The Share button opens a dialog: add a person by address as viewer or editor (with or
 without an e-mail), change or remove their access, and set the link (off, anyone can view, anyone
@@ -665,9 +683,9 @@ several browser contexts so they can be several devices and several people. It c
 API the app is unchanged, the sign-in round trip and its failure message, the phase 6 gate end to
 end (a document made anonymously survives sign-in, opens on a second device, and is shared
 read-only with a second account, whose edits stay local), opening by a view link without an
-account, signing out, and deleting from the account.
+account, signing out (keeping the copies, or removing them on a shared computer), the files kept
+with a document, and deleting from the account.
 
 **Not yet.** Real-time editing together (phase 7); until then two devices editing the same document
-merge on each save, but a cell both add while apart can get the same ID. Choosing to clear this
-browser's copies on sign-out (for shared computers). A list of the files kept with a document. The
+merge on each save, but a cell both add while apart can get the same ID. The
 version history of a document merged from two devices interleaves both histories.

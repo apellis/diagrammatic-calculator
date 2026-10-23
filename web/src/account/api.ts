@@ -42,6 +42,13 @@ export interface Share {
   account?: { name: string; email: string } | null;
 }
 
+/** A file kept with a document (an exported .dcw or .dch). */
+export interface KeptFile {
+  name: string;
+  size: number;
+  uploaded: number;
+}
+
 /** Why a share notification asked for was not sent. */
 export type MailOutcome = 'unavailable' | 'new-account' | 'opted-out' | 'limit' | 'failed';
 
@@ -164,5 +171,17 @@ export class Api {
 
   async putFile(id: string, name: string, text: string): Promise<void> {
     await this.call(`/docs/${id}/files/${encodeURIComponent(name)}`, { method: 'PUT', body: text, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+  }
+
+  async files(id: string, link?: string): Promise<KeptFile[]> {
+    return ((await (await this.call(`/docs/${id}/files`, { link })).json()) as { files: KeptFile[] }).files;
+  }
+
+  async file(id: string, name: string, link?: string): Promise<string> {
+    return (await this.call(`/docs/${id}/files/${encodeURIComponent(name)}`, { link })).text();
+  }
+
+  async deleteFile(id: string, name: string): Promise<void> {
+    await this.call(`/docs/${id}/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
   }
 }

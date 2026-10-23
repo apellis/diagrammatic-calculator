@@ -21,7 +21,7 @@ import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
 import { isSetUp, loadKey, loadSettings } from '../ai/providers';
 import { account, api, user } from '../account/account';
 import { DocSync } from '../account/docsync';
-import { ShareDialog, SyncBadge } from './Account';
+import { FilesDialog, ShareDialog, SyncBadge } from './Account';
 
 export function WorkspacePage(props: { id: string }) {
   const [od] = createResource(() => props.id, openDoc);
@@ -279,7 +279,7 @@ function DocView(props: {
   const [template, setTemplate] = createSignal<{ text: string; cursor?: number } | undefined>(undefined);
   const [renaming, setRenaming] = createSignal(false);
   const [branchName, setBranchName] = createSignal<string | null>(null);
-  const [modal, setModal] = createSignal<null | 'palette' | 'keys' | 'branch' | 'share' | 'discard' | { version: number } | { snapshot: number } | { pin: string }>(null);
+  const [modal, setModal] = createSignal<null | 'palette' | 'keys' | 'branch' | 'share' | 'files' | 'discard' | { version: number } | { snapshot: number } | { pin: string }>(null);
   // what is shared is what is shown: an edit still waiting for the pause before its save is saved now
   const share = () => {
     void props.sync?.saveNow();
@@ -610,6 +610,7 @@ function DocView(props: {
     ...(linked() || relink() ? [{ name: 'Stop saving to the file on disk', run: unlink }] : []),
     { name: 'Start a scratch branch', keys: keysOf('branch'), run: () => setBranchName(defaultBranchName()) },
     ...(props.sync?.cloudId && user() ? [{ name: 'Share this document', run: share }] : []),
+    ...(props.sync?.cloudId ? [{ name: 'Files kept with this document', run: () => setModal('files') }] : []),
     ...(onBranch()
       ? [
           { name: 'Compare and accept this branch', run: () => setModal('branch') },
@@ -823,6 +824,15 @@ function DocView(props: {
       <Show when={modal() === 'share' && props.sync?.cloudId}>
         {(id) => <ShareDialog cloudId={id()} name={name()} role={props.sync!.role ?? 'viewer'} onClose={() => setModal(null)}
           onCleanCopy={async () => { setModal(null); location.hash = `#/doc/${await createCleanCopy(main, `${name()} (clean copy)`)}`; }} />}
+      </Show>
+      <Show when={modal() === 'files' && props.sync?.cloudId}>
+        {(id) => <FilesDialog cloudId={id()} name={name()} canEdit={!!props.sync?.canEdit} token={props.o.info.cloud?.token} onClose={() => setModal(null)}
+          onOpen={async (file, text) => {
+            const r = await importText(file, text);
+            if (r.note) importNotes.set(r.id, r.note);
+            setModal(null);
+            location.hash = `#/doc/${r.id}`;
+          }} />}
       </Show>
       <Show when={modal() === 'branch' && props.branching.preview()} keyed>
         {(pv) => (

@@ -173,7 +173,14 @@ export function DocList() {
       <div class="row titlebar">
         <h1>diagrammatic-calculator</h1>
         <div class="grow" />
-        <AccountBar />
+        <AccountBar
+          onSignedOut={(r) => {
+            refetch();
+            if (!r.cleared) return;
+            const n = (k: number) => `${k} ${k === 1 ? 'document' : 'documents'}`;
+            setNotice(`Removed ${n(r.removed)} of the account from this browser.${r.kept ? ` Kept ${n(r.kept)} with changes the account does not have; export or delete ${r.kept === 1 ? 'it' : 'them'} if this computer is shared.` : ''}`);
+          }}
+        />
         <a class="button icon" href="#/about" data-testid="open-about" title="About" aria-label="About">
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9.5" />
@@ -208,7 +215,7 @@ export function DocList() {
           </li>
           <li>
             Signing out, or removing a document from this browser, keeps the account copy. Deleting a document you own removes both
-            copies.
+            copies. On a shared computer, Sign out can also remove the account's documents from this browser.
           </li>
           <li>Without an account, documents live only in this browser; export them to keep a copy elsewhere.</li>
           <li data-testid="install-help">

@@ -5,8 +5,8 @@ import { createSignal } from 'solid-js';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { Api, type CloudDoc, type User } from './api';
-import { CLOUD, syncDoc, upload } from './sync';
-import { createFromCloud, getInfo, listDocs, updateInfo, type CloudLink, type DocInfo } from '../doc/store';
+import { ahead, CLOUD, syncDoc, upload } from './sync';
+import { createFromCloud, deleteDoc, getInfo, listDocs, updateInfo, type CloudLink, type DocInfo } from '../doc/store';
 import { Doc } from '../doc/model';
 
 export type AccountState =
@@ -73,10 +73,42 @@ export function takeLinkToken(id: string): string | undefined {
   }
 }
 
-/** Signs out. Documents stay in this browser. */
-export async function signOut() {
+/**
+ * Signs out. Documents stay in this browser unless `clear` (for a shared computer): then every
+ * copy of this account's documents is first brought in step with the account and then removed
+ * from this browser, except copies with changes the account does not have (a failed save, or a
+ * viewer's own edits), which are kept and counted. Returns how many were removed and kept.
+ */
+export async function signOut(clear = false): Promise<{ removed: number; kept: number }> {
+  const u = user();
+  let removed = 0;
+  let kept = 0;
+  if (clear && u) {
+    try {
+      await syncAll(u);
+    } catch {
+      // the account cannot be reached: only copies already in step are removed
+    }
+    for (const d of await listDocs()) {
+      if (!ours(d, u)) continue;
+      const cloud = d.cloud;
+      // signed in, every document here is the account's; one still without a copy there failed to upload
+      if (!cloud) {
+        kept++;
+        continue;
+      }
+      // anything the account's copy does not have, such as a viewer's own edits, stays here
+      if (await withYdoc(d.id, async (y) => ahead(Y.encodeStateVector(y), cloud.sv))) {
+        kept++;
+        continue;
+      }
+      await deleteDoc(d.id);
+      removed++;
+    }
+  }
   await api.logout();
   setAccount({ status: 'anonymous' });
+  return { removed, kept };
 }
 
 /** Signs out in every browser where this account is signed in. */

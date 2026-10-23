@@ -171,6 +171,18 @@ export class MockAccounts {
       d.files.set(decodeURIComponent(name), req.postData() ?? '');
       return json({ name, size: 0 }, 201);
     }
+    if (sub === 'files' && !name && method === 'GET') {
+      return json({ files: [...d.files].sort(([a], [b]) => a.localeCompare(b)).map(([n, t]) => ({ name: n, size: Buffer.byteLength(t), uploaded: Date.now() })) });
+    }
+    if (sub === 'files' && name && method === 'GET') {
+      const t = d.files.get(decodeURIComponent(name));
+      return t === undefined ? fail(404, 'no such file') : route.fulfill({ status: 200, contentType: 'text/plain', body: t });
+    }
+    if (sub === 'files' && name && method === 'DELETE') {
+      if (!atLeast('editor')) return fail(403, 'you can only view this document');
+      d.files.delete(decodeURIComponent(name));
+      return route.fulfill({ status: 204 });
+    }
     return fail(405, 'method not allowed');
   }
 

@@ -28,6 +28,8 @@ Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
   23 October to replace a personal e-mail address with the owner's noreply address): the refs of
   pull requests #1 and #2 and the cached old commits. Delete the branch `wip/odd-normal-form`
   (old history; its work landed on master).
+- Register the receiver of Google's security events, so sessions end when Google access is
+  revoked (`docs/deploy.md`, "Revoked Google access"; a service account key and one script run).
 - Make the repository public, with the licence already in place.
 
 Polish (all remaining UX polish happens before going public):
@@ -40,9 +42,6 @@ Polish (all remaining UX polish happens before going public):
 - Size diagnostics when a job is stopped at its time limit.
 - Certificate hypotheses and references are printed as raw ASCII from the presentation files
   (`Q_ab != 0`); typeset them.
-- Clearing this browser's copies on sign-out (for shared computers); a list of the files kept with
-  a document.
-- Sessions do not end when the user's Google access is revoked; they end at the idle limit.
 
 Certificates:
 
