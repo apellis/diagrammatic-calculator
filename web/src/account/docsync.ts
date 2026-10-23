@@ -95,8 +95,22 @@ export class DocSync {
     clearTimeout(this.timer);
     this.dirty = true;
     this.setStatus('saving');
-    this.timer = setTimeout(() => void this.sync(), SAVE_DELAY);
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.sync();
+    }, SAVE_DELAY);
   };
+
+  /**
+   * Saves the changes waiting for the pause after an edit now, so that what is shared next (a link
+   * opened at once, a person added) includes them. Resolves when they are saved.
+   */
+  saveNow(): Promise<void> {
+    if (this.timer === undefined) return this.running ?? Promise.resolve();
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    return this.sync();
+  }
 
   private onVisibility = () => {
     if (document.visibilityState === 'hidden') void this.sync();

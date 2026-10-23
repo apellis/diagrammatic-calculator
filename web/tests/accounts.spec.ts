@@ -119,9 +119,19 @@ test('a view link opens the document without an account', async ({ browser }) =>
   const ada = mock.user('ada@example.org', 'Ada');
   const a = await device(browser, mock, ada);
   await newDoc(a.page);
-  await typeCell(a.page, 'def a := x_1 e(iji)');
   await saved(a.page);
+  // the page's timers are held from here, so the save that follows an edit after a pause never
+  // comes by itself: opening Share saves the edit at once, and the link shares it
+  await a.page.clock.install();
+  await a.page.clock.pauseAt(await a.page.evaluate(() => Date.now() + 1000));
+  await typeCell(a.page, 'def a := x_1 e(iji)');
+  // Enter writes the cell once the engine has checked it
+  await expect(cell(a.page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := x_1 e(iji)');
+  await expect(a.page.getByTestId('sync')).toHaveText('Saving…');
   await a.page.getByTestId('share').click();
+  await saved(a.page);
+  expect(mock.only().data.includes('x_1 e(iji)')).toBe(true);
+  await a.page.clock.resume();
   const dialog = a.page.getByRole('dialog', { name: 'Share' });
   await dialog.getByTestId('link-role').selectOption('viewer');
   const id = mock.only().id;

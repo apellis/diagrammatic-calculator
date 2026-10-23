@@ -273,6 +273,11 @@ function DocView(props: {
   const [renaming, setRenaming] = createSignal(false);
   const [branchName, setBranchName] = createSignal<string | null>(null);
   const [modal, setModal] = createSignal<null | 'palette' | 'keys' | 'branch' | 'share' | 'discard' | { version: number } | { snapshot: number } | { pin: string }>(null);
+  // what is shared is what is shown: an edit still waiting for the pause before its save is saved now
+  const share = () => {
+    void props.sync?.saveNow();
+    setModal('share');
+  };
   const [linked, setLinked] = props.linked;
   const [message, setMessage] = createSignal('');
   const [canvas, setCanvas] = createSignal<{ id: string; word?: string } | null>(null);
@@ -553,7 +558,7 @@ function DocView(props: {
     { name: 'Import a workspace as a new document', keys: `${K}O`, run: importFile },
     { name: 'Save to a file on disk after every step', run: linkFile },
     { name: 'Start a scratch branch', keys: `${K}B`, run: () => setBranchName(defaultBranchName()) },
-    ...(props.sync?.cloudId && user() ? [{ name: 'Share this document', run: () => setModal('share') }] : []),
+    ...(props.sync?.cloudId && user() ? [{ name: 'Share this document', run: share }] : []),
     ...(onBranch()
       ? [
           { name: 'Compare and accept this branch', run: () => setModal('branch') },
@@ -683,7 +688,7 @@ function DocView(props: {
             <>
               <SyncBadge sync={s()} />
               <Show when={s().cloudId && user()}>
-                <button class="ghost" onClick={() => setModal('share')} data-testid="share">Share</button>
+                <button class="ghost" onClick={share} data-testid="share">Share</button>
               </Show>
             </>
           )}
