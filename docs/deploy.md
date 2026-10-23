@@ -98,8 +98,10 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
   custom domain; `pages.dev` cannot have rules): one rule on URI path starting with `/api/` and
   method not GET, for example 60 requests per minute per IP, action Block for 1 minute.
 - **Separate tokens.** Instead of one `CLOUDFLARE_API_TOKEN` with every permission, keep the deploy
-  token at Cloudflare Pages: Edit plus D1: Edit, and remove Workers R2 Storage: Edit and DNS: Edit
-  once the bucket and the DMARC record exist (the run summary says when they do).
+  token at Cloudflare Pages: Edit plus D1: Edit, lower Workers R2 Storage to Read once the bucket
+  exists, and remove DNS: Edit once the DMARC record exists (the run summary says when they do).
+  R2 Read must stay: the deploy checks with it that the bucket exists, and without it would deploy
+  the site with accounts switched off. The app itself never uses this token.
 - **Protected environment.** The deploy job runs in the GitHub environment `production`. GitHub,
   Settings, Environments, `production`: under Deployment branches allow `master` only. The secrets
   can stay repository secrets (a job in the environment reads both); moving them into the
