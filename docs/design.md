@@ -538,7 +538,7 @@ development container cannot reach OpenAI).
 path under `/api/`), not a separate Worker. They are served from the app's own origin, so the
 session cookie is first-party and needs no CORS; they deploy with the site in the same
 `wrangler pages deploy`, so the app and the API never disagree about versions and every preview
-deployment has its API; and Cloudflare Access already covers them. A Worker routed under the same
+deployment has its API. A Worker routed under the same
 host would give the same origin, but needs a route, its own deploy and its own configuration. The
 function is invoked only for `/api/*` (the generated `_routes.json`); static files are served
 without it, so they cost nothing and behave exactly as before. The code is in `web/server/`, plain

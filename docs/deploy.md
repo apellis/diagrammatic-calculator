@@ -7,9 +7,9 @@ an R2 bucket and sends share notifications through Resend. Until the steps below
 deploy skips the accounts part with a line in the run summary, the API answers that accounts are
 not available, and the app stays anonymous exactly as before.
 
-Cloudflare Access stays in front of the whole site, API included. While it does, people pass Access
-and then sign in to the app, and someone a document is shared with must also be on the Access
-allowlist to open it. Removing Access is part of the public release.
+The site is served without Cloudflare Access (Alex, 23 October): anyone can use it anonymously,
+and Google sign-in is the only authentication. Until the Google consent screen is published, only
+its test users can sign in.
 
 ## Steps for Alex
 
@@ -88,10 +88,11 @@ Miniflare's D1 and R2 with a fake Google and a fake Resend.
 
 These settings live in the Cloudflare and GitHub dashboards, not in the repository.
 
-- **Access on every deployment address.** Cloudflare Zero Trust, Access, Applications: make sure the
-  application covers `*.diagcalc.pages.dev` as well as `diagcalc.pages.dev` (and the custom domain
-  when it moves), so old and preview deployments are private too. Workers & Pages, `diagcalc`,
-  Deployments: delete old deployments you do not need.
+- **Old deployments.** Every deployment keeps its own files and server code, bound to the
+  production database and storage, at its own `<hash>.diagcalc.pages.dev` address. The site is
+  served without Cloudflare Access, so delete old ones: GitHub, Actions, "Prune old deployments",
+  Run workflow (first with "dry run" to see the list). It keeps the production deployment and
+  anything newer.
 - **Rate limit.** Cloudflare, the zone, Security, WAF, Rate limiting rules (once the site is on the
   custom domain; `pages.dev` cannot have rules): one rule on URI path starting with `/api/` and
   method not GET, for example 60 requests per minute per IP, action Block for 1 minute.

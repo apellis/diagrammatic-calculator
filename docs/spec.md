@@ -311,7 +311,7 @@ The app is a static site on Cloudflare Pages at diagcalc.ape.computer; a server 
 
 - ape.computer's DNS moves to Cloudflare (free), with the Ghost records copied unchanged so the blog keeps working.
 - Pages deploys automatically from the main branch; every pull request gets a preview URL.
-- Cloudflare Access guards diagcalc.ape.computer with Google sign-in for an allowlist (free up to 50 users). Access holds no user data.
+- No Cloudflare Access in front of the site (Alex, 23 October; it guarded the site with an allowlist until then): anonymous use for everyone, Google sign-in for accounts.
 - Response headers in `_headers`: cross-origin isolation (for multi-core WebAssembly) and a strict Content Security Policy: scripts, workers, styles, fonts and images from the site only (no inline script; WebAssembly compilation allowed), network requests to the site and the AI providers (Anthropic, OpenAI, and the https or local address of an OpenAI-compatible server the person names), no plugins, no `<base>`, and no framing. `Referrer-Policy: no-referrer` and `nosniff` on every file. Trusted Types are not enforced: Solid builds its templates through `innerHTML`, so a policy would have to allow everything.
 
 **Accounts phase (phase 6).**
@@ -388,7 +388,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 
 ### Releases
 
-- **Web app:** every merge to `master` deploys to Cloudflare Pages behind Access. Pull requests get preview deployments, also behind Access.
+- **Web app:** every merge to `master` deploys to Cloudflare Pages. Preview deployments get no database or storage bindings; old deployments are deleted with the "Prune old deployments" workflow.
 - **CLI and MCP server:** tagged releases build `diagcalc` for macOS (arm64, x86_64), Linux (x86_64, arm64) and Windows (x86_64), attached to a GitHub release of the private repository.
 - **Python package:** wheels built with maturin for the same platforms, attached to the same release. Publishing to PyPI waits for the public release.
 - Versioning: semantic versions. The file formats carry their own version number, and the app can read every earlier format version.
