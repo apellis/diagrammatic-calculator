@@ -1,7 +1,9 @@
 // Generator-occurrence IDs (docs/spec.md, IDs; docs/design.md, Occurrence IDs): a letter for how
 // a piece is drawn and a number counted through the whole document in creation order (d3, c12).
 // The document stores them per summand word; a gesture carries them to its result through the
-// provenance map the engine returns, and a summand drawn without them gets fresh ones.
+// provenance map the engine returns, and a summand drawn without them takes them from the
+// summands drawn before (`term.diff`) or gets fresh ones. Strands (s1, s2, …) are numbered the
+// same way, each by where it starts: a point of the cell's bottom edge, or the piece it starts at.
 import type { Layout } from './geometry';
 
 /** The letter of an occurrence ID by how a piece is drawn; g for any other piece. */
@@ -59,6 +61,35 @@ export function carry(
     out[s.word] = ids;
   }
   return out;
+}
+
+/**
+ * Where each strand of a drawn summand starts, as the key its ID is stored under: `bottom k` for
+ * a strand that starts at the k-th point (from 1, left to right) of the bottom edge (the leftmost,
+ * if it has several), else `on ID` for the piece with the lowest canonical layer on it (a cup, or
+ * a bubble), by that piece's occurrence ID; undefined while that piece has none. Rewrites keep a
+ * term's bottom edge, and a piece's ID follows it, so a strand keeps its ID with them.
+ */
+export function strandAnchors(l: Layout, ids: Map<number, string>): (string | undefined)[] {
+  const out = new Map<number, string | undefined>();
+  const y0 = Math.min(0, ...l.boundaries.map((b) => b.y));
+  const at = (y?: number) => y !== undefined && Math.abs(y - y0) < 1e-9;
+  const starts: { x: number; strand: number }[] = [];
+  for (const line of l.lines) {
+    if (line.kind !== 'strand' || line.strand === undefined) continue;
+    if (at(line.y0)) starts.push({ x: line.x0!, strand: line.strand });
+    else if (at(line.y1)) starts.push({ x: line.x1!, strand: line.strand });
+  }
+  starts.sort((a, b) => a.x - b.x);
+  starts.forEach(({ strand }, k) => {
+    if (!out.has(strand)) out.set(strand, `bottom ${k + 1}`);
+  });
+  for (const pc of [...l.pieces].sort((a, b) => a.layer - b.layer)) {
+    for (const s of [...pc.inputs, ...pc.outputs]) {
+      if (!out.has(s)) out.set(s, ids.has(pc.layer) ? `on ${ids.get(pc.layer)}` : undefined);
+    }
+  }
+  return l.strands.map((_, s) => out.get(s));
 }
 
 /** The IDs of a drawn summand by canonical layer, as the canvas shows them. */

@@ -1110,7 +1110,7 @@ pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 17] = [
+pub const OPERATIONS: [&str; 18] = [
     "simplify",
     "check",
     "term.render",
@@ -1128,10 +1128,11 @@ pub const OPERATIONS: [&str; 17] = [
     "export.lean",
     "term.layout",
     "term.edit",
+    "term.diff",
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 17] = [
+pub const SCHEMAS: [(&str, &str); 18] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -1193,6 +1194,10 @@ pub const SCHEMAS: [(&str, &str); 17] = [
     (
         "term.edit",
         include_str!("../../../spec/ops/term.edit.schema.json"),
+    ),
+    (
+        "term.diff",
+        include_str!("../../../spec/ops/term.diff.schema.json"),
     ),
 ];
 pub const COMMON_SCHEMA: &str = include_str!("../../../spec/ops/common.schema.json");
@@ -1304,7 +1309,7 @@ pub fn call(op: &str, input: &Value) -> Value {
                 describe_context(&need("context")?, str_field("presentation").as_deref())
             }
             "relations.match" | "relation.apply" | "interchange" | "slide" | "straighten"
-            | "chain.find" | "export.lean" | "term.layout" | "term.edit" => {
+            | "chain.find" | "export.lean" | "term.layout" | "term.edit" | "term.diff" => {
                 let uint = |k: &str, d: usize| -> Result<usize> {
                     match input.get(k) {
                         None => Ok(d),
@@ -1332,6 +1337,7 @@ pub fn call(op: &str, input: &Value) -> Value {
                     req: req()?,
                     term: need("term")?,
                     rhs: str_field("rhs"),
+                    before: str_field("before"),
                     summand: uint("summand", 1)?,
                     rectangle,
                     relation: str_field("relation"),
@@ -1350,7 +1356,7 @@ pub fn call(op: &str, input: &Value) -> Value {
                     direction: str_field("direction").unwrap_or_default(),
                     steps: uint("steps", 0)?,
                     orders: orders(input)?,
-                    shown: uint("summands", 0)?,
+                    shown: uint("summands", if op == "term.diff" { 200 } else { 0 })?,
                     action: str_field("action").unwrap_or_default(),
                     generator: str_field("generator").unwrap_or_default(),
                     below: uint("below", 0)?,

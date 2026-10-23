@@ -46,8 +46,10 @@ for reviewing (a later roadmap item, section 12).
 - **Document** (`web/src/doc/model.ts`): one Yjs document per workspace with `gc: false`. Roots:
   `meta` (name, context, pinned watches, edited time), `cells` (a `Y.Array` of `Y.Map`s with `id`
   and `text` as a plain string), `history` (one entry per step with a full `Y.encodeSnapshot`),
-  `snapshots` (pinned results: computed values), `hints`, `occurrences`, `timeline`, `branches`
-  (each a whole Yjs update) and `counters` (`nextId`, `occ-<letter>`, `nextBranch`). Every change
+  `snapshots` (pinned results: computed values), `hints`, `occurrences`, `drawn` (per cell, the
+  summand words its canvas last drew, which occurrence IDs are carried from), `timeline`,
+  `branches` (each a whole Yjs update, with the `occ-*` counters it started from) and `counters`
+  (`nextId`, `occ-<letter>`, `nextBranch`). Every change
   goes through `Doc.step`, which records a version. Origins are the constants `LOCAL`
   (`author: 'you'`) and `AI`; the undo manager tracks those two origins. Reads are defensive
   (`problems()`, `cleanCopy()`).
@@ -224,8 +226,8 @@ chose to keep. They stay in the shared document as a record, labelled with who c
 inputs locally and says whether the value matches. Nothing else computed is shared.
 
 **5.8 Schema and limits.** The room accepts only these roots: `meta`, `cells`, `snapshots`,
-`hints`, `occurrences`, `timeline`, `counters`, `proposals` (and, during migration only, the old
-`history` and `branches`). Document size cap 16 MB, as now.
+`hints`, `occurrences`, `drawn`, `timeline`, `counters`, `proposals` (and, during migration only,
+the old `history` and `branches`). Document size cap 16 MB, as now.
 
 ## 6. The room: rules it enforces
 

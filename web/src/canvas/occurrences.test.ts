@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nodeEngine } from '../eval/testing';
-import { carry, fits, lettersOf } from './occurrences';
+import { carry, fits, idMap, lettersOf, strandAnchors } from './occurrences';
 import type { Layout } from './geometry';
 
 const engine = nodeEngine();
@@ -52,5 +52,31 @@ describe('occurrence IDs', () => {
     const fresh = counter({ d: 10 });
     const prov = [{ word: 'w', layers: [{ generator: 'x', from: [[1, 1], [2, 1]] }, { generator: 'x', from: [[2, 1]] }] }];
     expect(carry(prov, (k) => (k === 1 ? ['d5'] : ['d3']), (g) => draws[g], fresh)).toEqual({ w: ['d3', 'd10'] });
+  });
+
+  it('carry through text typed by hand: unchanged pieces keep theirs, a typed braid its crossings', async () => {
+    const o = await engine.call('term.diff', {
+      context: 'klr type=A2 nu=2i+j',
+      before: 'psi_1 x_1 e(iij) + x_3 e(iij)',
+      term: 'psi_1 x_2 x_1 e(iij) + 2 x_3 e(iij) + psi_2 e(iij)',
+    });
+    if (o.status !== 'done' || o.response.status !== 'ok') throw new Error(JSON.stringify(o));
+    const r = o.response;
+    const stored: Record<string, string[]> = { 'psi_1 x_1 e(iij)': ['d1', 'c1'], 'x_3 e(iij)': ['d2'] };
+    const ids = carry(r.provenance, (k) => stored[r.before[k - 1]], (g) => draws[g], counter({ d: 3, c: 2 }));
+    expect(ids).toEqual({ 'x_3 e(iij)': ['d2'], 'psi_2 e(iij)': ['c2'], 'psi_1 x_1 x_2 e(iij)': ['d1', 'd3', 'c1'] });
+    const b = await engine.call('term.diff', { context: 'klr type=A2 nu=2i+j', before: 'psi_1 psi_2 psi_1 e(iji)', term: 'psi_2 psi_1 psi_2 e(iji)' });
+    if (b.status !== 'done' || b.response.status !== 'ok') throw new Error(JSON.stringify(b));
+    expect(carry(b.response.provenance, () => ['c4', 'c5', 'c6'], (g) => draws[g], counter())).toEqual({ 'psi_2 psi_1 psi_2 e(iji)': ['c4', 'c5', 'c6'] });
+  });
+
+  it('anchor strands where they start: the bottom edge, else the piece they start at', async () => {
+    const [klr] = await layout('klr type=A2 nu=2i+j', 'psi_1 x_2 e(iij)');
+    expect(strandAnchors(klr, new Map())).toEqual(['bottom 1', 'bottom 2', 'bottom 3']);
+    // a bubble starts at its cup; a zigzag is the strand from the bottom
+    const [bubble, zigzag] = await layout('kl type=A1 mu=0', 'cap_2 x_1 cup_{1,i} e(i) + cap_1 x_2 cup_{1,i*} e()');
+    expect(strandAnchors(bubble, idMap(['u7', 'd2', 'n3']))).toEqual(['on u7']);
+    expect(strandAnchors(bubble, new Map())).toEqual([undefined]);
+    expect(strandAnchors(zigzag, new Map())).toEqual(['bottom 1']);
   });
 });

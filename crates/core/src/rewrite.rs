@@ -626,6 +626,53 @@ impl Provenance {
         p
     }
 
+    /// Provenance between two terms no rewrite connects, such as a term and the text typed in its
+    /// place. A summand of `after` whose word `before` also has is that summand. Each other summand
+    /// is paired with at most one other summand of `before`, the best aligned pairs first (more
+    /// layers kept, then more kept exactly, then the same source; ties to the earlier summands),
+    /// and its layers descend from the layers of that word the alignment keeps ([`align`]). Only
+    /// the first `limit` such summands of each side are compared; the flag says whether any were
+    /// left out (their layers descend from nothing).
+    pub fn diff<C, D>(before: &Term<C>, after: &Term<D>, limit: usize) -> (Self, bool) {
+        let mut p = Provenance::new(before);
+        let old_words: BTreeSet<&Word> = before.terms.iter().map(|(w, _)| w).collect();
+        let new_words: BTreeSet<&Word> = after.terms.iter().map(|(w, _)| w).collect();
+        let old: Vec<&Word> = before
+            .terms
+            .iter()
+            .map(|(w, _)| w)
+            .filter(|w| !new_words.contains(w))
+            .collect();
+        let new: Vec<&Word> = after
+            .terms
+            .iter()
+            .map(|(w, _)| w)
+            .filter(|w| !old_words.contains(w))
+            .collect();
+        let truncated = old.len() > limit || new.len() > limit;
+        let (old, new) = (&old[..old.len().min(limit)], &new[..new.len().min(limit)]);
+        let mut pairs = Vec::new();
+        for (j, b) in new.iter().enumerate() {
+            for (k, a) in old.iter().enumerate() {
+                let (kept, exact, origin) = align(a, b);
+                if kept > 0 {
+                    pairs.push(((kept, exact, a.source == b.source), j, k, origin));
+                }
+            }
+        }
+        pairs.sort_by(|x, y| y.0.cmp(&x.0).then(x.1.cmp(&y.1)).then(x.2.cmp(&y.2)));
+        let (mut new_done, mut old_done) = (vec![false; new.len()], vec![false; old.len()]);
+        for (_, j, k, origin) in pairs {
+            if new_done[j] || old_done[k] {
+                continue;
+            }
+            new_done[j] = true;
+            old_done[k] = true;
+            p.replace(old[k], [(new[j], origin)]);
+        }
+        (p, truncated)
+    }
+
     /// The occurrences a layer of each word of `end` descends from, sorted, in the order of
     /// `end`'s words.
     pub fn of_term<C>(&self, end: &Term<C>) -> Vec<Vec<Vec<(usize, usize)>>> {
@@ -637,6 +684,45 @@ impl Provenance {
             })
             .collect()
     }
+}
+
+/// The best alignment of the layers of `b` with those of `a`, both from the bottom: a common
+/// subsequence of layers of the same generator, as long as possible and, among those, with as
+/// many layers equal in position and binding as possible (ties broken towards keeping the lower
+/// layers of `a`). Returns how many layers it keeps, how many of them exactly, and for each layer
+/// of `b` the layer of `a` it keeps, if any.
+pub fn align(a: &Word, b: &Word) -> (usize, usize, Vec<Option<usize>>) {
+    let (n, m) = (a.layers.len(), b.layers.len());
+    // best[i][j]: the best score aligning a[i..] with b[j..]
+    let mut best = vec![vec![(0usize, 0usize); m + 1]; n + 1];
+    let pair = |i: usize, j: usize| -> Option<usize> {
+        let (x, y) = (&a.layers[i], &b.layers[j]);
+        (x.generator == y.generator).then(|| usize::from(x == y))
+    };
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            let mut s = best[i + 1][j].max(best[i][j + 1]);
+            if let Some(e) = pair(i, j) {
+                let (k, x) = best[i + 1][j + 1];
+                s = s.max((k + 1, x + e));
+            }
+            best[i][j] = s;
+        }
+    }
+    let mut origin = vec![None; m];
+    let (mut i, mut j) = (0, 0);
+    while i < n && j < m {
+        match pair(i, j) {
+            Some(e) if best[i][j] == (best[i + 1][j + 1].0 + 1, best[i + 1][j + 1].1 + e) => {
+                origin[j] = Some(i);
+                i += 1;
+                j += 1;
+            }
+            _ if best[i][j] == best[i][j + 1] => j += 1,
+            _ => i += 1,
+        }
+    }
+    (best[0][0].0, best[0][0].1, origin)
 }
 
 /// Rewrites the word `w` of the chain's current term at the match `m` of `rules[m.rule]`.

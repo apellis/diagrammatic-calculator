@@ -479,12 +479,27 @@ deleted. `rewrite::Provenance` composes the steps of a chain. The document keeps
 `Doc.occurrences`, keyed like the hints by cell and summand word, one ID per canonical layer, with
 one counter per letter that undo leaves alone, so an ID is never reused. A gesture computes the
 new summands' IDs from the provenance map (`src/canvas/occurrences.ts`, for the first 200 summands)
-and stores them in the same undoable step as the new text. A summand drawn without stored IDs
-(text typed by hand, a word the gesture did not reach) gets fresh ones when it is first drawn,
-outside the undo history: drawing records creation order and changes no input. Strands (`s1`,
-`s2`, …) are numbered left to right within each summand: they are not generators and no rewrite
-tracks them. Text edited by hand, terms written by the AI and branches accepted into the document
-do not carry IDs: their new summands get fresh ones.
+and stores them in the same undoable step as the new text. A term no gesture made (text typed by
+hand, a term the AI wrote, a changed definition the cell uses) gets its IDs when it is drawn,
+outside the undo history: drawing records creation order and changes no input. The document keeps,
+per cell, the words its canvas last drew (`Doc.drawn`, the first 60 summands); a summand drawn
+without stored IDs takes them from those by `term.diff`, which matches the two terms as a diff
+would. A summand whose word is still there is that summand; each other new summand is paired with
+at most one old summand that is gone, best aligned pair first (more pieces kept, then more kept in
+the same place, then the same source), and its layers keep the old layers of the same generator
+that a longest common subsequence of the two words lines up, bottom to top (as a rule-created
+layer continues the pattern's, so a braid typed by hand keeps its three crossings). What is left
+over is new and gets fresh IDs; only the first 200 changed summands of each side are compared, and
+the response says when more were left out. Accepting a branch carries the IDs of the cells whose
+text it takes, with their drawn words, in the same step: an ID numbered below the counters the
+branch started from (`BranchRecord.counters`; for a branch of a branch, the lower of the
+document's and the parent's) is shared and stays, and one the branch made gets the document's next
+number of its kind, since the document may have used that number meanwhile. Strands (`s1`, `s2`,
+…) are numbered through the document the same way, each by where it starts (`strandAnchors` in
+`src/canvas/occurrences.ts`): a strand from the k-th point of the bottom edge is stored under its
+cell and that point, shared by every summand of the cell (rewrites keep the bottom edge); a strand
+that does not reach the bottom (a bubble, a strand from a cup) under the occurrence ID of its
+lowest piece, so it follows that piece through rewrites and edits.
 
 Inside the canvas, the top bar's ← and the breadcrumb (document name › cell) go back to the
 document, as do the canvas's own "← Back to the document" button and Esc; from the document, ←

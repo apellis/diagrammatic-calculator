@@ -1,0 +1,14 @@
+{
+  "op": "term.diff",
+  "request": {
+    "context": "klr type=A2 nu=2i+j",
+    "before": "psi_1 x_1 e(iij) + x_3 e(iij)",
+    "term": "psi_1 x_2 x_1 e(iij) + 2 x_3 e(iij)"
+  },
+  "expect": {
+    "status": "ok",
+    "term": "2 x_3 e(iij) + psi_1 x_1 x_2 e(iij)",
+    "before": ["x_3 e(iij)", "psi_1 x_1 e(iij)"],
+    "truncated": false
+  }
+}

@@ -284,6 +284,43 @@ export type StraightenResponse =
   | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "TermDiffRequest".
+ */
+export type TermDiffRequest = TermRequest & TermDiffRequest1;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "TermDiffResponse".
+ */
+export type TermDiffResponse =
+  | {
+      status: 'ok';
+      /**
+       * The new term as printed.
+       */
+      term: string;
+      /**
+       * The words of the summands of 'before', in printed order: the summands the provenance map's occurrences [summand, layer] refer to.
+       */
+      before: string[];
+      provenance: ProvenanceMap1;
+      /**
+       * Some changed summands were beyond the 'summands' limit and were not compared: their layers descend from nothing.
+       */
+      truncated: boolean;
+    }
+  | OpError;
+/**
+ * Where each generator occurrence of a result came from (docs/conventions.md, Provenance): for each summand of the result, in printed order, its word and, for each of its layers (canonical, from the bottom), the generator and the occurrences [summand, layer] (1-based) of the starting term it descends from. An empty list: the layer was created. An occurrence listed under several summands was split; one listed nowhere was deleted.
+ */
+export type ProvenanceMap1 = {
+  word: string;
+  layers: {
+    generator: string;
+    from: [number, number][];
+  }[];
+}[];
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "TermEditRequest".
  */
 export type TermEditRequest = TermRequest & TermEditRequest1;
@@ -455,6 +492,8 @@ export interface Operations {
   SlideResponse?: SlideResponse;
   StraightenRequest?: StraightenRequest;
   StraightenResponse?: StraightenResponse;
+  TermDiffRequest?: TermDiffRequest;
+  TermDiffResponse?: TermDiffResponse;
   TermEditRequest?: TermEditRequest;
   TermEditResponse?: TermEditResponse;
   TermLayoutRequest?: TermLayoutRequest;
@@ -777,6 +816,20 @@ export interface SlideRequest1 {
 export interface StraightenRequest1 {
   term: string;
   max_steps?: number;
+}
+export interface TermDiffRequest1 {
+  /**
+   * The new term.
+   */
+  term: string;
+  /**
+   * The term it replaces.
+   */
+  before: string;
+  /**
+   * Compare only the first so many summands of each side that are not found unchanged (0: all).
+   */
+  summands?: number;
 }
 export interface TermEditRequest1 {
   term: string;
@@ -1142,6 +1195,7 @@ export interface OpTypes {
   'simplify': { request: SimplifyRequest; response: SimplifyResponse };
   'slide': { request: SlideRequest; response: SlideResponse };
   'straighten': { request: StraightenRequest; response: StraightenResponse };
+  'term.diff': { request: TermDiffRequest; response: TermDiffResponse };
   'term.edit': { request: TermEditRequest; response: TermEditResponse };
   'term.layout': { request: TermLayoutRequest; response: TermLayoutResponse };
   'term.render': { request: TermRenderRequest; response: TermRenderResponse };

@@ -18,7 +18,8 @@ import {
   along, arrowPoints, bounds, centre, crossingsOn, crossingsPassed, dropTarget, insertAbove, moveBy, moveTo, nextOnStrand,
   offsetFor, onStrand, path, piece, piecesIn, pullMove, rectangle, sameOrder, track, type Layout, type Line, type Piece, type Rect,
 } from '../canvas/geometry';
-import { carry, fits, idMap, lettersOf, type ProvenanceSummand } from '../canvas/occurrences';
+import { carry, fits, idMap, lettersOf, strandAnchors, type ProvenanceSummand } from '../canvas/occurrences';
+import { strandKey } from '../doc/model';
 
 export interface Generator {
   name: string;
@@ -127,6 +128,51 @@ export function Canvas(props: CanvasProps) {
     const ids = props.doc.occurrenceIds(props.cellId, l.word);
     return fits(ids, lettersOf(l)) ? idMap(ids) : new Map();
   };
+  /** The IDs of a drawn summand's strands, by strand number. */
+  const strandIdsOf = (l?: Layout): Map<number, string> => {
+    const out = new Map<number, string>();
+    if (!l) return out;
+    strandAnchors(l, idsOf(l)).forEach((a, s) => {
+      const id = a && props.doc.strandId(props.cellId, a);
+      if (id) out.set(s, id);
+    });
+    return out;
+  };
+  const drawOf = (name: string) => props.generators.find((g) => g.name === name)?.draw;
+  /**
+   * Gives the summands drawn for the first time their occurrence IDs, and records the words drawn.
+   * A summand written in place of others (text typed by hand, a term the AI wrote, a definition it
+   * uses changed) takes them from the summands drawn before, by `term.diff`; one with nothing to
+   * take from gets fresh ones. Then each strand without an ID gets one, by where it starts.
+   */
+  const giveIds = async (gen: number, term: string, context: string, summands: Layout[]) => {
+    const doc = props.doc;
+    const cell = props.cellId;
+    const words = summands.map((l) => l.word);
+    const missing = summands.filter((l, i) => words.indexOf(l.word) === i && !fits(doc.occurrenceIds(cell, l.word), lettersOf(l)));
+    const before = (doc.drawnWords(cell) ?? []).filter((w) => doc.occurrenceIds(cell, w));
+    let diff: { before: string[]; provenance: ProvenanceSummand[] } | undefined;
+    if (missing.length && before.some((w) => !words.includes(w))) {
+      const o = await props.engine.call('term.diff', { context, term, before: before.join(' + ') }, { lane: 'interactive' });
+      if (gen !== generation) return;
+      if (o.status === 'done' && o.response.status === 'ok') diff = o.response;
+    }
+    const d = diff;
+    doc.recordDrawn(cell, (fresh) => {
+      const want = new Set(missing.map((l) => l.word));
+      const out: Record<string, string[]> = d
+        ? carry(d.provenance.filter((p) => want.has(p.word)), (k) => doc.occurrenceIds(cell, d.before[k - 1]), drawOf, fresh)
+        : {};
+      for (const l of missing) if (!fits(out[l.word], lettersOf(l))) out[l.word] = lettersOf(l).map(fresh);
+      for (const l of summands) {
+        const ids = idMap(out[l.word] ?? doc.occurrenceIds(cell, l.word));
+        for (const a of strandAnchors(l, ids)) {
+          if (a && !doc.strandId(cell, a) && !out[strandKey(a)]) out[strandKey(a)] = [fresh('s')];
+        }
+      }
+      return out;
+    }, words);
+  };
   const [fresh, setFresh] = createSignal(new Set<string>());
   const [menu, setMenu] = createSignal<{ summand: number; rect?: Rect; matches: Match[]; previews: (Layout[] | null)[] } | null>(null);
   const [inserting, setInserting] = createSignal(false);
@@ -208,11 +254,7 @@ export function Canvas(props: CanvasProps) {
       }
       if (sel().summand >= summands.length) setSel({ summand: 0, layers: [] });
     });
-    // summands drawn for the first time get their occurrence IDs
-    const missing = summands
-      .map((l) => ({ word: l.word, letters: lettersOf(l) }))
-      .filter((x) => !fits(props.doc.occurrenceIds(props.cellId, x.word), x.letters));
-    props.doc.assignOccurrences(props.cellId, missing.filter((x, i) => missing.findIndex((y) => y.word === x.word) === i));
+    await giveIds(gen, term, context, summands);
   }));
 
   createEffect(() => {
@@ -259,8 +301,7 @@ export function Canvas(props: CanvasProps) {
       const ids = l && props.doc.occurrenceIds(props.cellId, l.word);
       return l && fits(ids, lettersOf(l)) ? ids : undefined;
     };
-    const draw = (name: string) => props.generators.find((g) => g.name === name)?.draw;
-    props.onWrite(term, note, provenance && ((fresh) => carry(provenance, old, draw, fresh)));
+    props.onWrite(term, note, provenance && ((fresh) => carry(provenance, old, drawOf, fresh)));
   };
   const terms = (t: string) => {
     const n = t === '0' ? 0 : t.split(/ [+-] /).length;
@@ -918,7 +959,8 @@ export function Canvas(props: CanvasProps) {
         const start = s.strand !== undefined ? (s.strand + (back ? -1 : 1) + n) % n : (one?.inputs[0] ?? one?.outputs[0] ?? 0);
         setSel({ summand: s.summand, layers: onStrand(l, start), strand: start, kept: true });
         const c = l.strands[start]?.colour;
-        return say(`Strand ${start + 1} of ${n} (s${start + 1}${c ? `, ${c}` : ''}) selected; S and Shift+S move to the next and previous strand, Tab and X add or remove single pieces.`);
+        const tag = [strandIdsOf(l).get(start), c].filter(Boolean).join(', ');
+        return say(`Strand ${start + 1} of ${n}${tag ? ` (${tag})` : ''} selected; S and Shift+S move to the next and previous strand, Tab and X add or remove single pieces.`);
       }
       case 'x':
       case 'X':
@@ -928,7 +970,7 @@ export function Canvas(props: CanvasProps) {
       case 'L':
         handled();
         setLabels(!labels());
-        return say(labels() ? 'Occurrence IDs shown: d dots, c crossings, u cups, n caps, g other pieces, s strands, numbered through the document in the order they were made (strands left to right in each summand).' : 'Occurrence IDs hidden; hovering a piece still shows its ID.');
+        return say(labels() ? 'Occurrence IDs shown: d dots, c crossings, u cups, n caps, b bubbles, g other pieces, s strands, numbered through the document in the order they were made.' : 'Occurrence IDs hidden; hovering a piece still shows its ID.');
       case '+':
       case '=':
         handled();
@@ -1021,6 +1063,7 @@ export function Canvas(props: CanvasProps) {
     const strandDash = (s?: number) => (s === undefined ? undefined : dashOf(l().strands[s]?.colour ?? ''));
     const vb = () => `${-pad} ${-(l().height + pad)} ${l().width + 2 * pad} ${l().height + 2 * pad + 0.5}`;
     const ids = createMemo(() => idsOf(l()));
+    const strandIds = createMemo(() => strandIdsOf(l()));
     /** The piece the keyboard ring is on, when it is in this summand and not just the selection. */
     const ring = () => {
       const c = cursor();
@@ -1120,7 +1163,7 @@ export function Canvas(props: CanvasProps) {
               }}
             </For>
             <For each={strandStarts()}>
-              {(t) => <text x={t.x + 0.08} y={-(t.y + 0.12)} font-size="0.24" fill={strandColour(t.strand)} data-occ={`s${t.strand + 1}`}>s{t.strand + 1}</text>}
+              {(t) => <text x={t.x + 0.08} y={-(t.y + 0.12)} font-size="0.24" fill={strandColour(t.strand)} data-occ={strandIds().get(t.strand)}>{strandIds().get(t.strand)}</text>}
             </For>
           </g>
         </Show>
@@ -1392,7 +1435,7 @@ const GESTURES: [string, string, string][] = [
   ['Move between summands', 'click a summand', '← →'],
   ['Pan', 'space-drag, scroll', '⇧ arrows'],
   ['Zoom', `${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
-  ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, b bubble, g other piece: numbered through the document in the order they were made, kept through rewrites; s strand: left to right in each summand)', 'hover a piece; IDs', 'L'],
+  ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, b bubble, g other piece, s strand: numbered through the document in the order they were made, kept through rewrites and edits)', 'hover a piece; IDs', 'L'],
   ['Ask the AI about the selection', '', keysOf('ask')],
   ['Leave the canvas for the toolbar and palette', 'click', '⇧Tab from the first piece'],
   ['Back to the document', '← Back', 'Esc (after clearing the selection)'],

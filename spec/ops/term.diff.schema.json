@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/term.diff.schema.json",
+  "title": "term.diff: where the generator occurrences of a term come from in the term it replaces, when no rewrite connects them (text edited by hand)",
+  "$defs": {
+    "request": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/termRequest"
+        }
+      ],
+      "required": [
+        "term",
+        "before"
+      ],
+      "properties": {
+        "term": {
+          "description": "The new term.",
+          "type": "string"
+        },
+        "before": {
+          "description": "The term it replaces.",
+          "type": "string"
+        },
+        "summands": {
+          "description": "Compare only the first so many summands of each side that are not found unchanged (0: all).",
+          "type": "integer",
+          "minimum": 0,
+          "default": 200
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "term",
+            "before",
+            "provenance",
+            "truncated"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "term": {
+              "description": "The new term as printed.",
+              "type": "string"
+            },
+            "before": {
+              "description": "The words of the summands of 'before', in printed order: the summands the provenance map's occurrences [summand, layer] refer to.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "provenance": {
+              "description": "A summand whose word 'before' also has descends from it unchanged; each other summand from at most one other summand of 'before', paired best aligned first, its layers from the layers of the same generator the alignment keeps (docs/conventions.md, Provenance).",
+              "$ref": "common.schema.json#/$defs/provenanceMap"
+            },
+            "truncated": {
+              "description": "Some changed summands were beyond the 'summands' limit and were not compared: their layers descend from nothing.",
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

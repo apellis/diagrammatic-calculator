@@ -118,6 +118,50 @@ describe('branches', () => {
     expect(d.list().map((c) => c.text)).toEqual(['def a := x_2', 'watch a', 'watch a a']);
   });
 
+  it('carries occurrence IDs from the branch, renumbering the ones it made', () => {
+    const d = new Doc();
+    d.setContext('nilhecke nu=2');
+    const a = d.addCell('def a := psi_1 x_1');
+    // drawn in the document: c1, d1, its strands s1 and s2
+    d.recordDrawn(a, (fresh) => ({ 'psi_1 x_1': [fresh('d'), fresh('c')], '|bottom 1': [fresh('s')], '|bottom 2': [fresh('s')] }), ['psi_1 x_1']);
+    expect(d.occurrenceIds(a, 'psi_1 x_1')).toEqual(['d1', 'c1']);
+    const br = d.createBranch('x');
+    const t = d.openBranch(br.id)!;
+    // the branch adds a dot (its d2) and a cell; the document meanwhile makes its own d2
+    t.updateCell(a, 'def a := psi_1 x_1 x_2', 'edit', (fresh) => ({ 'psi_1 x_1 x_2': ['d1', fresh('d'), 'c1'] }));
+    const n = t.addCell('watch x_1');
+    t.recordDrawn(n, (fresh) => ({ x_1: [fresh('d')] }), ['x_1']);
+    expect(t.occurrenceIds(a, 'psi_1 x_1 x_2')).toEqual(['d1', 'd2', 'c1']);
+    expect(t.occurrenceIds(n, 'x_1')).toEqual(['d3']);
+    const b = d.addCell('def b := x_2');
+    d.recordDrawn(b, (fresh) => ({ x_2: [fresh('d')] }), ['x_2']);
+    expect(d.occurrenceIds(b, 'x_2')).toEqual(['d2']);
+
+    d.acceptBranch(br.id, t);
+    // shared IDs stay, the branch's own get the document's next numbers
+    expect(d.occurrenceIds(a, 'psi_1 x_1 x_2')).toEqual(['d1', 'd3', 'c1']);
+    expect(d.occurrenceIds(n, 'x_1')).toEqual(['d4']);
+    expect(d.strandId(a, 'bottom 2')).toBe('s2');
+    expect(d.drawnWords(n)).toEqual(['x_1']);
+    expect(d.occurrenceIds(b, 'x_2')).toEqual(['d2']);
+    // undone with the accept
+    d.undo();
+    expect(d.occurrenceIds(a, 'psi_1 x_1 x_2')).toBeUndefined();
+  });
+
+  it('counts a branch of a branch from the lower counters', () => {
+    const d = new Doc();
+    const a = d.addCell('def a := x_1');
+    d.recordDrawn(a, (fresh) => ({ x_1: [fresh('d')] }), ['x_1']);
+    const p = d.createBranch('parent');
+    const pt = d.openBranch(p.id)!;
+    pt.recordDrawn(a, (fresh) => ({ 'x_1 x_1': [fresh('d'), fresh('d')] }), ['x_1 x_1']);
+    d.saveBranch(p.id, pt);
+    d.recordDrawn(a, (fresh) => ({ 'x_1 x_1 x_1': [fresh('d'), fresh('d'), fresh('d')] }), ['x_1 x_1 x_1']);
+    const c = d.createBranch('child', p.id);
+    expect(c.counters).toEqual({ 'occ-d': 2 });
+  });
+
   it('makes an AI action one undo step with the AI as author', async () => {
     const d = new Doc();
     d.addCell('def a := x_1');

@@ -72,6 +72,12 @@ export interface BranchRecord {
   base: Inputs;
   /** The branch's own document, as a Yjs update. */
   state: Uint8Array;
+  /**
+   * The occurrence-ID counters (`occ-d`, …) when the branch was made: an ID numbered below them
+   * is shared with the document, one numbered from them on was made in the branch and is
+   * renumbered on accept. Missing in branches made before IDs were carried on accept.
+   */
+  counters?: Record<string, number>;
 }
 
 /** One line of the AI activity timeline. */
@@ -138,6 +144,13 @@ const cellData = (m: Y.Map<string>): CellData => {
 export function validIds(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => isStr(x) && /^[a-z][0-9]+$/.test(x));
 }
+const validWords = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr);
+
+/**
+ * The key, after the cell ID, under which a strand's ID is stored: its anchor (`bottom 2`,
+ * `on u3`; src/canvas/occurrences.ts) after a bar, which no summand word starts with.
+ */
+export const strandKey = (anchor: string) => `|${anchor}`;
 
 export function validVersion(v: unknown): v is Version {
   return isObj(v) && isNum(v.n) && isStr(v.author) && isStr(v.note) && isNum(v.time) && v.snapshot instanceof Uint8Array;
@@ -176,7 +189,10 @@ function validInputs(v: unknown): v is Inputs {
   );
 }
 export function validBranch(v: unknown): v is BranchRecord {
-  return isObj(v) && isStr(v.id) && isStr(v.name) && isStr(v.author) && isNum(v.created) && validInputs(v.base) && v.state instanceof Uint8Array;
+  return (
+    isObj(v) && isStr(v.id) && isStr(v.name) && isStr(v.author) && isNum(v.created) && validInputs(v.base) && v.state instanceof Uint8Array &&
+    (v.counters === undefined || (isObj(v.counters) && Object.values(v.counters).every((n) => Number.isSafeInteger(n))))
+  );
 }
 
 export class Doc {
@@ -190,9 +206,16 @@ export class Doc {
   /**
    * Generator-occurrence IDs (docs/spec.md, IDs), keyed like hints by cell ID and summand word:
    * one ID per layer of the word's canonical layering, from the bottom. Gestures carry them through
-   * rewrites by the provenance map; a summand drawn without them gets fresh ones.
+   * rewrites by the provenance map; a summand drawn without them takes them from the summands drawn
+   * before it (`drawn`, by `term.diff`) or gets fresh ones. A strand's ID is kept under the cell ID
+   * and `strandKey` of where it starts.
    */
   readonly occurrences: Y.Map<string[]>;
+  /**
+   * For each cell, the summand words its canvas last drew (the first 60): the summands a term
+   * written in the cell's place takes its occurrence IDs from. A record of drawing, outside undo.
+   */
+  readonly drawn: Y.Map<string[]>;
   /** The AI activity timeline. */
   readonly timeline: Y.Array<TimelineEntry>;
   /** Scratch branches of this document (only the main document has any). */
@@ -210,6 +233,7 @@ export class Doc {
     this.snapshots = ydoc.getArray('snapshots');
     this.hints = ydoc.getMap('hints');
     this.occurrences = ydoc.getMap('occurrences');
+    this.drawn = ydoc.getMap('drawn');
     this.timeline = ydoc.getArray('timeline');
     this.branches = ydoc.getMap('branches');
     this.counters = ydoc.getMap('counters');
@@ -283,6 +307,7 @@ export class Doc {
     count('branches', this.branches.size, this.branchList().length);
     count('layout hints', this.hints.size, [...this.hints.values()].filter(validHint).length);
     count('occurrence IDs', this.occurrences.size, [...this.occurrences.values()].filter(validIds).length);
+    count('drawn summands', this.drawn.size, [...this.drawn.values()].filter(validWords).length);
     return out;
   }
 
@@ -304,6 +329,7 @@ export class Doc {
       d.cells.insert(0, cells.map(toMap));
       for (const [k, h] of Object.entries(hints)) d.hints.set(k, h);
       for (const [k, ids] of this.occurrences.entries()) if (validIds(ids)) d.occurrences.set(k, ids);
+      for (const [k, words] of this.drawn.entries()) if (validWords(words)) d.drawn.set(k, words);
       for (const [k, n] of this.counters.entries()) if (k.startsWith('occ-') && Number.isSafeInteger(n)) d.counters.set(k, n);
       if (snapshots.length) d.snapshots.push(snapshots);
       d.counters.set('nextId', Math.max(this.nextId(), 1 + Math.max(0, ...cells.map((c) => idNumber(c.id)))));
@@ -418,16 +444,35 @@ export class Doc {
     return validIds(ids) ? ids : undefined;
   }
 
+  /** The ID of a cell's strand that starts at `anchor` (src/canvas/occurrences.ts, strandAnchors). */
+  strandId(cellId: string, anchor: string): string | undefined {
+    const ids = this.occurrences.get(`${cellId} ${strandKey(anchor)}`);
+    return validIds(ids) && ids.length === 1 ? ids[0] : undefined;
+  }
+
+  /** The summand words the canvas of a cell last drew. */
+  drawnWords(cellId: string): string[] | undefined {
+    const w = this.drawn.get(cellId);
+    return validWords(w) ? w : undefined;
+  }
+
   /**
-   * Gives summands drawn for the first time their occurrence IDs, numbered on from every ID the
-   * document has used. Not an undoable step and not a version: it records what was drawn, as
-   * creation order needs, and changes no input.
+   * Records what the canvas drew: the occurrence IDs `ids` gives (keys after the cell ID: summand
+   * words and strand keys), numbered on from every ID the document has used, and the words drawn.
+   * Not an undoable step and not a version: it records what was drawn, as creation order needs,
+   * and changes no input.
    */
-  assignOccurrences(cellId: string, summands: { word: string; letters: string[] }[]) {
-    if (!summands.length) return;
+  recordDrawn(cellId: string, ids: (fresh: (letter: string) => string) => Record<string, string[]>, words: string[]) {
     this.ydoc.transact(() => {
-      for (const s of summands) this.occurrences.set(`${cellId} ${s.word}`, s.letters.map((l) => this.freshOccurrence(l)));
+      for (const [k, list] of Object.entries(ids((l) => this.freshOccurrence(l)))) this.occurrences.set(`${cellId} ${k}`, list);
+      const was = this.drawnWords(cellId);
+      if (!was || was.length !== words.length || was.some((w, i) => w !== words[i])) this.drawn.set(cellId, words);
     }, HISTORY);
+  }
+
+  /** The occurrence-ID counters, by key (`occ-d`, …). */
+  private occurrenceCounters(): Record<string, number> {
+    return Object.fromEntries([...this.counters.entries()].filter(([k, n]) => k.startsWith('occ-') && Number.isSafeInteger(n)));
   }
 
   /** The next occurrence ID of a kind (d dot, c crossing, …); undo leaves the counter alone, so an ID is never reused. */
@@ -523,8 +568,17 @@ export class Doc {
 
   // branches
 
-  /** `branch.create`: a scratch copy of the document as it is now. */
-  createBranch(name: string): BranchRecord {
+  /**
+   * `branch.create`: a scratch copy of the document as it is now. A branch made from another
+   * branch `from` (which then replaces its state) keeps the lower of the two counters, so the IDs
+   * that branch made are new to the document too.
+   */
+  createBranch(name: string, from?: string): BranchRecord {
+    const counters = this.occurrenceCounters();
+    const parent = from === undefined ? undefined : this.branch(from);
+    if (parent) {
+      for (const k of Object.keys(counters)) counters[k] = Math.min(counters[k], parent.counters?.[k] ?? 1);
+    }
     const b: BranchRecord = {
       id: `b${Number.isSafeInteger(this.counters.get('nextBranch')) ? this.counters.get('nextBranch') : 1}`,
       name,
@@ -532,6 +586,7 @@ export class Doc {
       created: Date.now(),
       base: this.inputs(),
       state: Y.encodeStateAsUpdate(this.ydoc),
+      counters,
     };
     this.ydoc.transact(() => {
       const nb = this.counters.get('nextBranch');
@@ -595,10 +650,46 @@ export class Doc {
   acceptBranch(id: string, d: Doc): Comparison {
     const b = this.branch(id);
     if (!b) throw new Error(`no branch ${id}`);
-    const { result, comparison } = merge(b.base, this.inputs(), d.inputs(), (kind) => this.freshId(kindOf(kind)));
-    this.step(`accept branch ${b.name}`, () => this.setInputs(result));
+    const renamed = new Map<string, string>();
+    const { result, comparison } = merge(b.base, this.inputs(), d.inputs(), (kind) => this.freshId(kindOf(kind)), renamed);
+    this.step(`accept branch ${b.name}`, () => {
+      this.setInputs(result);
+      this.carryOccurrences(b, d, comparison, renamed);
+    });
     this.discardBranch(id);
     return comparison;
+  }
+
+  /**
+   * Inside the accept step: the occurrence IDs (and drawn words) of the cells whose text came from
+   * the branch, so a piece keeps the ID it had there. An ID the branch shares with the document
+   * stays; one the branch made gets the document's next of its kind (the same one wherever it
+   * occurs), since the document may have used that number since.
+   */
+  private carryOccurrences(b: BranchRecord, d: Doc, comparison: Comparison, renamed: Map<string, string>) {
+    const cells = new Map<string, string>();
+    for (const c of comparison.changed) cells.set(c.id, c.id);
+    for (const c of comparison.added) cells.set([...renamed].find(([, to]) => to === c.id)?.[0] ?? c.id, c.id);
+    const fresh = new Map<string, string>();
+    for (const [from, to] of cells) {
+      const own = new Set([...this.occurrences.entries()].filter(([k, v]) => k.startsWith(`${to} `) && validIds(v)).flatMap(([, v]) => v));
+      const shared = (id: string) => (b.counters ? Number(id.slice(1)) < (b.counters[`occ-${id[0]}`] ?? 1) : own.has(id));
+      const map = (id: string) => {
+        if (shared(id)) return id;
+        if (!fresh.has(id)) fresh.set(id, this.freshOccurrence(id[0]));
+        return fresh.get(id)!;
+      };
+      for (const [k, ids] of d.occurrences.entries()) {
+        if (!k.startsWith(`${from} `) || !validIds(ids)) continue;
+        const key = `${to} ${k.slice(from.length + 1)}`;
+        const now = this.occurrences.get(key);
+        const next = ids.map(map);
+        if (!validIds(now) || now.some((x, i) => x !== next[i]) || now.length !== next.length) this.occurrences.set(key, next);
+      }
+      // outside the undo scope: a record of drawing
+      const words = d.drawnWords(from);
+      if (words) this.drawn.set(to, words);
+    }
   }
 
   /** Makes the inputs equal to `target` as one step, changing as little as possible. */
@@ -649,9 +740,12 @@ function toMap(c: CellData): Y.Map<string> {
 /**
  * Three-way merge of a branch into the document: `base` is the document when the branch was made,
  * `main` the document now, `branch` the branch now. A cell the branch added gets a fresh ID if the
- * document has since used its ID (`fresh` makes one).
+ * document has since used its ID (`fresh` makes one); `renamed` collects each added cell's ID in
+ * the branch and in the result.
  */
-export function merge(base: Inputs, main: Inputs, branch: Inputs, fresh?: (text: string) => string): { result: Inputs; comparison: Comparison } {
+export function merge(
+  base: Inputs, main: Inputs, branch: Inputs, fresh?: (text: string) => string, renamed?: Map<string, string>,
+): { result: Inputs; comparison: Comparison } {
   const baseText = new Map(base.cells.map((c) => [c.id, c.text]));
   const mainText = new Map(main.cells.map((c) => [c.id, c.text]));
   const branchIds = new Set(branch.cells.map((c) => c.id));
@@ -679,6 +773,7 @@ export function merge(base: Inputs, main: Inputs, branch: Inputs, fresh?: (text:
     if (baseText.has(c.id)) return;
     const id = mainText.has(c.id) && fresh ? fresh(c.text) : c.id;
     ids.set(c.id, id);
+    renamed?.set(c.id, id);
     const added = { id, text: c.text };
     comparison.added.push(added);
     const prev = branch.cells.slice(0, i).reverse().map((p) => ids.get(p.id) ?? p.id).find((p) => cells.some((x) => x.id === p));

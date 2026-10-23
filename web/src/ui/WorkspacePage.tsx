@@ -108,7 +108,7 @@ function Workspace(props: { o: OpenDoc }) {
     create: (name, inputs) => {
       const base = current()?.doc ?? main;
       if (base !== main) flush();
-      const b = main.createBranch(name ?? `what if ${main.branches.size + 1}`);
+      const b = main.createBranch(name ?? `what if ${main.branches.size + 1}`, base !== main ? current()?.id : undefined);
       // a branch of a branch starts from the branch's state but merges into the document
       if (base !== main) main.saveBranch(b.id, base);
       const d = main.openBranch(b.id)!;

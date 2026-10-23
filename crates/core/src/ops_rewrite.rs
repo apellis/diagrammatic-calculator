@@ -1,6 +1,6 @@
 //! The rewriting operations: `relations.match`, `relation.apply`, `interchange`, `slide`,
-//! `straighten`, `chain.find` and `export.lean`, and the canvas operations `term.layout` and
-//! `term.edit`. Schemas in `spec/ops/`.
+//! `straighten`, `chain.find` and `export.lean`, and the canvas operations `term.layout`,
+//! `term.edit` and `term.diff`. Schemas in `spec/ops/`.
 //!
 //! Locations: a term's summands are numbered from 1 in printed order; a summand's layers are
 //! numbered from 1 at the bottom of its canonical layering, strands from 1 at the left.
@@ -24,6 +24,8 @@ pub struct RewriteRequest {
     pub term: String,
     /// The other side of an equation (`chain.find`, `export.lean`).
     pub rhs: Option<String>,
+    /// `term.diff`: the term `term` replaces.
+    pub before: Option<String>,
     /// 1-based summand of `term`.
     pub summand: usize,
     /// 1-based inclusive layers and strands.
@@ -45,7 +47,8 @@ pub struct RewriteRequest {
     /// `term.layout`: for some summands (1-based), the order to draw their layers in, as
     /// 1-based canonical layers from the bottom; `term.edit`: the same for the edited summand.
     pub orders: std::collections::BTreeMap<usize, Vec<usize>>,
-    /// `term.layout`: how many summands to lay out (0: all).
+    /// `term.layout`: how many summands to lay out (0: all); `term.diff`: how many changed
+    /// summands of each side to compare (0: all).
     pub shown: usize,
     /// `term.edit`: `insert` or `remove`.
     pub action: String,
@@ -77,6 +80,24 @@ impl RingVisitor for RewriteOp<'_> {
         let pres = load_presentation(&spec, self.r.req.presentation.as_deref())?;
         let ctx = Context::new(pres, spec, base)?;
         let t = ctx.parse_term(&self.r.term)?;
+        if self.op == "term.diff" {
+            let before = self.r.before.as_deref().ok_or_else(|| {
+                Error::invalid("term.diff needs 'before', the term 'term' replaces")
+            })?;
+            let b = ctx.parse_term(before)?;
+            let limit = if self.r.shown == 0 {
+                usize::MAX
+            } else {
+                self.r.shown
+            };
+            let (prov, truncated) = Provenance::diff(&b, &t, limit);
+            return Ok(json!({
+                "term": ctx.fmt_term(&t),
+                "before": b.terms.iter().map(|(w, _)| ctx.fmt_word(w)).collect::<Vec<_>>(),
+                "provenance": provenance_json(&ctx, &t, &prov),
+                "truncated": truncated,
+            }));
+        }
         let rules: Vec<Rule<R>> = rewrite::rules_for_term(&ctx, &t)?
             .into_iter()
             .filter(|r| self.r.relation.as_ref().is_none_or(|n| &r.relation == n))
@@ -1024,5 +1045,66 @@ mod tests {
         let layers = &v["provenance"][0]["layers"];
         assert_eq!(layers[0]["from"], json!([]), "{v}");
         assert_eq!(layers[1]["from"], json!([[1, 1]]), "{v}");
+    }
+
+    #[test]
+    fn diff_of_hand_edited_terms() {
+        // An unchanged summand is itself; an edited one keeps the pieces it still has, best
+        // aligned pair first, so the new summand that also shares a crossing gets nothing.
+        let v = call(
+            "term.diff",
+            &json!({ "context": "klr type=A2 nu=2i+j",
+                     "before": "psi_1 x_1 e(iij) + x_3 e(iij)",
+                     "term": "psi_1 x_2 x_1 e(iij) + 2 x_3 e(iij) + psi_2 e(iij)" }),
+        );
+        assert_eq!(v["status"], "ok", "{v}");
+        assert_eq!(
+            v["before"],
+            json!(["x_3 e(iij)", "psi_1 x_1 e(iij)"]),
+            "{v}"
+        );
+        assert_eq!(v["truncated"], false, "{v}");
+        let from = |k: usize| -> Vec<Value> {
+            v["provenance"][k]["layers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|l| l["from"].clone())
+                .collect()
+        };
+        assert_eq!(v["provenance"][0]["word"], "x_3 e(iij)", "{v}");
+        assert_eq!(from(0), vec![json!([[1, 1]])]);
+        assert_eq!(v["provenance"][1]["word"], "psi_2 e(iij)", "{v}");
+        assert_eq!(from(1), vec![json!([])]);
+        assert_eq!(v["provenance"][2]["word"], "psi_1 x_1 x_2 e(iij)", "{v}");
+        assert_eq!(from(2), vec![json!([[2, 1]]), json!([]), json!([[2, 2]])]);
+        // A braid typed by hand keeps its three crossings, as the braid move does.
+        let v = call(
+            "term.diff",
+            &json!({ "context": "klr type=A2 nu=2i+j", "before": "psi_1 psi_2 psi_1 e(iji)",
+                     "term": "psi_2 psi_1 psi_2 e(iji)" }),
+        );
+        assert_eq!(
+            v["provenance"][0]["layers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|l| l["from"].clone())
+                .collect::<Vec<_>>(),
+            vec![json!([[1, 1]]), json!([[1, 2]]), json!([[1, 3]])],
+            "{v}"
+        );
+        // Changed summands beyond the limit are not compared, and the response says so.
+        let v = call(
+            "term.diff",
+            &json!({ "context": "nilhecke nu=3", "before": "x_1 + x_2 x_3",
+                     "term": "x_1 x_2 + x_2 x_3 x_3", "summands": 1 }),
+        );
+        assert_eq!(v["truncated"], true, "{v}");
+        let v = call(
+            "term.diff",
+            &json!({ "context": "nilhecke nu=3", "term": "x_1" }),
+        );
+        assert_eq!(v["kind"], "invalid", "{v}");
     }
 }

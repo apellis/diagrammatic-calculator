@@ -269,8 +269,13 @@ diagrams.
   whole operation lists, for each summand of the result and each of its layers, the occurrences
   `[summand, layer]` (1-based, summands in printed order) of the starting term it descends from:
   itself when untouched; for a layer a rule creates, the pattern's layer of the same generator,
-  matched bottom to top in order (a slid dot is the same dot); none for a new layer. Occurrence
-  IDs follow this map (`docs/design.md`, Occurrence IDs).
+  matched bottom to top in order (a slid dot is the same dot); none for a new layer. Between a
+  term and one written in its place (`term.diff`), a summand whose word both have descends from
+  itself; each other new summand from at most one old summand no longer there, the best aligned
+  pairs first, its layers from the old layers of the same generator that a longest common
+  subsequence of the two words keeps (more layers in the same position and binding preferred).
+  Occurrence IDs follow this map (`docs/design.md`, Occurrence IDs). Strand IDs follow where a
+  strand starts: a point of the bottom edge, or its lowest piece.
 - **Straightening** rewrites to the basis of the presentation's first representation that has
   one (KLR: `ψ_ŵ x^a`; `ONH_n`: `x^a ψ_ŵ`), working upwards one layer at a time. Dots move through
   crossings by the dot slides; crossings are brought to the canonical reduced word by braid moves,

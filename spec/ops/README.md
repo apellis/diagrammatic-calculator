@@ -25,13 +25,15 @@ these schemas in `crates/core/tests/schemas.rs`.
 | `export.lean` | 3 | `export.lean.schema.json` |
 | `term.layout` | 4b | `term.layout.schema.json` |
 | `term.edit` | 4b | `term.edit.schema.json` |
+| `term.diff` | 4b | `term.diff.schema.json` |
 
 Locations in the rewriting operations: a term's summands are numbered from 1 in printed order; a
 summand's layers are numbered from 1 at the bottom of its canonical layering, and strands from 1
 at the left. A rectangle names its first and last layer and strand. `term.layout` can draw a summand's layers in
 another order reachable by interchanges; the drawing's coefficient then carries the Koszul sign.
 The operations that change a term return its provenance map (`common.schema.json`,
-`provenanceMap`): where each generator occurrence of the result came from.
+`provenanceMap`): where each generator occurrence of the result came from. `term.diff` gives the
+same map between a term and one written in its place, which no rewrite connects.
 
 The other operations of the specification (workspace editing, rewriting, solving, graded linear
 algebra, history, export, AI) get their schemas in the phase that implements them, so a schema

@@ -501,3 +501,41 @@ test('a dot power above 3 is one dot labelled with its exponent, and sliding a d
   await expect(canvas(page).getByTestId('canvas-message')).toContainText('Slid the dot up through 1 crossing');
   await expect(canvas(page).locator('[data-power="4"]').first()).toBeVisible();
 });
+
+test('occurrence IDs survive text typed by hand, and strands are numbered through the document', async ({ page }) => {
+  await newDoc(page);
+  await typeCell(page, 'def a := psi_1 x_1 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');
+  await openCanvas(page, false);
+  /** The IDs of each frame's pieces (and, with the labels shown, strands), sorted. */
+  const ids = async (sel = '.hit-piece title') =>
+    (await Promise.all((await frames(page).all()).map(async (f) => (await f.locator(sel).allTextContents()).map((t) => t.split(':')[0]).sort()))).sort();
+  await expect.poll(() => ids()).toEqual([['c1', 'd1']]);
+  await page.keyboard.press('Escape');
+  await expect(canvas(page)).toBeHidden();
+
+  // typed by hand: the crossing and the dot keep their IDs, the new dot and crossing get new ones
+  const id = await cell(page, 0).getAttribute('data-cell');
+  // the head opens the editor when it opens the cell
+  const head = cell(page, 0).locator('.head');
+  if ((await head.getAttribute('aria-expanded')) === 'true') await head.click();
+  await head.click();
+  await page.locator(`#cell-${id} .cm-content`).click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await typeCell(page, 'def a := psi_1 x_1 x_3 e(iij) + psi_2 e(iij)');
+  await expect(cell(page, 0).getByTestId('summary')).toContainText('2 terms');
+  await openCanvas(page, false);
+  await expect.poll(() => ids()).toEqual([['c1', 'd1', 'd2'], ['c2']]);
+  await page.keyboard.press('l');
+  await expect.poll(() => ids('[data-occ]')).toEqual([['c1', 'd1', 'd2', 's1', 's2', 's3'], ['c2', 's1', 's2', 's3']]);
+  await page.keyboard.press('Escape');
+  await expect(canvas(page)).toBeHidden();
+
+  // another cell's strands continue the numbering
+  await addCell(page, 'def b := x_2 e(iij)');
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term');
+  await cell(page, 1).getByTestId('open-canvas').click();
+  await expect(frames(page).first().locator('svg.diagram')).toBeVisible();
+  await page.keyboard.press('l');
+  await expect.poll(() => ids('[data-occ]')).toEqual([['d3', 's4', 's5', 's6']]);
+});

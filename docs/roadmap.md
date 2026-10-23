@@ -28,10 +28,7 @@ Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
   revoked (`docs/deploy.md`, "Revoked Google access"; a service account key and one script run).
 - Make the repository public, with the licence already in place.
 
-Polish (all remaining UX polish happens before going public):
-
-- Occurrence IDs are carried through canvas gestures only: text typed by hand, terms written by
-  the AI and accepted branches give their new summands fresh IDs; strands are numbered per summand.
+Polish (all remaining UX polish happens before going public): none open.
 
 Certificates:
 
