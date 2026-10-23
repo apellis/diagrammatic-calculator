@@ -138,10 +138,12 @@ test('an AI what-if on a branch: edits there, reads the values, proposes accepti
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'a := psi_1 x_1 e(iij)');
 
-  // the activity timeline lists the request and the AI's steps with their notes
+  // the activity timeline (part of the document, so shared) records that a request was made,
+  // without its text, and the AI's steps with their notes
   await page.getByTestId('activity-tab').click();
   const tl = page.getByTestId('timeline');
-  await expect(tl).toContainText('What if I slide the dot up');
+  await expect(tl).toContainText('Asked the AI.');
+  await expect(tl).not.toContainText('What if I slide the dot up');
   await expect(tl).toContainText('slide the dot up through the crossing');
   await expect(tl).toContainText('accepted: the slide is an equality');
 });

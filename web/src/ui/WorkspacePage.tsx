@@ -1,7 +1,7 @@
 // A document's workspace: top bar, outline and cells, kept in step with the document and the
 // evaluator.
 import { createEffect, createResource, createSignal, For, on, onCleanup, onMount, Show, type Signal } from 'solid-js';
-import { openDoc, markExported, type OpenDoc } from '../doc/store';
+import { createCleanCopy, openDoc, markExported, type OpenDoc } from '../doc/store';
 import { kindOf, type CellData, type Comparison, type Doc, type Inputs } from '../doc/model';
 import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
@@ -63,8 +63,8 @@ function Workspace(props: { o: OpenDoc }) {
   let focusAI: (() => void) | undefined;
   let aiBusy = false;
   const [current, setCurrent] = createSignal<{ id: string; name: string; doc: Doc } | null>(null);
-  const [list, setList] = createSignal([...main.branches.values()].map(({ id, name }) => ({ id, name })));
-  const onBranches = () => setList([...main.branches.values()].map(({ id, name }) => ({ id, name })));
+  const [list, setList] = createSignal(main.branchList().map(({ id, name }) => ({ id, name })));
+  const onBranches = () => setList(main.branchList().map(({ id, name }) => ({ id, name })));
   main.branches.observe(onBranches);
 
   // a branch's changes are kept in the document shortly after each step
@@ -114,7 +114,7 @@ function Workspace(props: { o: OpenDoc }) {
     },
     open: (id) => {
       const d = id ? main.openBranch(id) : null;
-      show(id && d ? { id, name: main.branches.get(id)!.name, doc: d } : null);
+      show(id && d ? { id, name: main.branch(id)!.name, doc: d } : null);
     },
     compare: () => {
       const c = current();
@@ -161,6 +161,9 @@ function Workspace(props: { o: OpenDoc }) {
   });
 
   let nextProposal = 1;
+  const applies = new Map<number, () => void>();
+  // a document someone else owns: the AI's changes to it wait for the person (see ToolHost.foreign)
+  const foreign = () => !!props.o.info.cloud && props.o.info.cloud.role !== 'owner';
   const host: ToolHost = {
     engine,
     main,
@@ -177,17 +180,22 @@ function Workspace(props: { o: OpenDoc }) {
       const d = current()?.doc ?? main;
       return s && { version: d.versions().length, cell: s.cellId, summand: s.summand, word: s.word, text: s.text, layers: s.layers, rectangle: s.rectangle };
     },
-    propose: (p) => {
+    propose: (p, apply) => {
       const full: Proposal = { ...p, id: nextProposal++, state: 'open' };
+      if (apply) applies.set(full.id, apply);
       setProposals([...proposals(), full]);
       return full;
     },
+    foreign,
   };
   const decide = (p: Proposal, accept: boolean) => {
     setProposals(proposals().map((x) => (x.id === p.id ? { ...x, state: accept ? 'accepted' : 'rejected' } : x)));
-    main.log({ kind: 'proposal', author: 'you', text: `${accept ? 'accepted' : 'rejected'}: ${p.note}` });
+    const apply = applies.get(p.id);
+    applies.delete(p.id);
+    if (!foreign()) main.log({ kind: 'proposal', author: 'you', text: `${accept ? 'accepted' : 'rejected'}: ${p.note}` });
     if (!accept) return;
-    if (p.kind === 'remove') host.doc().removeCell(p.target, `remove ${p.target} (proposed by the AI: ${p.note})`);
+    if (p.kind === 'write') apply?.();
+    else if (p.kind === 'remove') host.doc().removeCell(p.target, `remove ${p.target} (proposed by the AI: ${p.note})`);
     else {
       if (branching.current?.id !== p.target) branching.open(p.target);
       branching.accept();
@@ -222,6 +230,7 @@ function Workspace(props: { o: OpenDoc }) {
       </div>
       <Show when={aiOpen()}>
         <AIPanel host={host} main={main} proposals={proposals()} onDecide={decide} onBusy={onBusy} onClose={() => setAiOpen(false)}
+          owner={props.o.info.cloud?.owner?.name || props.o.info.cloud?.owner?.email}
           focusRef={(f) => (focusAI = f)} />
       </Show>
     </div>
@@ -250,7 +259,7 @@ function DocView(props: {
   const [context, setContext] = createSignal(doc.context);
   const [name, setName] = createSignal(doc.name);
   const [versions, setVersions] = createSignal(doc.versions());
-  const [snapshots, setSnapshots] = createSignal(main.snapshots.toArray());
+  const [snapshots, setSnapshots] = createSignal(main.snapshotList());
   const [canUndo, setCanUndo] = createSignal(doc.undoManager.canUndo());
   const [canRedo, setCanRedo] = createSignal(doc.undoManager.canRedo());
   const [jobs, setJobs] = createSignal(0);
@@ -319,7 +328,13 @@ function DocView(props: {
     scheduleFileSave();
   };
   const onHistory = () => setVersions(doc.versions());
-  const onSnapshots = () => setSnapshots(main.snapshots.toArray());
+  // malformed shared content, skipped when reading (rechecked whenever the cells or history change)
+  const problems = () => {
+    cells();
+    versions();
+    return doc.problems();
+  };
+  const onSnapshots = () => setSnapshots(main.snapshotList());
   const onHints = () => setHintsVersion(hintsVersion() + 1);
   // pinned watches (kept in the document itself) and the term counts each has had this session
   const [pinnedIds, setPinnedIds] = createSignal(main.pinned);
@@ -694,6 +709,12 @@ function DocView(props: {
             <Show when={props.branching.current}>
               {(b) => <div class="banner branch-banner">You are on the scratch branch “{b().name}”. Changes here leave the document alone until you accept them.</div>}
             </Show>
+            <Show when={problems().length}>
+              <div class="banner" data-testid="doc-problems">
+                Parts of this document could not be read and are left out ({problems().join(', ')}): someone with edit access wrote content in a form this app does not write.{' '}
+                <a href="#" onClick={async (e) => { e.preventDefault(); location.hash = `#/doc/${await createCleanCopy(doc, `${name()} (repaired)`)}`; }}>Make a repaired copy</a>
+              </div>
+            </Show>
             <Show when={reminder()}>
               <div class="banner">This document changed and has not been exported for a week. <a href="#" onClick={(e) => { e.preventDefault(); void exportFile(); }}>Export it</a> to keep a copy.</div>
             </Show>
@@ -737,7 +758,8 @@ function DocView(props: {
       <Show when={modal() === 'palette'}><Palette commands={commands()} onClose={() => setModal(null)} /></Show>
       <Show when={modal() === 'keys'}><Keys onClose={() => setModal(null)} /></Show>
       <Show when={modal() === 'share' && props.sync?.cloudId}>
-        {(id) => <ShareDialog cloudId={id()} name={name()} role={props.sync!.role ?? 'viewer'} onClose={() => setModal(null)} />}
+        {(id) => <ShareDialog cloudId={id()} name={name()} role={props.sync!.role ?? 'viewer'} onClose={() => setModal(null)}
+          onCleanCopy={async () => { setModal(null); location.hash = `#/doc/${await createCleanCopy(main, `${name()} (clean copy)`)}`; }} />}
       </Show>
       <Show when={modal() === 'branch' && props.branching.compare()} keyed>
         {(cmp) => (

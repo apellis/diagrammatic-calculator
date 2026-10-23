@@ -17,7 +17,11 @@ export interface AISettings {
   effort: Effort;
   /** For an OpenAI-compatible server, its base URL (ending in /v1). */
   baseUrl: string;
+  /** The most tokens (in, cached and out) one request may use before it stops; 0 for no limit. */
+  budget: number;
 }
+
+export const BUDGETS = [250_000, 1_000_000, 4_000_000, 0];
 
 export const ANTHROPIC_MODELS: { id: string; name: string }[] = [
   { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
@@ -26,7 +30,7 @@ export const ANTHROPIC_MODELS: { id: string; name: string }[] = [
   { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
 ];
 
-export const DEFAULT_SETTINGS: AISettings = { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', baseUrl: '' };
+export const DEFAULT_SETTINGS: AISettings = { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', baseUrl: '', budget: 1_000_000 };
 
 export interface TurnRequest {
   system: string;
@@ -430,6 +434,7 @@ const OLD_DEFAULT_URL = 'http://localhost:11434/v1';
 export function loadSettings(): AISettings {
   try {
     const s: AISettings = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('diagcalc.ai.settings') ?? '{}') };
+    if (!BUDGETS.includes(s.budget)) s.budget = DEFAULT_SETTINGS.budget;
     return s.baseUrl === OLD_DEFAULT_URL ? { ...s, baseUrl: '' } : s;
   } catch {
     return DEFAULT_SETTINGS;

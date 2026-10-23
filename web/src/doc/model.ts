@@ -3,6 +3,12 @@
 //
 // Every change goes through `step`, so it is one undoable step with an author and a note, and
 // it is recorded as a version in the history.
+//
+// A shared document's content comes from every editor, so nothing in it is trusted to have the
+// shape this code writes: every read checks it and skips or replaces what does not fit, so a
+// malformed or hostile update cannot stop the document from opening (`problems` says what was
+// skipped, and `cleanCopy` makes a fresh document without it). The history, its authors and the
+// timeline are a cooperative record, not evidence: any editor can write any entry.
 import * as Y from 'yjs';
 
 export const FORMAT = 'diagcalc-workspace/1';
@@ -102,6 +108,60 @@ export function kindOf(text: string): CellKind | null {
 
 const LETTER: Record<CellKind, string> = { def: 'd', watch: 'w', solve: 's', check: 'k', note: 'n', comment: 'c' };
 
+export const DEFAULT_CONTEXT = 'klr type=A2 nu=2i+j ring=QQ';
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isStr = (v: unknown): v is string => typeof v === 'string';
+
+/** A cell as stored: a map with a string ID (its text, if not a string, reads as empty). */
+function isCell(m: unknown): m is Y.Map<string> {
+  return m instanceof Y.Map && isStr(m.get('id'));
+}
+const cellData = (m: Y.Map<string>): CellData => {
+  const text = m.get('text');
+  return { id: m.get('id')!, text: isStr(text) ? text : '' };
+};
+
+export function validVersion(v: unknown): v is Version {
+  return isObj(v) && isNum(v.n) && isStr(v.author) && isStr(v.note) && isNum(v.time) && v.snapshot instanceof Uint8Array;
+}
+export function validSnapshot(v: unknown): v is Snapshot {
+  return isObj(v) && isStr(v.name) && isStr(v.cellId) && isStr(v.cellText) && isStr(v.context) && isNum(v.version) && isStr(v.key) && isNum(v.time);
+}
+const KINDS = new Set(['request', 'tool', 'note', 'milestone', 'proposal', 'error']);
+export function validEntry(v: unknown): v is TimelineEntry {
+  return (
+    isObj(v) &&
+    isNum(v.time) &&
+    isStr(v.author) &&
+    KINDS.has(v.kind as string) &&
+    isStr(v.text) &&
+    (v.detail === undefined || isStr(v.detail)) &&
+    (v.version === undefined || isNum(v.version)) &&
+    (v.branch === undefined || isStr(v.branch))
+  );
+}
+export function validHint(v: unknown): v is Hint {
+  if (!isObj(v)) return false;
+  if (v.order !== undefined && !(Array.isArray(v.order) && v.order.every((x) => Number.isInteger(x)))) return false;
+  if (v.offsets !== undefined && !(isObj(v.offsets) && Object.values(v.offsets).every((o) => Array.isArray(o) && o.length === 2 && o.every(isNum)))) return false;
+  return true;
+}
+function validInputs(v: unknown): v is Inputs {
+  return (
+    isObj(v) &&
+    isStr(v.context) &&
+    Array.isArray(v.cells) &&
+    v.cells.every((c) => isObj(c) && isStr(c.id) && isStr(c.text)) &&
+    isObj(v.hints) &&
+    Object.values(v.hints).every(validHint)
+  );
+}
+export function validBranch(v: unknown): v is BranchRecord {
+  return isObj(v) && isStr(v.id) && isStr(v.name) && isStr(v.author) && isNum(v.created) && validInputs(v.base) && v.state instanceof Uint8Array;
+}
+
 export class Doc {
   readonly ydoc: Y.Doc;
   readonly meta: Y.Map<unknown>;
@@ -147,19 +207,88 @@ export class Doc {
   // reading
 
   get name(): string {
-    return (this.meta.get('name') as string) ?? 'Untitled';
+    const n = this.meta.get('name');
+    return isStr(n) ? n : 'Untitled';
   }
   get context(): string {
-    return (this.meta.get('context') as string) ?? 'klr type=A2 nu=2i+j ring=QQ';
+    const c = this.meta.get('context');
+    return isStr(c) ? c : DEFAULT_CONTEXT;
+  }
+  /** When the document was last edited, if recorded. */
+  get edited(): number | undefined {
+    const e = this.meta.get('edited');
+    return isNum(e) ? e : undefined;
   }
   list(): CellData[] {
-    return this.cells.toArray().map((m) => ({ id: m.get('id')!, text: m.get('text') ?? '' }));
+    return this.cells.toArray().filter(isCell).map(cellData);
   }
+  /** The position in `cells` of the cell `id` (counting entries that are not cells, which `list` skips). */
   index(id: string): number {
-    return this.cells.toArray().findIndex((m) => m.get('id') === id);
+    return this.cells.toArray().findIndex((m) => isCell(m) && m.get('id') === id);
   }
   versions(): Version[] {
-    return this.history.toArray();
+    return this.history.toArray().filter(validVersion);
+  }
+  snapshotList(): Snapshot[] {
+    return this.snapshots.toArray().filter(validSnapshot);
+  }
+  timelineList(): TimelineEntry[] {
+    return this.timeline.toArray().filter(validEntry);
+  }
+  branch(id: string): BranchRecord | undefined {
+    const b = this.branches.get(id);
+    return validBranch(b) ? b : undefined;
+  }
+  branchList(): BranchRecord[] {
+    return [...this.branches.values()].filter(validBranch);
+  }
+
+  /**
+   * What in the shared content does not have the shape this app writes (and is skipped when
+   * reading); empty for a sound document.
+   */
+  problems(): string[] {
+    const out: string[] = [];
+    const count = (what: string, all: number, good: number) => all !== good && out.push(`${all - good} malformed ${what}`);
+    if (this.meta.has('name') && !isStr(this.meta.get('name'))) out.push('a malformed name');
+    if (this.meta.has('context') && !isStr(this.meta.get('context'))) out.push('a malformed context');
+    count('cells', this.cells.length, this.list().length);
+    count('versions', this.history.length, this.versions().length);
+    count('snapshots', this.snapshots.length, this.snapshotList().length);
+    count('timeline entries', this.timeline.length, this.timelineList().length);
+    count('branches', this.branches.size, this.branchList().length);
+    count('layout hints', this.hints.size, [...this.hints.values()].filter(validHint).length);
+    return out;
+  }
+
+  /**
+   * A fresh document with the current content and nothing else: no deleted text, no history,
+   * no branches, and nothing malformed. For repairing a damaged document, and for sharing a
+   * document without what was ever deleted from it.
+   */
+  cleanCopy(name = this.name): Doc {
+    const d = new Doc(new Y.Doc({ gc: false }));
+    const cells = this.list();
+    const hints = Object.fromEntries([...this.hints.entries()].filter(([, h]) => validHint(h)));
+    const snapshots = this.snapshotList();
+    const pinned = this.pinned;
+    d.ydoc.transact(() => {
+      d.meta.set('name', name);
+      d.meta.set('context', this.context);
+      if (pinned.length) d.meta.set('pinned', pinned);
+      d.cells.insert(0, cells.map(toMap));
+      for (const [k, h] of Object.entries(hints)) d.hints.set(k, h);
+      if (snapshots.length) d.snapshots.push(snapshots);
+      d.counters.set('nextId', Math.max(this.nextId(), 1 + Math.max(0, ...cells.map((c) => Number(c.id.slice(1)) || 0))));
+    }, HISTORY);
+    d.record('clean copy', LOCAL.author);
+    return d;
+  }
+
+  /** The next cell number; if the counter is malformed, one past every number in use. */
+  private nextId(): number {
+    const n = this.counters.get('nextId');
+    return Number.isSafeInteger(n) && n! > 0 ? n! : 1 + Math.max(0, ...this.list().map((c) => Number(c.id.slice(1)) || 0));
   }
 
   // changing: each call is one step
@@ -207,7 +336,8 @@ export class Doc {
 
   /** Watches the AI pinned as measures of its progress. */
   get pinned(): string[] {
-    return (this.meta.get('pinned') as string[]) ?? [];
+    const p = this.meta.get('pinned');
+    return Array.isArray(p) ? p.filter(isStr) : [];
   }
   pinWatch(id: string, pinned = true) {
     const now = this.pinned.filter((x) => x !== id);
@@ -224,7 +354,7 @@ export class Doc {
   }
 
   freshId(kind: CellKind | null): string {
-    const n = this.counters.get('nextId') ?? 1;
+    const n = this.nextId();
     this.counters.set('nextId', n + 1);
     return `${LETTER[kind ?? 'def']}${n}`;
   }
@@ -250,7 +380,8 @@ export class Doc {
   }
 
   hint(cellId: string, word: string): Hint | undefined {
-    return this.hints.get(`${cellId} ${word}`);
+    const h = this.hints.get(`${cellId} ${word}`);
+    return validHint(h) ? h : undefined;
   }
 
   /** `layout.hint`: sets or clears how a summand is drawn. */
@@ -270,7 +401,7 @@ export class Doc {
     const i = this.index(id);
     if (i < 0 || i === to) return;
     this.step(note, () => {
-      const text = this.cells.get(i).get('text')!;
+      const text = cellData(this.cells.get(i)).text;
       this.cells.delete(i, 1);
       const m = new Y.Map<string>();
       m.set('id', id);
@@ -286,7 +417,7 @@ export class Doc {
       this.cells.delete(0, this.cells.length);
       this.cells.insert(0, cells.map(toMap));
       const max = Math.max(0, ...cells.map((c) => Number(c.id.slice(1)) || 0));
-      this.counters.set('nextId', Math.max(max + 1, this.counters.get('nextId') ?? 1));
+      this.counters.set('nextId', Math.max(max + 1, this.nextId()));
     });
   }
 
@@ -302,14 +433,18 @@ export class Doc {
     this.undoManager.redo();
   }
 
-  /** The workspace as it was at a version, read-only. */
+  /** The workspace as it was at a version, read-only; null if there is no such version or its snapshot cannot be read. */
   at(n: number): { context: string; cells: CellData[] } | null {
-    const v = this.history.toArray().find((h) => h.n === n);
+    const v = this.versions().find((h) => h.n === n);
     if (!v) return null;
-    const old = Y.createDocFromSnapshot(this.ydoc, Y.decodeSnapshot(v.snapshot));
-    const meta = old.getMap('meta');
-    const cells = old.getArray<Y.Map<string>>('cells').toArray().map((m) => ({ id: m.get('id')!, text: m.get('text') ?? '' }));
-    return { context: (meta.get('context') as string) ?? this.context, cells };
+    try {
+      const old = Y.createDocFromSnapshot(this.ydoc, Y.decodeSnapshot(v.snapshot));
+      const ctx = old.getMap('meta').get('context');
+      const cells = old.getArray<unknown>('cells').toArray().filter(isCell).map(cellData);
+      return { context: isStr(ctx) ? ctx : this.context, cells };
+    } catch {
+      return null;
+    }
   }
 
   /** The workspace file (.dcw) of the current inputs, cells as entered. */
@@ -332,7 +467,7 @@ export class Doc {
   /** `branch.create`: a scratch copy of the document as it is now. */
   createBranch(name: string): BranchRecord {
     const b: BranchRecord = {
-      id: `b${this.counters.get('nextBranch') ?? 1}`,
+      id: `b${Number.isSafeInteger(this.counters.get('nextBranch')) ? this.counters.get('nextBranch') : 1}`,
       name,
       author: this.author.author,
       created: Date.now(),
@@ -340,7 +475,8 @@ export class Doc {
       state: Y.encodeStateAsUpdate(this.ydoc),
     };
     this.ydoc.transact(() => {
-      this.counters.set('nextBranch', (this.counters.get('nextBranch') ?? 1) + 1);
+      const nb = this.counters.get('nextBranch');
+      this.counters.set('nextBranch', (Number.isSafeInteger(nb) ? nb! : 1) + 1);
       this.branches.set(b.id, b);
     }, HISTORY);
     return b;
@@ -348,17 +484,21 @@ export class Doc {
 
   /** The branch's own document; changes to it are kept with `saveBranch`. */
   openBranch(id: string): Doc | null {
-    const b = this.branches.get(id);
+    const b = this.branch(id);
     if (!b) return null;
     const ydoc = new Y.Doc({ gc: false });
-    Y.applyUpdate(ydoc, b.state);
+    try {
+      Y.applyUpdate(ydoc, b.state);
+    } catch {
+      return null;
+    }
     const d = new Doc(ydoc);
     d.ydoc.transact(() => d.branches.clear(), HISTORY);
     return d;
   }
 
   saveBranch(id: string, d: Doc) {
-    const b = this.branches.get(id);
+    const b = this.branch(id);
     if (b) this.ydoc.transact(() => this.branches.set(id, { ...b, state: Y.encodeStateAsUpdate(d.ydoc) }), HISTORY);
   }
 
@@ -369,7 +509,7 @@ export class Doc {
 
   /** `branch.compare`: what accepting the branch would change in the document now. */
   compareBranch(id: string, d: Doc): Comparison {
-    const b = this.branches.get(id);
+    const b = this.branch(id);
     if (!b) throw new Error(`no branch ${id}`);
     return merge(b.base, this.inputs(), d.inputs()).comparison;
   }
@@ -380,7 +520,7 @@ export class Doc {
    * branch also changed, where the branch's text wins (listed as conflicts).
    */
   acceptBranch(id: string, d: Doc): Comparison {
-    const b = this.branches.get(id);
+    const b = this.branch(id);
     if (!b) throw new Error(`no branch ${id}`);
     const { result, comparison } = merge(b.base, this.inputs(), d.inputs(), (kind) => this.freshId(kindOf(kind)));
     this.step(`accept branch ${b.name}`, () => this.setInputs(result));
@@ -401,7 +541,10 @@ export class Doc {
     }
     for (const k of [...this.hints.keys()]) if (!(k in target.hints)) this.hints.delete(k);
     const want = new Set(target.cells.map((c) => c.id));
-    for (let i = this.cells.length - 1; i >= 0; i--) if (!want.has(this.cells.get(i).get('id')!)) this.cells.delete(i, 1);
+    for (let i = this.cells.length - 1; i >= 0; i--) {
+      const m = this.cells.get(i);
+      if (!isCell(m) || !want.has(m.get('id')!)) this.cells.delete(i, 1);
+    }
     target.cells.forEach((c, i) => {
       const at = this.index(c.id);
       if (at === i) {

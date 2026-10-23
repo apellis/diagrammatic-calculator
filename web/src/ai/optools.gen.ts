@@ -587,9 +587,12 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "string"
         },
         "name": {
-          "type": "string"
+          "description": "The theorem's name: a letter, then letters, digits and _ (diagcalc_chain if empty).",
+          "type": "string",
+          "pattern": "^([A-Za-z][A-Za-z0-9_]*)?$"
         },
         "doc": {
+          "description": "Its docstring; comment delimiters in it are broken up.",
           "type": "string"
         },
         "max_steps": {

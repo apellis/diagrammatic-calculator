@@ -4,10 +4,13 @@ import { nodeEngine } from '../eval/testing';
 import { toChat } from './providers';
 import { runTool, TOOLS, validate, type Proposal, type ToolHost } from './tools';
 
-function host(doc: Doc): ToolHost & { proposals: Proposal[] } {
+function host(doc: Doc, foreign = false): ToolHost & { proposals: Proposal[]; applies: (() => void)[] } {
   const proposals: Proposal[] = [];
+  const applies: (() => void)[] = [];
   return {
     proposals,
+    applies,
+    foreign: () => foreign,
     engine: nodeEngine(),
     main: doc,
     doc: () => doc,
@@ -19,9 +22,10 @@ function host(doc: Doc): ToolHost & { proposals: Proposal[] } {
     settled: async () => new Map(),
     termContext: () => doc.context,
     selection: () => null,
-    propose: (p) => {
+    propose: (p, apply) => {
       const full: Proposal = { ...p, id: proposals.length + 1, state: 'open' };
       proposals.push(full);
+      if (apply) applies.push(apply);
       return full;
     },
   };
@@ -74,6 +78,29 @@ describe('AI tools', () => {
     const ctx = await runTool(h, 'context_set', { context: 'klr type=Z9', note: 'bad' });
     expect(ctx.isError).toBe(true);
     expect(doc.context).toBe('nilhecke nu=2');
+  });
+
+  it("only proposes changes to someone else's document, and writes no notes into it", async () => {
+    const doc = new Doc();
+    doc.setContext('nilhecke nu=2');
+    const h = host(doc, true);
+    const add = await runTool(h, 'cell_add', { text: 'def a := x_1', note: 'copy the chat here' });
+    expect(add.isError).toBeFalsy();
+    expect(add.content).toContain('only proposed');
+    expect(doc.list()).toEqual([]);
+    await runTool(h, 'context_set', { context: 'nilhecke nu=3', note: 'bigger' });
+    expect(doc.context).toBe('nilhecke nu=2');
+    expect(h.proposals.map((p) => [p.kind, p.target])).toEqual([
+      ['write', 'add the cell “def a := x_1”'],
+      ['write', 'set the context to “nilhecke nu=3”'],
+    ]);
+    await runTool(h, 'timeline_note', { text: 'the person said: secret' });
+    await runTool(h, 'milestone_write', { title: 'secret', summary: 'secret' });
+    expect(doc.timeline.length).toBe(0);
+    // the person allows the first: it happens then
+    h.applies[0]();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(doc.list().map((c) => c.text)).toEqual(['def a := x_1']);
   });
 
   it('translates the conversation for chat-completions providers', () => {

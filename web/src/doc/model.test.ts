@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as Y from 'yjs';
 import { Doc } from './model';
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -121,5 +122,83 @@ describe('branches', () => {
     d.addCell('watch x_1');
     d.undo();
     expect(d.list().length).toBe(1);
+  });
+});
+
+describe('malformed shared content', () => {
+  /** What a hostile or buggy editor can save: valid Yjs, but not the shape this app writes. */
+  function hostile(): Uint8Array {
+    const good = new Doc();
+    good.addCell('def a := x_1');
+    const evil = new Y.Doc({ gc: false });
+    Y.applyUpdate(evil, Y.encodeStateAsUpdate(good.ydoc));
+    (evil.getArray('cells') as Y.Array<unknown>).push(['not a map', 42]);
+    const noId = new Y.Map<unknown>();
+    noId.set('text', 'no id');
+    (evil.getArray('cells') as Y.Array<unknown>).push([noId]);
+    const badText = new Y.Map<unknown>();
+    badText.set('id', 'd9');
+    badText.set('text', { evil: true });
+    (evil.getArray('cells') as Y.Array<unknown>).push([badText]);
+    const meta = evil.getMap('meta');
+    meta.set('name', { toString: 1 });
+    meta.set('context', 7);
+    meta.set('pinned', 'w1');
+    meta.set('edited', 'yesterday');
+    (evil.getArray('history') as Y.Array<unknown>).push([{ n: 99, author: 'AI', note: 'x', time: 1, snapshot: new Uint8Array([1, 2, 3]) }, 'junk']);
+    (evil.getArray('snapshots') as Y.Array<unknown>).push([{ name: 1 }]);
+    (evil.getArray('timeline') as Y.Array<unknown>).push([{ time: 1e300, author: 'AI', kind: 'tool', text: 't' }, null]);
+    evil.getMap('branches').set('b1', { id: 'b1' });
+    evil.getMap('hints').set('d1 x', { order: 'nope' });
+    evil.getMap('counters').set('nextId', 'many');
+    return Y.encodeStateAsUpdate(evil);
+  }
+
+  it('cannot stop a document from opening, reading or changing', async () => {
+    const d = new Doc();
+    Y.applyUpdate(d.ydoc, hostile(), { author: 'cloud' });
+    expect(d.name).toBe('Untitled');
+    expect(d.context).toBe('klr type=A2 nu=2i+j ring=QQ');
+    expect(d.pinned).toEqual([]);
+    expect(d.edited).toBeUndefined();
+    expect(d.list()).toEqual([
+      { id: 'd1', text: 'def a := x_1' },
+      { id: 'd9', text: '' },
+    ]);
+    expect(d.at(99)).toBeNull();
+    expect(d.snapshotList()).toEqual([]);
+    expect(d.branchList()).toEqual([]);
+    expect(d.openBranch('b1')).toBeNull();
+    expect(d.hint('d1', 'x')).toBeUndefined();
+    expect(d.problems()).toEqual(['a malformed name', 'a malformed context', '3 malformed cells', '1 malformed versions', '1 malformed snapshots', '1 malformed timeline entries', '1 malformed branches', '1 malformed layout hints']);
+    // editing still works, with fresh IDs
+    const id = d.addCell('watch a');
+    expect(id).toBe('w10');
+    d.updateCell('d9', 'def b := x_2');
+    d.moveCell('d9', 0);
+    await settle();
+    expect(d.list().map((c) => c.id)).toEqual(['d9', 'd1', 'w10']);
+    d.replace('nilhecke nu=2', [{ id: 'd1', text: 'def a := x_1' }], 'restore');
+    expect(d.list()).toEqual([{ id: 'd1', text: 'def a := x_1' }]);
+  });
+
+  it('is left out of a clean copy, together with deleted text and history', async () => {
+    const d = new Doc();
+    const secret = d.addCell('note my password is hunter2');
+    d.removeCell(secret);
+    d.addCell('def a := x_1');
+    Y.applyUpdate(d.ydoc, hostile(), { author: 'cloud' });
+    await settle();
+    const c = d.cleanCopy('Clean');
+    await settle();
+    expect(c.problems()).toEqual([]);
+    expect(c.name).toBe('Clean');
+    expect(c.list()).toEqual(d.list());
+    expect(c.versions().map((v) => v.note)).toEqual(['clean copy']);
+    const bytes = Y.encodeStateAsUpdate(c.ydoc);
+    expect(new TextDecoder().decode(bytes)).not.toContain('hunter2');
+    expect(new TextDecoder().decode(Y.encodeStateAsUpdate(d.ydoc))).toContain('hunter2');
+    // new cells in the copy get IDs the original never used
+    expect(c.addCell('watch a')).not.toBe('d1');
   });
 });

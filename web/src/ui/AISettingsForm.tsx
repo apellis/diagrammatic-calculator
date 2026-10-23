@@ -2,6 +2,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import {
   ANTHROPIC_MODELS,
+  BUDGETS,
   checkProvider,
   listModels,
   loadKey,
@@ -179,6 +180,11 @@ export function AISettingsForm() {
           </select>
         </label>
       </Show>
+      <label title="A request stops when it has used this many tokens, so a long loop cannot use up your credit">Limit per request
+        <select value={settings().budget} onChange={(e) => setSettings({ ...settings(), budget: Number(e.currentTarget.value) })} aria-label="Token limit per request" data-testid="ai-budget">
+          <For each={BUDGETS}>{(b) => <option value={b}>{b ? `${b.toLocaleString('en')} tokens` : 'no limit'}</option>}</For>
+        </select>
+      </label>
       <label>Key <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} onChange={() => key() && void refreshModels()} placeholder={settings().provider === 'compatible' ? 'only if the server needs one' : 'your API key'} aria-label="API key" autocomplete="off" /></label>
       <label class="row hint"><input type="checkbox" checked={remember()} onChange={(e) => setRemember(e.currentTarget.checked)} /> Remember on this device (otherwise for this session only)</label>
       <div class="row">

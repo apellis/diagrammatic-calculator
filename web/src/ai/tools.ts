@@ -32,8 +32,9 @@ export interface SelectionRef {
 /** A change the AI proposes and the person accepts or rejects. */
 export interface Proposal {
   id: number;
-  kind: 'remove' | 'accept-branch';
-  /** The cell to remove, or the branch to accept. */
+  /** `write`: any change to a document someone else owns, which waits for the person. */
+  kind: 'remove' | 'accept-branch' | 'write';
+  /** The cell to remove, the branch to accept, or what the write does. */
   target: string;
   note: string;
   state: 'open' | 'accepted' | 'rejected';
@@ -55,7 +56,14 @@ export interface ToolHost {
   settled(): Promise<Map<string, CellState>>;
   termContext(): string;
   selection(): SelectionRef | null;
-  propose(p: Omit<Proposal, 'id' | 'state'>): Proposal;
+  /** `apply` makes a `write` proposal's change once the person accepts it. */
+  propose(p: Omit<Proposal, 'id' | 'state'>, apply?: () => void): Proposal;
+  /**
+   * Whether the document belongs to someone else (opened from a share or a link). Its text may
+   * have been written to steer the AI, so every change the AI makes to it waits for the person,
+   * and the AI's notes are not written into it.
+   */
+  foreign(): boolean;
 }
 
 const note = { type: 'string', description: 'One line saying why, shown in the history and the activity timeline.' };
@@ -148,6 +156,28 @@ const WORKSPACE_TOOLS: ToolDef[] = [
 
 const OPS = new Map(OP_TOOLS.map((t) => [t.name, t.op]));
 
+/** One line saying what a workspace write does, for the person to confirm. */
+function describeWrite(name: string, a: Record<string, unknown>): string {
+  const short = (s: unknown) => String(s ?? '').split('\n')[0].slice(0, 120);
+  switch (name) {
+    case 'cell_add':
+      return `add the cell “${short(a.text)}”`;
+    case 'cell_update':
+      return `change ${short(a.id)} to “${short(a.text)}”`;
+    case 'cell_move':
+      return `move ${short(a.id)} to position ${short(a.index)}`;
+    case 'context_set':
+      return `set the context to “${short(a.context)}”`;
+    case 'branch_create':
+      return `start the branch “${short(a.name)}”`;
+    case 'branch_discard':
+      return 'discard the branch shown';
+    case 'watch_pin':
+      return `${a.unpin ? 'unpin' : 'pin'} ${short(a.id)}`;
+  }
+  return name;
+}
+
 /** Every tool, in a stable order (the list is part of the cached prompt prefix). */
 export const TOOLS: ToolDef[] = [...WORKSPACE_TOOLS, ...OP_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }))];
 
@@ -236,9 +266,14 @@ export function cellView(id: string, text: string, s: CellState | undefined): Re
 }
 
 function log(host: ToolHost, e: Omit<TimelineEntry, 'time' | 'author'>) {
+  // nothing the AI writes reaches someone else's document unless the person confirms it
+  if (host.foreign()) return;
   const b = host.branch();
   host.main.log({ ...e, ...(b ? { branch: b.name } : {}) });
 }
+
+/** Tools that change the document (or its branches), and so wait for the person on someone else's document. */
+const WRITES = new Set(['cell_add', 'cell_update', 'cell_move', 'context_set', 'branch_create', 'branch_discard', 'watch_pin']);
 
 /** Runs one tool call. Never throws: failures come back as error results the model can read. */
 export async function runTool(host: ToolHost, name: string, input: unknown): Promise<ToolResult> {
@@ -269,7 +304,7 @@ async function runOp(host: ToolHost, op: OpName, a: Record<string, unknown>): Pr
   return { content: clip(JSON.stringify(r)), isError: !ok, summary: `${op}: ${what}` };
 }
 
-async function runWorkspace(host: ToolHost, name: string, a: Record<string, unknown>): Promise<ToolResult> {
+async function runWorkspace(host: ToolHost, name: string, a: Record<string, unknown>, confirmed = false): Promise<ToolResult> {
   const doc = host.doc();
   const n = a.note as string | undefined;
   const ok = (summary: string, content: unknown = { status: 'ok' }) => ({ content: typeof content === 'string' ? content : JSON.stringify(content), summary });
@@ -278,6 +313,14 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
     log(host, { kind: 'tool', text: n ?? summary, detail: summary, version: doc.versions().length + 1 });
     return ok(summary, content);
   };
+  if (WRITES.has(name) && host.foreign() && !confirmed) {
+    const what = describeWrite(name, a);
+    host.propose({ kind: 'write', target: what, note: n ?? what }, () => void runWorkspace(host, name, a, true));
+    return ok(
+      `proposed: ${what}`,
+      `This document belongs to someone else, so the change (${what}) is only proposed; the person will accept or reject it. Do not wait for the answer.`,
+    );
+  }
   switch (name) {
     case 'workspace_read': {
       const states = await host.settled();
@@ -353,7 +396,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
       return ok('back to the document');
     case 'timeline_note':
       log(host, { kind: 'note', text: a.text as string });
-      return ok('noted');
+      return ok('noted', host.foreign() ? 'Not written: this document belongs to someone else, so the activity timeline is left alone.' : undefined);
     case 'watch_pin': {
       const id = a.id as string;
       const i = host.main.index(id);
@@ -363,7 +406,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
     }
     case 'milestone_write':
       log(host, { kind: 'milestone', text: a.title as string, detail: a.summary as string });
-      return ok('milestone written');
+      return ok('milestone written', host.foreign() ? 'Not written: this document belongs to someone else, so the activity timeline is left alone; tell the person in the chat instead.' : undefined);
   }
   return fail(`There is no tool named ${name}.`);
 }

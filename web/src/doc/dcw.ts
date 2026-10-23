@@ -38,11 +38,14 @@ export async function exportDcw(doc: Doc): Promise<{ text: string; canonical: bo
 export function exportDch(doc: Doc): string {
   const versions = doc.versions().map((v) => {
     const at = doc.at(v.n);
-    return { n: v.n, author: v.author, note: v.note, time: new Date(v.time).toISOString(), workspace: at ? doc.toDcw(at) : null };
+    return { n: v.n, author: v.author, note: v.note, time: iso(v.time), workspace: at ? doc.toDcw(at) : null };
   });
-  const snapshots = doc.snapshots.toArray().map((s) => ({ ...s, time: new Date(s.time).toISOString() }));
-  const timeline = doc.timeline.toArray().map((t) => ({ ...t, time: new Date(t.time).toISOString() }));
+  const snapshots = doc.snapshotList().map((s) => ({ ...s, time: iso(s.time) }));
+  const timeline = doc.timelineList().map((t) => ({ ...t, time: iso(t.time) }));
   return JSON.stringify({ format: 'diagcalc-history/1', name: doc.name, versions, snapshots, timeline }, null, 2) + '\n';
 }
+
+/** A time as ISO 8601, or null for one out of the Date range (shared content may hold anything). */
+const iso = (t: number) => (Math.abs(t) <= 8.64e15 ? new Date(t).toISOString() : null);
 
 export const fileName = (name: string, ext: string) => `${name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'workspace'}.${ext}`;

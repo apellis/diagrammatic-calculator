@@ -19,7 +19,7 @@ export interface CloudLink {
   synced?: number;
   /** The link token, for a document opened by its link. */
   token?: string;
-  owner?: { email: string; name: string };
+  owner?: { email?: string; name: string };
 }
 
 export interface DocInfo {
@@ -105,7 +105,7 @@ export async function openDoc(id: string): Promise<OpenDoc> {
   await persistence.whenSynced;
   const doc = new Doc(ydoc);
   const sync = () => {
-    const edited = (doc.meta.get('edited') as number) ?? info.edited;
+    const edited = doc.edited ?? info.edited;
     if (doc.name !== info.name || edited !== info.edited) {
       info.name = doc.name;
       info.edited = edited;
@@ -147,7 +147,7 @@ export async function createFromCloud(update: Uint8Array, cloud: CloudLink, fall
   if (!doc.meta.has('name')) doc.meta.set('name', fallbackName);
   await new Promise((r) => setTimeout(r, 0));
   const now = Date.now();
-  await putInfo({ id, name: doc.name, created: now, edited: (doc.meta.get('edited') as number) ?? now, cloud: { ...cloud, synced: now } });
+  await putInfo({ id, name: doc.name, created: now, edited: doc.edited ?? now, cloud: { ...cloud, synced: now } });
   await persistence.destroy();
   void askPersistence();
   return id;
@@ -161,6 +161,15 @@ export async function duplicateDoc(id: string): Promise<string> {
     Y.applyUpdate(d.ydoc, update);
     d.meta.set('name', `${src.info.name} (copy)`);
   });
+}
+
+/**
+ * A new local document holding `src.cleanCopy()`: the current content only (no deleted text, no
+ * history, nothing malformed). Returns its ID.
+ */
+export async function createCleanCopy(src: Doc, name: string): Promise<string> {
+  const update = Y.encodeStateAsUpdate(src.cleanCopy(name).ydoc);
+  return createDoc(name, (d) => Y.applyUpdate(d.ydoc, update));
 }
 
 export async function deleteDoc(id: string) {

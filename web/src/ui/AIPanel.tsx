@@ -31,6 +31,8 @@ export interface AIPanelProps {
   onClose: () => void;
   /** Set by the panel: focuses the message box (for Cmd-L). */
   focusRef?: (f: () => void) => void;
+  /** Who owns the document, when it is someone else's. */
+  owner?: string;
 }
 
 export function AIPanel(props: AIPanelProps) {
@@ -45,14 +47,14 @@ export function AIPanel(props: AIPanelProps) {
   const [attach, setAttach] = createSignal(true);
   const [busy, setBusy] = createSignal(false);
   const [usage, setUsage] = createSignal<{ input: number; output: number; cacheRead: number } | null>(null);
-  const [timeline, setTimeline] = createSignal<TimelineEntry[]>(props.main.timeline.toArray());
+  const [timeline, setTimeline] = createSignal<TimelineEntry[]>(props.main.timelineList());
   const [tab, setTab] = createSignal<'chat' | 'activity'>('chat');
   const messages: Anthropic.MessageParam[] = [];
   let abort: AbortController | null = null;
   let box!: HTMLTextAreaElement;
   let log!: HTMLDivElement;
 
-  const onTimeline = () => setTimeline(props.main.timeline.toArray());
+  const onTimeline = () => setTimeline(props.main.timelineList());
   props.main.timeline.observe(onTimeline);
   onCleanup(() => {
     props.main.timeline.unobserve(onTimeline);
@@ -79,7 +81,8 @@ export function AIPanel(props: AIPanelProps) {
     setDraft('');
     setBusy(true);
     props.onBusy(true);
-    props.main.log({ kind: 'request', author: 'you', text: text.split('\n')[0].slice(0, 120) });
+    // the request's text stays in this chat: the document (shared with others) only records that one was made
+    if (!props.host.foreign()) props.main.log({ kind: 'request', author: 'you', text: 'Asked the AI.' });
     abort = new AbortController();
     const parts = (f: (ps: Part[]) => void) => setEntries(at, produce((e) => { if (e.role === 'assistant') f(e.parts); }));
     const add = (part: Part) => parts((ps) => ps.push(part));
@@ -109,14 +112,15 @@ export function AIPanel(props: AIPanelProps) {
           break;
         case 'stopped':
           add({ type: 'stopped', reason: e.reason });
-          if (e.reason !== 'Stopped.') props.main.log({ kind: 'error', text: e.reason });
+          // the reason can name the provider or a private server address: it stays in this chat
+          if (e.reason !== 'Stopped.' && !props.host.foreign()) props.main.log({ kind: 'error', text: 'The request stopped with an error (shown in the chat of whoever made it).' });
           break;
       }
       scroll();
     };
     setUsage(null);
     try {
-      await run({ provider: provider(key(), settings()), host: props.host, messages, signal: abort.signal, emit });
+      await run({ provider: provider(key(), settings()), host: props.host, messages, signal: abort.signal, emit, budget: settings().budget });
     } finally {
       abort = null;
       setBusy(false);
@@ -161,6 +165,13 @@ export function AIPanel(props: AIPanelProps) {
           Every message sends your text, the selection and the terms involved to the provider you choose, with your key, straight from this browser.
           Nothing goes anywhere else.
           <div><button onClick={() => { markSeen(); setNoticeSeen(true); }}>I understand</button></div>
+        </div>
+      </Show>
+
+      <Show when={props.host.foreign()}>
+        <div class="banner" data-testid="ai-foreign">
+          This document belongs to {props.owner || 'someone else'}. Its text goes to the AI with your messages and could be written to steer it,
+          so every change the AI makes here waits for you to accept it.
         </div>
       </Show>
 
@@ -241,11 +252,11 @@ export function AIPanel(props: AIPanelProps) {
               {(p) => (
                 <div class="proposal" data-testid="proposal">
                   <div>
-                    <strong>{p.kind === 'remove' ? `Remove ${p.target}?` : 'Accept the branch into the document?'}</strong>
+                    <strong>{p.kind === 'remove' ? `Remove ${p.target}?` : p.kind === 'write' ? `Let the AI ${p.target}?` : 'Accept the branch into the document?'}</strong>
                     <div class="hint">{p.note}</div>
                   </div>
                   <div class="row">
-                    <button class="primary" onClick={() => props.onDecide(p, true)}>{p.kind === 'remove' ? 'Remove' : 'Accept'}</button>
+                    <button class="primary" onClick={() => props.onDecide(p, true)}>{p.kind === 'remove' ? 'Remove' : p.kind === 'write' ? 'Allow' : 'Accept'}</button>
                     <button onClick={() => props.onDecide(p, false)}>Reject</button>
                   </div>
                 </div>
