@@ -148,6 +148,23 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
         Ok((coef, out))
     }
 
+    /// A first guess at the bubble variables `words` need ([`basis_cache::kz_estimate`]).
+    fn kz_estimate<'w>(&self, words: impl Iterator<Item = &'w Word>) -> Result<usize> {
+        let mut prefix = 0;
+        for w in words {
+            let mut acc = 0;
+            for d in self.ctx.layer_degrees(w) {
+                acc += d;
+                prefix = prefix.max(acc);
+            }
+        }
+        let h = self.mu()?.iter().map(|x| x.abs()).max().unwrap_or(0);
+        let cartan = self.ctx.cartan.as_ref().expect("checked by the strategy");
+        let d = cartan.d.iter().copied().min().unwrap_or(1);
+        let all_odd = self.ctx.colours.iter().all(|c| c.odd);
+        Ok(basis_cache::kz_estimate(prefix, h, d, all_odd))
+    }
+
     /// The longest object a word passes through.
     fn longest(&self, w: &Word) -> usize {
         let mut obj = w.source.clone();
@@ -166,12 +183,12 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
             .ok_or_else(|| Error::precondition("the BE2 normal form needs the region weight mu="))
     }
 
-    /// Runs `f` with enough bubble variables: from 4 per colour, doubling while an index
+    /// Runs `f` with enough bubble variables: from `kz` per colour, doubling while an index
     /// overflows. `nx`, the number of dot variables, is the longest object the words pass through,
     /// for the reason given at `crate::rep::kl`'s `with_up` (the evaluation has the same runs);
     /// [`Up::run`] checks it.
-    fn with_up<T>(&self, nx: usize, f: impl Fn(&Up<'_, R>) -> Result<T>) -> Result<T> {
-        let mut kz = 4;
+    fn with_up<T>(&self, nx: usize, kz: usize, f: impl Fn(&Up<'_, R>) -> Result<T>) -> Result<T> {
+        let mut kz = kz;
         loop {
             let up = Up::new(self.ctx, nx, kz)?;
             match f(&up) {
@@ -247,20 +264,27 @@ impl<'a, R: Ring> SkmBasis<'a, R> {
         for w in bent.iter().map(|(w, _)| w).chain(&bent_basis) {
             len = len.max(self.longest(w));
         }
-        let coefs = self.with_up(len, |up| {
+        let space = basis_cache::Key {
+            context: self
+                .fingerprint
+                .get_or_init(|| basis_cache::fingerprint("skm", &self.prov.method, self.ctx))
+                .clone(),
+            src: src.clone(),
+            tgt: tgt.clone(),
+            degree,
+            nx: len,
+            kz: 0,
+        };
+        let estimate = self.kz_estimate(bent.iter().map(|(w, _)| w).chain(&bent_basis))?;
+        let kz = basis_cache::start_kz(&space, estimate);
+        let coefs = self.with_up(len, kz, |up| {
             let phi = Phi::new(up, mu.clone());
             let (_, acc) = self.phi_sum(&phi, &bent)?;
             let target = phi.coords(&target_obj, &acc)?;
             let key = basis_cache::Key {
-                context: self
-                    .fingerprint
-                    .get_or_init(|| basis_cache::fingerprint("skm", &self.prov.method, self.ctx))
-                    .clone(),
-                src: src.clone(),
-                tgt: tgt.clone(),
-                degree,
                 nx: up.nx,
                 kz: up.kz,
+                ..space.clone()
             };
             let ech = match basis_cache::get::<Echelon<R::Elem>>(&key) {
                 Some(e) => e,
@@ -313,7 +337,8 @@ impl<R: Ring> Evaluator<R> for SkmBasis<'_, R> {
                 .map(|(w, c)| (bend(&self.roles, w), c.clone()))
                 .collect();
             let len = bent.iter().map(|(w, _)| self.longest(w)).max().unwrap_or(0);
-            let zero = self.with_up(len, |up| {
+            let kz = self.kz_estimate(bent.iter().map(|(w, _)| w))?;
+            let zero = self.with_up(len, kz, |up| {
                 let phi = Phi::new(up, mu.clone());
                 let (_, acc) = self.phi_sum(&phi, &bent)?;
                 Ok(acc.iter().all(|v| v.is_empty()))

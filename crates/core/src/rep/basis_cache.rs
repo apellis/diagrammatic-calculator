@@ -118,6 +118,42 @@ pub fn get<T: Any + Send + Sync>(key: &Key) -> Option<Arc<T>> {
     found
 }
 
+/// The number of bubble variables per colour to start evaluating the hom space of `key` with (its
+/// `kz` is ignored): the one an echelon form kept for that hom space was computed with, so that a
+/// repeat finds it without first failing at fewer variables, or else `estimate`.
+pub fn start_kz(key: &Key, estimate: usize) -> usize {
+    let same_space = |k: &Key| {
+        k.degree == key.degree
+            && k.nx == key.nx
+            && k.src == key.src
+            && k.tgt == key.tgt
+            && (Arc::ptr_eq(&k.context, &key.context) || k.context == key.context)
+    };
+    cache()
+        .entries
+        .iter()
+        .filter(|e| same_space(&e.key))
+        .map(|e| e.key.kz)
+        .max()
+        .unwrap_or(estimate)
+}
+
+/// A first guess at the bubble variables per colour that evaluating words needs, from `prefix`,
+/// the largest degree of a bottom part of any of the words, `h`, the largest `|⟨i, μ⟩|`, and `d`,
+/// the smallest symmetrizer entry: `prefix / 2d + h + 2` bubble indices, halved when every colour
+/// is odd (an odd colour's `kz` variables cover the indices up to `2 kz + 1`), rounded up to a
+/// power of two and at least 4. On every workload measured (KL and BE2, types A1, A2, B2 and G2, degrees up to 18, `μ` from
+/// −4 to 4) the bubble indices met stayed below it. It is only a starting point: an index above it
+/// restarts the evaluation with twice as many variables. Starting too high costs little (a few
+/// more ring variables); starting too low costs a whole failed evaluation.
+pub fn kz_estimate(prefix: i64, h: i64, d: i64, all_odd: bool) -> usize {
+    let mut guess = prefix.max(0) / (2 * d.max(1)) + h.abs() + 2;
+    if all_odd {
+        guess = (guess + 1) / 2;
+    }
+    (guess.max(4) as usize).next_power_of_two()
+}
+
 /// Keeps `value` under `key`, `cost` counting its coefficients; evicts the least recently used
 /// entries beyond the bounds.
 pub fn insert<T: Any + Send + Sync>(key: Key, value: Arc<T>, cost: usize) {

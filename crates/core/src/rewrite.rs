@@ -951,6 +951,9 @@ pub fn normal_form<R: Ring>(
     straighten_impl(ctx, rules, layout, t, max_steps, false).map(|(chain, n)| (chain.end, n))
 }
 
+/// Plans kept for words no longer in the term before they are dropped (see `straighten_impl`).
+const PLANS_KEPT: usize = 2_000;
+
 fn straighten_impl<R: Ring>(
     ctx: &Context<R>,
     rules: &[Rule<R>],
@@ -1045,6 +1048,11 @@ fn straighten_impl<R: Ring>(
             .collect();
         for x in &touched {
             refresh(x, &chain.end, &plans, &mut moves, &mut queue)?;
+        }
+        // Plans of words that have left the term are kept, since a word that comes back resumes
+        // its plan; when they far outnumber the term they are dropped, which bounds the memory.
+        if plans.len() > PLANS_KEPT.max(8 * chain.end.terms.len()) {
+            plans.retain(|w, _| present(&chain.end, w));
         }
         if !keep {
             chain.steps.clear();

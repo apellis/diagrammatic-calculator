@@ -363,6 +363,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 | B8 | Interactive latency: typing an edit, sliding a dot through a crossing, applying a relation | in B1 and B3 workspaces | the 150 ms target |
 | B9 | Rewriting: straightening random words to normal form | 10 to 200 layers | agreement with the representation |
 | B10 | Peak memory of each workload in the browser | all of the above | the ceiling for each device class |
+| B11 | KL and BE2 normal forms, first evaluation and a repeat in the same hom space | three strands in degrees 0 and 2 at μ = −2, 0, 2; four strands; even and odd colours | normal forms fixed; the repeat finds the kept basis evaluations |
 
 **How it runs.** `bench/` holds the workloads as workspace files plus timing scripts. CI runs the native suite on every pull request and the browser suite in headless Chromium (Playwright). Results are appended to `bench/history/` as JSON and drawn as trend charts in a static page. Profiling uses `cargo flamegraph` natively and the Chrome performance profiler in the browser; findings and fixes go in the pull request description.
 
@@ -381,7 +382,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 ### CI (GitHub Actions)
 
 - On every pull request: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, the WebAssembly build with `wasm-pack`, the web build with type checks and unit tests, Playwright in Chromium, and the fixture suite across all four surfaces.
-- Nightly and on request: Playwright in Firefox and WebKit, the full evaluation suite (B1–B10) with results stored as a JSON artifact and compared with the previous run. A slowdown of more than 10% on any benchmark fails the run.
+- Nightly and on request: Playwright in Firefox and WebKit, the full evaluation suite (B1–B11) with results stored as a JSON artifact and compared with the previous run. A slowdown of more than 10% on any benchmark fails the run.
 - Caches: Cargo registry and target directory, `node_modules`, and the Playwright browsers.
 - The merge gate is green CI, as in the Lean repositories.
 

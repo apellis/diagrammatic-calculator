@@ -1,5 +1,5 @@
 //! The evaluation suite (specification, "Performance targets and the evaluation suite"):
-//! workloads B1–B10. Each workload checks its answers and times the engine; the results are
+//! workloads B1–B11. Each workload checks its answers and times the engine; the results are
 //! printed as a table and written as JSON (`diagcalc-bench/1`).
 //!
 //! ```text
@@ -651,6 +651,56 @@ impl Bench {
         }
     }
 
+    /// B11: normal forms in the Khovanov–Lauda and Brundan–Ellis 2-categories. A term `t` is
+    /// normalised with the basis cache emptied before each pass (the first evaluation of its hom
+    /// space), then `u`, another term of the same hom space and degree, with the cache kept (a
+    /// repeat). Checks: both normal forms are fixed, and the repeat found the kept rows.
+    fn two_category(&mut self, context: &str, t: &str, u: &str, reps: usize) {
+        use diagcalc_core::rep::basis_cache;
+        let s = Setup::new(context);
+        let ev = s.eval();
+        let (t, u) = (s.term(t), s.term(u));
+        let degree = s.ctx.word_degree(&t.terms[0].0);
+        let strands = t.terms[0].0.source.len();
+        let mut nf = None;
+        let secs = time_batch(&[()], reps, |_| {
+            basis_cache::clear();
+            nf = Some(ev.normal_form(&t).unwrap());
+        });
+        let nf = nf.unwrap();
+        let ok = ev.normal_form(&nf).unwrap() == nf;
+        self.record(
+            "B11",
+            context,
+            &format!("first evaluation, {strands} strands, degree {degree}"),
+            Timing {
+                count: 1,
+                secs,
+                terms: nf.terms.len() as f64,
+                ok,
+            },
+        );
+        let (hits, _) = basis_cache::stats();
+        let mut nu = None;
+        let secs = time_batch(&[()], reps, |_| {
+            nu = Some(ev.normal_form(&u).unwrap());
+        });
+        let nu = nu.unwrap();
+        let hit = basis_cache::stats().0 > hits;
+        let ok = hit && ev.normal_form(&nu).unwrap() == nu;
+        self.record(
+            "B11",
+            context,
+            &format!("repeat in the same hom space, {strands} strands, degree {degree}"),
+            Timing {
+                count: 1,
+                secs,
+                terms: nu.terms.len() as f64,
+                ok,
+            },
+        );
+    }
+
     fn run(&mut self) {
         let max_n = if self.opts.quick { 5 } else { 6 };
         let words = if self.opts.quick { 10 } else { 20 };
@@ -775,6 +825,55 @@ impl Bench {
             };
             self.long_words("nilhecke n=4", lens, words);
             self.long_words("klr type=A2 nu=2i+j", lens, words);
+        }
+        if self.wants("B11") {
+            // three strands, degree 0 and 2, at mu = -2, 0, 2
+            for mu in ["-2", "0", "2"] {
+                let c = format!("kl type=A1 mu={mu}");
+                self.two_category(&c, "e(i* i i)", "x_2 psi_2 e(i* i i)", REPS);
+            }
+            for mu in ["0", "2"] {
+                let c = format!("kl type=A1 mu={mu}");
+                self.two_category(&c, "x_2 e(i* i i)", "x_3 e(i* i i)", REPS);
+            }
+            self.two_category(
+                "be2 type=A1 mu=-2",
+                "e(i* i i)",
+                "x_2 psi_2 e(i* i i)",
+                REPS,
+            );
+            for mu in ["0", "2"] {
+                let c = format!("be2 type=A1 odd=i mu={mu}");
+                self.two_category(&c, "x_2 e(i* i i)", "x_3 e(i* i i)", REPS);
+            }
+            // four strands
+            self.two_category(
+                "kl type=A2 mu=i",
+                "e(j* i i j)",
+                "psi_2 x_2 e(j* i i j)",
+                REPS,
+            );
+            if !self.opts.quick {
+                self.two_category("kl type=A1 mu=-2", "x_2 e(i* i i)", "x_3 e(i* i i)", 1);
+                self.two_category(
+                    "be2 type=A1 odd=i mu=-2",
+                    "-x_2 x_1 psi_2 e(i* i i)",
+                    "x_3 e(i* i i)",
+                    1,
+                );
+                self.two_category(
+                    "kl type=A2 mu=0",
+                    "psi_3 e(i* j i j)",
+                    "2 psi_3 e(i* j i j)",
+                    1,
+                );
+                self.two_category(
+                    "be2 type=A1 odd=i mu=0",
+                    "psi_2 e(i* i i i)",
+                    "psi_3 e(i* i i i)",
+                    1,
+                );
+            }
         }
         if self.wants("B10") {
             self.memory();

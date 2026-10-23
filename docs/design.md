@@ -143,8 +143,13 @@ diagram per matching of the boundary:
 
 The normal form solves `Φ(f) = Σ a_k Φ(b_k)` by fraction-free elimination. The basis words are
 checked to be independent each time, and the target to lie in their span. Bubble slides assume
-the default `Q = klq2`; the strategy refuses any other `Q`. Bubble variables are allocated four
-per colour and doubled when an index overflows.
+the default `Q = klq2`; the strategy refuses any other `Q`. Bubble variables are allocated per
+colour and doubled when an index overflows, which restarts the evaluation. The first allocation
+is the one the hom space's kept basis evaluations used, if any (so a repeat does not restart),
+and otherwise a guess from the words' degrees (`basis_cache::kz_estimate`: the largest degree of
+a bottom part of a word divided by `2 min d_i`, plus the largest `|⟨i, μ⟩|`, plus 2, halved when
+every colour is odd, at least 4, rounded up to a power of two). It held on every workload measured; a guess too high costs a few ring variables,
+one too low a whole failed evaluation (up to a third of the time).
 
 The evaluation ring has one dot variable per strand of the longest object the words pass through.
 That is enough: a run from `w` to `w2` is straightened between sorted components no longer than
@@ -282,7 +287,11 @@ always rewriting the word with the most layers still to come, so equal words pro
 different paths meet and cancel early: on one random 30-layer nilHecke word this cut the steps
 from about 80,000 to about 350. And only the words a step touches are re-examined. A chain keeps every
 intermediate word, which grows like steps times layers; `rewrite::normal_form` gives the same
-normal form without keeping the steps (B9 uses it beyond 50 layers).
+normal form without keeping the steps (B9 uses it beyond 50 layers). The planned braid sequences
+of words that have left the term are kept (a word that comes back resumes its plan) until they
+number more than 2,000 and eight times the term; then they are dropped, and a word that comes back
+is planned afresh. That bounds the memory by the current term rather than every word ever
+produced: B9's 200-layer nilHecke words peaked at 234 MB before, 44 MB now, with the same steps.
 
 ## Lean bridge
 

@@ -21,6 +21,10 @@ and times them:
   sliding a dot through a crossing, checking a braid relation (target: under 150 ms);
 - **B9** straightening random words of 10 to 200 layers, checked against the representation's
   action; the representation's own time is recorded alongside;
+- **B11** normal forms in the Khovanov–Lauda and Brundan–Ellis 2-categories (`kl`, `be2` even and
+  with an odd colour): three strands in degrees 0 and 2 at `μ` = −2, 0, 2, and four strands. Each
+  term's first evaluation is timed with the basis cache emptied, then another term of the same hom
+  space with the cache kept (a repeat); the heaviest cases run in the full suite only;
 - **B10** the largest heap peak of any workload run, against a phone tab's 256 MB. Every result
   also records its own `peak_bytes`, counted by the bench's allocator.
 
