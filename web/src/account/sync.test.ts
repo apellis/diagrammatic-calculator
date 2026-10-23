@@ -115,6 +115,38 @@ describe('syncing a document with the account', () => {
     expect(la.version).toBe(lb.version);
   });
 
+  it('saves deletion-only changes even when the state vector is unchanged', async () => {
+    const { api, docs } = fakeServer(); const y = new Y.Doc();
+    y.getText('text').insert(0, 'abc');
+    let link = await upload(api, y, 'name', user);
+    const before = Y.encodeStateVector(y); y.getText('text').delete(0, 1);
+    expect(Y.encodeStateVector(y)).toEqual(before);
+    link = await syncDoc(api, y, link, 'name');
+    const server = new Y.Doc(); Y.applyUpdate(server, docs.get(link.id)!.data);
+    expect(server.getText('text').toString()).toBe('bc');
+  });
+
+  it('does not promote a dirty cached viewer into a writer', async () => {
+    const { api, log } = fakeServer(); const y = new Y.Doc(); y.getMap('meta').set('local', true);
+    const link = await upload(api, y, 'name', user); log.length = 0;
+    await expect(syncDoc(api, y, { ...link, role: 'viewer' }, 'name')).rejects.toThrow('reopen');
+    expect(log.some(l => l.startsWith('PUT'))).toBe(false);
+  });
+
+  it('fences a replaced generation before even applying its snapshot', async () => {
+    const { api, log } = fakeServer(); const y = new Y.Doc(); y.getMap('meta').set('local', true);
+    const link = await upload(api, y, 'name', user); log.length = 0;
+    await expect(syncDoc(api, y, { ...link, generation: 1 }, 'name', { version: 2, role: 'owner', generation: 2 })).rejects.toThrow('generation mismatch');
+    expect(log).toEqual([]); expect(y.getMap('meta').get('local')).toBe(true);
+  });
+
+  it('keeps generation zero read-only, including for its owner pending migration', async () => {
+    const { api, log } = fakeServer(); const y = new Y.Doc(); y.getMap('meta').set('local', true);
+    const link = await upload(api, y, 'name', user); y.getMap('meta').set('more', true); log.length = 0;
+    await syncDoc(api, y, { ...link, generation: 0 }, 'name', { version: link.version, role: 'owner', generation: 0 });
+    expect(log.some(l => l.startsWith('PUT'))).toBe(false);
+  });
+
   it('only reads as a viewer', async () => {
     const owner = fakeServer();
     const d = new Doc();

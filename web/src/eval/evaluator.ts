@@ -73,6 +73,10 @@ export class Evaluator {
   private limits = new Map<string, number>();
   private states = new Map<string, CellState>();
   private generation = 0;
+  private appliedGeneration = 0;
+  private remoteTimer?: ReturnType<typeof setTimeout>;
+  private remoteWaiters: { resolve: () => void; reject: (error: unknown) => void }[] = [];
+  private completed = new Map<string, Stored>();
   private current: { context: string; cells: CellData[] } = { context: '', cells: [] };
 
   constructor(
@@ -108,7 +112,8 @@ export class Evaluator {
     const s = this.states.get(id);
     if (!s) return;
     if (timeoutMs) this.limits.set(id, timeoutMs);
-    this.states.set(id, { ...s, key: undefined });
+    if (s.key) this.completed.delete(s.key);
+    this.states.set(id, { ...s, key: undefined, valueKey: undefined });
     void this.update(this.current.context, this.current.cells);
   }
 
@@ -116,6 +121,12 @@ export class Evaluator {
   workspaceOf(id: string): string | undefined {
     const key = this.states.get(id)?.key;
     return key ? this.workspaces.get(key) : undefined;
+  }
+
+  snapshotRun(id: string): OpTypes['workspace.run']['request'] | undefined {
+    const key = this.states.get(id)?.key;
+    const workspace = key && this.workspaces.get(key);
+    return workspace ? { workspace, scalars: [...(this.scalars.get(key!) ?? [])], summands: this.opts.summands ?? 200 } : undefined;
   }
 
   /**
@@ -144,9 +155,33 @@ export class Evaluator {
   }
 
   /** Brings every cell's state up to date with the workspace's inputs. */
-  async update(context: string, cells: CellData[]): Promise<void> {
+  update(context: string, cells: CellData[], mode: 'local' | 'remote' = 'local'): Promise<void> {
     const gen = ++this.generation;
-    this.current = { context, cells };
+    // Own the snapshot: a caller may mutate its array during the asynchronous parse.
+    this.current = { context, cells: cells.map(c => ({ ...c })) };
+    if (mode === 'remote') {
+      const waiting = new Promise<void>((resolve, reject) => this.remoteWaiters.push({ resolve, reject }));
+      // Fixed small window, not a trailing debounce: continuous remote traffic cannot starve it.
+      this.remoteTimer ??= setTimeout(() => {
+        this.remoteTimer = undefined;
+        this.flushUpdate(this.generation);
+      }, 75);
+      return waiting;
+    }
+    if (this.remoteTimer) clearTimeout(this.remoteTimer);
+    this.remoteTimer = undefined;
+    return this.flushUpdate(gen);
+  }
+
+  private flushUpdate(gen: number): Promise<void> {
+    const waiters = this.remoteWaiters.splice(0);
+    const { context, cells } = this.current;
+    const applying = this.apply(context, cells, gen);
+    applying.then(() => waiters.forEach(w => w.resolve()), error => waiters.forEach(w => w.reject(error)));
+    return applying;
+  }
+
+  private async apply(context: string, cells: CellData[], gen: number): Promise<void> {
     const parsed = await Promise.all(cells.map((c) => this.parse(c.text)));
     if (gen !== this.generation) return;
 
@@ -169,7 +204,15 @@ export class Evaluator {
       if (p.cell.defines) defined.set(p.cell.defines, i);
     });
 
-    const wanted = new Set<string>();
+    const lookup = [...new Set(keys.filter((key, i): key is string =>
+      !!key && this.states.get(cells[i].id)?.key !== key && !this.jobs.has(key)))];
+    const hits = lookup.length
+      ? this.cache.getMany ? await this.cache.getMany(lookup)
+        : new Map(await Promise.all(lookup.map(async key => [key, await this.cache.get(key)] as const)))
+      : new Map<string, unknown>();
+    if (gen !== this.generation) return;
+    this.appliedGeneration = gen;
+    const wanted = new Set(keys.filter((key): key is string => !!key));
     for (let i = 0; i < cells.length; i++) {
       const c = cells[i];
       const p = parsed[i];
@@ -183,8 +226,8 @@ export class Evaluator {
         s.parsed = p.cell;
         s.key = keys[i];
         if (s.key) {
-          const hit = await this.cache.get(s.key);
-          if (gen !== this.generation) return;
+          const hit = this.completed.get(s.key) ?? hits.get(s.key)
+            ?? (old?.valueKey === s.key && old.value ? { value: old.value, ms: old.ms ?? 0 } : undefined);
           if (hit !== undefined) {
             // kept for tracing a summand and for the command line, as for a computed value
             this.workspaces.set(s.key, this.miniWorkspace(context, cells, deps, i));
@@ -195,7 +238,6 @@ export class Evaluator {
             if (old?.key === s.key && old.status !== 'stale' && old.status !== 'running') {
               s.status = old.status; // failed or exploded with these very inputs
             } else {
-              wanted.add(s.key);
               // the time computing counts from when this key's job started
               s.since = old?.key === s.key && old.since ? old.since : Date.now();
               this.start(s.key, this.miniWorkspace(context, cells, deps, i), cells[i].id, scalars[i]);
@@ -211,6 +253,7 @@ export class Evaluator {
     const live = new Set([...this.states.values()].map((s) => s.key));
     for (const key of this.workspaces.keys()) if (!live.has(key)) this.workspaces.delete(key);
     for (const key of this.scalars.keys()) if (!live.has(key)) this.scalars.delete(key);
+    for (const key of this.completed.keys()) if (!live.has(key)) this.completed.delete(key);
   }
 
   /** The workspace that evaluates cell i: the definitions it needs, in order, then the cell. */
@@ -237,7 +280,11 @@ export class Evaluator {
     this.engine
       .call('workspace.run', { workspace, summands: this.opts.summands ?? 200, scalars }, { signal: abort.signal, timeoutMs })
       .then(async (o) => {
-        if (this.jobs.get(key) === abort) this.jobs.delete(key);
+        // Key equality alone is insufficient after edit-away/edit-back: bind the result to
+        // this exact invocation, and never trust an engine that resolves after abort.
+        if (this.jobs.get(key) !== abort) return;
+        this.jobs.delete(key);
+        if (abort.signal.aborted) o = { status: 'cancelled', ms: o.ms };
         let stored: Stored;
         if (o.status === 'cancelled') {
           // cells still waiting on this key were stopped by the person, not by an edit
@@ -257,8 +304,13 @@ export class Evaluator {
           const r = o.response;
           if (r.status !== 'ok') stored = { value: { kind: 'error', status: 'error', message: r.message, error_kind: r.kind }, ms: o.ms };
           else stored = { value: r.cells.find((c) => c.id === id) ?? { kind: 'error', status: 'error', message: 'no result' }, ms: o.ms };
-          await this.cache.put(key, stored);
+          // Persistence is not on the local result-display critical path.
+          void this.cache.put(key, stored).catch(() => {});
         }
+        this.completed.set(key, stored);
+        // A newer input snapshot may still be parsing/coalescing. Its apply pass will
+        // consume this result only if its causal key still matches.
+        if (this.appliedGeneration !== this.generation) return;
         // every cell currently waiting on this key gets the value
         for (const s of this.states.values()) {
           if (s.key === key) this.show({ ...s }, s, key, stored);
@@ -270,7 +322,7 @@ export class Evaluator {
     const v = stored.value;
     const sameValue = old?.valueKey === key;
     s.previous = sameValue ? old!.previous : old?.value ?? s.previous;
-    s.value = v;
+    s.value = 'id' in v ? { ...v, id: s.id } : v;
     s.valueKey = key;
     s.ms = stored.ms;
     s.key = key;

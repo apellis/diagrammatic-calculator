@@ -2,7 +2,7 @@
 
 What is left, in order. The phases and their gates are in `docs/spec.md` ("Phases, deliverables
 and acceptance gates"); phases 0 to 6 have passed. This file lists everything still open: the
-remaining work before going public, phase 7, later items, the back burner, and what we decided
+remaining work before going public, later items, the back burner, and what we decided
 not to do. It is the one list to keep current: an item is removed when it lands (git history
 keeps it), and new findings are added here.
 
@@ -41,20 +41,14 @@ Certificates:
   the calculator's set made literally `twoB`, a proof that the change of basis is unitriangular,
   or a Lean proof that the calculator's evaluation is well defined on KL's Hom spaces.
 
-## Phase 7: live co-editing
-
-Specified, with its plan and the decisions it needs from Alex, in `docs/phase7.md`. The phase 7
-items found by the reviews of 23 October (history out of the document, cells keyed by ID and
-edited as `Y.Text`, authors, branch and proposal ownership, the top bar, evaluation under remote
-edits, the room's security rules) are all there.
+Phase 7 is implemented; accepted decisions and its executable verification map are in
+`docs/phase7.md`. Deployment state is recorded by the Deploy web app workflow.
 
 ## Later
 
 - **View mode** (Alex, 23 October): a mode with no editing affordances, optimised for reviewing the
   parts of a document.
-- **Sharing roles** (Alex, 23 October): owner, editor and viewer. The server and API already have
-  the roles and refuse a viewer's saves; the UI still shows viewers the editing controls. Goes with
-  the view mode.
+
 - **Speed:**
   - persist the basis cache to IndexedDB, so reopening a document needs no first evaluation per hom
     space;
@@ -84,4 +78,5 @@ edits, the room's security rules) are all there.
 
 - Trusted Types: not workable while Solid renders templates through `innerHTML`; the
   Content-Security-Policy is the defence in place.
-- Sharing computed results between collaborators (decided for phase 7).
+- Sharing live result caches between collaborators (decided for phase 7). Explicitly pinned
+  snapshots remain shared, attributed artifacts with local recomputation.

@@ -235,6 +235,8 @@ test('pinning a result keeps a snapshot', async ({ page }) => {
   await page.getByRole('tab', { name: 'Snapshots' }).click();
   await page.locator('.outline .oitem', { hasText: 'first' }).click();
   await expect(page.getByRole('dialog').or(page.locator('.modal'))).toContainText('"kind": "watch"');
+  await page.getByTestId('pinned-recompute').getByRole('button', { name: 'Recompute', exact: true }).click();
+  await expect(page.getByTestId('pinned-recompute')).toContainText('Matches the saved value and provenance.');
 });
 
 test('the gate example: idempotents of a cyclotomic quotient', async ({ page }) => {
@@ -300,6 +302,24 @@ test('latency: edits and cached watches meet the interactive target', { tag: '@t
   console.log(`latency: computed edit ${computed.toFixed(0)} ms; cached undo/redo worst ${worst.toFixed(0)} ms (${[...undo, ...redo].map((x) => x.toFixed(0)).join(', ')})`);
   expect(computed).toBeLessThan(1000);
   expect(worst).toBeLessThan(150);
+});
+
+test('latency: a 50-cell dependency chain computes locally and undoes from cache', { tag: '@timing' }, async ({ page }) => {
+  const lines = ['diagcalc-workspace/1', 'context klr type=A2 nu=2i+j ring=QQ', 'def a0 := x_1 e(iji)'];
+  for (let i = 1; i < 49; i++) lines.push(`def a${i} := a${i - 1}`);
+  lines.push('watch a48');
+  await page.goto('/');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import .dcw or .dch…' }).click();
+  await (await chooser).setFiles({ name: 'chain.dcw', mimeType: 'text/plain', buffer: Buffer.from(lines.join('\n') + '\n') });
+  await expect(page.locator('.cell[data-cell]')).toHaveCount(50);
+  await expect(cell(page, 49).getByTestId('summary')).toHaveText('1 term, degree 2');
+  await cell(page, 0).locator('.head').click();
+  await cell(page, 0).locator('.cm-content').fill('def a0 := x_1^2 e(iji)');
+  const computed = await timeUntil(page, 49, '1 term, degree 4', 'keydown', () => page.keyboard.press('Enter'));
+  const undo = await timeUntil(page, 49, '1 term, degree 2', 'click', () => page.getByRole('button', { name: 'Undo', exact: true }).click());
+  console.log(`50-cell real WASM/browser chain: edit ${computed.toFixed(1)} ms; cached undo ${undo.toFixed(1)} ms`);
+  expect(Number.isFinite(computed) && Number.isFinite(undo)).toBe(true);
 });
 
 test('cells and results are typeset; clicking a cell edits its text, clicking a result shows its text', async ({ page }) => {

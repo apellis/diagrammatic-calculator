@@ -6,7 +6,7 @@ import { Typeset } from './Typeset';
 import { NoteView } from './Results';
 import { ContextForm, PresentationTitle } from './ContextForm';
 
-export function ContextChip(props: { context: string; scalars: string[]; onSet: (c: string) => void }) {
+export function ContextChip(props: { context: string; scalars: string[]; readOnly?: boolean; onSet: (c: string) => void }) {
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal('');
   const [info] = createResource(
@@ -30,6 +30,7 @@ export function ContextChip(props: { context: string; scalars: string[]; onSet: 
     onCleanup(() => document.removeEventListener('pointerdown', onDown));
   });
   const apply = async () => {
+    if (props.readOnly) return;
     const o = await engine.call('context.describe', { context: draft() }, { lane: 'interactive' });
     if (o.status !== 'done') return;
     const r = o.response;
@@ -37,11 +38,11 @@ export function ContextChip(props: { context: string; scalars: string[]; onSet: 
     // focus goes back to the chip only from the popover: if the person has moved on (a click in a
     // cell while the engine was checking the line), it stays where they put it
     close(!!wrap?.contains(document.activeElement));
-    props.onSet(r.context);
+    if (!props.readOnly) props.onSet(r.context);
   };
   return (
     <span style={{ position: 'relative', 'min-width': '0' }} ref={wrap}>
-      <button class="chip" title="Change the context" data-testid="context" aria-expanded={open()} aria-haspopup="dialog" ref={chip}
+      <button class="chip" disabled={props.readOnly} title="Change the context" data-testid="context" aria-expanded={open()} aria-haspopup="dialog" ref={chip}
         onClick={() => { setDraft(props.context); setOpen(!open()); }}>
         <ContextText context={props.context} />
       </button>

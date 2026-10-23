@@ -25,6 +25,11 @@ migrations_dir = "migrations"
 binding = "FILES"
 bucket_name = "diagcalc"
 
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "DocRoom"
+script_name = "diagcalc-live"
+
 # Preview deployments (branches other than the production branch) get none of the bindings above:
 # no database, no files, so they never touch production data and their API answers that accounts
 # are not available.

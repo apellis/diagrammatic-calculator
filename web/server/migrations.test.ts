@@ -41,10 +41,13 @@ describe('D1 migrations', () => {
         'index sent_mail_created',
         'table mail_optout',
         'table pending_deletes',
+        'table doc_versions', 'index doc_versions_time',
+        'table doc_branches', 'index doc_branches_user',
+        'table live_sockets', 'index live_sockets_user',
       ]),
     );
     const cols = async (t: string) => (await db.prepare(`SELECT name FROM pragma_table_info('${t}')`).all<{ name: string }>()).results.map((r) => r.name);
-    expect(await cols('documents')).toEqual(['id', 'owner_id', 'name', 'created', 'edited', 'version', 'size', 'snapshot_key', 'link_role', 'link_token', 'files_size']);
+    expect(await cols('documents')).toEqual(['id', 'owner_id', 'name', 'created', 'edited', 'version', 'size', 'snapshot_key', 'link_role', 'link_token', 'files_size', 'generation']);
     expect(await cols('shares')).toEqual(['doc_id', 'email', 'role', 'created', 'invited_by', 'user_id']);
     expect(await cols('sessions')).toEqual(['id_hash', 'user_id', 'created', 'expires', 'last_seen']);
   });

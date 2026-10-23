@@ -42,7 +42,13 @@ export interface R2Bucket {
  * `EMAIL_FROM` variable); the rest are secrets set on the Pages project. Any of them may be
  * missing: the API then reports that accounts are not available and the app stays anonymous.
  */
+export interface LiveNamespace {
+  idFromName(id: string): unknown;
+  get(id: unknown): { fetch(req: Request): Promise<Response> };
+}
+
 export interface Env {
+  LIVE?: LiveNamespace;
   DB?: D1Database;
   FILES?: R2Bucket;
   GOOGLE_CLIENT_ID?: string;

@@ -144,7 +144,8 @@ test('an AI what-if on a branch: edits there, reads the values, proposes accepti
   const tl = page.getByTestId('timeline');
   await expect(tl).toContainText('Asked the AI.');
   await expect(tl).not.toContainText('What if I slide the dot up');
-  await expect(tl).toContainText('slide the dot up through the crossing');
+  // Phase 7 keeps exploratory branch activity private, even when its final change is accepted.
+  await expect(tl).not.toContainText('slide the dot up through the crossing');
   await expect(tl).toContainText('accepted: the slide is an equality');
 });
 

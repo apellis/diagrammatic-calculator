@@ -5,6 +5,8 @@ import { appOrigin, defaultDeps, ready, type Deps, type Env, type ReadyEnv } fro
 import { HttpError, empty, json, redirect } from './http';
 import { callback, csrfOk, csrfToken, currentSession, login, logout, logoutEverywhere, rotate, securityEvent, type Session } from './auth';
 import * as docs from './docs';
+import * as live from './live';
+import * as versions from './versions';
 import { unsubscribe } from './mail';
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -44,7 +46,9 @@ export async function handle(req: Request, env: Env, deps: Deps = defaultDeps): 
     // Google's security events (Cross-Account Protection): signed by Google, not sent by a browser
     if (path === 'google/risc' && method === 'POST') return await securityEvent(req, env, deps);
     const s = await currentSession(req, env, deps);
-    if (UNSAFE.has(method)) {
+    const anonymousTicket = !s && method === 'POST' && seg.length === 3 && seg[0] === 'docs' && seg[2] === 'live-ticket' && !!req.headers.get('x-link-token');
+    if (anonymousTicket) live.sameOrigin(req, env);
+    if (UNSAFE.has(method) && !anonymousTicket) {
       if (!s) {
         // signing out without a session only clears the cookie
         if (path === 'auth/logout') return empty(204, await logout(env, null));
@@ -84,9 +88,11 @@ async function dispatch({ req, env, deps, s, method, path, seg }: Call): Promise
     case 'POST docs':
       return docs.createDoc(req, env, s, deps);
   }
-  if (seg[0] !== 'docs' || seg.length < 2 || seg.length > 4) throw new HttpError(404, 'no such route');
+  if (seg[0] !== 'docs' || seg.length < 2 || seg.length > 5) throw new HttpError(404, 'no such route');
 
+  if (method === 'GET' && seg.length === 3 && seg[2] === 'live') return live.openLive(req, env, seg[1], s, deps);
   const a = await docs.access(env, seg[1], s, req.headers.get('x-link-token'));
+  if(seg.length===5&&seg[2]==='proposals'&&seg[4]==='decision'&&method==='POST')return live.decideProposal(req,env,a,s,seg[3]);
   const sub = seg.slice(2, 3).join('');
   const name = seg[3];
   switch (`${method} ${sub}${name === undefined ? '' : '/:name'}`) {
@@ -99,7 +105,23 @@ async function dispatch({ req, env, deps, s, method, path, seg }: Call): Promise
     case 'GET snapshot':
       return docs.getSnapshot(env, a);
     case 'PUT snapshot':
-      return docs.putSnapshot(req, env, a, s, deps);
+      return live.forwardWrite(req, env, a, s);
+    case 'POST migrate':
+      return live.forwardWrite(req, env, a, s, true);
+    case 'POST live-ticket':
+      return live.liveTicket(req, env, a, s, deps);
+    case 'GET versions':
+      return versions.listVersions(env, a);
+    case 'GET versions/:name':
+      return versions.getVersion(env, a, name);
+    case 'GET branches':
+      return versions.listBranches(env, a, s);
+    case 'GET branches/:name':
+      return versions.getBranch(env, a, s, name);
+    case 'PUT branches/:name':
+      return versions.putBranch(req, env, a, s, name, deps);
+    case 'DELETE branches/:name':
+      return versions.deleteBranch(env, a, s, name, deps);
     case 'GET shares':
       return docs.listShares(env, a, s);
     case 'PUT shares':

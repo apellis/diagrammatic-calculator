@@ -2,6 +2,7 @@
 import { appOrigin, type Deps, type ReadyEnv } from './env';
 import { equal, pkceChallenge, randomToken, seal, sha256, sign, unseal, verify } from './crypto';
 import { clearCookie, cookies, redirect, setCookie } from './http';
+import { revokeRooms, userRooms } from './live';
 import { GOOGLE_AUTH, GOOGLE_ISSUERS, GOOGLE_TOKEN, TokenError, verifyIdToken, verifySecurityEvent } from './oidc';
 
 export const SESSION_COOKIE = '__Host-dc_session';
@@ -186,13 +187,19 @@ export async function csrfOk(req: Request, env: ReadyEnv, s: Session): Promise<b
 
 /** POST /api/auth/logout: ends the session here and in the database. */
 export async function logout(env: ReadyEnv, s: Session | null): Promise<string[]> {
-  if (s) await env.DB.prepare('DELETE FROM sessions WHERE id_hash = ?').bind(await sha256(s.id)).run();
+  if (s) {
+    const rooms = await userRooms(env, s.user.id);
+    await env.DB.prepare('DELETE FROM sessions WHERE id_hash = ?').bind(await sha256(s.id)).run();
+    await revokeRooms(env, rooms);
+  }
   return [clearCookie(SESSION_COOKIE)];
 }
 
 /** POST /api/auth/logout-all: ends every session of the account, in every browser. */
 export async function logoutEverywhere(env: ReadyEnv, s: Session): Promise<string[]> {
+  const rooms = await userRooms(env, s.user.id);
   await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(s.user.id).run();
+  await revokeRooms(env, rooms);
   return [clearCookie(SESSION_COOKIE)];
 }
 
@@ -234,7 +241,10 @@ export async function securityEvent(req: Request, env: ReadyEnv, deps: Deps): Pr
     if (typeof subject?.sub !== 'string' || !subject.sub) continue;
     // a subject is named by Google's issuer and the Google account ID that sign-in also uses
     if (subject.iss !== undefined && (typeof subject.iss !== 'string' || !GOOGLE_ISSUERS.includes(subject.iss.replace(/\/$/, '')))) continue;
+    const user = await env.DB.prepare('SELECT id FROM users WHERE google_sub = ?').bind(subject.sub).first<{ id: string }>();
+    const rooms = user ? await userRooms(env, user.id) : [];
     await env.DB.prepare('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE google_sub = ?)').bind(subject.sub).run();
+    await revokeRooms(env, rooms);
   }
   return new Response(null, { status: 202 });
 }

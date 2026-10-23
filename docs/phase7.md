@@ -1,21 +1,67 @@
-# Phase 7: live co-editing — specification and plan
+# Phase 7: live co-editing — specification and implementation
 
-Status: written 23 October 2026, before any phase 7 code. This is the brief for whoever builds
-phase 7. Read `AGENTS.md` first (it binds you), then this file, then the parts of `docs/spec.md`,
+Status: implemented; local acceptance checks pass. Deployment results are recorded by the
+Deploy web app workflow. Originally specified 23 October 2026.
+
+## Accepted implementation decisions
+
+The following decisions from Alex supersede conflicting requirements below:
+
+- **Only committed edits synchronize.** Drafts stay private. A remote commit must not remount an
+  editor or discard its draft; offer Keep mine / Take theirs. No direct shared-keystroke editor
+  binding is required. Presence describes the focused cell and committed-text/canvas selections,
+  not another person's private draft.
+- **Recovery is ordinary editor recovery**, not a promise to retain every intermediate edit:
+  session-local undo/redo, persistent checkpoints, and preservation of conflicting drafts. Stable
+  cell identity must survive moves. A durable save acknowledgement follows storage, not receipt.
+- **Local responsiveness comes first.** Local commits and evaluation never wait for networking.
+  Remote commits converge promptly; remote evaluation may coalesce bursts. The original combined
+  300 ms debounce / 150 ms end-to-end target is replaced by measured behavior without unnecessary
+  recomputation.
+- **Low idle cost is sufficient.** Preferred annual budget is below $100 all-in. Billing analytics
+  and billing validation are not acceptance gates; Alex monitors billing. Use hibernation and
+  stop maintenance after the final connection and persistence complete.
+- Use Free during development; a Paid upgrade before public release remains a recommendation,
+  not permission to change billing. Branches are personal; any editor may decide proposals;
+  attributed pinned results remain shared and locally recomputable; dedicated view mode is later.
+- Merge and deployment are authorized without further approval. Keep making progress while
+  offering periodic status and useful review points; do not wait for those reviews. Report actual
+  access failures rather than requiring an advance token-permission change.
+
+The original implementation brief is retained below, subject to the accepted decisions above.
+Read `AGENTS.md` first (it binds you), then this file, then the parts of `docs/spec.md`,
 `docs/design.md` ("Web app", "Accounts and sharing (phase 6)") and `docs/deploy.md` it points to.
 `docs/roadmap.md` is the list of everything open; phase 7 items move from there to here and leave
 both when they land.
+
+## Implementation and verification map
+
+| Boundary | Implementation | Executable coverage |
+| --- | --- | --- |
+| Committed edits, UUID-owned editors, private conflicting/deleted drafts | `src/doc/model.ts`, `src/ui/WorkspacePage.tsx`, `Cell.tsx`, `Editor.tsx` | `src/doc/collaboration.test.ts`, `tests/live.spec.ts` (including actual server ID repair while a draft is open) |
+| Session undo, private checkpoints and branches, safe migration/reopen | `src/doc/store.ts`, `src/account/recovery.ts`, `docsync.ts`, `account.ts`, `src/ui/CloudRecovery.tsx` | Account/doc recovery and lifecycle unit tests; `tests/recovery.spec.ts`, `tests/branches.spec.ts` |
+| Durable rooms, authentication, limits, revocation and generation fences | `live/room.ts`, `validation.ts`, `server/live.ts`, `room-auth.ts`, `versions.ts` | `live/acceptance.test.ts`, `limits.test.ts`, `room.test.ts`, `server/live.test.ts`, `versions.test.ts` |
+| Actual Pages-to-room integration | `server/router.ts`, external `LIVE` binding | `live/pages-seam.test.ts`: real workerd, migrations, signed sessions, tickets, durable readback, viewer/origin/session rejection, target-free AI presence |
+| Authenticated presence without private branch content | `src/account/live.ts`, `live/presence.ts`, workspace UI | Live-provider/presence units and peer-received browser awareness regression |
+| Atomic shared AI decisions and attributable recomputable pins | `src/ai/proposals.ts`, `src/eval/pinned.ts`, `src/ui/PinnedRecompute.tsx` | Proposal/pin unit tests; two-editor proposal race and pinned-recompute browser tests |
+| Immediate local evaluation, coalesced remote work, cached undo | `src/eval/evaluator.ts`, `src/engine/engine.ts` | Local-first/cancellation units and real browser/WASM timing tests, including a 50-cell chain |
+
+Paths in the table are relative to `web/`. Run `npm test`, `npm run typecheck`, `npm run build`
+and Playwright's Chromium and timing projects there; run the repository's Rust checks in
+`AGENTS.md`. `docs/deploy.md` describes the separate Worker/Pages bundles and deployment order.
+Browser fixtures prove UI behavior, not production authorization: real-runtime room and Pages
+seam tests are separate. An authenticated Google session is needed for signed-in production
+review; an anonymous health check is not that review. No billing measurement is required.
 
 ## 1. Goal and gate
 
 Several people edit one document at the same time, each in their own browser, and see each other's
 changes, cursors and selections as they happen.
 
-**Gate** (from the spec's phase table): two browsers edit one workspace at once with no lost edits
-in a scripted test, and an idle document costs nothing. This plan adds what the gate needs to mean
-something: the test also covers a third browser joining late, a browser that goes offline and comes
-back, a viewer, and a revoked collaborator; and "costs nothing" is shown by the room hibernating
-(section 9).
+**Gate:** two browsers commit edits to one workspace without losing edits or private drafts.
+Tests also cover a third browser joining late, a browser going offline and returning, a viewer
+and a revoked collaborator. Rooms use hibernation and stop maintenance after their final
+connection closes; zero-cost billing is not a gate (see the accepted decisions above).
 
 **In scope.** The live room (a Durable Object per document), the WebSocket protocol, its
 authentication and limits, the document-model changes live editing needs, presence, AI activity
@@ -41,7 +87,7 @@ for reviewing (a later roadmap item, section 12).
 - The server never computes mathematics. The room may do structural bookkeeping on the CRDT
   (validation, ID de-duplication), which is not computation in this sense.
 
-## 3. What exists today (phase 6)
+## 3. Phase 6 baseline (historical)
 
 - **Document** (`web/src/doc/model.ts`): one Yjs document per workspace with `gc: false`. Roots:
   `meta` (name, context, pinned watches, edited time), `cells` (a `Y.Array` of `Y.Map`s with `id`

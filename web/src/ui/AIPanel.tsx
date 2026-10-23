@@ -49,6 +49,7 @@ export interface AIPanelProps {
   /** The document itself: its timeline. */
   main: Doc;
   proposals: Proposal[];
+  authorLabel?: (id?: string, kind?: 'person' | 'ai') => string;
   onDecide: (p: Proposal, accept: boolean) => void;
   /** Steps during a request are the AI's and undo as one. */
   onBusy: (busy: boolean) => void;
@@ -112,7 +113,7 @@ export function AIPanel(props: AIPanelProps) {
     for (const c of cs) {
       setEntries(entries.length, { role: 'user', text: c.text, cell: c.cell });
       // the comment's text stays in this chat, like a request's
-      if (!props.host.foreign()) props.main.log({ kind: 'request', author: 'you', text: `Commented on ${c.cell} for the AI.` });
+      if (!props.host.foreign() && !props.host.readOnly?.()) props.host.doc().log({ kind: 'request', author: props.main.localOrigin.author, authorKind: 'person', text: `Commented on ${c.cell} for the AI.` });
     }
     return cs.map((c) => commentMessage({ id: c.cell, text: c.cellText }, c.text));
   };
@@ -158,7 +159,7 @@ export function AIPanel(props: AIPanelProps) {
         case 'stopped':
           add({ type: 'stopped', reason: e.reason });
           // the reason can name the provider or a private server address: it stays in this chat
-          if (e.reason !== 'Stopped.' && !props.host.foreign()) props.main.log({ kind: 'error', text: 'The request stopped with an error (shown in the chat of whoever made it).' });
+          if (e.reason !== 'Stopped.' && !props.host.foreign() && !props.host.readOnly?.()) props.host.doc().log({ kind: 'error', text: 'The request stopped with an error (shown in the chat of whoever made it).' });
           break;
       }
       scroll();
@@ -184,7 +185,7 @@ export function AIPanel(props: AIPanelProps) {
     setEntries(entries.length, { role: 'user', text, selection: sel ? selectionLabel(sel) : undefined });
     setDraft('');
     // the request's text stays in this chat: the document (shared with others) only records that one was made
-    if (!props.host.foreign()) props.main.log({ kind: 'request', author: 'you', text: 'Asked the AI.' });
+    if (!props.host.foreign() && !props.host.readOnly?.()) props.host.doc().log({ kind: 'request', author: props.main.localOrigin.author, authorKind: 'person', text: 'Asked the AI.' });
     await request();
   };
 
@@ -264,7 +265,7 @@ export function AIPanel(props: AIPanelProps) {
                 {(t) => (
                   <div class={`tl tl-${t.kind}`}>
                     <span class="hint">{time(t.time)}</span>
-                    <span class="tl-author">{t.author}</span>
+                    <span class="tl-author">{props.authorLabel?.(t.author, t.authorKind) ?? t.author}</span>
                     <span class="grow">
                       {t.text}
                       <Show when={t.branch}><span class="branch-name small">⑂ {t.branch}</span></Show>
@@ -382,11 +383,11 @@ export function AIPanel(props: AIPanelProps) {
                 <div class="proposal" data-testid="proposal">
                   <div>
                     <strong>{p.kind === 'remove' ? `Remove ${p.target}?` : p.kind === 'write' ? `Let the AI ${p.target}?` : 'Accept the branch into the document?'}</strong>
-                    <div class="hint">{p.note}</div>
+                    <div class="hint">{p.note}<Show when={p.author}> · proposed by {props.authorLabel?.(p.author) ?? p.author}</Show></div>
                   </div>
                   <div class="row">
-                    <button class="primary" onClick={() => props.onDecide(p, true)}>{p.kind === 'remove' ? 'Remove' : p.kind === 'write' ? 'Allow' : 'Accept'}</button>
-                    <button onClick={() => props.onDecide(p, false)}>Reject</button>
+                    <button class="primary" disabled={props.host.readOnly?.()} onClick={() => props.onDecide(p, true)}>{p.kind === 'remove' ? 'Remove' : p.kind === 'write' ? 'Allow' : 'Accept'}</button>
+                    <button disabled={props.host.readOnly?.()} onClick={() => props.onDecide(p, false)}>Reject</button>
                   </div>
                 </div>
               )}

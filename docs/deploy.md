@@ -39,10 +39,9 @@ that need a person, done once.
 5. GitHub, Actions, "Deploy web app": run the workflow. Its summary lists each part; the last line
    should say "Accounts: D1 database and R2 bucket bound, migrations applied."
 
-Workers Paid ($5 a month) should not be needed yet: D1, R2 and Pages Functions have free
-allowances far above this app's use, and the API does little computation per request (the free
-plan's limit is 10 ms of CPU per request). It is needed for Durable Objects (real-time co-editing,
-phase 7), or earlier if the API ever reports exceeded CPU limits.
+Phase 7 uses SQLite-backed Durable Objects, available on the Workers Free plan. The workflow
+does not change billing plans. Usage and any future upgrade remain the owner's decision; billing
+analytics are not an application acceptance gate.
 
 Secrets take effect with the next deployment, which step 5 makes. Without `RESEND_API_KEY`
 everything works except that sharing sends no e-mail. The sender address is the `EMAIL_FROM`
@@ -71,6 +70,50 @@ those keep serving the static app but not the API.
 - Otherwise: removes `web/wrangler.toml` and deploys the site and functions with no bindings.
 
 A migration is never edited once it is on `master`; a schema change is the next numbered file.
+
+### Phase 7 live rooms
+
+The build job also bundles `web/live/room.ts` using `web/live/wrangler.toml`, without deployment
+credentials. The deploy job copies the existing D1 database ID into the room configuration and
+deploys that compiled Worker (`diagcalc-live`) before Pages. Both use the same `DB` and `FILES`;
+Pages has the external Durable Object binding `LIVE` to its `DocRoom` class. The token therefore
+also needs permission to deploy Workers. A missing permission fails the deployment rather than
+silently replacing the room with a different write path.
+
+The room has no `workers.dev` or preview URL, and its public fetch handler always returns 403.
+Only Pages may issue its internal requests. Never deploy either of the test-only entrypoints in
+`web/live`; the configured production entry is `room.ts`. New documents use schema generation 1.
+An old document remains read-only until its owner chooses **Enable live editing**. Migration
+retains a server checkpoint and a detached local recovery copy before switching generations.
+
+Do not roll Pages back to phase 6 after migrating documents: that older application does not
+understand the generation fence or committed `Y.Text` cells. Prefer a forward fix. Recover an
+individual document by reading its checkpoint into a personal branch or detached copy; do not
+merge an old-generation update into a migrated room. Original checkpoints are retained, but
+there is no promise to retain every intermediate edit.
+
+Every accepted update is staged and validated before it becomes authoritative, stored durably,
+then broadcast and acknowledged to its sender. The REST snapshot is updated as part of that
+save, so reconnect and REST readers do not depend on an in-memory room. Checkpoint maintenance
+is bounded and ceases when the final socket closes. Session/access rechecks remain at most a
+minute apart while a room has connections; terminal status messages notify clients without
+depending on completion of the WebSocket close handshake.
+
+Local verification (no Google or Cloudflare credentials required):
+
+```sh
+cd web
+npm run typecheck
+npm test
+npm run build
+E2E_PORT=4187 npx playwright test --project chromium --workers 2
+npx wrangler@4.149.0 deploy --dry-run --config live/wrangler.toml
+```
+
+Browser fixtures exercise the UI with multiple independent contexts. The separate Miniflare
+suite exercises the real room, persistence, authentication and Pages-to-room boundary; fixture
+tests alone are not a security or durability proof. Production Google sign-in remains a separate
+live review step when no authenticated browser is available to the deployer.
 
 ## Running the accounts API locally
 

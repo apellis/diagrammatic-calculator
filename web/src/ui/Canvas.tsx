@@ -69,6 +69,8 @@ export interface Selection {
 
 export interface CanvasProps {
   doc: Doc;
+  readOnly?: boolean;
+  remoteSelections?: { name: string; colour: string; selection: Pick<Selection, 'cellId' | 'word' | 'layers'> }[];
   engine: Calls;
   cellId: string;
   title: string;
@@ -146,6 +148,7 @@ export function Canvas(props: CanvasProps) {
    * take from gets fresh ones. Then each strand without an ID gets one, by where it starts.
    */
   const giveIds = async (gen: number, term: string, context: string, summands: Layout[]) => {
+    if (props.readOnly) return;
     const doc = props.doc;
     const cell = props.cellId;
     const words = summands.map((l) => l.word);
@@ -157,6 +160,7 @@ export function Canvas(props: CanvasProps) {
       if (gen !== generation) return;
       if (o.status === 'done' && o.response.status === 'ok') diff = o.response;
     }
+    if (props.readOnly) return;
     const d = diff;
     doc.recordDrawn(cell, (fresh) => {
       const want = new Set(missing.map((l) => l.word));
@@ -291,6 +295,7 @@ export function Canvas(props: CanvasProps) {
    * carries the occurrence IDs of the summands drawn now to the new summands.
    */
   const write = (term: string, note: string, provenance?: ProvenanceSummand[]) => {
+    if (props.readOnly) { say('View only. Make a personal branch to edit.'); return; }
     changed = true;
     const before = layouts();
     pending = { term: props.term, words: new Set(before.map((l) => l.word)) };
@@ -331,7 +336,7 @@ export function Canvas(props: CanvasProps) {
       const h = hintOf(l) ?? {};
       const canonical = order.every((x, i) => x === i + 1);
       changed = true;
-      props.doc.setHint(props.cellId, l.word, { ...h, order: canonical ? undefined : order }, note);
+      if (!props.readOnly) props.doc.setHint(props.cellId, l.word, { ...h, order: canonical ? undefined : order }, note);
       say(moved.sign !== l.sign ? 'Interchange of two odd pieces: the coefficient of this summand changes sign (−1).' : 'Interchanged; the coefficient is unchanged.');
     });
 
@@ -345,7 +350,7 @@ export function Canvas(props: CanvasProps) {
     const offsets = { ...(h.offsets ?? {}) };
     if (Math.abs(next[0]) < 0.02 && Math.abs(next[1]) < 0.02) delete offsets[layer];
     else offsets[layer] = next;
-    props.doc.setHint(props.cellId, l.word, { ...h, offsets }, 'move a piece for looks');
+    if (!props.readOnly) props.doc.setHint(props.cellId, l.word, { ...h, offsets }, 'move a piece for looks');
   };
 
   const openMenu = (k: number) =>
@@ -1167,6 +1172,13 @@ export function Canvas(props: CanvasProps) {
             </For>
           </g>
         </Show>
+        <For each={(props.remoteSelections ?? []).filter((s) => s.selection.cellId === props.cellId && s.selection.word === l().word)}>
+          {(s) => <Show when={bounds(l(), s.selection.layers)}>{(b) => <g pointer-events="none" data-testid="remote-canvas-selection">
+            <rect x={b()[0] - 0.2} y={-(b()[3] + 0.2)} width={b()[2] - b()[0] + 0.4} height={b()[3] - b()[1] + 0.4}
+              fill="none" stroke={s.colour} stroke-width={0.035} stroke-dasharray="0.12 0.06" />
+            <text x={b()[0] - 0.2} y={-(b()[3] + 0.25)} font-size="0.24" fill={s.colour}>{s.name}</text>
+          </g>}</Show>}
+        </For>
         <Show when={snapped()}>
           {(b) => <rect x={b()[0] - 0.15} y={-(b()[3] + 0.15)} width={b()[2] - b()[0] + 0.3} height={b()[3] - b()[1] + 0.3} fill="none" stroke="var(--accent)" stroke-width={0.025} stroke-dasharray="0.1 0.07" pointer-events="none" />}
         </Show>
@@ -1322,7 +1334,7 @@ export function Canvas(props: CanvasProps) {
         <div class="palette-bar" aria-label="Generators">
           <For each={props.generators}>
             {(g, i) => (
-              <button class="gen" draggable={true} data-generator={g.name} aria-label={describeGenerator(g)}
+              <button class="gen" disabled={props.readOnly} draggable={!props.readOnly} data-generator={g.name} aria-label={describeGenerator(g)}
                 title={`${describeGenerator(g)}. Drag onto a strand to insert it; or click a strand to set the insertion point, then click here (or press I, then ${i() + 1})`}
                 classList={{ on: inserting() }}
                 onDragStart={(e) => {
@@ -1372,7 +1384,7 @@ export function Canvas(props: CanvasProps) {
                 <div class="row"><strong class="grow">Relations{m().rect ? ' in the selection' : ''}</strong><button class="ghost" onClick={() => setMenu(null)} aria-label="Close the relations">×</button></div>
                 <For each={m().matches.slice(0, 9)}>
                   {(x, i) => (
-                    <button class="relitem" onClick={() => void apply(i())} data-relation={x.relation}>
+                    <button class="relitem" disabled={props.readOnly} onClick={() => void apply(i())} data-relation={x.relation}>
                       <kbd>{i() + 1}</kbd>
                       <span class="grow">
                         <span class="relname">{x.relation}</span> <span class="hint">{x.direction}{x.sign === -1 ? ', sign −1' : ''}</span>

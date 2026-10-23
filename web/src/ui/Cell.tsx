@@ -3,7 +3,7 @@
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import type { CellState } from '../eval/evaluator';
 import { kindOf } from '../doc/model';
-import { Editor } from './Editor';
+import { Editor, type RemoteCursor } from './Editor';
 import { NoteView, ResultView, Summary, summary, type Tracer } from './Results';
 import { Typeset } from './Typeset';
 import { toTex } from './tex';
@@ -24,6 +24,12 @@ export interface CellProps {
   expanded: boolean;
   active: boolean;
   isNew?: boolean;
+  readOnly?: boolean;
+  pinDisabled?: boolean;
+  remoteCursors?: RemoteCursor[];
+  onSelection?: (selection: { anchor: number; head: number } | null) => void;
+  /** Private draft, never sent to the shared document. Null clears recovery state. */
+  onDraft?: (text: string | null) => void;
   onToggle: () => void;
   onCommit: (text: string) => void;
   onCancel: () => void;
@@ -73,7 +79,9 @@ export function Cell(props: CellProps) {
     setCommentDraft('');
     setCommenting(false);
   };
-  let editor: { set: (t: string, c?: number) => void; focus: () => void } | undefined;
+  let editor: { set: (t: string, c?: number, focus?: boolean) => void; focus: () => void } | undefined;
+  let base = props.text;
+  const [conflict, setConflict] = createSignal(false);
   const kind = () => props.state?.parsed?.kind ?? kindOf(props.text) ?? (props.text ? 'def' : 'new');
   const head = () => {
     const p = props.state?.parsed;
@@ -84,8 +92,24 @@ export function Cell(props: CellProps) {
   const slash = () => draft().startsWith('/');
   // editing when new or opened by a click; typeset otherwise, and again once the cell is left
   const [editing, setEditing] = createSignal(!!props.isNew);
-  createEffect(on(() => props.active, (a) => !a && setEditing(!!props.isNew), { defer: true }));
+  createEffect(on(() => props.active, (a) => {
+    if (!a && !conflict() && draft() === base) setEditing(!!props.isNew);
+  }, { defer: true }));
+  createEffect(on(() => props.text, (text) => {
+    if (text === base) return;
+    if (draft() !== base && draft() !== text) {
+      setConflict(true);
+      props.onDraft?.(draft());
+      return;
+    }
+    base = text;
+    setDraft(text);
+    setConflict(false);
+    props.onDraft?.(null);
+    if (editing()) editor?.set(text, undefined, false);
+  }, { defer: true }));
   const edit = () => {
+    if (props.readOnly) return;
     setEditing(true);
     queueMicrotask(() => editor?.focus());
   };
@@ -103,15 +127,32 @@ export function Cell(props: CellProps) {
   onCleanup(() => clearTimeout(pause));
   const changed = (t: string) => {
     setDraft(t);
+    props.onDraft?.(t === props.text ? null : t);
     clearTimeout(pause);
     if (problem()) void check(t);
     else pause = setTimeout(() => void check(t), 400);
   };
-  const commit = async (t: string) => {
+  const commit = async (t: string, resolve = false) => {
+    if (props.readOnly || (conflict() && !resolve)) return;
     clearTimeout(pause);
+    const observed = props.text;
     if (await check(t)) return editor?.focus();
+    // Validation is asynchronous. A remote commit while it runs is a new conflict.
+    if (props.readOnly || observed !== props.text || (conflict() && !resolve)) return;
+    base = t;
+    setDraft(t);
+    setConflict(false);
+    props.onDraft?.(null);
     if (!props.isNew) setEditing(false);
     props.onCommit(t);
+  };
+  const takeTheirs = () => {
+    base = props.text;
+    setDraft(base);
+    setConflict(false);
+    setProblem('');
+    props.onDraft?.(null);
+    editor?.set(base, undefined, false);
   };
   const canPin = () => props.state?.status === 'fresh' && props.state.value?.status === 'ok';
   const canTikz = () => canPin() && ['watch', 'def'].includes((props.state!.value as { kind: string }).kind);
@@ -123,7 +164,7 @@ export function Cell(props: CellProps) {
       <div class="head" role="button" tabindex={0} aria-expanded={props.expanded} aria-controls={`body-${props.id}`}
         aria-label={`${kind()} cell ${props.id}: ${head() || 'empty'}${props.state ? `, ${summary(props.state)}` : ''}`}
         onClick={() => {
-          if (!props.expanded) setEditing(true);
+          if (!props.expanded && !props.readOnly) setEditing(true);
           props.onToggle();
         }}
         onKeyDown={(e) => {
@@ -156,15 +197,17 @@ export function Cell(props: CellProps) {
       </div>
       <Show when={props.expanded}>
         <div class="body" id={`body-${props.id}`}>
-          <Show when={editing()} fallback={<CellText text={props.text} kind={kind()} onEdit={edit} />}>
+          <Show when={editing() && !props.readOnly} fallback={<CellText text={props.text} kind={kind()} onEdit={edit} />}>
             <Editor
-              text={props.text}
+              text={draft()} remoteCursors={draft() === props.text ? props.remoteCursors : []}
+              onSelection={(selection) => props.onSelection?.(draft() === props.text ? selection : null)}
               autofocus={props.active || editing()}
               placeholder="Type a term to define it, or / for a cell kind"
               onChange={changed}
               invalid={!!problem()}
               onCommit={(t) => void commit(t)}
               onCancel={() => {
+                takeTheirs();
                 setProblem('');
                 if (!props.isNew) setEditing(false);
                 props.onCancel();
@@ -176,6 +219,14 @@ export function Cell(props: CellProps) {
                 if (t) queueMicrotask(() => api.set(t.text, t.cursor));
               }}
             />
+          </Show>
+          <Show when={conflict()}>
+            <div class="banner draft-conflict" data-testid="draft-conflict" role="status">
+              This cell changed elsewhere. Your draft has not been shared.
+              <pre>{props.text}</pre>
+              <button disabled={props.readOnly} onClick={() => void commit(draft(), true)}>Keep mine</button>
+              <button onClick={takeTheirs}>Take theirs</button>
+            </div>
           </Show>
           <Show when={editing() && problem()}>
             <div class="error small" data-testid="cell-problem">{problem()}. Fix it, or press Esc to {props.isNew ? 'discard it' : 'keep the previous text'}.</div>
@@ -195,10 +246,10 @@ export function Cell(props: CellProps) {
             <div class="tools"><div class="grow" /><button class="ghost" onClick={props.onRemove}>Discard (Esc)</button></div>
           }>
             <div class="tools">
-              <button class="ghost" title="Move up" aria-label="Move the cell up" onClick={() => props.onMove(-1)}>↑</button>
-              <button class="ghost" title="Move down" aria-label="Move the cell down" onClick={() => props.onMove(1)}>↓</button>
+              <button class="ghost" title="Move up" aria-label="Move the cell up" disabled={props.readOnly} onClick={() => props.onMove(-1)}>↑</button>
+              <button class="ghost" title="Move down" aria-label="Move the cell down" disabled={props.readOnly} onClick={() => props.onMove(1)}>↓</button>
               <button class="ghost" onClick={props.onRerun} disabled={!props.state?.key}>Recompute</button>
-              <button class="ghost" onClick={props.onPin} disabled={!canPin()}>Pin result</button>
+              <button class="ghost" onClick={props.onPin} disabled={props.readOnly || props.pinDisabled || !canPin()}>Pin result</button>
               <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
               <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>
                 <button class="ghost" onClick={() => props.onCanvas?.()} title="Open the focus canvas (F)" data-testid="open-canvas">Canvas</button>
@@ -209,7 +260,7 @@ export function Cell(props: CellProps) {
               </Show>
               <div class="grow" />
               <span class="hint">{props.id}</span>
-              <button class="ghost" onClick={props.onRemove}>Delete</button>
+              <button class="ghost" disabled={props.readOnly} onClick={props.onRemove}>Delete</button>
             </div>
             <Show when={props.comments?.length}>
               <ul class="cell-comments" data-testid="cell-comments">

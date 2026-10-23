@@ -13,6 +13,10 @@ export interface CloudLink {
   role: 'owner' | 'editor' | 'viewer';
   /** The server's version this copy last matched. */
   version: number;
+  /** Server schema generation; old caches without it belong to generation zero. */
+  generation?: number;
+  /** Deletion-set fingerprint supplements the state vector for deletion-only commits. */
+  deletions?: string;
   /** The Yjs state vector of that version, to tell whether this copy has anything new. */
   sv?: Uint8Array;
   /** When this copy last matched the server. */
@@ -24,6 +28,10 @@ export interface CloudLink {
 
 export interface DocInfo {
   id: string;
+  /** Local storage generation; legacy database is left intact until migration succeeds. */
+  localGeneration?: number;
+  /** Recovery copies must never be implicitly published to an account. */
+  localOnly?: boolean;
   name: string;
   created: number;
   edited: number;
@@ -60,9 +68,18 @@ export async function listDocs(): Promise<DocInfo[]> {
   return all.sort((a, b) => b.edited - a.edited);
 }
 
+function committed(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Local metadata transaction failed'));
+  });
+}
+
 async function putInfo(info: DocInfo) {
   const db = await index();
-  await req(db.transaction(INDEX, 'readwrite').objectStore(INDEX).put(info));
+  const tx = db.transaction(INDEX, 'readwrite');
+  tx.objectStore(INDEX).put(info);
+  await committed(tx);
 }
 
 /** Changes some fields of a document's entry, leaving the others as they are stored now. */
@@ -73,7 +90,8 @@ export async function updateInfo(id: string, patch: Partial<Omit<DocInfo, 'id'>>
   const cur = (await req(store.get(id))) as DocInfo | undefined;
   if (!cur) return undefined;
   const next = { ...cur, ...patch };
-  await req(store.put(next));
+  store.put(next);
+  await committed(tx);
   return next;
 }
 
@@ -87,13 +105,16 @@ export async function getInfo(id: string): Promise<DocInfo | undefined> {
   return (await req(db.transaction(INDEX).objectStore(INDEX).get(id))) as DocInfo | undefined;
 }
 
-const dbName = (id: string) => `diagcalc-doc-${id}`;
+const dbName = (id: string, generation = 0) => `diagcalc-doc-${id}${generation ? `-v${generation}` : ""}`;
+const privateName = (id: string) => `diagcalc-private-${id}`;
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 export interface OpenDoc {
   info: DocInfo;
   doc: Doc;
   close(): void;
+  /** Wait until local shared state and private recovery are persisted. */
+  flush(): Promise<void>;
 }
 
 /** Opens a stored document; changes are saved on every step. */
@@ -101,9 +122,25 @@ export async function openDoc(id: string): Promise<OpenDoc> {
   const info = await getInfo(id);
   if (!info) throw new Error('no such document');
   const ydoc = new Y.Doc({ gc: false });
-  const persistence = new IndexeddbPersistence(dbName(id), ydoc);
+  let persistence = new IndexeddbPersistence(dbName(id, info.localGeneration), ydoc);
   await persistence.whenSynced;
-  const doc = new Doc(ydoc);
+  const privateDoc = new Y.Doc();
+  let recovery = new IndexeddbPersistence(privateName(id), privateDoc);
+  await recovery.whenSynced;
+  let doc = new Doc(ydoc, privateDoc);
+  // Cloud migration is coordinated by the owner/provider generation endpoint, never here.
+  if (!info.cloud && doc.needsMigration) {
+    const migrated = doc.migrateLegacy();
+    await persistence.destroy();
+    await recovery.destroy();
+    info.localGeneration = (info.localGeneration ?? 0) + 1;
+    persistence = new IndexeddbPersistence(dbName(id, info.localGeneration), migrated.ydoc);
+    recovery = new IndexeddbPersistence(privateName(id), migrated.privateDoc);
+    await Promise.all([persistence.whenSynced, recovery.whenSynced]);
+    await putInfo(info);
+    doc = migrated;
+  }
+  if (!doc.needsMigration) doc.ydoc.gc = true;
   const sync = () => {
     const edited = doc.edited ?? info.edited;
     if (doc.name !== info.name || edited !== info.edited) {
@@ -113,22 +150,25 @@ export async function openDoc(id: string): Promise<OpenDoc> {
     }
   };
   doc.meta.observe(sync);
-  return { info, doc, close: () => { doc.meta.unobserve(sync); void persistence.destroy(); } };
+  return { info, doc, flush: async () => { await Promise.all([persistence.set('flushed', Date.now()), recovery.set('flushed', Date.now())]); }, close: () => { doc.meta.unobserve(sync); doc.undoManager.destroy(); void persistence.destroy(); void recovery.destroy(); } };
 }
 
 /** Creates a document, optionally filled by `fill`, and returns its ID. */
-export async function createDoc(name: string, fill?: (d: Doc) => void): Promise<string> {
+export async function createDoc(name: string, fill?: (d: Doc) => void, options: { localOnly?: boolean } = {}): Promise<string> {
   const id = newId();
-  const ydoc = new Y.Doc({ gc: false });
+  const ydoc = new Y.Doc({ gc: true });
   const persistence = new IndexeddbPersistence(dbName(id), ydoc);
   await persistence.whenSynced;
-  const doc = new Doc(ydoc);
+  const privateDoc = new Y.Doc();
+  const recovery = new IndexeddbPersistence(privateName(id), privateDoc);
+  await recovery.whenSynced;
+  const doc = new Doc(ydoc, privateDoc);
   doc.meta.set('name', name);
   fill?.(doc);
   await new Promise((r) => setTimeout(r, 0)); // let the history record the first steps
   const now = Date.now();
-  await putInfo({ id, name: doc.name, created: now, edited: now });
-  await persistence.destroy();
+  await putInfo({ id, name: doc.name, created: now, edited: now, ...options });
+  await Promise.all([persistence.destroy(), recovery.destroy()]);
   void askPersistence();
   return id;
 }
@@ -139,26 +179,45 @@ export async function createDoc(name: string, fill?: (d: Doc) => void): Promise<
  */
 export async function createFromCloud(update: Uint8Array, cloud: CloudLink, fallbackName: string, origin: unknown): Promise<string> {
   const id = newId();
+  // Preserve legacy deleted structs until the owner has materialized old snapshots.
   const ydoc = new Y.Doc({ gc: false });
   const persistence = new IndexeddbPersistence(dbName(id), ydoc);
   await persistence.whenSynced;
   if (update.length) Y.applyUpdate(ydoc, update, origin);
-  const doc = new Doc(ydoc);
+  const privateDoc = new Y.Doc();
+  const recovery = new IndexeddbPersistence(privateName(id), privateDoc);
+  await recovery.whenSynced;
+  const doc = new Doc(ydoc, privateDoc);
   if (!doc.meta.has('name')) doc.meta.set('name', fallbackName);
   await new Promise((r) => setTimeout(r, 0));
   const now = Date.now();
   await putInfo({ id, name: doc.name, created: now, edited: doc.edited ?? now, cloud: { ...cloud, synced: now } });
-  await persistence.destroy();
+  await Promise.all([persistence.destroy(), recovery.destroy()]);
   void askPersistence();
   return id;
+}
+
+/** Persist a fresh generation after owner cloud migration succeeds. Close existing handles first. */
+export async function replaceLocalDoc(id: string, doc: Doc, cloud?: CloudLink): Promise<void> {
+  const info = await getInfo(id);
+  if (!info) throw new Error('no such document');
+  const generation = (info.localGeneration ?? 0) + 1;
+  const persistence = new IndexeddbPersistence(dbName(id, generation), doc.ydoc);
+  const recovery = new IndexeddbPersistence(privateName(id), doc.privateDoc);
+  await Promise.all([persistence.whenSynced, recovery.whenSynced]);
+  await Promise.all([persistence.set('flushed', Date.now()), recovery.set('flushed', Date.now())]);
+  await putInfo({ ...info, localGeneration: generation, name: doc.name, ...(cloud ? { cloud } : {}) });
+  await Promise.all([persistence.destroy(), recovery.destroy()]);
 }
 
 export async function duplicateDoc(id: string): Promise<string> {
   const src = await openDoc(id);
   const update = Y.encodeStateAsUpdate(src.doc.ydoc);
+  const recovery = Y.encodeStateAsUpdate(src.doc.privateDoc);
   src.close();
   return createDoc(`${src.info.name} (copy)`, (d) => {
     Y.applyUpdate(d.ydoc, update);
+    Y.applyUpdate(d.privateDoc, recovery);
     d.meta.set('name', `${src.info.name} (copy)`);
   });
 }
@@ -173,10 +232,12 @@ export async function createCleanCopy(src: Doc, name: string): Promise<string> {
 }
 
 export async function deleteDoc(id: string) {
-  const ydoc = new Y.Doc();
-  const persistence = new IndexeddbPersistence(dbName(id), ydoc);
-  await persistence.whenSynced;
-  await persistence.clearData();
+  const info = await getInfo(id);
+  // Replacement retains old generations for recovery; explicit deletion removes all of
+  // them, not just the active generation and the original unsuffixed database.
+  const names = [privateName(id)];
+  for (let generation = 0; generation <= (info?.localGeneration ?? 0); generation++) names.push(dbName(id, generation));
+  for (const name of names) await req(indexedDB.deleteDatabase(name));
   const db = await index();
   await req(db.transaction(INDEX, 'readwrite').objectStore(INDEX).delete(id));
   await saveLink(id, null);

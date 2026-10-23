@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 // CHROMIUM_PATH points at a preinstalled Chromium when the matching Playwright browser is not
 // downloaded (for example in a container without network access to the browser CDN).
 const executablePath = process.env.CHROMIUM_PATH || undefined;
+const port = Number(process.env.E2E_PORT ?? 4173);
 
 export default defineConfig({
   testDir: 'tests',
@@ -12,7 +13,7 @@ export default defineConfig({
   // on CI, failures also become annotations of the run, readable without its log
   reporter: process.env.CI ? [['list'], ['github'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: `http://localhost:${port}`,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -22,8 +23,9 @@ export default defineConfig({
     { name: 'timing', grep: /@timing/, dependencies: ['chromium'], workers: 1, use: { ...devices['Desktop Chrome'], launchOptions: { executablePath } } },
   ],
   webServer: {
-    command: 'npx vite preview --port 4173 --strictPort',
-    port: 4173,
-    reuseExistingServer: !process.env.CI,
+    command: `npx vite preview --port ${port} --strictPort`,
+    port,
+    // A different project can occupy the default port. Never test it by accident.
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === '1',
   },
 });

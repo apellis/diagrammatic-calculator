@@ -1,5 +1,5 @@
 // The document: a Yjs CRDT holding the workspace's inputs (context and cells), the pinned
-// snapshots and the version history. Results are never stored here (see src/eval/).
+// snapshots. Private versions and branches live in a separate sidecar, never on the wire.
 //
 // Every change goes through `step`, so it is one undoable step with an author and a note, and
 // it is recorded as a version in the history.
@@ -29,10 +29,17 @@ export interface Version {
   time: number;
   /** Y.encodeSnapshot of the document after this step. */
   snapshot: Uint8Array;
+  /** Full Yjs state for GC-enabled checkpoints; absent on legacy snapshots. */
+  update?: Uint8Array;
+  retained?: boolean;
+  authorKind?: 'person' | 'ai';
 }
 
 /** A frozen result: the value and everything needed to say how it was obtained. */
 export interface Snapshot {
+  author?: string;
+  /** Just the cell and its dependencies, not unrelated private branch content. */
+  run?: { workspace: string; scalars?: string[]; summands?: number };
   name: string;
   cellId: string;
   cellText: string;
@@ -84,6 +91,7 @@ export interface BranchRecord {
 export interface TimelineEntry {
   time: number;
   author: string;
+  authorKind?: 'person' | 'ai';
   kind: 'request' | 'tool' | 'note' | 'milestone' | 'proposal' | 'error';
   text: string;
   /** More detail: a tool's input, a milestone's summary. */
@@ -132,12 +140,12 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isStr = (v: unknown): v is string => typeof v === 'string';
 
 /** A cell as stored: a map with a string ID (its text, if not a string, reads as empty). */
-function isCell(m: unknown): m is Y.Map<string> {
+function isCell(m: unknown): m is Y.Map<unknown> {
   return m instanceof Y.Map && isStr(m.get('id'));
 }
-const cellData = (m: Y.Map<string>): CellData => {
+const cellData = (m: Y.Map<unknown>): CellData => {
   const text = m.get('text');
-  return { id: m.get('id')!, text: isStr(text) ? text : '' };
+  return { id: m.get('id') as string, text: text instanceof Y.Text ? text.toString() : isStr(text) ? text : '' };
 };
 
 /** Occurrence IDs as stored: a letter and a number each. */
@@ -153,7 +161,7 @@ const validWords = (v: unknown): v is string[] => Array.isArray(v) && v.every(is
 export const strandKey = (anchor: string) => `|${anchor}`;
 
 export function validVersion(v: unknown): v is Version {
-  return isObj(v) && isNum(v.n) && isStr(v.author) && isStr(v.note) && isNum(v.time) && v.snapshot instanceof Uint8Array;
+  return isObj(v) && isNum(v.n) && isStr(v.author) && isStr(v.note) && isNum(v.time) && v.snapshot instanceof Uint8Array && (v.update === undefined || v.update instanceof Uint8Array);
 }
 export function validSnapshot(v: unknown): v is Snapshot {
   return isObj(v) && isStr(v.name) && isStr(v.cellId) && isStr(v.cellText) && isStr(v.context) && isNum(v.version) && isStr(v.key) && isNum(v.time);
@@ -197,8 +205,13 @@ export function validBranch(v: unknown): v is BranchRecord {
 
 export class Doc {
   readonly ydoc: Y.Doc;
+  readonly privateDoc: Y.Doc;
+  readonly cellOrder: Y.Array<string>;
+  readonly proposals: Y.Map<ProposalRecord>;
+  readonly localOrigin = { author: 'you', kind: 'person' as const };
+  readonly aiOrigin = { author: 'AI', kind: 'ai' as const };
   readonly meta: Y.Map<unknown>;
-  readonly cells: Y.Array<Y.Map<string>>;
+  readonly cells: Y.Array<Y.Map<unknown>>;
   readonly history: Y.Array<Version>;
   readonly snapshots: Y.Array<Snapshot>;
   /** Layout hints, keyed by cell ID and summand word. */
@@ -225,30 +238,33 @@ export class Doc {
   readonly undoManager: Y.UndoManager;
   private pendingNote: string | null = null;
 
-  constructor(ydoc = new Y.Doc({ gc: false })) {
+  constructor(ydoc = new Y.Doc({ gc: true }), privateDoc = new Y.Doc()) {
     this.ydoc = ydoc;
+    this.privateDoc = privateDoc;
+    this.cellOrder = ydoc.getArray('cellOrder');
+    this.proposals = ydoc.getMap('proposals');
     this.meta = ydoc.getMap('meta');
     this.cells = ydoc.getArray('cells');
-    this.history = ydoc.getArray('history');
+    this.history = privateDoc.getArray('history');
     this.snapshots = ydoc.getArray('snapshots');
     this.hints = ydoc.getMap('hints');
     this.occurrences = ydoc.getMap('occurrences');
     this.drawn = ydoc.getMap('drawn');
     this.timeline = ydoc.getArray('timeline');
-    this.branches = ydoc.getMap('branches');
+    this.branches = privateDoc.getMap('branches');
     this.counters = ydoc.getMap('counters');
-    this.undoManager = new Y.UndoManager([this.cells, this.meta, this.hints, this.occurrences], {
-      trackedOrigins: new Set([LOCAL, AI]),
+    this.undoManager = new Y.UndoManager([this.cells, this.cellOrder, this.meta, this.hints, this.occurrences], {
+      trackedOrigins: new Set([this.localOrigin, this.aiOrigin]),
       captureTimeout: 0,
     });
     ydoc.on('afterTransaction', (tr: Y.Transaction) => {
-      if (tr.origin === HISTORY || !(tr.origin === LOCAL || tr.origin === AI || tr.origin === this.undoManager)) return;
+      if (tr.origin === HISTORY || !(tr.origin === this.localOrigin || tr.origin === this.aiOrigin || tr.origin === this.undoManager)) return;
       const changed = tr.changedParentTypes as Map<unknown, unknown>;
-      if (!changed.has(this.cells) && !changed.has(this.meta) && !changed.has(this.hints)) return;
+      if (!changed.has(this.cells) && !changed.has(this.cellOrder) && !changed.has(this.meta) && !changed.has(this.hints)) return;
       const note = tr.origin === this.undoManager ? (this.undoManager.undoing ? 'undo' : 'redo') : (this.pendingNote ?? 'edit');
-      const author = tr.origin === AI ? AI.author : LOCAL.author;
+      const author = tr.origin === this.aiOrigin ? this.aiOrigin.author : this.localOrigin.author;
       this.pendingNote = null;
-      queueMicrotask(() => this.record(note, author));
+      this.record(note, author);
     });
   }
 
@@ -268,11 +284,15 @@ export class Doc {
     return isNum(e) ? e : undefined;
   }
   list(): CellData[] {
-    return this.cells.toArray().filter(isCell).map(cellData);
+    return this.orderedCells().map(cellData);
+  }
+  /** Stable row identity for UI ownership; public IDs can be repaired after a merge. */
+  keyedList(): (CellData & { key: string })[] {
+    return this.orderedCells().map((m) => ({ ...cellData(m), key: cellKey(m) }));
   }
   /** The position in `cells` of the cell `id` (counting entries that are not cells, which `list` skips). */
   index(id: string): number {
-    return this.cells.toArray().findIndex((m) => isCell(m) && m.get('id') === id);
+    return this.orderedCells().findIndex((m) => m.get('id') === id);
   }
   versions(): Version[] {
     return this.history.toArray().filter(validVersion);
@@ -301,10 +321,12 @@ export class Doc {
     if (this.meta.has('name') && !isStr(this.meta.get('name'))) out.push('a malformed name');
     if (this.meta.has('context') && !isStr(this.meta.get('context'))) out.push('a malformed context');
     count('cells', this.cells.length, this.list().length);
-    count('versions', this.history.length, this.versions().length);
+    const legacyHistory = this.ydoc.share.has('history') ? this.ydoc.getArray<Version>('history').toArray() : [];
+    count('versions', this.history.length + legacyHistory.length, this.versions().length + legacyHistory.filter(validVersion).length);
     count('snapshots', this.snapshots.length, this.snapshotList().length);
     count('timeline entries', this.timeline.length, this.timelineList().length);
-    count('branches', this.branches.size, this.branchList().length);
+    const legacyBranches = this.ydoc.share.has('branches') ? [...this.ydoc.getMap<BranchRecord>('branches').values()] : [];
+    count('branches', this.branches.size + legacyBranches.length, this.branchList().length + legacyBranches.filter(validBranch).length);
     count('layout hints', this.hints.size, [...this.hints.values()].filter(validHint).length);
     count('occurrence IDs', this.occurrences.size, [...this.occurrences.values()].filter(validIds).length);
     count('drawn summands', this.drawn.size, [...this.drawn.values()].filter(validWords).length);
@@ -317,7 +339,7 @@ export class Doc {
    * document without what was ever deleted from it.
    */
   cleanCopy(name = this.name): Doc {
-    const d = new Doc(new Y.Doc({ gc: false }));
+    const d = new Doc(new Y.Doc({ gc: true }));
     const cells = this.list();
     const hints = Object.fromEntries([...this.hints.entries()].filter(([, h]) => validHint(h)));
     const snapshots = this.snapshotList();
@@ -338,6 +360,33 @@ export class Doc {
     return d;
   }
 
+  /** Owner-only conversion; caller must publish a fresh generation, never merge into legacy. */
+  migrateLegacy(): Doc {
+    const d = this.cleanCopy();
+    d.history.delete(0, d.history.length);
+    Y.applyUpdate(d.privateDoc, Y.encodeStateAsUpdate(this.privateDoc));
+    d.privateDoc.getMap('migration').set('legacyUpdate', Y.encodeStateAsUpdate(this.ydoc));
+    const legacy = this.ydoc.share.has('history') ? this.ydoc.getArray<Version>('history').toArray().filter(validVersion) : [];
+    for (const v of legacy) {
+      try {
+        const at = Y.createDocFromSnapshot(this.ydoc, Y.decodeSnapshot(v.snapshot));
+        d.history.push([{ ...v, update: Y.encodeStateAsUpdate(at) }]);
+        at.destroy();
+      } catch { d.history.push([v]); }
+    }
+    if (this.ydoc.share.has('branches')) {
+      for (const [id, b] of this.ydoc.getMap<BranchRecord>('branches')) if (validBranch(b)) d.branches.set(id, b);
+    }
+    for (const entry of this.timelineList()) d.timeline.push([entry]);
+    for (const [id, p] of this.proposals) if (validProposal(p)) d.proposals.set(id, p);
+    d.checkpoint('migration');
+    return d;
+  }
+
+  get needsMigration(): boolean {
+    return this.ydoc.share.has('history') || this.ydoc.share.has('branches') || this.cells.toArray().some(m => isCell(m) && !(m.get('text') instanceof Y.Text));
+  }
+
   /** The next cell number; if the counter is malformed, one past every number in use. */
   private nextId(): number {
     const n = this.counters.get('nextId');
@@ -347,7 +396,12 @@ export class Doc {
   // changing: each call is one step
 
   /** Who makes the steps: the person, or the AI while it acts for them. */
-  author: typeof LOCAL | typeof AI = LOCAL;
+  author: { author: string; kind: 'person' | 'ai' } = this.localOrigin;
+
+  setIdentity(userId?: string) {
+    this.localOrigin.author = userId || 'you';
+    this.aiOrigin.author = userId || 'AI';
+  }
 
   step(note: string, fn: () => void) {
     this.pendingNote = note;
@@ -369,22 +423,22 @@ export class Doc {
 
   /** From now until `endAI`, steps are the AI's and undo as one. */
   beginAI() {
-    if (this.author === AI) return;
+    if (this.author === this.aiOrigin) return;
     this.undoManager.stopCapturing();
-    this.author = AI;
+    this.author = this.aiOrigin;
     this.undoManager.captureTimeout = Number.MAX_SAFE_INTEGER;
   }
 
   endAI() {
-    if (this.author !== AI) return;
-    this.author = LOCAL;
+    if (this.author !== this.aiOrigin) return;
+    this.author = this.localOrigin;
     this.undoManager.captureTimeout = 0;
     this.undoManager.stopCapturing();
   }
 
   /** Adds a line to the activity timeline (a record, not an undoable step). */
   log(entry: Omit<TimelineEntry, 'time' | 'author'> & { author?: string }) {
-    this.ydoc.transact(() => this.timeline.push([{ time: Date.now(), author: AI.author, ...entry }]), HISTORY);
+    this.ydoc.transact(() => this.timeline.push([{ time: Date.now(), author: this.aiOrigin.author, authorKind: 'ai', ...entry }]), HISTORY);
   }
 
   /** Watches the AI pinned as measures of its progress. */
@@ -417,10 +471,8 @@ export class Doc {
     let id = '';
     this.step(note, () => {
       id = this.freshId(kindOf(text));
-      const m = new Y.Map<string>();
-      m.set('id', id);
-      m.set('text', text);
-      this.cells.insert(index, [m]);
+      const m = toMap({ id, text });
+      this.insertCell(m, index);
     });
     return id;
   }
@@ -431,9 +483,9 @@ export class Doc {
    */
   updateCell(id: string, text: string, note = `edit ${id}`, ids?: (fresh: (letter: string) => string) => Record<string, string[]>) {
     const i = this.index(id);
-    if (i < 0 || this.cells.get(i).get('text') === text) return;
+    if (i < 0 || this.list()[i].text === text) return;
     this.step(note, () => {
-      this.cells.get(i).set('text', text);
+      setText(this.orderedCells()[i], text);
       if (ids) for (const [word, list] of Object.entries(ids((l) => this.freshOccurrence(l)))) this.occurrences.set(`${id} ${word}`, list);
     });
   }
@@ -496,7 +548,7 @@ export class Doc {
 
   /** `cell.remove` */
   removeCell(id: string, note = `remove ${id}`) {
-    const i = this.index(id);
+    const i = this.cells.toArray().findIndex(m => isCell(m) && m.get('id') === id);
     if (i >= 0) this.step(note, () => this.cells.delete(i, 1));
   }
 
@@ -505,12 +557,10 @@ export class Doc {
     const i = this.index(id);
     if (i < 0 || i === to) return;
     this.step(note, () => {
-      const text = cellData(this.cells.get(i)).text;
-      this.cells.delete(i, 1);
-      const m = new Y.Map<string>();
-      m.set('id', id);
-      m.set('text', text);
-      this.cells.insert(Math.max(0, Math.min(to, this.cells.length)), [m]);
+      const cell = this.orderedCells()[i];
+      const order = this.orderedCells().filter(m => m !== cell).map(cellKey);
+      order.splice(Math.max(0, Math.min(to, order.length)), 0, cellKey(cell));
+      this.writeOrder(order);
     });
   }
 
@@ -527,7 +577,7 @@ export class Doc {
 
   /** `result.pin`: freezes a result as a snapshot (not undoable: snapshots are a record). */
   pin(s: Snapshot) {
-    this.ydoc.transact(() => this.snapshots.push([s]), HISTORY);
+    this.ydoc.transact(() => this.snapshots.push([{ ...s, author: s.author ?? this.localOrigin.author }]), HISTORY);
   }
 
   undo() {
@@ -542,9 +592,11 @@ export class Doc {
     const v = this.versions().find((h) => h.n === n);
     if (!v) return null;
     try {
-      const old = Y.createDocFromSnapshot(this.ydoc, Y.decodeSnapshot(v.snapshot));
+      const old = v.update ? new Y.Doc() : Y.createDocFromSnapshot(this.ydoc, Y.decodeSnapshot(v.snapshot));
+      if (v.update) Y.applyUpdate(old, v.update);
       const ctx = old.getMap('meta').get('context');
-      const cells = old.getArray<unknown>('cells').toArray().filter(isCell).map(cellData);
+      const reader = new Doc(old);
+      const cells = reader.list();
       return { context: isStr(ctx) ? ctx : this.context, cells };
     } catch {
       return null;
@@ -580,7 +632,7 @@ export class Doc {
       for (const k of Object.keys(counters)) counters[k] = Math.min(counters[k], parent.counters?.[k] ?? 1);
     }
     const b: BranchRecord = {
-      id: `b${Number.isSafeInteger(this.counters.get('nextBranch')) ? this.counters.get('nextBranch') : 1}`,
+      id: `b${crypto.randomUUID()}`,
       name,
       author: this.author.author,
       created: Date.now(),
@@ -588,9 +640,7 @@ export class Doc {
       state: Y.encodeStateAsUpdate(this.ydoc),
       counters,
     };
-    this.ydoc.transact(() => {
-      const nb = this.counters.get('nextBranch');
-      this.counters.set('nextBranch', (Number.isSafeInteger(nb) ? nb! : 1) + 1);
+    this.privateDoc.transact(() => {
       this.branches.set(b.id, b);
     }, HISTORY);
     return b;
@@ -600,7 +650,7 @@ export class Doc {
   openBranch(id: string): Doc | null {
     const b = this.branch(id);
     if (!b) return null;
-    const ydoc = new Y.Doc({ gc: false });
+    const ydoc = new Y.Doc({ gc: true });
     try {
       Y.applyUpdate(ydoc, b.state);
     } catch {
@@ -613,12 +663,12 @@ export class Doc {
 
   saveBranch(id: string, d: Doc) {
     const b = this.branch(id);
-    if (b) this.ydoc.transact(() => this.branches.set(id, { ...b, state: Y.encodeStateAsUpdate(d.ydoc) }), HISTORY);
+    if (b) this.privateDoc.transact(() => this.branches.set(id, { ...b, state: Y.encodeStateAsUpdate(d.ydoc) }), HISTORY);
   }
 
   /** `branch.discard` */
   discardBranch(id: string) {
-    this.ydoc.transact(() => this.branches.delete(id), HISTORY);
+    this.privateDoc.transact(() => this.branches.delete(id), HISTORY);
   }
 
   /** `branch.compare`: what accepting the branch would change in the document now. */
@@ -707,33 +757,87 @@ export class Doc {
     const want = new Set(target.cells.map((c) => c.id));
     for (let i = this.cells.length - 1; i >= 0; i--) {
       const m = this.cells.get(i);
-      if (!isCell(m) || !want.has(m.get('id')!)) this.cells.delete(i, 1);
+      if (!isCell(m) || !want.has(m.get('id') as string)) this.cells.delete(i, 1);
     }
     target.cells.forEach((c, i) => {
       const at = this.index(c.id);
-      if (at === i) {
-        if (this.cells.get(i).get('text') !== c.text) this.cells.get(i).set('text', c.text);
-        return;
+      if (at < 0) this.insertCell(toMap(c), i);
+      else {
+        setText(this.orderedCells()[at], c.text);
+        if (at !== i) {
+          const order = this.orderedCells().map(cellKey);
+          const [key] = order.splice(at, 1);
+          order.splice(i, 0, key);
+          this.writeOrder(order);
+        }
       }
-      if (at >= 0) this.cells.delete(at, 1);
-      this.cells.insert(i, [toMap(c)]);
     });
   }
 
-  private record(note: string, author: string) {
-    const n = this.history.length + 1;
-    const snapshot = Y.encodeSnapshot(Y.snapshot(this.ydoc));
-    this.ydoc.transact(() => {
-      this.history.push([{ n, author, note, time: Date.now(), snapshot }]);
-      this.meta.set('edited', Date.now());
-    }, HISTORY);
+  /** Explicit retained recovery checkpoint, outside the shared document. */
+  checkpoint(note = 'checkpoint', author = this.localOrigin.author, retained = true): Version {
+    const n = Math.max(0, ...this.versions().map(v => v.n)) + 1;
+    const v = { n, author, authorKind: this.author.kind, note, retained, time: Date.now(), snapshot: new Uint8Array(), update: Y.encodeStateAsUpdate(this.ydoc) };
+    this.history.push([v]);
+    return v;
   }
+
+  private record(note: string, author: string) {
+    this.checkpoint(note, author, false);
+    // Bound automatic recovery; explicitly retained checkpoints and imported history stay.
+    let excess = this.versions().filter(v => v.retained === false).length - 50;
+    for (let i = 0; excess > 0 && i < this.history.length;) {
+      if (this.history.get(i)?.retained === false) { this.history.delete(i, 1); excess--; }
+      else i++;
+    }
+    this.ydoc.transact(() => this.meta.set('edited', Date.now()), HISTORY);
+  }
+
+  private orderedCells(): Y.Map<unknown>[] {
+    const cells = this.cells.toArray().filter(isCell);
+    const order = this.cellOrder.toArray();
+    const rank = new Map(order.map((key, i) => [key, i]));
+    return cells.sort((a, b) => (rank.get(cellKey(a)) ?? Infinity) - (rank.get(cellKey(b)) ?? Infinity));
+  }
+
+  private writeOrder(keys: string[]) {
+    // Splice only the changed range; concurrent untouched insertions survive.
+    const old = this.cellOrder.toArray();
+    let start = 0, end = 0;
+    while (start < old.length && start < keys.length && old[start] === keys[start]) start++;
+    while (end < old.length - start && end < keys.length - start && old[old.length - 1 - end] === keys[keys.length - 1 - end]) end++;
+    if (old.length - start - end) this.cellOrder.delete(start, old.length - start - end);
+    this.cellOrder.insert(start, keys.slice(start, keys.length - end));
+  }
+
+  private insertCell(cell: Y.Map<unknown>, index: number) {
+    const keys = this.orderedCells().map(cellKey);
+    this.cells.push([cell]);
+    keys.splice(Math.max(0, Math.min(index, keys.length)), 0, cellKey(cell));
+    this.writeOrder(keys);
+  }
+
+  cellText(id: string): Y.Text | undefined {
+    const text = this.orderedCells().find(m => m.get('id') === id)?.get('text');
+    return text instanceof Y.Text ? text : undefined;
+  }
+
+  proposalList(): ProposalRecord[] {
+    return [...this.proposals.values()].filter(validProposal);
+  }
+
+  propose(record: ProposalRecord) {
+    if (!validProposal(record)) throw new Error('invalid proposal');
+    this.step('propose', () => this.proposals.set(record.id, record));
+  }
+
 }
 
-function toMap(c: CellData): Y.Map<string> {
-  const m = new Y.Map<string>();
+function toMap(c: CellData): Y.Map<unknown> {
+  const m = new Y.Map<unknown>();
   m.set('id', c.id);
-  m.set('text', c.text);
+  m.set('text', new Y.Text(c.text));
+  m.set('key', crypto.randomUUID());
   return m;
 }
 
@@ -790,4 +894,36 @@ export function merge(
     comparison.hints++;
   }
   return { result: { context, cells, hints }, comparison };
+}
+
+function cellKey(m: Y.Map<unknown>): string {
+  return isStr(m.get('key')) ? m.get('key') as string : `legacy:${m.get('id')}`;
+}
+
+/** Preserve unchanged characters so disconnected commits merge instead of replacing text. */
+function setText(m: Y.Map<unknown>, next: string) {
+  const text = m.get('text');
+  if (!(text instanceof Y.Text)) { m.set('text', new Y.Text(next)); return; }
+  const old = text.toString();
+  let start = 0, end = 0;
+  while (start < old.length && start < next.length && old[start] === next[start]) start++;
+  while (end < old.length - start && end < next.length - start && old[old.length - 1 - end] === next[next.length - 1 - end]) end++;
+  if (old.length - start - end) text.delete(start, old.length - start - end);
+  const insert = next.slice(start, next.length - end);
+  if (insert) text.insert(start, insert);
+}
+
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+export interface ProposalRecord {
+  id: string;
+  author: string;
+  time: number;
+  title: string;
+  payload: JsonValue;
+  status: 'pending' | 'accepted' | 'rejected';
+  decidedBy?: string;
+}
+export function validProposal(v: unknown): v is ProposalRecord {
+  const json = (x: unknown): boolean => x === null || isStr(x) || typeof x === 'boolean' || isNum(x) || (Array.isArray(x) ? x.every(json) : isObj(x) && Object.getPrototypeOf(x) === Object.prototype && Object.values(x).every(json));
+  try { return isObj(v) && isStr(v.id) && isStr(v.author) && isNum(v.time) && isStr(v.title) && ['pending', 'accepted', 'rejected'].includes(v.status as string) && json(v.payload) && (v.decidedBy === undefined || isStr(v.decidedBy)); } catch { return false; }
 }

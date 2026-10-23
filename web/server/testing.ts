@@ -9,6 +9,10 @@ import { b64url, pkceChallenge, randomToken, utf8 } from './crypto';
 import { GOOGLE_AUTH, GOOGLE_JWKS, GOOGLE_TOKEN } from './oidc';
 import { RESEND_API } from './mail';
 import { handle } from './router';
+import { access } from './docs';
+import { putSnapshot } from './testing-snapshots';
+import type { ReadyEnv } from './env';
+import type { Session } from './auth';
 
 export const ORIGIN = 'https://diagcalc.example.org';
 export const CLIENT_ID = 'test-client.apps.example';
@@ -152,6 +156,17 @@ export class World {
             ...(options.email === false ? {} : { RESEND_API_KEY: 're_test_key', EMAIL_FROM: 'Calculator <share@send.example.org>' }),
             ...(options.appOrigin ? { APP_ORIGIN: options.appOrigin } : {}),
           };
+    if (options.accounts !== false) w.env.LIVE = {
+      idFromName: id => id,
+      get: () => ({ fetch: async req => {
+        if (new URL(req.url).pathname === '/internal/revoke') return new Response(null, { status: 204 });
+        const identity = JSON.parse(req.headers.get('x-dc-identity')!);
+        const row = await DB.prepare('SELECT u.id, u.email, u.name, s.created, s.expires FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?').bind(identity.session).first<{ id: string; email: string; name: string; created: number; expires: number }>();
+        const s: Session | null = row ? { id: '', user: { id: row.id, email: row.email, name: row.name }, created: row.created, expires: row.expires } : null;
+        const a = await access(w.env as ReadyEnv, req.headers.get('x-dc-doc')!, s, identity.link);
+        return putSnapshot(req, w.env as ReadyEnv, a, s, w.deps);
+      } }),
+    };
     return w;
   }
 
@@ -250,7 +265,7 @@ export class Browser {
     const r = await this.fetch('/api/docs', { method: 'POST', json: { name } });
     if (r.status !== 201) throw new Error(`create failed: ${r.status}`);
     const { id } = (await r.json()) as { id: string };
-    const put = await this.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'if-match': '"0"' }, body: content });
+    const put = await this.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'if-match': '"0"', 'x-doc-generation': '1' }, body: content });
     if (put.status !== 200) throw new Error(`save failed: ${put.status}`);
     return id;
   }

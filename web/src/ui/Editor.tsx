@@ -1,10 +1,43 @@
 // A text cell's editor: CodeMirror with one line per cell (notes may span lines).
-import { onCleanup, onMount } from 'solid-js';
-import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/view';
+import { createEffect, onCleanup, onMount } from 'solid-js';
+import { EditorState, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, EditorView, WidgetType, keymap, placeholder as cmPlaceholder } from '@codemirror/view';
+import type { DecorationSet } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 
+export interface RemoteCursor { anchor: number; head: number; name: string; colour: string }
+const remotePositions = StateEffect.define<RemoteCursor[]>();
+class CollaboratorCaret extends WidgetType {
+  constructor(readonly name: string, readonly colour: string) { super(); }
+  eq(other: CollaboratorCaret) { return this.name === other.name && this.colour === other.colour; }
+  toDOM() {
+    const caret = document.createElement('span'); caret.className = 'remote-caret';
+    caret.style.borderColor = this.colour; caret.setAttribute('aria-label', `${this.name}'s cursor`);
+    const label = document.createElement('span'); label.textContent = this.name; label.style.backgroundColor = this.colour;
+    caret.append(label); return caret;
+  }
+}
+const remoteDecoration = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, transaction) {
+    let result = value.map(transaction.changes);
+    for (const effect of transaction.effects) if (effect.is(remotePositions)) {
+      const ranges = effect.value.flatMap((c) => {
+        if (!Number.isInteger(c.anchor) || !Number.isInteger(c.head) || Math.min(c.anchor, c.head) < 0 || Math.max(c.anchor, c.head) > transaction.newDoc.length) return [];
+        const colour = /^#[0-9a-f]{6}$/i.test(c.colour) ? c.colour : '#537bc4';
+        const caret = Decoration.widget({ widget: new CollaboratorCaret(c.name, colour), side: 1 }).range(c.head);
+        return c.anchor === c.head ? [caret] : [Decoration.mark({ attributes: { style: `background-color:${colour}30` } }).range(Math.min(c.anchor, c.head), Math.max(c.anchor, c.head)), caret];
+      });
+      result = Decoration.set(ranges, true);
+    }
+    return result;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
 export interface EditorProps {
+  remoteCursors?: RemoteCursor[];
+  onSelection?: (selection: { anchor: number; head: number } | null) => void;
   text: string;
   placeholder?: string;
   autofocus?: boolean;
@@ -16,7 +49,7 @@ export interface EditorProps {
   /** Focus left the cell (after committing any change). */
   onLeave?: () => void;
   /** Gives the parent a way to replace the text, e.g. from the cell-kind menu. */
-  ref?: (api: { set: (t: string, cursor?: number) => void; focus: () => void }) => void;
+  ref?: (api: { set: (t: string, cursor?: number, focus?: boolean) => void; focus: () => void }) => void;
 }
 
 export function Editor(props: EditorProps) {
@@ -37,7 +70,7 @@ export function Editor(props: EditorProps) {
       state: EditorState.create({
         doc: props.text,
         extensions: [
-          history(),
+          history(), remoteDecoration,
           keymap.of([
             { key: 'Mod-Enter', run: commit },
             { key: 'Enter', run: () => (multiline() ? false : commit()) },
@@ -49,6 +82,7 @@ export function Editor(props: EditorProps) {
           cmPlaceholder(props.placeholder ?? ''),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) props.onChange?.(text());
+            if (u.selectionSet || u.docChanged || u.focusChanged) props.onSelection?.(u.view.hasFocus ? { anchor: u.state.selection.main.anchor, head: u.state.selection.main.head } : null);
           }),
           EditorView.domEventHandlers({
             blur: (e) => {
@@ -65,9 +99,11 @@ export function Editor(props: EditorProps) {
       }),
     });
     props.ref?.({
-      set: (t, cursor) => {
-        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t }, selection: { anchor: cursor ?? t.length } });
-        view.focus();
+      set: (t, cursor, focus = true) => {
+        if (!focus) committed = t;
+        const anchor = Math.min(cursor ?? (focus ? t.length : view.state.selection.main.anchor), t.length);
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t }, selection: { anchor } });
+        if (focus) view.focus();
       },
       focus: () => view.focus(),
     });
@@ -77,6 +113,10 @@ export function Editor(props: EditorProps) {
       view.dispatch({ selection: { anchor: view.state.doc.length } });
     }
   });
-  onCleanup(() => view?.destroy());
+  createEffect(() => {
+    const cursors = props.remoteCursors ?? [];
+    if (view) view.dispatch({ effects: remotePositions.of(cursors) });
+  });
+  onCleanup(() => { props.onSelection?.(null); view?.destroy(); });
   return <div class="editor" classList={{ invalid: !!props.invalid }} ref={host} />;
 }

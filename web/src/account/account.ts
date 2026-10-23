@@ -84,8 +84,9 @@ export async function signOut(clear = false): Promise<{ removed: number; kept: n
   let removed = 0;
   let kept = 0;
   if (clear && u) {
+    const preserve = new Set<string>();
     try {
-      await syncAll(u);
+      await syncAccount(u, undefined, preserve);
     } catch {
       // the account cannot be reached: only copies already in step are removed
     }
@@ -93,12 +94,13 @@ export async function signOut(clear = false): Promise<{ removed: number; kept: n
       if (!ours(d, u)) continue;
       const cloud = d.cloud;
       // signed in, every document here is the account's; one still without a copy there failed to upload
-      if (!cloud) {
+      if (!cloud || d.localOnly) {
         kept++;
         continue;
       }
       // anything the account's copy does not have, such as a viewer's own edits, stays here
-      if (await withYdoc(d.id, async (y) => ahead(Y.encodeStateVector(y), cloud.sv))) {
+      if (preserve.has(d.id) || await hasPrivateBranches(d)
+        || await withYdoc(d, async (y) => unsaved(y, cloud) || y.getMap('branches').size > 0)) {
         kept++;
         continue;
       }
@@ -142,7 +144,9 @@ export function uploadOnce(localId: string, ydoc: Y.Doc, name: string, u: User):
   if (!p) {
     p = (async () => {
       const cur = await getInfo(localId);
-      if (cur?.cloud) return cur.cloud;
+      if (!cur) throw new Error('No such local document');
+      if (cur.localOnly) throw new Error('Recovery copy is local-only');
+      if (cur.cloud) return cur.cloud;
       const link = await upload(api, ydoc, name, u);
       await updateInfo(localId, { cloud: link });
       return link;
@@ -152,18 +156,33 @@ export function uploadOnce(localId: string, ydoc: Y.Doc, name: string, u: User):
   return p;
 }
 
-const dbName = (id: string) => `diagcalc-doc-${id}`;
+// Select shared storage exactly as store.openDoc does; never upload the private sidecar.
+const dbName = (d: DocInfo) => `diagcalc-doc-${d.id}${d.localGeneration ? `-v${d.localGeneration}` : ''}`;
+// Same deletion-set representation as syncDoc. Missing baselines cannot prove safe removal.
+const deletions = (update: Uint8Array) => JSON.stringify([...Y.decodeUpdate(update).ds.clients].sort(([a], [b]) => a - b));
+const unsaved = (y: Y.Doc, cloud: CloudLink) => !cloud.sv || cloud.deletions === undefined
+  || ahead(Y.encodeStateVector(y), cloud.sv) || deletions(Y.encodeStateAsUpdate(y)) !== cloud.deletions;
+
+// Deliberately conservative: no branch is discarded on the strength of a shared-state
+// baseline. Automatic checkpoints alone do not make every document ineligible for clear.
+async function hasPrivateBranches(d: DocInfo): Promise<boolean> {
+  const y = new Y.Doc();
+  const p = new IndexeddbPersistence(`diagcalc-private-${d.id}`, y);
+  try { await p.whenSynced; return y.getMap('branches').size > 0; }
+  finally { await p.destroy(); y.destroy(); }
+}
 
 /** Runs `fn` on a stored document's Yjs document, saving what it changes. */
-async function withYdoc<T>(id: string, fn: (ydoc: Y.Doc) => Promise<T>): Promise<T> {
+async function withYdoc<T>(d: DocInfo, fn: (ydoc: Y.Doc) => Promise<T>): Promise<T> {
   const ydoc = new Y.Doc({ gc: false });
-  const p = new IndexeddbPersistence(dbName(id), ydoc);
+  const p = new IndexeddbPersistence(dbName(d), ydoc);
   await p.whenSynced;
   try {
     return await fn(ydoc);
   } finally {
     await new Promise((r) => setTimeout(r, 0));
     await p.destroy();
+    ydoc.destroy();
   }
 }
 
@@ -180,31 +199,40 @@ export interface SyncReport {
  * here are copied here, and copies that changed on either side are brought in step.
  */
 export async function syncAll(u: User, onChange?: () => void): Promise<SyncReport> {
+  return syncAccount(u, onChange);
+}
+
+async function syncAccount(u: User, onChange?: () => void, preserve?: Set<string>): Promise<SyncReport> {
   const report: SyncReport = { uploaded: 0, downloaded: 0, updated: 0, failed: 0 };
   const remote = await api.list();
   const byId = new Map<string, CloudDoc>([...remote.owned, ...remote.shared].map((d) => [d.id, d]));
   const local = await listDocs();
   for (const d of local) {
-    if (!ours(d, u)) continue;
+    if (!ours(d, u) || d.localOnly) continue;
     try {
       if (!d.cloud) {
-        await withYdoc(d.id, (y) => uploadOnce(d.id, y, d.name, u));
+        await withYdoc(d, (y) => uploadOnce(d.id, y, d.name, u));
         report.uploaded++;
       } else {
         const meta = byId.get(d.cloud.id);
         // gone from the account, or no longer shared: leave the local copy alone
-        if (!meta) continue;
-        const changedHere = d.edited > (d.cloud.synced ?? 0);
-        if (meta.version === d.cloud.version && !changedHere) continue;
-        const { link, name, edited } = await withYdoc(d.id, async (y) => {
+        if (!meta) { preserve?.add(d.id); continue; }
+        const result = await withYdoc(d, async (y) => {
+          // Deletion-only commits need not advance the edited timestamp.
+          if (meta.version === d.cloud!.version && meta.generation === d.cloud!.generation
+            && meta.role === d.cloud!.role && !unsaved(y, d.cloud!)) return null;
           const link = await syncDoc(api, y, d.cloud!, d.name, meta);
           const doc = new Doc(y);
           return { link, name: doc.meta.has('name') ? doc.name : d.name, edited: doc.edited ?? d.edited };
         });
+        if (!result) continue;
+        const { link, name, edited } = result;
         await updateInfo(d.id, { cloud: link, name, edited: Math.max(d.edited, edited) });
         report.updated++;
       }
     } catch {
+      // A generation fence or failed save invalidates the old baseline for removal.
+      preserve?.add(d.id);
       report.failed++;
     }
     onChange?.();
@@ -231,6 +259,8 @@ export async function openFromAccount(u: User | null, meta: Pick<CloudDoc, 'id' 
     account: u?.id ?? null,
     role: s.role,
     version: s.version,
+    generation: s.generation,
+    deletions: s.data.length ? deletions(s.data) : '[]',
     sv: s.data.length ? Y.encodeStateVectorFromUpdate(s.data) : new Uint8Array([0]),
     ...(token ? { token } : {}),
     ...(meta.owner ? { owner: meta.owner } : {}),

@@ -57,8 +57,9 @@ export function AccountBar(props: { onSignedOut?: (r: { removed: number; kept: n
                     <span>
                       Also remove this account's documents from this browser (on a shared computer)
                       <span class="hint" style={{ display: 'block' }}>
-                        They stay in your account and come back when you sign in again. A copy with changes your account does not have
-                        yet is kept here. Saved results are cleared too.
+                        Synced documents come back from your account when you sign in again. Copies with unsaved changes,
+                        personal branches, or local-only recovery are kept here. Removed copies lose their private local
+                        checkpoint history permanently. Saved results are cleared too.
                       </span>
                     </span>
                   </label>
@@ -193,7 +194,7 @@ export function OpenShared(props: { id: string; token?: string }) {
 /** The open document's save status in the top bar. */
 export function SyncBadge(props: { sync: DocSync }) {
   return (
-    <span class="hint sync" data-testid="sync" data-status={props.sync.status()} classList={{ warn: !['saving', 'saved', 'view-only'].includes(props.sync.status()) }}>
+    <span class="hint sync" data-testid="sync" data-status={props.sync.status()} classList={{ warn: !['saving', 'saved', 'live', 'connecting', 'view-only'].includes(props.sync.status()) }}>
       {statusText[props.sync.status()]}
     </span>
   );

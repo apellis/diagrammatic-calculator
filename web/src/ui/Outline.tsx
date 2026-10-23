@@ -34,6 +34,7 @@ export function Outline(props: {
   onSelect: (id: string) => void;
   onVersion: (n: number) => void;
   onSnapshot: (i: number) => void;
+  authorLabel?: (id?: string, kind?: 'person' | 'ai') => string;
   /** Watches pinned as measures of progress, and the term counts each has had. */
   pinned?: { id: string; trend: number[] }[];
 }) {
@@ -113,7 +114,7 @@ export function Outline(props: {
             <button class="oitem" onClick={() => props.onVersion(v.n)} title={new Date(v.time).toLocaleString()} data-note={v.note}
               aria-label={`Version ${v.n}: ${v.note}, ${ago(v.time)}`}>
               <span class="muted" style={{ width: '3ch', flex: 'none' }}>{v.n}</span>
-              <span class="t grow">{v.author === 'AI' ? <span class="badge">AI</span> : null} <HistoryNote note={v.note} /></span>
+              <span class="t grow"><span class="hint">{props.authorLabel?.(v.author, v.authorKind) ?? v.author}: </span><HistoryNote note={v.note} /></span>
               <span class="muted" style={{ 'font-size': '11px' }}>{ago(v.time)}</span>
             </button>
           )}

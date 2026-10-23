@@ -384,10 +384,12 @@ for evaluations, where a job can be cancelled or stopped at its time limit by re
 worker. Requests and responses are typed by `src/engine/ops.gen.ts`, generated from `spec/ops/`
 (`npm run gen-ops`; CI checks it is current).
 
-**Document.** `src/doc/model.ts`: a Yjs document holding the context, the cells (each an ID and
-its text as one entry of a `.dcw` file), pinned snapshots and the version history. Every change is
-one step through `Doc.step`, so it is one undo step (Yjs `UndoManager`) and one version, recorded
-with a Yjs snapshot so any version opens read-only and can be restored. Documents are stored in
+**Document.** `src/doc/model.ts`: a shared Yjs document holding the context, committed cells,
+pinned snapshots, proposals and activity. Each cell has an immutable UUID, a repairable public ID
+and committed `Y.Text`; `cellOrder` orders UUIDs. The UI keys rows, private drafts and focus by UUID,
+resolving the current public ID only when an operation runs. `Doc.step` supplies session-specific
+undo origins. A separate private Yjs sidecar holds personal branches and recovery: the latest 50
+automatic steps plus explicitly retained checkpoints, not every intermediate edit. Both are stored in
 IndexedDB (`y-indexeddb`) with an index for the document list; `.dcw` export and import go through
 `workspace.parse`, so the file is canonical. A `.dch` file holds the history (`spec/history.md`);
 importing one rebuilds the document version by version (`src/doc/dcw.ts`): each version's
@@ -549,8 +551,9 @@ no object) is written and shows its error as the cell's result. A result is type
 its text in the fixed-width font, selected, to copy. Raw views of files and data (a version's `.dcw`, a snapshot's JSON, an AI tool call's
 input) stay in the fixed-width font.
 
-**Branches (4b).** A branch is its own Yjs document, kept as an update in the main document's
-`branches` map with the inputs it started from; the page shows either the document or a branch,
+**Branches.** A branch is its own Yjs document, kept as an update in the private sidecar's
+`branches` map with the inputs it started from. Cloud branch storage is scoped to the current user
+and document, never broadcast to collaborators. The page shows either the document or a branch,
 each with its own evaluator over the shared cache. `branch.accept` is a three-way merge of the
 branch's changes since it started into the document as it is now (cells changed, added, removed,
 hints), applied as one step that changes as little as possible; a cell both sides changed takes
@@ -692,13 +695,19 @@ version, size, the R2 key of the current snapshot, link role and token), `shares
 lower-case e-mail address, role) and `sent_mail` (only sender and time, for the daily limit). Shares
 are by address, so a document can be shared with someone who has never signed in. R2 holds each
 document's content, a Yjs update, under `docs/<id>/snapshots/<random>`, and exported files under
-`docs/<id>/files/<name>`. The server never reads a snapshot.
+`docs/<id>/files/<name>`. The live room reads snapshots to validate and merge CRDT structure; it
+never computes mathematics. Migration adds document generations, checkpoint and personal-branch
+metadata, and bounded socket/nonce admission records.
 
-**Saving.** `PUT /api/docs/:id/snapshot` carries `If-Match: "<version>"`. The content is written to
+**REST saving.** `PUT /api/docs/:id/snapshot` carries `If-Match: "<version>"` and
+`X-Doc-Generation`. Pages authenticates it and forwards it to the live room, which serializes it
+with WebSocket writes and stages structural validation before changing authority. Content is written to
 a fresh R2 key, then D1 moves the version on only if it is still the one the page read; otherwise
 the fresh object is deleted and the answer is 409 with the current version. The page then fetches
 the current content, merges it into its own (Yjs merges without losing either side's steps) and
-saves again. A save that loses the race therefore never overwrites another, and the previous
+saves again within the same generation. A generation mismatch instead preserves a detached local
+recovery copy and reopens a fresh current-generation document; it must never merge old schema
+updates into the new room. A save that loses the race never overwrites another, and the previous
 snapshot is deleted only after the new one is current.
 
 **Access.** Every document route first works out the caller's role: owner, a share to their
@@ -752,17 +761,20 @@ fetch. On sign-in the document list syncs everything (`syncAll`): documents made
 the account (each once, even if an open document tries at the same moment), the account's
 documents missing here are copied here, and changed copies are brought in step. A document that
 belongs to another account signed in earlier on this browser is left alone and tagged. An open
-document (`src/account/docsync.ts`) syncs when it opens, 1.5 s after a change, when the page is
-hidden, and every minute while visible, and the top bar says where it stands ("Saved to your
-account", "Saving…", "Offline: saved in this browser", "View only: changes stay in this browser").
+document (`src/account/docsync.ts`) prefers the live provider. Local commits and evaluation happen
+immediately, independent of network acknowledgement; remote evaluation coalesces bursts. REST
+fallback syncs on open, after changes, on hide and periodically. The top bar distinguishes live,
+saving, offline, view-only and migration/recovery states. Viewers have no editable shared controls.
+Detached recovery copies carry a durable local-only marker respected by all upload paths.
 Exporting a `.dcw` also keeps a copy with the document in R2; "Files kept with this document" in
 the command palette lists them, to download, open as a new document or (for editors) remove.
 Deleting an owned document deletes it from the account; removing a shared one only removes the
 copy here. Signing out keeps the copies in this browser, unless the person ticks "Also remove this
 account's documents from this browser" (for a shared computer): every copy is first synced, then
-removed, except one that still has changes the account lacks (its state vector is ahead of the
-server's, as with a viewer's own edits or a failed save), which is kept and counted in the notice;
-the result cache is cleared too.
+removed, except one with unsaved work, local-only recovery or private branches, which is kept and
+counted in the notice. Clear-sign-out explicitly warns that private checkpoints of removed copies
+are permanently lost; checkpoint-only history does not force every copy to be retained. The
+result cache is cleared too.
 
 **Sharing.** The Share button opens a dialog: add a person by address as viewer or editor (with or
 without an e-mail), change or remove their access, and set the link (off, anyone can view, anyone
@@ -776,10 +788,36 @@ stand-in for the API with the same routes and rules (roles, CSRF token, versione
 several browser contexts so they can be several devices and several people. It checks that with no
 API the app is unchanged, the sign-in round trip and its failure message, the phase 6 gate end to
 end (a document made anonymously survives sign-in, opens on a second device, and is shared
-read-only with a second account, whose edits stay local), opening by a view link without an
+read-only with a second account, whose shared editing controls are disabled), opening by a view link without an
 account, signing out (keeping the copies, or removing them on a shared computer), the files kept
 with a document, and deleting from the account.
 
-**Not yet.** Real-time editing together (phase 7); until then two devices editing the same document
-merge on each save, but a cell both add while apart can get the same ID. The
-version history of a document merged from two devices interleaves both histories.
+## Live co-editing (phase 7)
+
+`web/live/room.ts` exports the SQLite-backed `DocRoom`. The production Worker fetch handler is
+always forbidden; Pages reaches the class through its external `LIVE` binding. Signed short-lived
+tickets bind document, generation and session/link access, with one-use nonce admission. The room
+rechecks access on messages and within one minute while idle. Terminal status frames revoke the
+client immediately without relying on a peer's close handshake. Viewers never write.
+
+Updates are staged on a clone, bounded by message and resulting-document limits, then persisted
+to R2/D1 and transactional DO storage before broadcast and the sender's single durable-save ack.
+The room repairs colliding public cell IDs without changing UUIDs. Checkpoints and personal
+branches are distinct from the shared working state. Generation-zero documents are read-only
+until an owner migrates them, preserving the exact legacy checkpoint and detached local work.
+
+`src/account/live.ts` speaks the Yjs protocol and maintains authenticated presence. A private
+editor draft is never a shared Yjs edit. Committed-text cursors use relative positions; private
+branches publish only generic branch/AI-active presence, not their names, text or selections.
+
+Shared proposal decisions use a hash of the full shared update (including deletions), a staged
+candidate and a room compare-and-set. The successful client applies the decided change as one
+local undo step; competing decisions fail without a second application. Pinned results capture
+their dependency workspace and run settings; recomputation compares value and provenance, not
+incidental SVG/drawing IDs, and leaves the shared document unchanged.
+
+`tests/live.spec.ts` and `tests/recovery.spec.ts` exercise multiple independent browser contexts,
+private drafts, UUID repair, reconnect, recovery, proposals and presence privacy. The separate
+`live/` Miniflare tests execute the production room and Pages router with real storage and session
+signatures, including save readback, nonce/session/origin rejection, revocation, generation fencing
+and idle-alarm cessation. Browser transport fixtures alone are not a security or persistence proof.

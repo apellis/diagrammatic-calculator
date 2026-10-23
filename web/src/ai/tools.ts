@@ -7,7 +7,7 @@
 // accepting a branch are only proposed: the person accepts or rejects them.
 import type { Calls } from '../eval/evaluator';
 import type { CellState } from '../eval/evaluator';
-import type { Comparison, Doc, TimelineEntry } from '../doc/model';
+import type { Comparison, Doc, Inputs, TimelineEntry } from '../doc/model';
 import { kindOf } from '../doc/model';
 import { OP_TOOLS } from './optools.gen';
 import type { OpName } from '../engine/ops.gen';
@@ -32,6 +32,13 @@ export interface SelectionRef {
 /** A change the AI proposes and the person accepts or rejects. */
 export interface Proposal {
   id: number;
+  key?: string;
+  author?: string;
+  /** Preconditions and executable data; never a serialized function. */
+  base?: Inputs;
+  after?: Inputs;
+  operation?: { name: string; args: Record<string, unknown> };
+  branch?: string;
   /** `write`: any change to a document someone else owns, which waits for the person. */
   kind: 'remove' | 'accept-branch' | 'write';
   /** The cell to remove, the branch to accept, or what the write does. */
@@ -55,6 +62,7 @@ export interface ToolHost {
   /** Cell states once every cell is computed (or after a time limit). */
   settled(): Promise<Map<string, CellState>>;
   termContext(): string;
+  snapshotRun?(id: string): { workspace: string; scalars?: string[]; summands?: number } | undefined;
   selection(): SelectionRef | null;
   /** `apply` makes a `write` proposal's change once the person accepts it. */
   propose(p: Omit<Proposal, 'id' | 'state'>, apply?: () => void): Proposal;
@@ -64,6 +72,7 @@ export interface ToolHost {
    * and the AI's notes are not written into it.
    */
   foreign(): boolean;
+  readOnly?(): boolean;
 }
 
 const note = { type: 'string', description: 'One line saying why, shown in the history and the activity timeline.' };
@@ -276,9 +285,9 @@ export function cellView(id: string, text: string, s: CellState | undefined): Re
 
 function log(host: ToolHost, e: Omit<TimelineEntry, 'time' | 'author'>) {
   // nothing the AI writes reaches someone else's document unless the person confirms it
-  if (host.foreign()) return;
+  if (host.foreign() || host.readOnly?.()) return;
   const b = host.branch();
-  host.main.log({ ...e, ...(b ? { branch: b.name } : {}) });
+  host.doc().log({ ...e, ...(b ? { branch: b.name } : {}) });
 }
 
 const ASK_CONTEXT = 'diagcalc.ai.askBeforeContext';
@@ -314,6 +323,8 @@ export async function runTool(host: ToolHost, name: string, input: unknown): Pro
   const problem = validate(def.input_schema, input);
   if (problem) return { content: JSON.stringify({ INVALID_INPUT: problem, received: input }), isError: true, summary: `${name}: ${problem}` };
   const a = input as Record<string, unknown>;
+  if (host.readOnly?.() && (WRITES.has(name) || ['cell_remove', 'branch_accept', 'timeline_note', 'milestone_write'].includes(name)))
+    return { content: 'This document is view only. Make a personal branch to edit.', isError: true, summary: 'view only' };
   try {
     const op = OPS.get(name);
     if (op) return await runOp(host, op, a);
@@ -321,6 +332,15 @@ export async function runTool(host: ToolHost, name: string, input: unknown): Pro
   } catch (e) {
     return { content: `The tool failed: ${(e as Error).message}`, isError: true, summary: `${name} failed` };
   }
+}
+
+export async function applyProposedWrite(host: ToolHost, operation: NonNullable<Proposal['operation']>): Promise<void> {
+  const def = TOOLS.find((t) => t.name === operation.name);
+  if (!def || !WRITES.has(operation.name)) throw new Error('Invalid proposed operation');
+  const problem = validate(def.input_schema, operation.args);
+  if (problem) throw new Error(problem);
+  const result = await runWorkspace(host, operation.name, operation.args, true);
+  if (result.isError) throw new Error(result.content);
 }
 
 async function runOp(host: ToolHost, op: OpName, a: Record<string, unknown>): Promise<ToolResult> {
@@ -348,7 +368,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
   const foreign = WRITES.has(name) && host.foreign();
   if ((foreign || (name === 'context_set' && askBeforeContext())) && !confirmed) {
     const what = describeWrite(name, a);
-    host.propose({ kind: 'write', target: what, note: n ?? what }, () => void runWorkspace(host, name, a, true));
+    host.propose({ kind: 'write', target: what, note: n ?? what, base: doc.inputs(), operation: { name, args: structuredClone(a) }, ...(host.branch() ? { branch: host.branch()!.id } : {}) }, () => void runWorkspace(host, name, a, true));
     const why = foreign ? 'This document belongs to someone else, so' : 'The person asked to confirm every change of the context, so';
     return ok(`proposed: ${what}`, `${why} the change (${what}) is only proposed; the person will accept or reject it. Do not wait for the answer.`);
   }
@@ -388,7 +408,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
     case 'cell_remove': {
       const id = a.id as string;
       if (doc.index(id) < 0) return fail(`There is no cell ${id}.`);
-      host.propose({ kind: 'remove', target: id, note: n! });
+      host.propose({ kind: 'remove', target: id, note: n!, base: doc.inputs(), ...(host.branch() ? { branch: host.branch()!.id } : {}) });
       log(host, { kind: 'proposal', text: n!, detail: `remove ${id}` });
       return ok(`proposed removing ${id}`, `Proposed removing ${id}; the person will accept or reject it. Do not wait for the answer.`);
     }
@@ -411,7 +431,9 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
     case 'branch_accept': {
       const b = host.branch();
       if (!b) return fail('No branch is shown.');
-      host.propose({ kind: 'accept-branch', target: b.id, note: n! });
+      const preview = host.main.previewBranch(b.id, doc);
+      if (!preview) return fail('The branch cannot be compared.');
+      host.propose({ kind: 'accept-branch', target: b.id, note: n!, base: preview.before, after: preview.after });
       log(host, { kind: 'proposal', text: n!, detail: `accept branch ${b.name}` });
       return ok(`proposed accepting ${b.name}`, `Proposed accepting “${b.name}”; the person will confirm or not. Do not wait for the answer.`);
     }
@@ -446,8 +468,10 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
         if (doc.index(id) < 0) return fail(`There is no cell ${id}.`);
         if (!s || s.status !== 'fresh' || !s.valueKey || v?.status !== 'ok' || !['def', 'watch'].includes(v.kind ?? '')) return fail(`${id} has no current value of a def or watch cell to show.`);
         // the same result already frozen is not frozen twice
-        if (!host.main.snapshotList().some((x) => x.key === s.valueKey)) {
-          host.main.pin({ name: `${a.title as string} (${id})`, cellId: id, cellText: s.text, context: doc.context, version: doc.versions().length, key: s.valueKey, value: s.value, time: Date.now() });
+        const pins = host.branch() ? doc : host.main;
+        if (!pins.snapshotList().some((x) => x.key === s.valueKey)) {
+          const run = host.snapshotRun?.(id);
+          pins.pin({ name: `${a.title as string} (${id})`, cellId: id, cellText: s.text, context: doc.context, version: doc.versions().length, key: s.valueKey, value: s.value, time: Date.now(), ...(run ? { run } : {}) });
         }
         keys.push(s.valueKey);
       }

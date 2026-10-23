@@ -16,6 +16,7 @@ export interface Me {
 }
 
 export interface Person {
+  id?: string;
   /** Left out for someone who has the document only through its link. */
   email?: string;
   name: string;
@@ -27,6 +28,7 @@ export interface CloudDoc {
   created: number;
   edited: number;
   version: number;
+  generation?: number;
   size: number;
   role: Role;
   owner?: Person;
@@ -35,6 +37,7 @@ export interface CloudDoc {
 }
 
 export interface Share {
+  accountId?: string;
   email: string;
   role: 'viewer' | 'editor';
   created: number;
@@ -138,15 +141,55 @@ export class Api {
     return (await this.call(`/docs/${id}`, { link })).json();
   }
 
-  async snapshot(id: string, link?: string): Promise<{ data: Uint8Array; version: number; role: Role }> {
+  async snapshot(id: string, link?: string): Promise<{ data: Uint8Array; version: number; role: Role; generation?: number }> {
     const r = await this.call(`/docs/${id}/snapshot`, { link });
-    return { data: new Uint8Array(await r.arrayBuffer()), version: Number(r.headers.get('x-doc-version')), role: r.headers.get('x-doc-role') as Role };
+    return { data: new Uint8Array(await r.arrayBuffer()), version: Number(r.headers.get('x-doc-version')), role: r.headers.get('x-doc-role') as Role, generation: r.headers.has('x-doc-generation') ? Number(r.headers.get('x-doc-generation')) : undefined };
   }
 
   /** Saves on top of `version`; an ApiError with status 409 carries the current version. */
-  async save(id: string, data: Uint8Array, version: number, name: string, link?: string): Promise<{ version: number }> {
-    const headers = { 'if-match': `"${version}"`, 'x-doc-name': encodeURIComponent(name), 'content-type': 'application/octet-stream' };
+  async save(id: string, data: Uint8Array, version: number, name: string, link?: string, generation?: number): Promise<{ version: number; generation?: number }> {
+    const headers: Record<string, string> = { 'if-match': `"${version}"`, 'x-doc-name': encodeURIComponent(name), 'content-type': 'application/octet-stream' };
+    if (generation !== undefined) headers['x-doc-generation'] = String(generation);
     return (await this.call(`/docs/${id}/snapshot`, { method: 'PUT', headers, body: data.slice(), link })).json();
+  }
+
+  async liveTicket(id: string, link?: string): Promise<{ ticket: string; role: Role; generation: number }> {
+    return (await this.call(`/docs/${id}/live-ticket`, { method: 'POST', link })).json();
+  }
+
+  liveUrl(id: string, ticket: string): string {
+    const url = new URL(`${this.base}/docs/${id}/live`, globalThis.location?.href ?? 'http://localhost');
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('ticket', ticket);
+    return url.href;
+  }
+
+  async migrate(id: string, data: Uint8Array, generation: number, link?: string): Promise<{ version: number; generation: number }> {
+    return (await this.call(`/docs/${id}/migrate`, { method: 'POST', link, body: data.slice(), headers: { 'content-type': 'application/octet-stream', 'x-doc-generation': String(generation) } })).json();
+  }
+
+  async versions(id: string, link?: string): Promise<{ versions: { id: string; time: number; author: string; note: string; size: number }[] }> {
+    return (await this.call(`/docs/${id}/versions`, { link })).json();
+  }
+
+  async version(id: string, version: string, link?: string): Promise<Uint8Array> {
+    return new Uint8Array(await (await this.call(`/docs/${id}/versions/${encodeURIComponent(version)}`, { link })).arrayBuffer());
+  }
+
+  async branches(id: string): Promise<{ branches: { id: string; name: string; updated: number; size: number }[] }> {
+    return (await this.call(`/docs/${id}/branches`)).json();
+  }
+
+  async branch(id: string, branch: string): Promise<Uint8Array> {
+    return new Uint8Array(await (await this.call(`/docs/${id}/branches/${encodeURIComponent(branch)}`)).arrayBuffer());
+  }
+
+  async putBranch(id: string, branch: string, data: Uint8Array, name: string): Promise<void> {
+    await this.call(`/docs/${id}/branches/${encodeURIComponent(branch)}`, { method: 'PUT', body: data.slice(), headers: { 'content-type': 'application/octet-stream', 'x-doc-name': encodeURIComponent(name) } });
+  }
+
+  async deleteBranch(id: string, branch: string): Promise<void> {
+    await this.call(`/docs/${id}/branches/${encodeURIComponent(branch)}`, { method: 'DELETE' });
   }
 
   async setLink(id: string, link: 'off' | 'viewer' | 'editor'): Promise<CloudDoc> {

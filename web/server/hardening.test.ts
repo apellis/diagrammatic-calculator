@@ -57,8 +57,8 @@ describe('storage', () => {
     expect((await stranger.fetch(`/api/docs/${id}/files/a.dcw`, { method: 'PUT', headers: h, body: 'x'.repeat(500) })).status).toBe(201);
     expect((await stranger.fetch(`/api/docs/${id}/files/b.dcw`, { method: 'PUT', headers: h, body: 'x'.repeat(200) })).status).toBe(413);
     const other = await a.newDoc('R', new Uint8Array(50));
-    expect((await a.fetch(`/api/docs/${other}/snapshot`, { method: 'PUT', headers: { 'if-match': '"1"' }, body: new Uint8Array(150) })).status).toBe(413);
-    expect((await a.fetch(`/api/docs/${other}/snapshot`, { method: 'PUT', headers: { 'if-match': '"1"' }, body: new Uint8Array(90) })).status).toBe(200);
+    expect((await a.fetch(`/api/docs/${other}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': '"1"' }, body: new Uint8Array(150) })).status).toBe(413);
+    expect((await a.fetch(`/api/docs/${other}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': '"1"' }, body: new Uint8Array(90) })).status).toBe(200);
   });
 
   it('refuses an oversized body from its Content-Length, before reading it', async () => {
@@ -88,7 +88,7 @@ describe('storage', () => {
         else c.enqueue(new Uint8Array(1024));
       },
     });
-    const r = await a.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', body, headers: { 'if-match': '"1"' } });
+    const r = await a.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', body, headers: { 'x-doc-generation': '1', 'if-match': '"1"' } });
     expect(r.status).toBe(413);
     expect(sent).toBeLessThan(100_000);
   });
@@ -286,8 +286,10 @@ describe('save races', () => {
     const me = (await a.refresh()).user!;
     const session = { id: '', user: me, created: 0, expires: 0 };
     const stale = await access(w.env as ReadyEnv, id, session, null);
-    expect((await a.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'if-match': '"1"' }, body: new Uint8Array([2]) })).status).toBe(200);
+    expect((await a.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': '"1"' }, body: new Uint8Array([2]) })).status).toBe(200);
+    await w.DB.prepare('UPDATE documents SET generation = 2 WHERE id = ?').bind(id).run();
     const r = await getSnapshot(w.env as ReadyEnv, stale);
+    expect(r.headers.get('x-doc-generation')).toBe('2');
     expect(r.headers.get('x-doc-version')).toBe('2');
     expect(new Uint8Array(await r.arrayBuffer())).toEqual(new Uint8Array([2]));
   });
@@ -299,7 +301,7 @@ describe('save races', () => {
     await w.FILES.put(`docs/${id}/snapshots/leftover`, new Uint8Array([9]));
     w.clock += 3600_000;
     for (let v = 1; v < 32; v++) {
-      expect((await a.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'if-match': `"${v}"` }, body: new Uint8Array([v]) })).status).toBe(200);
+      expect((await a.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': `"${v}"` }, body: new Uint8Array([v]) })).status).toBe(200);
     }
     const left = (await w.FILES.list({ prefix: `docs/${id}/snapshots/` })).objects.map((o) => o.key);
     expect(left).toHaveLength(1);

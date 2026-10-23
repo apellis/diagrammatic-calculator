@@ -95,6 +95,8 @@ jobs:
         run: npm run build
       - name: Build the accounts API as Pages deploys it
         run: npx -y wrangler@4.149.0 pages functions build --outdir "$RUNNER_TEMP/functions"
+      - name: Build the live room
+        run: npx -y wrangler@4.149.0 deploy --dry-run --config live/wrangler.toml --outdir "$RUNNER_TEMP/live-worker"
       - name: Cache the Playwright browser
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

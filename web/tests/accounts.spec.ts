@@ -99,10 +99,11 @@ test('the phase 6 gate: a document made anonymously survives sign-in, opens on a
   await shared.locator('td.open').click();
   await expect(c.page).toHaveURL(/#\/doc\//);
   await expect(c.page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(2);
-  await expect(c.page.getByTestId('sync')).toHaveText('View only: changes stay in this browser');
-  // a viewer's edits stay in their browser
-  await addCell(c.page, 'watch x_2 e(iji)');
-  await c.page.waitForTimeout(2500);
+  await expect(c.page.getByTestId('sync')).toHaveText('View only');
+  // A viewer cannot enter an editor or add a cell (including legacy REST documents).
+  await expect(c.page.locator('[data-testid="add-cell"]:enabled')).toHaveCount(0);
+  await cell(c.page, 0).locator('.head').click();
+  await expect(c.page.locator('.cm-content[contenteditable="true"]')).toHaveCount(0);
   expect(mock.log.some((l) => l.who === bob.email && l.method === 'PUT')).toBe(false);
   expect(mock.only().version).toBe(2);
   // and the owner's sharing controls are not theirs
@@ -126,14 +127,22 @@ test('on a shared computer, signing out can remove the account\'s documents from
   const shared = mock.only().id;
   mock.shares.set(shared, new Map([['bob@example.org', 'viewer']]));
 
-  // Bob has a document of his own, and a viewer's copy of Ada's with an edit of his
+  // Bob has an owned document with an unsaved edit, and a clean viewer copy of Ada's.
   const b = await device(browser, mock, bob);
   await newDoc(b.page);
   await typeCell(b.page, 'def b := x_2 e(iji)');
   await saved(b.page);
+  const ownedUrl = b.page.url();
   await b.page.goto('/#/');
   await b.page.getByTestId('shared-with-me').locator(`tr[data-shared="${shared}"] td.open`).click();
-  await expect(b.page.getByTestId('sync')).toHaveText('View only: changes stay in this browser');
+  await expect(b.page.getByTestId('sync')).toHaveText('View only');
+  await b.page.goto('/#/');
+  const owned = [...mock.docs.values()].find((d) => d.owner === bob.id)!;
+  // Simulate unavailable snapshot storage, not editable viewer permissions. Logout remains online.
+  await b.context.route(`**/api/docs/${owned.id}/snapshot`, (route) =>
+    route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback());
+  await b.page.goto(ownedUrl);
+  await expect(cell(b.page, 0)).toBeVisible();
   await addCell(b.page, 'watch x_2 e(iji)');
   await b.page.goto('/#/');
   await expect(b.page.locator('tr[data-doc]')).toHaveCount(2);
@@ -147,13 +156,16 @@ test('on a shared computer, signing out can remove the account\'s documents from
     'Removed 1 document of the account from this browser. Kept 1 document with changes the account does not have; export or delete it if this computer is shared.',
   );
   await expect(b.page.locator('tr[data-doc]')).toHaveCount(1);
-  await expect(b.page.locator('tr[data-doc]')).toContainText('shared, can view');
+  await expect(b.page.locator('tr[data-doc]')).not.toContainText('shared, can view');
 
-  // signing in again brings the account's document back
+  // Signing in again retains the owned unsaved document and lists the shared document.
   b.session.next = bob;
   await b.page.getByTestId('sign-in').click();
   await expect(b.page.getByTestId('account-name')).toHaveText('Bob');
-  await expect(b.page.locator('tr[data-doc]')).toHaveCount(2);
+  await expect(b.page.locator('tr[data-doc]')).toHaveCount(1);
+  await expect(b.page.getByTestId('shared-with-me').locator(`tr[data-shared="${shared}"]`)).toBeVisible();
+  await b.page.locator('tr[data-doc] td.open').click();
+  await expect(cell(b.page, 1).locator('.head .text')).toHaveAttribute('data-text', 'x_2 e(iji)');
   await a.context.close();
   await b.context.close();
 });
@@ -223,7 +235,7 @@ test('a view link opens the document without an account', async ({ browser }) =>
   await d.page.goto(url.replace(/^https?:\/\/[^/]+/, ''));
   await expect(d.page).toHaveURL(/#\/doc\//);
   await expect(d.page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(1);
-  await expect(d.page.getByTestId('sync')).toHaveText('View only: changes stay in this browser');
+  await expect(d.page.getByTestId('sync')).toHaveText('View only');
   expect(mock.log.filter((l) => l.who === null && l.path.startsWith('docs/')).every((l) => l.link === `token${id}`)).toBe(true);
 
   // without the link and without an account, the page asks to sign in

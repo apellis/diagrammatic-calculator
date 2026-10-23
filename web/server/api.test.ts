@@ -21,7 +21,7 @@ beforeEach(() => {
 
 const body = async (r: Response) => new Uint8Array(await r.arrayBuffer());
 const put = (b: Browser, id: string, version: number, data: Uint8Array<ArrayBuffer>, headers: Record<string, string> = {}) =>
-  b.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'if-match': `"${version}"`, ...headers }, body: data });
+  b.fetch(`/api/docs/${id}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': `"${version}"`, ...headers }, body: data });
 
 describe('without configuration', () => {
   it('reports that accounts are not available, and every other route answers 503', async () => {
@@ -392,9 +392,9 @@ describe('sharing and access', () => {
     expect('link' in ((await (await editor.fetch(doc)).json()) as object)).toBe(false);
     // writing
     const v = Number((await owner.fetch(`${doc}/snapshot`)).headers.get('x-doc-version'));
-    expect(await status(viewer, `${doc}/snapshot`, { method: 'PUT', headers: { 'if-match': `"${v}"` }, body: new Uint8Array([9]) })).toBe(403);
-    expect(await status(stranger, `${doc}/snapshot`, { method: 'PUT', headers: { 'if-match': `"${v}"` }, body: new Uint8Array([9]) })).toBe(404);
-    expect(await status(editor, `${doc}/snapshot`, { method: 'PUT', headers: { 'if-match': `"${v}"` }, body: new Uint8Array([9]) })).toBe(200);
+    expect(await status(viewer, `${doc}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': `"${v}"` }, body: new Uint8Array([9]) })).toBe(403);
+    expect(await status(stranger, `${doc}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': `"${v}"` }, body: new Uint8Array([9]) })).toBe(404);
+    expect(await status(editor, `${doc}/snapshot`, { method: 'PUT', headers: { 'x-doc-generation': '1', 'if-match': `"${v}"` }, body: new Uint8Array([9]) })).toBe(200);
     expect(await status(viewer, doc, { method: 'PATCH', json: { name: 'mine' } })).toBe(403);
     expect(await status(editor, doc, { method: 'PATCH', json: { name: 'Shared notes' } })).toBe(200);
     // the owner's rights
@@ -452,13 +452,13 @@ describe('sharing and access', () => {
     expect(snap.headers.get('x-doc-role')).toBe('viewer');
     expect(await body(snap)).toEqual(new Uint8Array([7, 7]));
     expect((await anon.fetch(`/api/docs/${doc}/snapshot`, { headers: { 'x-link-token': token.slice(1) + 'A' } })).status).toBe(404);
-    expect((await stranger.fetch(`/api/docs/${doc}/snapshot`, { method: 'PUT', headers: { ...withLink, 'if-match': '"1"' }, body: new Uint8Array([1]) })).status).toBe(403);
+    expect((await stranger.fetch(`/api/docs/${doc}/snapshot`, { method: 'PUT', headers: { ...withLink, 'x-doc-generation': '1', 'if-match': '"1"' }, body: new Uint8Array([1]) })).status).toBe(403);
 
     // editing by link: the same link, now with edit rights
     const ed = (await (await owner.fetch(`/api/docs/${doc}`, { method: 'PATCH', json: { link: 'editor' } })).json()) as { link: { token: string } };
     expect(ed.link.token).toBe(token);
-    expect((await stranger.fetch(`/api/docs/${doc}/snapshot`, { method: 'PUT', headers: { ...withLink, 'if-match': '"1"' }, body: new Uint8Array([1]) })).status).toBe(200);
-    expect((await anon.fetch(`/api/docs/${doc}/snapshot`, { method: 'PUT', headers: { ...withLink, 'if-match': '"2"' }, body: new Uint8Array([1]) })).status).toBe(401);
+    expect((await stranger.fetch(`/api/docs/${doc}/snapshot`, { method: 'PUT', headers: { ...withLink, 'x-doc-generation': '1', 'if-match': '"1"' }, body: new Uint8Array([1]) })).status).toBe(200);
+    expect((await anon.fetch(`/api/docs/${doc}/snapshot`, { method: 'PUT', headers: { ...withLink, 'x-doc-generation': '1', 'if-match': '"2"' }, body: new Uint8Array([1]) })).status).toBe(401);
     // a link never lowers a role someone has, and link holders cannot manage sharing
     expect(((await (await viewer.fetch(`/api/docs/${doc}`, { headers: withLink })).json()) as { role: string }).role).toBe('editor');
     expect((await stranger.fetch(`/api/docs/${doc}`, { method: 'PATCH', headers: withLink, json: { link: 'off' } })).status).toBe(403);

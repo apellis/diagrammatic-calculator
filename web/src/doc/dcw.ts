@@ -153,17 +153,19 @@ export function fillFromHistory(d: Doc, h: History) {
       d.cells.insert(
         0,
         v.workspace.cells.map((c) => {
-          const m = new Y.Map<string>();
+          const m = new Y.Map<unknown>();
           m.set('id', c.id);
-          m.set('text', c.text);
+          m.set('text', new Y.Text(c.text));
+          m.set('key', crypto.randomUUID());
           return m;
         }),
       );
     }, IMPORT);
     max = Math.max(max, ...v.workspace.cells.map((c) => idNumber(c.id)));
-    const snapshot = Y.encodeSnapshot(Y.snapshot(d.ydoc));
+    const snapshot = new Uint8Array();
+    const update = Y.encodeStateAsUpdate(d.ydoc);
     d.ydoc.transact(() => {
-      d.history.push([{ n: v.n, author: v.author, note: v.note, time: v.time, snapshot }]);
+      d.history.push([{ n: v.n, author: v.author, note: v.note, time: v.time, snapshot, update }]);
       d.meta.set('edited', v.time);
     }, IMPORT);
   }

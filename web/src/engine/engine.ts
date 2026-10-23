@@ -4,7 +4,7 @@
 // a context); its calls run in order, each stopped after INTERACTIVE_TIMEOUT_MS (a shared or
 // imported document must not be able to freeze it). The job lane is a pool of workers for
 // evaluations that can take long; a job can be cancelled, or stopped at its time limit. Stopping
-// a call replaces its worker.
+// a call replaces its worker after a short cancellation grace period.
 import wasmUrl from './pkg/diagcalc_wasm_bg.wasm?url';
 import type { OpName, OpTypes } from './ops.gen';
 import type { FromWorker, ToWorker } from './worker';
@@ -35,6 +35,7 @@ export function limitMessage(ms: number): string {
 
 /** The time limit of every interactive call, unless the caller gives another. */
 export const INTERACTIVE_TIMEOUT_MS = 10_000;
+export const CANCELLATION_GRACE_MS = 2_000;
 
 export interface CallOptions {
   /** 'interactive' for quick operations, 'job' (the default) for evaluations. */
@@ -54,6 +55,8 @@ interface Pending {
   timeoutMs?: number;
   /** The last sizes the call reported. */
   sizes?: Sizes;
+  cancelled?: boolean;
+  removeAbort?: () => void;
 }
 
 class Slot {
@@ -61,6 +64,7 @@ class Slot {
   ready!: Promise<string>;
   current: Pending | null = null;
   timer: ReturnType<typeof setTimeout> | null = null;
+  cancelTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private module: Promise<WebAssembly.Module>,
@@ -70,11 +74,14 @@ class Slot {
   }
 
   start() {
-    this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+    const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+    this.worker = worker;
     this.ready = new Promise((resolve, reject) => {
       this.worker.onmessage = (e: MessageEvent<FromWorker>) => {
+        if (this.worker !== worker) return;
         const m = e.data;
         if (m.type === 'ready') return resolve(m.version);
+        if (!this.current || this.current.id !== m.id) return;
         if (m.type === 'progress') {
           if (this.current?.id === m.id) {
             try {
@@ -87,17 +94,18 @@ class Slot {
         }
         if (m.type === 'result') this.finish({ status: 'done', response: JSON.parse(m.response), ms: m.ms });
         else if (m.type === 'failed') {
-          this.finish({
+          this.stop({
             status: 'done',
             ms: performance.now() - (this.current?.started ?? 0),
             response: { status: 'error', kind: 'internal', message: m.message },
           });
-          this.restart();
         }
       };
       this.worker.onerror = (e) => reject(e);
     });
-    this.module.then((module) => this.worker.postMessage({ type: 'init', module } satisfies ToWorker));
+    this.module.then((module) => {
+      if (this.worker === worker) worker.postMessage({ type: 'init', module } satisfies ToWorker);
+    });
   }
 
   restart() {
@@ -113,27 +121,43 @@ class Slot {
         this.stop({ status: 'exploded', ms: performance.now() - p.started, message: limitMessage(p.timeoutMs!), ...(p.sizes ? { diagnostics: p.sizes } : {}) });
       }, p.timeoutMs);
     }
-    p.signal?.addEventListener('abort', () => {
-      if (this.current === p) this.stop({ status: 'cancelled', ms: performance.now() - p.started });
-    });
+    const abort = () => {
+      if (this.current !== p) return;
+      p.cancelled = true;
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = null;
+      // The actual WASM call is synchronous and has no cancellation flag. Posting a
+      // cancel message cannot interrupt it. Let it finish during grace (discarding
+      // the result), otherwise replace the worker. Do not claim cooperative support.
+      this.cancelTimer = setTimeout(() => {
+        if (this.current === p) this.stop({ status: 'cancelled', ms: performance.now() - p.started });
+      }, CANCELLATION_GRACE_MS);
+    };
+    p.signal?.addEventListener('abort', abort, { once: true });
+    p.removeAbort = () => p.signal?.removeEventListener('abort', abort);
     this.ready.then(() => {
-      if (this.current === p) this.worker.postMessage({ type: 'call', id: p.id, op: p.op, request: p.request } satisfies ToWorker);
+      if (this.current !== p) return;
+      if (p.cancelled) this.finish({ status: 'cancelled', ms: performance.now() - p.started });
+      else this.worker.postMessage({ type: 'call', id: p.id, op: p.op, request: p.request } satisfies ToWorker);
     });
   }
 
   /** Ends the running call without its result, replacing the worker. */
   stop(o: Outcome<unknown>) {
-    this.finish(o);
+    // Replace before pumping the next call; otherwise it can be sent to the dead worker.
     this.restart();
+    this.finish(o);
   }
 
   private finish(o: Outcome<unknown>) {
     const p = this.current;
     if (!p) return;
     if (this.timer) clearTimeout(this.timer);
-    this.timer = null;
+    if (this.cancelTimer) clearTimeout(this.cancelTimer);
+    this.timer = this.cancelTimer = null;
+    p.removeAbort?.();
     this.current = null;
-    p.resolve(o);
+    p.resolve(p.cancelled ? { status: 'cancelled', ms: performance.now() - p.started } : o);
     this.onIdle();
   }
 }

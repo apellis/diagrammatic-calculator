@@ -4,6 +4,8 @@
 
 export interface CacheStore {
   get(key: string): Promise<unknown | undefined>;
+  /** Optional for older/custom stores; ResultCache uses one transaction. */
+  getMany?(keys: string[]): Promise<Map<string, unknown>>;
   put(key: string, value: unknown): Promise<void>;
   clear(): Promise<void>;
 }
@@ -60,16 +62,38 @@ export class ResultCache implements CacheStore {
   }
 
   async get(key: string): Promise<unknown | undefined> {
-    if (this.memory.has(key)) return this.memory.get(key);
+    return (await this.getMany([key])).get(key);
+  }
+
+  async getMany(keys: string[]): Promise<Map<string, unknown>> {
+    const hits = new Map<string, unknown>();
+    const missing = [...new Set(keys)].filter((key) => {
+      if (!this.memory.has(key)) return true;
+      hits.set(key, this.memory.get(key));
+      return false;
+    });
+    if (!missing.length) return hits;
     const db = await this.db;
-    if (!db) return undefined;
-    const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
-    const row = (await req(store.get(key))) as Row | undefined;
-    if (!row) return undefined;
-    row.used = Date.now();
-    store.put(row);
-    this.remember(key, row.value);
-    return row.value;
+    if (!db) return hits;
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () => reject(tx.error);
+      // Queue every request synchronously; touch LRU rows in the same transaction.
+      for (const key of missing) {
+        const request = store.get(key);
+        request.onsuccess = () => {
+          const row = request.result as Row | undefined;
+          if (!row) return;
+          hits.set(key, row.value);
+          row.used = Date.now();
+          store.put(row);
+        };
+      }
+    });
+    for (const [key, value] of hits) this.remember(key, value);
+    return hits;
   }
 
   async put(key: string, value: unknown): Promise<void> {

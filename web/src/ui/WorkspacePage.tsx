@@ -2,10 +2,10 @@
 // evaluator.
 import { createEffect, createResource, createSignal, For, on, onCleanup, onMount, Show, type Signal } from 'solid-js';
 import { createCleanCopy, loadLink, openDoc, markExported, saveLink, type OpenDoc } from '../doc/store';
-import { kindOf, type CellData, type Comparison, type Doc, type Inputs } from '../doc/model';
+import { kindOf, type CellData, type Comparison, type Doc, type Inputs, type Snapshot } from '../doc/model';
 import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
-import { exportDch, exportDcw, fileName } from '../doc/dcw';
+import { exportDch, exportDcw, parseDcw, fileName } from '../doc/dcw';
 import { Cell, TEMPLATES } from './Cell';
 import { Outline } from './Outline';
 import { ContextChip, ContextText } from './ContextChip';
@@ -17,11 +17,17 @@ import { IMPORTABLE, importNotes, importText } from './DocList';
 import { Canvas, type Generator, type Selection } from './Canvas';
 import { AIPanel, type CellComment } from './AIPanel';
 import { isAction, keysOf, type ActionId } from './shortcuts';
-import type { Proposal, SelectionRef, ToolHost } from '../ai/tools';
+import { applyProposedWrite, type Proposal, type SelectionRef, type ToolHost } from '../ai/tools';
+import * as Y from 'yjs';
+import { prepareDecision, sharedProposals, stateHash } from '../ai/proposals';
 import { isSetUp, loadKey, loadSettings } from '../ai/providers';
 import { account, api, user } from '../account/account';
 import { DocSync } from '../account/docsync';
 import { FilesDialog, ShareDialog, SyncBadge } from './Account';
+import { CloudRecovery } from './CloudRecovery';
+import { PersonalBranches } from '../account/recovery';
+import { PinnedRecompute } from './PinnedRecompute';
+import { useAuthors } from './authors';
 
 export function WorkspacePage(props: { id: string }) {
   const [od] = createResource(() => props.id, openDoc);
@@ -52,6 +58,7 @@ export interface ViewApi {
   /** Cell states once every cell is computed (or after a time limit). */
   settled: () => Promise<Map<string, CellState>>;
   termContext: () => string;
+  snapshotRun: (id: string) => Snapshot['run'];
   /** Opens a snapshot (by its key) in the snapshot dialog. */
   showSnapshot: (key: string) => void;
 }
@@ -63,7 +70,12 @@ function Workspace(props: { o: OpenDoc }) {
   // the AI panel shows by default once a key is entered
   const [aiOpen, setAiOpen] = createSignal(isSetUp(loadSettings(), loadKey(loadSettings().provider).key));
   const [selection, setSelection] = createSignal<Selection | null>(null);
-  const [proposals, setProposals] = createSignal<Proposal[]>([]);
+  let privateProposals: Proposal[] = [];
+  const [proposals, setProposals] = createSignal<Proposal[]>(sharedProposals(main));
+  const [proposalError, setProposalError] = createSignal('');
+  const refreshProposals = () => setProposals([...sharedProposals(main), ...privateProposals]);
+  main.proposals.observe(refreshProposals);
+  onCleanup(() => main.proposals.unobserve(refreshProposals));
   let view: ViewApi | null = null;
   let focusAI: (() => void) | undefined;
   let aiBusy = false;
@@ -130,6 +142,7 @@ function Workspace(props: { o: OpenDoc }) {
       return c ? main.previewBranch(c.id, c.doc) : null;
     },
     accept: () => {
+      if ((sync()?.link() ?? props.o.info.cloud) && !sync()?.canEdit) return null;
       const c = current();
       if (!c) return null;
       flush();
@@ -146,9 +159,12 @@ function Workspace(props: { o: OpenDoc }) {
   // signed in, the document is kept in step with the account (and someone who opened it by its
   // link without signing in gets others' changes)
   const [sync, setSync] = createSignal<DocSync | null>(null);
+  const authorLabel = useAuthors(sync);
   createEffect(
     on(account, (a) => {
       const u = a.status === 'signed-in' ? a.user : null;
+      main.setIdentity(u?.id);
+      current()?.doc.setIdentity(u?.id);
       const s = sync();
       if (s && s.user?.id !== u?.id) {
         void s.stop();
@@ -169,6 +185,16 @@ function Workspace(props: { o: OpenDoc }) {
     props.o.close();
   });
 
+  createEffect(on(() => `${sync()?.cloudId ?? ''}:${sync()?.link()?.generation ?? 0}:${user()?.id ?? ''}`, () => {
+    const link = sync()?.link(), u = user();
+    if (!link || !u || link.account !== u.id || (link.generation ?? 0) === 0) return;
+    const branches = new PersonalBranches(main, api, link.id, u.id, (error) => {
+      if (!(error instanceof Error && /404|503|no such document|unavailable/.test(error.message)))
+        setProposalError(`Personal branches could not sync: ${error instanceof Error ? error.message : 'network error'}. They remain in this browser.`);
+    });
+    onCleanup(branches.start());
+  }));
+
   let nextProposal = 1;
   const applies = new Map<number, () => void>();
   // a document someone else owns: the AI's changes to it wait for the person (see ToolHost.foreign)
@@ -183,6 +209,7 @@ function Workspace(props: { o: OpenDoc }) {
     compareBranch: () => branching.compare(),
     discardBranch: () => branching.discard(),
     settled: async () => (view ? view.settled() : new Map()),
+    snapshotRun: (id) => view?.snapshotRun(id),
     termContext: () => view?.termContext() ?? (current()?.doc ?? main).context,
     selection: (): SelectionRef | null => {
       const s = selection();
@@ -191,27 +218,66 @@ function Workspace(props: { o: OpenDoc }) {
     },
     propose: (p, apply) => {
       const full: Proposal = { ...p, id: nextProposal++, state: 'open' };
-      if (apply) applies.set(full.id, apply);
-      setProposals([...proposals(), full]);
+      const personal = p.branch || p.operation?.name.startsWith('branch_') || !sync()?.cloudId;
+      if (personal) {
+        if (apply) applies.set(full.id, apply);
+        privateProposals.push(full);
+        refreshProposals();
+      } else {
+        if (!sync()?.canEdit) throw new Error('This document is view only.');
+        full.key = crypto.randomUUID();
+        full.author = user()?.id ?? main.localOrigin.author;
+        main.propose({ id: full.key, author: full.author, time: Date.now(), title: full.note,
+          payload: JSON.parse(JSON.stringify(full)), status: 'pending' });
+      }
       return full;
     },
     foreign,
+    readOnly: () => !current() && !!(sync()?.link() ?? props.o.info.cloud) && !sync()?.canEdit,
   };
-  const decide = (p: Proposal, accept: boolean) => {
-    setProposals(proposals().map((x) => (x.id === p.id ? { ...x, state: accept ? 'accepted' : 'rejected' } : x)));
-    const apply = applies.get(p.id);
-    applies.delete(p.id);
-    if (!foreign()) main.log({ kind: 'proposal', author: 'you', text: `${accept ? 'accepted' : 'rejected'}: ${p.note}` });
-    if (!accept) return;
-    if (p.kind === 'write') apply?.();
-    else if (p.kind === 'remove') host.doc().removeCell(p.target, `remove ${p.target} (proposed by the AI: ${p.note})`);
-    else {
-      if (branching.current?.id !== p.target) branching.open(p.target);
-      branching.accept();
-    }
+  const deciding = new Set<string | number>();
+  const decide = async (p: Proposal, accept: boolean) => {
+    const key = p.key ?? p.id;
+    if (deciding.has(key) || p.state !== 'open') return;
+    deciding.add(key); setProposalError('');
+    let release: (() => void) | undefined;
+    try {
+      if (p.key) {
+        const s = sync(); const link = s?.link();
+        if (!s?.canEdit || !s.live || !link || !user()) throw new Error('Reconnect with editing access to decide this proposal.');
+        release = s.live.pauseIncoming();
+        const prepared = await prepareDecision(main, p, host, accept, user()!.id);
+        if (await stateHash(main.ydoc) !== prepared.base) throw new Error('The document changed; try the decision again.');
+        const headers: Record<string, string> = { 'content-type': 'application/octet-stream', 'x-csrf-token': api.csrf,
+          'x-proposal-state': accept ? 'accepted' : 'rejected', 'x-proposal-base': prepared.base, 'x-doc-generation': String(link.generation ?? 0) };
+        if (link.token) headers['x-link-token'] = link.token;
+        const response = await fetch(`/api/docs/${encodeURIComponent(link.id)}/proposals/${encodeURIComponent(p.key)}/decision`,
+          { method: 'POST', credentials: 'same-origin', headers, body: prepared.update.slice(), signal: AbortSignal.timeout(15_000) });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({})) as { error?: string };
+          throw new Error(error.error ?? `Proposal decision failed (${response.status}).`);
+        }
+        main.undoManager.stopCapturing();
+        Y.applyUpdate(main.ydoc, prepared.update, main.localOrigin);
+        main.undoManager.stopCapturing();
+      } else {
+        if (accept && host.readOnly?.()) throw new Error('This document is view only.');
+        if (accept) {
+          if (p.kind === 'write') { if (p.operation) await applyProposedWrite(host, p.operation); else applies.get(p.id)?.(); }
+          else if (p.kind === 'remove') host.doc().removeCell(p.target, `remove ${p.target} (proposed by the AI: ${p.note})`);
+          else { if (branching.current?.id !== p.target) branching.open(p.target); branching.accept(); }
+        }
+        applies.delete(p.id);
+        privateProposals = privateProposals.map((x) => x.id === p.id ? { ...x, state: accept ? 'accepted' : 'rejected' } : x);
+        refreshProposals();
+        if (!foreign() && !host.readOnly?.()) host.doc().log({ kind: 'proposal', author: main.localOrigin.author, authorKind: 'person', text: `${accept ? 'accepted' : 'rejected'}: ${p.note}` });
+      }
+    } catch (error) { setProposalError(error instanceof Error ? error.message : 'The decision could not be saved.'); }
+    finally { release?.(); deciding.delete(key); }
   };
   const onBusy = (busy: boolean) => {
     aiBusy = busy;
+    sync()?.updatePresence({ ai: busy ? { active: true } : null });
     const d = current()?.doc;
     if (busy) {
       main.beginAI();
@@ -241,12 +307,13 @@ function Workspace(props: { o: OpenDoc }) {
         <Show when={current()?.doc ?? main} keyed>
           {(doc) => (
             <DocView o={props.o} doc={doc} branching={branching} linked={linked} aiOpen={aiOpen()} onToggleAI={toggleAI} onAsk={ask}
-              onSelection={setSelection} api={(a) => (view = a)} sync={sync()} comments={comments} onComment={comment} />
+              onSelection={setSelection} api={(a) => (view = a)} sync={sync()} authorLabel={authorLabel} comments={comments} onComment={comment} />
           )}
         </Show>
       </div>
+      <Show when={proposalError()}><div class="banner error" role="alert">{proposalError()}</div></Show>
       <Show when={aiOpen()}>
-        <AIPanel host={host} main={main} proposals={proposals()} onDecide={decide} onBusy={onBusy} onClose={() => setAiOpen(false)}
+        <AIPanel host={host} main={main} proposals={proposals()} authorLabel={authorLabel} onDecide={decide} onBusy={onBusy} onClose={() => setAiOpen(false)}
           owner={props.o.info.cloud?.owner?.name || props.o.info.cloud?.owner?.email}
           focusRef={(f) => (focusAI = f)} comments={comments} onCommentsSent={commentsSent} onSnapshot={(k) => view?.showSnapshot(k)} />
       </Show>
@@ -268,6 +335,7 @@ function DocView(props: {
   api: (a: ViewApi) => void;
   /** The document's sync with the account, when there is one. */
   sync: DocSync | null;
+  authorLabel: (id?: string, kind?: 'person' | 'ai') => string;
   /** Comments on cells for the AI, and making one. */
   comments: () => CellComment[];
   onComment: (cell: string, cellText: string, text: string) => void;
@@ -275,7 +343,20 @@ function DocView(props: {
   const doc = props.doc;
   const main = props.o.doc;
   const onBranch = () => props.branching.current !== null;
-  const [cells, setCells] = createSignal<CellData[]>(doc.list());
+  const mainReadOnly = () => !!(props.sync?.link() ?? props.o.info.cloud) &&
+    (props.sync ? !props.sync.canEdit : props.o.info.cloud?.role === 'viewer' || !user());
+  const readOnly = () => !onBranch() && mainReadOnly();
+  const authorLabel = props.authorLabel;
+  const [drafts, setDrafts] = createSignal<Record<string, string>>({});
+  const rememberDraft = (id: string, text: string | null) => setDrafts((previous) => {
+    if (text === null && !(id in previous) || previous[id] === text) return previous;
+    const next = { ...previous };
+    if (text === null) delete next[id]; else next[id] = text;
+    return next;
+  });
+  const [cells, setCells] = createSignal(doc.keyedList());
+  const keyOf = (id: string) => cells().find((c) => c.id === id)?.key;
+  const idOf = (key: string | null) => cells().find((c) => c.key === key)?.id ?? null;
   const [context, setContext] = createSignal(doc.context);
   const [name, setName] = createSignal(doc.name);
   const [versions, setVersions] = createSignal(doc.versions());
@@ -284,7 +365,9 @@ function DocView(props: {
   const [canRedo, setCanRedo] = createSignal(doc.undoManager.canRedo());
   const [jobs, setJobs] = createSignal(0);
   const [expanded, setExpanded] = createSignal(new Set<string>());
-  const [active, setActive] = createSignal<string | null>(null);
+  const [activeKey, setActiveKey] = createSignal<string | null>(null);
+  const active = () => idOf(activeKey());
+  const setActive = (id: string | null) => setActiveKey(id ? keyOf(id) ?? null : null);
   const [adding, setAdding] = createSignal<number | null>(null);
   // on a narrow screen the outline is a drawer over the cells, closed at first
   const narrow = () => window.matchMedia?.('(max-width: 760px)').matches ?? false;
@@ -300,8 +383,43 @@ function DocView(props: {
   };
   const [linked, setLinked] = props.linked;
   const [message, setMessage] = createSignal('');
-  const [canvas, setCanvas] = createSignal<{ id: string; word?: string } | null>(null);
+  const [canvasTarget, setCanvasTarget] = createSignal<{ key: string; word?: string } | null>(null);
+  const canvas = () => {
+    const target = canvasTarget(), id = target && idOf(target.key);
+    return target && id ? { id, word: target.word } : null;
+  };
+  const setCanvas = (target: { id: string; word?: string } | null) => {
+    const key = target && keyOf(target.id);
+    setCanvasTarget(target && key ? { key, word: target.word } : null);
+  };
   const [hintsVersion, setHintsVersion] = createSignal(0);
+
+  const cursorsFor = (id: string) => {
+    cells(); // Relative positions move when committed text changes, without a presence packet.
+    const text = doc.cellText(id);
+    return (props.sync?.presence() ?? []).flatMap((p) => {
+      if (p.cell !== id || !text || !p.cursor || typeof p.cursor !== 'object') return [];
+      try {
+        const cursor = p.cursor as { anchor: object; head: object };
+        const a = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(cursor.anchor), doc.ydoc);
+        const h = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(cursor.head), doc.ydoc);
+        return a?.type === text && h?.type === text ? [{ anchor: a.index, head: h.index, name: p.user?.name ?? 'Viewer', colour: p.user?.colour ?? '#537bc4' }] : [];
+      } catch { return []; }
+    });
+  };
+  const canvasPresence = () => (props.sync?.presence() ?? []).flatMap((p) => {
+    const s = p.selection as Partial<Selection> | undefined;
+    return s && typeof s.cellId === 'string' && typeof s.word === 'string' && Array.isArray(s.layers) && s.layers.length <= 512 && s.layers.every(Number.isSafeInteger)
+      ? [{ name: p.user?.name ?? 'Viewer', colour: /^#[0-9a-f]{6}$/i.test(p.user?.colour ?? '') ? p.user!.colour : '#537bc4', selection: { cellId: s.cellId, word: s.word, layers: s.layers } }] : [];
+  });
+  const textSelection = (id: string, selection: { anchor: number; head: number } | null) => {
+    if (onBranch()) return;
+    const text = doc.cellText(id);
+    props.sync?.updatePresence({ cell: id, cursor: text && selection ? {
+      anchor: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(text, selection.anchor)),
+      head: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(text, selection.head)),
+    } : null });
+  };
 
   // cell states, one signal per cell so only changed cells re-render
   const states = new Map<string, Signal<CellState | undefined>>();
@@ -319,6 +437,7 @@ function DocView(props: {
   };
   props.api({
     termContext,
+    snapshotRun: (id) => ev?.snapshotRun(id),
     showSnapshot: (key) => {
       const i = snapshots().findIndex((s) => s.key === key);
       if (i >= 0) setModal({ snapshot: i });
@@ -345,15 +464,19 @@ function DocView(props: {
   });
 
   let ev: Evaluator | undefined;
-  const refresh = () => {
-    // keep each unchanged cell's object, so its component stays as it is
-    const old = new Map(cells().map((c) => [c.id, c]));
-    setCells(doc.list().map((c) => (old.get(c.id)?.text === c.text ? old.get(c.id)! : c)));
+  const refresh = (_event?: unknown, transaction?: Y.Transaction) => {
+    // Never reuse another UUID's row merely because its public ID and text match.
+    const old = new Map(cells().map((c) => [c.key, c]));
+    setCells(doc.keyedList().map((c) => {
+      const previous = old.get(c.key);
+      return previous?.id === c.id && previous.text === c.text ? previous : c;
+    }));
     setContext(doc.context);
     setName(doc.name);
     setCanUndo(doc.undoManager.canUndo());
     setCanRedo(doc.undoManager.canRedo());
-    void ev?.update(doc.context, doc.list());
+    const remote = transaction && !transaction.local && transaction.origin !== doc.localOrigin && transaction.origin !== doc.aiOrigin;
+    void ev?.update(doc.context, doc.list(), remote ? 'remote' : 'local');
     scheduleFileSave();
   };
   const onHistory = () => setVersions(doc.versions());
@@ -380,6 +503,7 @@ function DocView(props: {
       return { id, trend: [...t] };
     });
   doc.cells.observeDeep(refresh);
+  doc.cellOrder.observe(refresh);
   doc.meta.observe(refresh);
   doc.history.observe(onHistory);
   main.snapshots.observe(onSnapshots);
@@ -389,7 +513,11 @@ function DocView(props: {
     ev = new Evaluator(engine, cache, { engineId: id }, (s) => slot(s.id)[1](s));
     refresh();
   });
-  if (!doc.cells.length) setAdding(0);
+  if (!doc.cells.length && !readOnly()) setAdding(0);
+  createEffect(() => { if (readOnly()) setAdding(null); });
+  createEffect(() => { props.sync?.status(); props.sync?.updatePresence(onBranch()
+    ? { cell: null, branch: 'personal branch', selection: null, cursor: null }
+    : { cell: active(), branch: null }); });
   const note = importNotes.get(props.o.info.id);
   if (note) {
     importNotes.delete(props.o.info.id);
@@ -440,13 +568,15 @@ function DocView(props: {
   };
 
   const toggle = (id: string) => {
-    if (opened === id) opened = null;
+    const key = keyOf(id);
+    if (!key) return;
+    if (opened === key) opened = null;
     const s = new Set(expanded());
-    if (s.has(id) && active() === id) {
-      s.delete(id);
+    if (s.has(key) && activeKey() === key) {
+      s.delete(key);
       setActive(null);
     } else {
-      s.add(id);
+      s.add(key);
       setActive(id);
     }
     setExpanded(s);
@@ -455,9 +585,11 @@ function DocView(props: {
   let opened: string | null = null;
   const focusCell = (id: string) => {
     const s = new Set(expanded());
-    if (opened && opened !== id) s.delete(opened);
-    if (!s.has(id)) opened = id;
-    s.add(id);
+    const key = keyOf(id);
+    if (!key) return;
+    if (opened && opened !== key) s.delete(opened);
+    if (!s.has(key)) opened = key;
+    s.add(key);
     setExpanded(s);
     setActive(id);
     requestAnimationFrame(() => document.getElementById(`cell-${id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
@@ -480,6 +612,7 @@ function DocView(props: {
     return 'error' in p ? p.error : null;
   };
   const commitNew = (index: number, text: string) => {
+    if (readOnly()) return;
     const t = normalize(text);
     setAdding(null);
     setTemplate(undefined);
@@ -488,6 +621,7 @@ function DocView(props: {
     focusCell(id);
   };
   const commit = (id: string, text: string) => {
+    if (readOnly()) return;
     const t = normalize(text);
     if (t.startsWith('/')) return;
     if (!t) doc.removeCell(id);
@@ -495,14 +629,18 @@ function DocView(props: {
   };
 
   const pin = (id: string) => {
+    if (mainReadOnly()) return;
     const s = stateOf(id);
     if (s?.value && s.valueKey) setModal({ pin: id });
   };
   const pinAs = (id: string, label: string) => {
+    if (mainReadOnly()) return;
+    if (readOnly()) return;
     setModal(null);
     const s = stateOf(id);
-    if (!s?.value || !s.valueKey || !label.trim()) return;
-    main.pin({ name: label, cellId: id, cellText: s.text, context: context(), version: versions().length, key: s.valueKey, value: s.value, time: Date.now() });
+    if (!s?.value || !s.valueKey || s.status !== 'fresh' || !label.trim()) return;
+    const run = ev?.snapshotRun(id);
+    main.pin({ name: label, cellId: id, cellText: s.text, context: context(), version: versions().length, key: s.valueKey, value: s.value, time: Date.now(), ...(run ? { run } : {}) });
     setMessage(`Pinned “${label}”.`);
   };
   const copyTikz = async (id: string) => {
@@ -548,6 +686,7 @@ function DocView(props: {
 
   /** A new cell at `index`, starting from the template of a cell kind when one is given. */
   const addAt = (index: number, kind?: string) => {
+    if (readOnly()) return;
     const t = TEMPLATES.find(([k]) => k === kind);
     setTemplate(t ? { text: t[1], cursor: t[2] } : undefined);
     setAdding(index);
@@ -565,6 +704,7 @@ function DocView(props: {
     return ws && `cat > cell.dcw <<'EOF'\n${ws}EOF\ndiagcalc run cell.dcw\n`;
   };
   const rename = (n: string) => {
+    if (readOnly()) return;
     setRenaming(false);
     const t = n.trim();
     if (t && t !== name()) doc.rename(t);
@@ -620,8 +760,8 @@ function DocView(props: {
     ...['def', 'watch', 'solve', 'check', 'note'].map((k) => ({ name: `New ${k} cell`, run: () => addAt(cells().length, k) })),
     { name: 'Insert a cell below the active cell', keys: keysOf('insert'), run: () => insertBelow(active()) },
     { name: 'Rename document', run: () => setRenaming(true) },
-    { name: 'Undo', keys: `${K}Z`, run: () => doc.undo() },
-    { name: 'Redo', keys: isMac ? '⇧⌘Z' : 'Ctrl+Y', run: () => doc.redo() },
+    { name: 'Undo', keys: `${K}Z`, run: () => !readOnly() && doc.undo() },
+    { name: 'Redo', keys: isMac ? '⇧⌘Z' : 'Ctrl+Y', run: () => !readOnly() && doc.redo() },
     { name: 'Export workspace (.dcw)', keys: keysOf('export'), run: exportFile },
     { name: 'Export history (.dch)', run: () => download(fileName(name(), 'dch'), exportDch(doc), 'application/json') },
     { name: 'Import a workspace or history file as a new document', keys: keysOf('import'), run: importFile },
@@ -659,8 +799,8 @@ function DocView(props: {
     if (is('ai')) { e.preventDefault(); props.onToggleAI(); return; }
     if (is('ask')) { e.preventDefault(); props.onAsk(); return; }
     if (inEditor) return;
-    if (mod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doc.redo() : doc.undo(); return; }
-    if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); doc.redo(); return; }
+    if (mod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); !readOnly() && (e.shiftKey ? doc.redo() : doc.undo()); return; }
+    if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); if (!readOnly()) doc.redo(); return; }
     if (is('keys')) { e.preventDefault(); setModal('keys'); return; }
     if (is('canvas') && active() && !canvas()) { e.preventDefault(); openCanvas(active()!); return; }
     if (is('insert')) { e.preventDefault(); insertBelow(active()); return; }
@@ -674,6 +814,7 @@ function DocView(props: {
   onCleanup(() => {
     window.removeEventListener('keydown', onKey);
     doc.cells.unobserveDeep(refresh);
+    doc.cellOrder.unobserve(refresh);
     doc.meta.unobserve(refresh);
     doc.history.unobserve(onHistory);
     main.snapshots.unobserve(onSnapshots);
@@ -706,7 +847,7 @@ function DocView(props: {
         <button class="ghost" title="Show or hide the outline" aria-label={outline() ? 'Hide the outline' : 'Show the outline'} aria-expanded={outline()} onClick={() => setOutline(!outline())}>☰</button>
         <Show when={canvas()} fallback={
           <Show when={renaming()} fallback={
-            <button class="ghost name" title="Rename" aria-label={`Rename the document ${name()}`} onClick={() => setRenaming(true)}>{name()}</button>
+            <button class="ghost name" title="Rename" disabled={readOnly()} aria-label={`Rename the document ${name()}`} onClick={() => setRenaming(true)}>{name()}</button>
           }>
             <input class="name-input" value={name()} aria-label="Document name" ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); rename(e.currentTarget.value); } if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); } }}
@@ -721,7 +862,7 @@ function DocView(props: {
             </span>
           )}
         </Show>
-        <ContextChip context={context()} scalars={scalars()} onSet={(c) => c !== context() && doc.setContext(c)} />
+        <ContextChip context={context()} scalars={scalars()} readOnly={readOnly()} onSet={(c) => !readOnly() && doc.setContext(c)} />
         <Show when={props.branching.current} fallback={<>
           <span class="branch-start" style={{ position: 'relative' }}>
             <button class="ghost" title={`Try something on a scratch branch, then accept or discard it (${keysOf('branch')})`} aria-expanded={branchName() !== null}
@@ -748,7 +889,7 @@ function DocView(props: {
           {(b) => (
             <span class="row branch" data-testid="branch">
               <span class="branch-name" title="A scratch branch: changes here leave the document alone until you accept them">⑂ {b().name}</span>
-              <button class="primary" onClick={() => setModal('branch')}>Accept…</button>
+              <button class="primary" disabled={mainReadOnly()} onClick={() => setModal('branch')}>Accept…</button>
               <button onClick={discardBranch}>Discard</button>
               <button class="ghost" title="Back to the document; the branch is kept" onClick={() => props.branching.open(null)}>Leave</button>
             </span>
@@ -761,6 +902,20 @@ function DocView(props: {
           <button class="ghost" onClick={() => void allowRelink()} data-testid="relink"
             title="This document saves to a file on disk; the browser needs your permission again for this visit">↔ {relink()!.name}: resume saving</button>
         </Show>
+        <details class="presence" data-testid="presence" hidden={!props.sync?.presence().length}>
+          <summary aria-label={`People in this document (${props.sync?.presence().length ?? 0})`}>
+            <For each={(props.sync?.presence() ?? []).slice(0, 3)}>{p => <span class="presence-avatar" aria-hidden="true"
+              style={{ 'border-color': /^#[0-9a-f]{6}$/i.test(p.user?.colour ?? '') ? p.user!.colour : 'var(--border)' }}>{p.user?.name.slice(0, 1) ?? '?'}</span>}</For>
+            <span>{props.sync?.presence().length ?? 0} here</span>
+          </summary>
+          <div class="presence-list" tabIndex={0}>
+          <For each={props.sync?.presence() ?? []}>{(p) => <span class="collaborator" data-testid="collaborator"
+            style={{ 'border-color': /^#[0-9a-f]{6}$/i.test(p.user?.colour ?? '') ? p.user!.colour : 'var(--border)' }}
+            title={typeof p.cell === 'string' ? `At ${p.cell}` : 'Viewing this document'}>
+            {p.user?.name ?? 'Viewer'}<Show when={p.ai && typeof p.ai === 'object' && (p.ai as { active?: boolean }).active}> · AI working</Show>
+          </span>}</For>
+          </div>
+        </details>
         <Show when={props.sync}>
           {(s) => (
             <>
@@ -771,8 +926,8 @@ function DocView(props: {
             </>
           )}
         </Show>
-        <button class="ghost" title={`Undo (${K}Z)`} disabled={!canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
-        <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
+        <button class="ghost" title={`Undo (${K}Z)`} disabled={readOnly() || !canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
+        <button class="ghost" title="Redo" disabled={readOnly() || !canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
         <button class={`light ${jobs() ? 'busy' : ''}`} disabled={!jobs()} data-testid="light"
           title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'}
           aria-label={jobs() ? `Cancel ${jobs()} ${jobs() === 1 ? 'computation' : 'computations'}` : 'No computations running'}
@@ -782,7 +937,7 @@ function DocView(props: {
       </header>
       <div class="layout" classList={{ 'no-outline': !outline() }}>
         <Show when={outline()}>
-          <Outline cells={cells()} state={stateOf} active={active()} versions={versions()} snapshots={snapshots()} pinned={pinned()}
+          <Outline cells={cells()} state={stateOf} active={active()} versions={versions()} snapshots={snapshots()} pinned={pinned()} authorLabel={authorLabel}
             onSelect={(id) => { if (narrow()) setOutline(false); focusCell(id); }}
             onVersion={(n) => setModal({ version: n })} onSnapshot={(i) => setModal({ snapshot: i })} />
         </Show>
@@ -801,41 +956,55 @@ function DocView(props: {
             <Show when={reminder()}>
               <div class="banner">This document changed and has not been exported for a week. <a href="#" onClick={(e) => { e.preventDefault(); void exportFile(); }}>Export it</a> to keep a copy.</div>
             </Show>
-            <For each={cells()}>
-              {(c, i) => (
-                <>
+            <CloudRecovery o={props.o} sync={props.sync} onBranch={(inputs, name) => props.branching.create(name, inputs)} />
+            <Show when={readOnly()}><div class="banner" data-testid="read-only">View only. Export or make a personal branch to work on a copy.</div></Show>
+            <For each={Object.entries(drafts()).filter(([key]) => !cells().some((c) => c.key === key))}>
+              {([id, text]) => <div class="banner" data-testid="deleted-draft">
+                Cell {id} was deleted elsewhere. Your uncommitted draft is still here.
+                <pre>{text}</pre>
+                <button disabled={readOnly()} onClick={() => { doc.addCell(text); rememberDraft(id, null); }}>Restore draft as new cell</button>
+                <button onClick={() => rememberDraft(id, null)}>Discard draft</button>
+              </div>}
+            </For>
+            <For each={cells().map((c) => c.key)}>
+              {(key, i) => {
+                // UUID owns the editor and draft; callbacks resolve the current public ID.
+                const row = () => cells().find((c) => c.key === key);
+                const id = () => row()?.id ?? '';
+                const text = () => row()?.text ?? '';
+                return <>
                   <Show when={adding() === i()}><NewCell index={i()} /></Show>
-                  {/* a pointer shortcut; the keyboard inserts with Alt+Enter or the palette */}
-                  <div class="insert"><button tabindex={-1} aria-hidden="true" onClick={() => addAt(i())}>+ cell</button></div>
-                  <Show when={c.text} keyed>
-                    {(text) => (
-                      <Cell id={c.id} text={text} state={stateOf(c.id)} expanded={expanded().has(c.id)} active={active() === c.id}
-                        onToggle={() => toggle(c.id)} onCommit={(t) => commit(c.id, t)} onCancel={() => setActive(null)}
-                        onRemove={() => doc.removeCell(c.id)} onMove={(d) => doc.moveCell(c.id, i() + d)}
-                        onPin={() => pin(c.id)} onRerun={() => ev?.rerun(c.id)} onCopyTikz={() => copyTikz(c.id)}
-                        onCanvas={(w) => openCanvas(c.id, w)} validate={validate} onInsertBelow={() => insertBelow(c.id)}
-                        onStop={() => stop(c.id)} onRunLonger={() => runLonger(c.id)} commandLine={() => commandLine(c.id)} trace={trace(c.id)}
-                        comments={props.comments().filter((x) => x.cell === c.id)} onComment={(t) => props.onComment(c.id, text, t)} />
-                    )}
+                  <div class="insert"><button tabindex={-1} aria-hidden="true" disabled={readOnly()} onClick={() => addAt(i())}>+ cell</button></div>
+                  <Show when={props.sync?.presence().some((p) => p.cell === id())}>
+                    <div class="cell-presence hint" aria-live="polite">{props.sync?.presence().filter((p) => p.cell === id()).map((p) => p.user?.name ?? 'Viewer').join(', ')} here</div>
                   </Show>
-                </>
-              )}
+                  <Cell id={id()} text={text()} state={stateOf(id())} expanded={expanded().has(key)} active={activeKey() === key}
+                    readOnly={readOnly()} onDraft={(t) => { if (row()) rememberDraft(key, t); }} remoteCursors={cursorsFor(id())} onSelection={(s) => textSelection(id(), s)}
+                    onToggle={() => toggle(id())} onCommit={(t) => commit(id(), t)} onCancel={() => setActive(null)}
+                    onRemove={() => !readOnly() && doc.removeCell(id())} onMove={(d) => !readOnly() && doc.moveCell(id(), i() + d)}
+                    onPin={() => pin(id())} pinDisabled={mainReadOnly()} onRerun={() => ev?.rerun(id())} onCopyTikz={() => copyTikz(id())}
+                    onCanvas={(w) => openCanvas(id(), w)} validate={validate} onInsertBelow={() => insertBelow(id())}
+                    onStop={() => stop(id())} onRunLonger={() => runLonger(id())} commandLine={() => commandLine(id())} trace={trace(id())}
+                    comments={props.comments().filter((x) => x.cell === id())} onComment={(t) => props.onComment(id(), text(), t)} />
+                </>;
+              }}
             </For>
             <Show when={adding() !== null && adding()! >= cells().length}><NewCell index={cells().length} /></Show>
             <div style={{ 'margin-top': '10px' }}>
-              <button onClick={() => addAt(cells().length)} data-testid="add-cell">+ New cell</button>
+              <button disabled={readOnly()} onClick={() => addAt(cells().length)} data-testid="add-cell">+ New cell</button>
               <span class="hint" style={{ 'margin-left': '10px' }}>Type a term to define it, or <kbd>/</kbd> for a cell kind; <kbd>Enter</kbd> commits.</span>
             </div>
           </div>
         </main>
         <Show when={canvas()?.id} keyed>
-          {(id) => (
-            <Canvas doc={doc} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
+          {(id) => {
+            const key = keyOf(id)!;
+            return <Canvas doc={doc} readOnly={readOnly()} remoteSelections={canvasPresence()} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
               term={canvasTerm(id)} expanded={usesDefinitions(id)} generators={described()?.generators ?? []}
               colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word} value={stateOf(id)?.value}
-              onWrite={(t, note, ids) => writeCanvas(id, t, note, ids)} onSelection={props.onSelection} onAsk={props.onAsk}
-              onClose={() => { setCanvas(null); focusCell(id); }} />
-          )}
+              onWrite={(t, note, ids) => { const current = idOf(key); if (!readOnly() && current) writeCanvas(current, t, note, ids); }} onSelection={(s) => { props.onSelection(s); if (!onBranch()) props.sync?.updatePresence({ selection: s }); }} onAsk={props.onAsk}
+              onClose={() => { setCanvas(null); const current = idOf(key); if (current) focusCell(current); }} />;
+          }}
         </Show>
         </div>
       </div>
@@ -856,7 +1025,7 @@ function DocView(props: {
       </Show>
       <Show when={modal() === 'branch' && props.branching.preview()} keyed>
         {(pv) => (
-          <BranchView name={props.branching.current?.name ?? ''} cmp={pv.comparison} before={pv.before} after={pv.after} onClose={() => setModal(null)}
+          <BranchView name={props.branching.current?.name ?? ''} canAccept={!mainReadOnly()} cmp={pv.comparison} before={pv.before} after={pv.after} onClose={() => setModal(null)}
             onAccept={() => { setModal(null); const r = props.branching.accept(); if (r) setMessage(`Accepted: ${describe(r)}.`); }}
             onDiscard={() => { setModal(null); discardBranch(); }} />
         )}
@@ -890,8 +1059,8 @@ function DocView(props: {
         )}
       </Show>
       <Show when={(() => { const m = modal(); return m && typeof m === 'object' && 'version' in m ? m.version : null; })()} keyed>
-        {(n) => <VersionView n={n} at={doc.at(n)} dcw={(s) => doc.toDcw(s)} current={doc.toDcw()} onClose={() => setModal(null)}
-          onRestore={(s) => { doc.replace(s.context, s.cells, `restore version ${n}`); setModal(null); }}
+        {(n) => <VersionView n={n} canRestore={!readOnly()} at={doc.at(n)} dcw={(s) => doc.toDcw(s)} current={doc.toDcw()} onClose={() => setModal(null)}
+          onRestore={(s) => { if (readOnly()) return; doc.replace(s.context, s.cells, `restore version ${n}`); setModal(null); }}
           onBranch={(s) => {
             setModal(null);
             props.branching.create(`version ${n}`, { ...s, hints: doc.inputs().hints });
@@ -904,9 +1073,15 @@ function DocView(props: {
               <table class="kv"><tbody>
                 <tr><td>cell</td><td><span class="kind">{kindOf(s.cellText) ?? 'def'}</span> <Typeset text={s.cellText.replace(/^(def|watch|solve|check)\s+/, '')} /></td></tr>
                 <tr><td>context</td><td><ContextText context={s.context} /></td></tr>
+                <tr><td>computed by</td><td>{s.author ? `${authorLabel(s.author)} (browser)` : 'Unknown (older snapshot)'}</td></tr>
                 <tr><td>version</td><td>{s.version}, {new Date(s.time).toLocaleString()}</td></tr>
                 <tr><td>inputs</td><td class="hint">{s.key}</td></tr>
               </tbody></table>
+              <Show when={stateOf(s.cellId)?.valueKey !== s.key}><p class="hint" data-testid="snapshot-outdated">The current inputs or engine differ from this snapshot, or its cell was removed. The saved result is unchanged.</p></Show>
+              <PinnedRecompute snapshot={s} />
+              <Show when={s.run} fallback={<p class="hint">This older snapshot does not retain its dependency inputs.</p>}>
+                <button onClick={() => void parseDcw(s.run!.workspace).then((inputs) => { setModal(null); props.branching.create(`Recompute ${s.name}`, { ...inputs, hints: {} }); }).catch((e) => setMessage(`Cannot reopen snapshot inputs: ${e.message}`))}>Open inputs in personal branch</button>
+              </Show>
               <div style={{ 'margin-top': '10px' }}>
                 <ResultView s={{ id: 'snapshot', text: s.cellText, status: 'fresh', value: s.value as CellState['value'] }} />
               </div>
@@ -942,7 +1117,7 @@ function describe(c: Comparison): string {
   return parts.length ? parts.join(', ') : 'no changes';
 }
 
-function BranchView(props: { name: string; cmp: Comparison; before: Inputs; after: Inputs; onClose: () => void; onAccept: () => void; onDiscard: () => void }) {
+function BranchView(props: { name: string; canAccept: boolean; cmp: Comparison; before: Inputs; after: Inputs; onClose: () => void; onAccept: () => void; onDiscard: () => void }) {
   const c = () => props.cmp;
   return (
     <Dialog label={`Branch ${props.name}`} onClose={props.onClose}>
@@ -960,7 +1135,7 @@ function BranchView(props: { name: string; cmp: Comparison; before: Inputs; afte
         ].join('\n') || 'The branch changes nothing.'}</pre>
         <ValueChanges before={props.before} after={props.after} />
         <div class="row" style={{ 'margin-top': '10px' }}>
-          <button class="primary" onClick={props.onAccept}>Accept</button>
+          <button class="primary" disabled={!props.canAccept} onClick={props.onAccept}>Accept</button>
           <button onClick={props.onClose}>Keep working on the branch</button>
           <div class="grow" />
           <button onClick={props.onDiscard}>Discard the branch</button>
@@ -1087,6 +1262,7 @@ export function lineDiff(a: string[], b: string[]): [' ' | '−' | '+', string][
 }
 
 function VersionView(props: {
+  canRestore: boolean;
   n: number;
   at: { context: string; cells: CellData[] } | null;
   dcw: (s: { context: string; cells: CellData[] }) => string;
@@ -1111,7 +1287,7 @@ function VersionView(props: {
                 </For>
               </pre>
               <div class="row" style={{ 'margin-top': '10px' }}>
-                <button class="primary" onClick={() => props.onRestore(s())}>Restore this version</button>
+                <button class="primary" disabled={!props.canRestore} onClick={() => props.onRestore(s())}>Restore this version</button>
                 <button onClick={() => props.onBranch(s())}>Open as a branch</button>
                 <button onClick={props.onClose}>Close</button>
               </div>
