@@ -3,7 +3,7 @@
 A fast, exact calculator for diagrammatic algebra (KLR algebras first) whose terms are read and
 edited as string diagrams. It explores; Lean proves. The specification is `docs/spec.md`; the
 design notes are `docs/design.md`; the reading of every notation is fixed in
-`docs/conventions.md`.
+`docs/conventions.md`. Everything still open is listed in `docs/roadmap.md`.
 
 ## Rules
 
