@@ -1,82 +1,86 @@
 # Roadmap
 
-What is left, in order. The phases and their gates are in `docs/spec.md` ("Phases, deliverables
-and acceptance gates"); phases 0 to 6 have passed. This file lists everything still open: the
-remaining work before going public, later items, the back burner, and what we decided
-not to do. It is the one list to keep current: an item is removed when it lands (git history
-keeps it), and new findings are added here.
+The single list of open work. Phases 0 to 7 have passed; phase 8 is next, before public release.
+Phase 9 is useful later work and must not block
+release. The phase table and gates are in `docs/spec.md`; detailed phase 7 decisions are in
+`docs/phase7.md`. Remove completed and discarded items rather than keeping a second backlog of
+them; git history retains the decisions. Keep genuine external blockers explicit.
 
-## Decisions for Alex
+The public site is `https://diagcalc.pages.dev`; no custom-domain migration is planned.
 
-None open.
+## Phase 7: live co-editing — complete
 
-## Before going public
+Implemented in `7cfe45d`, with [CI](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129703)
+and [deployment](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129712)
+successful. Accepted decisions and the executable verification map are in `docs/phase7.md`.
+The authenticated production revocation check below remains a separate phase 8 check.
 
-Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
+## Phase 8: after phase 7, before public release
 
-- Google sign-in, published: verify `diagcalc.pages.dev` (or the custom domain) in Google Search
-  Console, set the consent screen's homepage to the About page and its privacy policy to
-  `/privacy`, submit for brand verification, then publish. Until then only test users can sign
-  in.
-- Custom domain `diagcalc.ape.computer`, when wanted: add its callback URL to the OAuth client,
-  then change `APP_ORIGIN`; register Google's security events again for the new origin
-  (`docs/deploy.md`, "Revoked Google access"); add the WAF rate limit on `/api/` writes; Resend
-  for share e-mails.
-- Before that, ask GitHub Support to remove the pre-rewrite history (master was rewritten on
-  23 October to replace a personal e-mail address with the owner's noreply address): the refs of
-  pull requests #1 and #2 and the cached old commits.
-- Make the repository public, with the licence already in place.
+### Reading and sharing
 
-Polish (all remaining UX polish happens before going public): none open.
+- **View mode:** an explicit mode with no editing affordances, for reviewing a document. Keep
+  the existing document model and rendering; this is not a new commenting or review system.
+- **Viewer-facing polish:** check that read-only recipients have no unusable
+  editing controls and that owners/editors can choose view mode. Fix remaining affordance gaps,
+  not a second permission implementation.
+- **Certificate presentation:** check the released app's mathematical provenance. KL's `basis`
+  and `kl-evaluation` stay `literature`; conclusions depending on odd BE2 nondegeneracy remain
+  explicitly conditional. Stronger certificates are phase 9, not a release condition.
 
-Certificates:
+### Publication and deployed checks
 
-- `kl`: the `basis` and `kl-evaluation` certificates stay `literature`. categorification-lean's
-  `KL3.Diagram.canonicalBasis` is the family `IntegralSpanning.twoB`: a canonical chord diagram on
-  the word `rd s ++ t` (from the empty word), dots at the arcs' left ends, bubbles composed on, and
-  the lower endpoints bent back down by nested caps. The calculator's spanning set
-  (`rep/kl/basis.rs`) is drawn differently: caps at the bottom, a reduced word of the through
-  strands, cups at the top, a dot at each arc's left end, bubbles at the bottom right. The two are
-  indexed alike and plausibly differ by lower terms, but that is not proved. `lean` needs one of:
-  the calculator's set made literally `twoB`, a proof that the change of basis is unitriangular,
-  or a Lean proof that the calculator's evaluation is well defined on KL's Hom spaces.
+Account access and external review are dependencies, not unimplemented application features.
+See `docs/deploy.md` for instructions.
 
-Phase 7 is implemented; accepted decisions and its executable verification map are in
-`docs/phase7.md`. Deployment state is recorded by the Deploy web app workflow.
+- **Google sign-in readiness and branding — owner access required.** Inspect the existing
+  project's Audience, Branding and Data Access settings; verify the chosen site in Search
+  Console, complete any required brand verification and use the production audience for release.
+  The code requests only `openid email profile`: Google's basic-sign-in exception means Testing
+  is not by itself a test-user-only restriction. Branding verification and audience publication
+  are separate. The current About route is `/#/about`, not `/about`; privacy is `/privacy`.
+- **Live revocation check:** Google's security-event receiver has been registered for
+  `https://diagcalc.pages.dev`. Verify that revocation also ends
+  access through an already-open live room. Registration alone is not this end-to-end check.
+- **Release deployment:** run the applicable release checks, verify the deployed build, and
+  confirm obsolete deployments are pruned. Do not treat a workflow acknowledgement as proof
+  that obsolete endpoints disappeared.
+- **Publish on Alex's go-ahead:** publish the tested Python distribution on PyPI, publish Google
+  sign-in, and make the repository public with the licence already in place. Configure the
+  PyPI publisher/account before the upload; packaging tests are not publication.
 
-## Later
+## Phase 9: post-release, non-blocking
 
-- **View mode** (Alex, 23 October): a mode with no editing affordances, optimised for reviewing the
-  parts of a document.
+### Mathematical certificates
 
-- **Speed:**
-  - persist the basis cache to IndexedDB, so reopening a document needs no first evaluation per hom
-    space;
-  - lazy canonicalisation in `smash::val_mul` (estimated 2–3×, also for the KLR representation);
-  - group `mul_top` terms by dot monomial and add in place in `rep/skm/up.rs` (estimated 1.5–2×);
-  - basis rows in parallel (2.5× on 4 threads measured);
-  - compact monomials, in-place polynomial addition, `SmallVec` denominators;
-  - two WASM modules (size-optimised for the interactive lane, speed-optimised for jobs), and
-    lazy-loading the AI SDK, the canvas and KaTeX's fallback fonts;
-  - web pipeline: show results before caching, batched lookups, warm workers, cache keyed on
-    canonical text (about −20 ms per edit).
-- **Odd BE2 normal forms** become proven when BE2's Nondegeneracy Conjecture for odd colours is;
-  until then they are marked conditional.
-- **Old deployments** pile up again with each deploy (each keeps its code and the production
-  bindings). Run "Prune old deployments" from time to time, or have the deploy prune after a
-  successful production deploy.
-- **AI providers:** stream OpenAI and compatible servers; carry OpenAI reasoning between turns.
-- Python package on PyPI (with the public release).
+- **KL Lean certificates.** categorification-lean's `KL3.Diagram.canonicalBasis` is the family
+  `IntegralSpanning.twoB`: a canonical chord diagram on `rd s ++ t` from the empty word, dots at
+  the arcs' left ends, bubbles composed on, and the lower endpoints bent back down by nested
+  caps. The calculator's set (`rep/kl/basis.rs`) instead has caps at the bottom, a reduced word
+  of the through strands, cups at the top, dots at the arcs' left ends and bubbles at bottom
+  right. Identical indexing is not a proved identification. A `lean` certificate needs a
+  unitriangular change-of-basis proof, a proof that the calculator's evaluation is well defined
+  on KL Hom spaces, or a deliberate change to literally use `twoB`. Preserve the drawing
+  conventions unless there is a mathematical reason to change them.
+- **Odd BE2 nondegeneracy.** Adopt a valid proof when available; until then retain the conditional
+  conclusions. Resolving the conjecture is a research dependency, not a calculator release task.
 
-## Back burner
+### Performance
 
-- Phones and tablets beyond cheap fixes (Alex, 23 October: mobile is a non-goal).
-- A fast, not-yet-proven result shown first and marked pending (Alex, 22 October: only if normal
-  forms are too slow interactively; the speed review found them fast enough after the fixes).
+Re-profile the released system before selecting work; keep exactness and determinism, and
+retain changes only with measured benefits.
 
-## Won't do
+- Persist the basis cache to IndexedDB, with engine-version/context invalidation, to avoid cold
+  hom-space evaluations after reopening a document.
+- Evaluate independent basis rows in parallel, keeping thread management outside the core.
+- Compact monomials, in-place polynomial addition and `SmallVec` denominators where allocation
+  profiles justify them.
+- Lazy-load the AI SDK, canvas and KaTeX fallback fonts where startup measurements justify it.
+- Cache results by canonical text rather than trimmed input text. Reassess worker warming after
+  phase 7; retain only residual work supported by measurements, not duplicate worker-lifetime work.
 
-- Trusted Types: not workable while Solid renders templates through `innerHTML`; the
-  Content-Security-Policy is the defence in place.
-- Sharing live result caches between collaborators (decided for phase 7). Explicitly pinned
-  snapshots remain shared, attributed artifacts with local recomputation.
+### Optional share notifications
+
+- **Resend share emails:** configure a separately verified sending domain and restricted sending
+  key when wanted; the `pages.dev` hostname is not a sending domain we control.
+  Copying share links must continue to work without email delivery, with an accurate UI state.

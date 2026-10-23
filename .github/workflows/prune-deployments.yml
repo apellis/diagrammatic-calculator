@@ -1,13 +1,14 @@
-# Deletes the Cloudflare Pages deployments of "diagcalc" that are older than the current
-# production deployment. Each deployment keeps its own static files and server code, bound to the
-# production database and storage, at its own <hash>.diagcalc.pages.dev address; old ones would
-# serve code without later fixes. Run by hand (Actions, this workflow, Run workflow); with
-# "dry run" it only lists what it would delete. A push that changes .github/prune-deployments
-# also runs it: the file's first word, "list" or "delete", says which. Deployments newer than production (one being
-# made right now) are never touched.
+# Old deployments retain server code and production bindings. Prune after a successful
+# master deployment; keep production and anything equally recent/newer at selection time.
+# Manual dashboard rollbacks must wait until pruning is cancelled and has stopped.
+# Manual runs default to a dry run. The legacy list/delete marker is still supported.
 name: Prune old deployments
 
 on:
+  workflow_run:
+    workflows: [Deploy web app]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -17,65 +18,65 @@ on:
   push:
     branches: [master]
     paths: [.github/prune-deployments]
+  pull_request:
+    paths:
+      - .github/scripts/prune_deployments.py
+      - .github/scripts/test_prune_deployments.py
+      - .github/workflows/prune-deployments.yml
 
 permissions:
   contents: read
 
+concurrency:
+  group: prune-deployments
+  cancel-in-progress: false
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test pruning without credentials
+        run: python3 -m unittest discover -s .github/scripts -p 'test_prune_deployments.py' -v
   prune:
+    needs: test
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/master' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'master' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      DRY_RUN: ${{ github.event_name == 'push' || inputs.dry_run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'push'
         with:
+          # Never execute code/artifacts from the triggering workflow's head.
+          ref: master
           persist-credentials: false
           sparse-checkout: .github
-      - name: Mode of a push run
-        if: github.event_name == 'push'
-        run: |
-          mode=$(awk 'NR==1 {print $1}' .github/prune-deployments)
-          case "$mode" in
-            delete) echo DRY_RUN=false >> "$GITHUB_ENV" ;;
-            *) echo DRY_RUN=true >> "$GITHUB_ENV" ;;
-          esac
-      - name: Delete deployments older than production
+      - name: Prune and verify
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          EXPECTED_COMMIT_HASH: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/diagcalc"
-          get() { curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$1"; }
-          prod=$(get "$api" | jq -r '.result.canonical_deployment.id')
-          prod_time=$(get "$api" | jq -r '.result.canonical_deployment.created_on')
-          [ -n "$prod" ] && [ "$prod" != null ] || { echo "::error::no production deployment found"; exit 1; }
-          echo "::notice::production deployment $prod from $prod_time is kept"
-          : > old.txt
-          page=1
-          while :; do
-            body=$(get "$api/deployments?per_page=25&page=$page")
-            n=$(echo "$body" | jq '.result | length')
-            [ "$n" -gt 0 ] && [ "$page" -le 200 ] || break
-            echo "$body" | jq -r --arg p "$prod" --arg t "$prod_time" \
-              '.result[] | select(.id != $p and .created_on < $t) | "\(.id) \(.created_on) \(.environment)"' >> old.txt
-            page=$((page + 1))
-          done
-          count=$(wc -l < old.txt)
-          if [ "$DRY_RUN" = true ]; then
-            echo "::notice::dry run: $count deployments would be deleted"
-            awk '{print $3}' old.txt | sort | uniq -c | while read -r k e; do echo "::notice::$k $e"; done
-            exit 0
+          args=()
+          if [ "$EVENT_NAME" = workflow_run ]; then
+            args+=(--delete)
+          elif [ "$EVENT_NAME" = workflow_dispatch ] && [ "$DRY_RUN" = false ]; then
+            args+=(--delete)
+          elif [ "$EVENT_NAME" = push ]; then
+            read -r mode _ < .github/prune-deployments
+            if [ "$mode" = delete ]; then args+=(--delete); fi
           fi
-          deleted=0
-          while read -r id created env; do
-            if curl -fsS -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$api/deployments/$id?force=true" > /dev/null; then
-              deleted=$((deleted + 1))
-            else
-              echo "::warning::could not delete $id ($env, $created)"
-            fi
-          done < old.txt
-          left=$(( $(get "$api/deployments?per_page=1" | jq '.result_info.total_count') ))
-          echo "::notice::deleted $deleted of $count old deployments; $left deployments remain"
+          python3 .github/scripts/prune_deployments.py "${args[@]}"

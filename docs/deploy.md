@@ -1,6 +1,6 @@
 # Deploying the web app and accounts
 
-The web app is a static site on Cloudflare Pages (project `diagcalc`), deployed by
+The web app is a static site at `https://diagcalc.pages.dev` on Cloudflare Pages (project `diagcalc`), deployed by
 `.github/workflows/deploy-web.yml` on every push to `master`. The accounts API (phase 6) is a set of
 Pages Functions in `web/functions/`, deployed with the site; it keeps its data in a D1 database and
 an R2 bucket and sends share notifications through Resend. Until the steps below are done the
@@ -10,8 +10,11 @@ not available, and the app stays anonymous exactly as before.
 The site is served without Cloudflare Access (Alex, 23 October): anyone can use it anonymously,
 and Google sign-in is the only authentication. The per-deployment addresses
 (`<hash>.diagcalc.pages.dev`) stay behind Access ("Preview access: restrict previews" in the Pages
-project's settings, with its Zero Trust application for `*.diagcalc.pages.dev`). Until the Google consent screen is published, only
-its test users can sign in.
+project's settings, with its Zero Trust application for `*.diagcalc.pages.dev`). The app requests
+only `openid email profile`; Google's [basic-sign-in exception](https://support.google.com/cloud/answer/15549945?hl=en)
+means Testing alone does not restrict these requests to listed test users or apply the usual
+testing warning/authorization expiry. Account and Workspace policies can still restrict access.
+Audience publication and brand verification are separate release configuration steps.
 
 ## Steps for Alex
 
@@ -20,22 +23,24 @@ that need a person, done once.
 
 1. Cloudflare, My Profile, API Tokens: edit the token stored as `CLOUDFLARE_API_TOKEN` and add the
    account permissions D1: Edit and Workers R2 Storage: Edit (called "Write" in the new token
-   editor; keep Cloudflare Pages: Edit). Once `ape.computer` is on Cloudflare, also the zone
-   permission DNS: Edit for it, for the DMARC record. If R2 was never used on the account, open R2 in the
-   dashboard once and enable it.
+   editor; keep Cloudflare Pages: Edit). No zone or DNS permissions are needed. If R2 was never
+   used on the account, open R2 in the dashboard once and enable it.
 2. Google Cloud console, Google Auth Platform: create the consent screen (external audience, app
    name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only).
-   While Access is on, leave it in Testing and add the allowed people as test users; publishing
-   needs a homepage and privacy policy on a verified domain and waits for the public release. Then Clients: create an OAuth client of type Web application with the authorized
+   Testing is not an access-control boundary for these basic sign-in scopes. For production,
+   review Audience, Branding and Data Access separately; branding needs a homepage and privacy
+   policy on a verified site. Then Clients: create an OAuth client of type Web application with the authorized
    redirect URI `https://diagcalc.pages.dev/api/auth/callback` (the redirect URI is built from the
-   variable `APP_ORIGIN` in `web/wrangler.toml`; when the custom domain moves over, add
-   `https://diagcalc.ape.computer/api/auth/callback` here first, then change `APP_ORIGIN`).
+   variable `APP_ORIGIN` in `web/wrangler.toml`). This is the chosen public hostname; no
+   custom-domain migration is planned.
 3. Cloudflare, Workers & Pages, `diagcalc`, Settings, Variables and Secrets, Production: add the
    secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 2.
-4. (Share e-mails only; can wait for the custom domain.) Resend: add the domain `send.ape.computer` and put the records it lists (SPF, DKIM, return-path
-   MX) into the `ape.computer` zone (Resend's automatic Cloudflare setup does this); wait until it
-   shows verified. Then API Keys: create a key with sending access to `send.ape.computer` only, and
-   add it as the Pages secret `RESEND_API_KEY` (as in step 3).
+4. (Optional share e-mails; not required for release.) Resend needs a separately controlled
+   sending domain, not the site's `pages.dev` hostname. If enabling this later, verify a sending
+   domain with the records Resend lists, configure its SPF, DKIM and DMARC, and create an API key
+   restricted to that domain. Add the key as the Pages secret `RESEND_API_KEY` (as in step 3), and
+   set `EMAIL_FROM` in `web/wrangler.toml` to a sender on that domain. No sending domain is selected
+   or provisioned by this repository.
 5. GitHub, Actions, "Deploy web app": run the workflow. Its summary lists each part; the last line
    should say "Accounts: D1 database and R2 bucket bound, migrations applied."
 
@@ -43,11 +48,11 @@ Phase 7 uses SQLite-backed Durable Objects, available on the Workers Free plan. 
 does not change billing plans. Usage and any future upgrade remain the owner's decision; billing
 analytics are not an application acceptance gate.
 
-Secrets take effect with the next deployment, which step 5 makes. Without `RESEND_API_KEY`
-everything works except that sharing sends no e-mail. The sender address is the `EMAIL_FROM`
-variable in `web/wrangler.toml`.
+Secrets take effect with the next deployment, which step 5 makes. Share e-mails require both
+`RESEND_API_KEY` and the `EMAIL_FROM` variable in `web/wrangler.toml`. `EMAIL_FROM` is empty by
+default, so sharing sends no e-mail; copying share links still works.
 
-`APP_ORIGIN` in `web/wrangler.toml` is the site's address (now `https://diagcalc.pages.dev`). The
+`APP_ORIGIN` in `web/wrangler.toml` is the site's address (`https://diagcalc.pages.dev`). The
 API answers only requests that reach it there (others get 421), and sign-in redirects and links in
 share e-mails use it. Every deployment also has an address of its own (`<hash>.diagcalc.pages.dev`);
 those keep serving the static app but not the API.
@@ -59,9 +64,9 @@ those keep serving the static app but not the API.
   environment. Every action is pinned to a commit; Dependabot proposes updates.
 - Runs `.github/scripts/provision-accounts.sh`, which creates, if missing and if the token allows:
   the D1 database `diagcalc`, the R2 bucket `diagcalc`, the Pages secret `SESSION_SECRET` (a fresh
-  random value, never printed; an existing one is kept, since changing it signs everyone out) and
-  the TXT record `_dmarc.send.ape.computer` = `v=DMARC1; p=quarantine; adkim=s; aspf=s`. It also
-  reports which of the other secrets are set. Nothing in it fails the run.
+  random value, never printed; an existing one is kept, since changing it signs everyone out).
+  It also reports which of the other secrets are set. It does not manage DNS records.
+  Nothing in it fails the run.
 - If the database and bucket exist: writes the database ID (looked up by name, or the secret
   `D1_DATABASE_ID` if set) into `web/wrangler.toml`, applies the migrations in `web/migrations/`
   with `wrangler d1 migrations apply diagcalc --remote` (wrangler records which have run), then
@@ -133,12 +138,21 @@ Miniflare's D1 and R2 with a fake Google and a fake Resend.
 
 These settings live in the Cloudflare and GitHub dashboards, not in the repository.
 
-- **Old deployments.** Every deployment keeps its own files and server code, bound to the
-  production database and storage, at its own `<hash>.diagcalc.pages.dev` address. The site is
-  served without Cloudflare Access, so delete old ones: GitHub, Actions, "Prune old deployments",
-  Run workflow (first with "dry run" to see the list), or push a change to
-  `.github/prune-deployments` whose first word is `list` or `delete`. It keeps the production
-  deployment and anything newer.
+- **Old deployments.** Every deployment keeps its own files and server code with production
+  bindings. "Prune old deployments" now follows successful "Deploy web app" runs on `master`.
+  It skips superseded runs, selects only deployments older than production at selection time,
+  stops on a detected production change, and verifies that deleted deployments are absent. It runs
+  only trusted `master` code, never artifacts from the triggering run. The script is
+  `.github/scripts/prune_deployments.py`; its tests run without credentials. For a manual dry
+  run: GitHub, Actions, "Prune old deployments", Run workflow, leave "dry run" checked. Uncheck
+  it to delete, or change `.github/prune-deployments` to start with `list` or `delete` and push.
+  The automatic trigger becomes active when this workflow is deployed to `master`; local tests
+  alone do not establish that it ran against Cloudflare.
+  **Before a manual dashboard rollback, cancel any pruning run and confirm it has stopped.**
+  The API's production read and deployment delete are not atomic: a rollback between them can
+  make a selected obsolete deployment newer than the rollback target. Cloudflare protects the
+  active production deployment, but the script cannot lock dashboard actions or preserve every
+  future rollback target. Do not claim otherwise from the pre-delete check.
 - **Revoked Google access (Cross-Account Protection).** Without this, a session ends only at its
   limits (30 days, or 7 without use) or when the person signs out. With it, Google tells the API
   when it ends a person's sessions, when they remove this app's access in their Google account, or
@@ -149,16 +163,14 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
   from `web/`, run `node scripts/risc-register.mjs <key.json> https://diagcalc.pages.dev`: it
   registers `<site>/api/google/risc` as the receiver and asks Google for a verification event.
   Delete the key afterwards (or keep it outside the repository); run the script again with a new
-  key when `APP_ORIGIN` changes. Without a terminal: paste the key's whole JSON into a repository
-  secret `GOOGLE_RISC_KEY` (GitHub, Settings, Secrets and variables, Actions), run the workflow
-  "Register Google security events" (Actions, Run workflow), check its notices, then delete the
-  secret and the key. Registered on 23 October 2026 for `https://diagcalc.pages.dev`.
-- **Rate limit.** Cloudflare, the zone, Security, WAF, Rate limiting rules (once the site is on the
-  custom domain; `pages.dev` cannot have rules): one rule on URI path starting with `/api/` and
-  method not GET, for example 60 requests per minute per IP, action Block for 1 minute.
+  key when `APP_ORIGIN` changes. Alternatively, use the "Register Google security events"
+  workflow with a temporary repository secret `GOOGLE_RISC_KEY`, then remove the secret and
+  revoke/delete the service-account key. Registration for `https://diagcalc.pages.dev` succeeded
+  on 23 October 2026 ([run 40018607671](https://github.com/apellis/diagrammatic-calculator/actions/runs/40018607671));
+  the run requested a verification event, but does not prove revocation closes a phase 7 room.
 - **Separate tokens.** Instead of one `CLOUDFLARE_API_TOKEN` with every permission, keep the deploy
   token at Cloudflare Pages: Edit plus D1: Edit, lower Workers R2 Storage to Read once the bucket
-  exists, and remove DNS: Edit once the DMARC record exists (the run summary says when they do).
+  exists (the run summary says when it does), and remove any zone or DNS permissions.
   R2 Read must stay: the deploy checks with it that the bucket exists, and without it would deploy
   the site with accounts switched off. The app itself never uses this token.
 - **Protected environment.** The deploy job runs in the GitHub environment `production`. GitHub,
@@ -167,3 +179,21 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
   environment would also hide them from other workflows, but needs their values, so it can wait
   until the token is next rotated. Settings, Branches: protect `master` (no force pushes, no
   deletion).
+
+## Public-release account steps
+
+Publication belongs to phase 8 and needs Alex's go-ahead.
+
+- **Google Auth Platform:** use the existing OAuth client's project, not a new client. Confirm
+  the external audience and the `openid`, `email`, `profile` scopes. Verify the site's ownership
+  in Search Console using a method offered for that property. The public About page is
+  `https://diagcalc.pages.dev/#/about` (the app uses hash routing); the privacy policy is
+  `https://diagcalc.pages.dev/privacy`. Both were reachable anonymously in the browser on
+  23 October. Configure branding and authorized domains, complete any verification Google
+  requires, then switch the audience to production at release. Console configuration still
+  needs an authenticated owner; reachable pages do not establish domain verification or approval.
+  See [Google's brand-verification requirements](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification).
+- **GitHub Support:** Alex has submitted the cached-history removal ticket and is waiting for
+  a response. Do not submit a duplicate request or treat the ticket as confirmation of removal.
+- **Python distribution:** build/install checks and publisher setup are documented in
+  `docs/python.md`. Do not upload to PyPI or change repository visibility merely to test packaging.

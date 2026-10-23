@@ -2,8 +2,7 @@
 # Provisions what the accounts API (phase 6) needs on Cloudflare, idempotently, before each deploy:
 #   - the D1 database "diagcalc" (created if missing; its ID is written to web/wrangler.toml),
 #   - the R2 bucket "diagcalc" (created if missing),
-#   - the Pages secret SESSION_SECRET (a fresh random value, set only if the project has none),
-#   - the DMARC record _dmarc.send.ape.computer (created if missing).
+#   - the Pages secret SESSION_SECRET (a fresh random value, set only if the project has none).
 # Each part reports one line in the run summary. A part the API token has no permission for is
 # skipped with a note saying which permission to add; nothing here fails the workflow. If the
 # database and bucket are both available, ACCOUNTS=true is exported and the deploy binds them;
@@ -16,9 +15,6 @@ set -uo pipefail
 API=https://api.cloudflare.com/client/v4
 ACC="$API/accounts/$CLOUDFLARE_ACCOUNT_ID"
 NAME=diagcalc
-ZONE=ape.computer
-DMARC_NAME=_dmarc.send.ape.computer
-DMARC_VALUE='v=DMARC1; p=quarantine; adkim=s; aspf=s'
 
 summary() { echo "$1"; [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
 cf() { # method url [json]
@@ -113,28 +109,6 @@ if printf '%s' "$r" | ok; then
   fi
 else
   summary "Pages project: could not be read ($(printf '%s' "$r" | errors))."
-fi
-
-# --- DMARC ----------------------------------------------------------------------------------------
-r=$(cf GET "$API/zones?name=$ZONE")
-zone=$(printf '%s' "$r" | jq -r '.result[0].id // ""' 2>/dev/null)
-if [ -z "$zone" ]; then
-  summary "DMARC: skipped (zone $ZONE not on this account or not visible to the token; needed only for share e-mails)."
-else
-  r=$(cf GET "$API/zones/$zone/dns_records?type=TXT&name=$DMARC_NAME")
-  if ! printf '%s' "$r" | ok; then
-    summary "DMARC: DNS records not readable; add the zone permission DNS: Edit for $ZONE ($(printf '%s' "$r" | errors))."
-  elif [ "$(printf '%s' "$r" | jq '.result | length')" -gt 0 ]; then
-    summary "DMARC: record $DMARC_NAME found."
-  else
-    body=$(jq -cn --arg n "$DMARC_NAME" --arg c "\"$DMARC_VALUE\"" '{type:"TXT",name:$n,content:$c,ttl:1}')
-    r=$(cf POST "$API/zones/$zone/dns_records" "$body")
-    if printf '%s' "$r" | ok; then
-      summary "DMARC: record $DMARC_NAME created."
-    else
-      summary "DMARC: could not create the record; add the zone permission DNS: Edit for $ZONE ($(printf '%s' "$r" | errors))."
-    fi
-  fi
 fi
 
 # --- Result ---------------------------------------------------------------------------------------

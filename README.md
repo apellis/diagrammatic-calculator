@@ -4,11 +4,13 @@ A fast, exact calculator for diagrammatic algebra (KLR algebras, nilHecke and od
 first; any presentation of a monoidal supercategory by generators and relations) whose terms can be
 read and edited as string diagrams.
 
-Status: the headless calculator is built (phases 1 to 3 of `docs/spec.md`): exact normal forms
-through faithful representations, finite-dimensional quotients and their linear algebra, and
-rewriting by the defining relations, with rewrite chains exported as Lean proofs. The live
-workspace in the browser (phase 4a) is in `web/`; gestures on diagrams and the in-app AI (phase 4b)
-are next. `AGENTS.md` says how to work in this repository.
+Status: phases 0 to 7 are complete: the exact headless calculator and Lean chain export, the
+browser workspace with diagram gestures and an in-app AI, KL and BE2 2-categories, and accounts
+with document sharing and live co-editing. `docs/roadmap.md` is the current work list:
+phase 8 prepares public release; phase 9 contains non-blocking later work. `AGENTS.md`
+says how to work in this repository.
+
+Python bindings and local distribution builds are documented in `docs/python.md`.
 
 ```sh
 cd web && npm ci && npm run wasm && npm run dev    # the web app on http://localhost:5173

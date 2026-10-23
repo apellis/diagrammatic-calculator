@@ -22,7 +22,7 @@ diagrammatic-calculator is a fast, exact calculator for diagrammatic algebra, KL
 - Research results. The repository holds the tool; research using it lives in other repositories.
 - Server-side computation, a paid tier, TikZ import, and diagram categories beyond those named in the phases. Each can be added later without changing the core.
 
-**Fixed decisions (Alex, 18 to 21 October):** repository diagrammatic-calculator, private during early development, with the code and the web app to be made public later; Rust core with Python bindings and a WebAssembly build; TypeScript front end; static site on Cloudflare Pages at diagcalc.ape.computer, behind Cloudflare Access until the public release; anonymous use with documents in the browser; optional Google sign-in, sharing and multiplayer later on Cloudflare Workers; users bring their own AI API key; email through Resend; budget under $100 a year.
+**Fixed decisions (Alex, 18 to 23 October):** repository diagrammatic-calculator, private during early development, with the code to be made public later; Rust core with Python bindings and a WebAssembly build; TypeScript front end; static site at `https://diagcalc.pages.dev`, accessible without Cloudflare Access; anonymous use with documents in the browser; optional Google sign-in, sharing and multiplayer on Cloudflare Workers; users bring their own AI API key; optional share email through Resend once a separate sender is configured; budget under $100 a year.
 
 ## Architecture
 
@@ -305,11 +305,10 @@ Until accounts exist, every document lives in the user's browser, and files on d
 
 ## Hosting, access and accounts
 
-The app is a static site on Cloudflare Pages at diagcalc.ape.computer; a server appears only for accounts, sharing and multiplayer, and it never computes.
+The app is a static site on Cloudflare Pages at `https://diagcalc.pages.dev`; a server appears only for accounts, sharing and multiplayer, and it never computes.
 
 **Private stage (until the public release).**
 
-- ape.computer's DNS moves to Cloudflare (free), with the Ghost records copied unchanged so the blog keeps working.
 - Pages deploys automatically from the main branch; every pull request gets a preview URL.
 - No Cloudflare Access in front of the site (Alex, 23 October; it guarded the site with an allowlist until then): anonymous use for everyone, Google sign-in for accounts.
 - Response headers in `_headers`: cross-origin isolation (for multi-core WebAssembly) and a strict Content Security Policy: scripts, workers, styles, fonts and images from the site only (no inline script; WebAssembly compilation allowed), network requests to the site and the AI providers (Anthropic, OpenAI, and the https or local address of an OpenAI-compatible server the person names), no plugins, no `<base>`, and no framing. `Referrer-Policy: no-referrer` and `nosniff` on every file. Trusted Types are not enforced: Solid builds its templates through `innerHTML`, so a policy would have to allow everything.
@@ -319,7 +318,7 @@ The app is a static site on Cloudflare Pages at diagcalc.ape.computer; a server 
 - A Cloudflare Worker adds Google sign-in (OpenID Connect), replacing Access. Switching is about a day of work, and people simply sign in again.
 - D1 (SQLite) holds users, documents' metadata, and sharing: owner, editors, viewers, and link sharing with view or edit rights.
 - R2 holds document snapshots and exported files.
-- Email through Resend from a sending subdomain (for example send.ape.computer) with SPF, DKIM and DMARC: share notifications only.
+- Optional email through Resend from a separately verified sending domain with SPF, DKIM and DMARC: share notifications only. Email is disabled until a sender is configured; copying share links works without it. The site's `pages.dev` hostname is not a sending domain we control.
 - Anonymous use stays free and unchanged.
 
 **Security of the accounts phase.** These rules hold whatever the client sends.
@@ -403,7 +402,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 
 ## Phases, deliverables and acceptance gates
 
-Each phase ends with a gate that Claude checks and reports to Alex with evidence (a CI run, benchmark JSON, a screen recording or a Lean build). A phase starts only when the previous gate has passed. The order follows risk: the engine's correctness risks (equality strategies, conventions, arithmetic speed) are retired before any UI is built. This list supersedes the roadmap's phases.
+Each implementation phase ends with a gate checked and reported to Alex with evidence (a CI run, benchmark JSON, a screen recording or a Lean build). Dependent work starts after the preceding gate; independent release preparation may run alongside phase 7. The order follows risk: the engine's correctness risks (equality strategies, conventions, arithmetic speed) are retired before any UI is built. `docs/roadmap.md` keeps the open work and external blockers current under these phase numbers. Phase 9 is a non-blocking backlog, not a requirement to finish every listed project.
 
 | Phase | Deliverables | Gate |
 |---|---|---|
@@ -415,8 +414,9 @@ Each phase ends with a gate that Claude checks and reports to Alex with evidence
 | 4b. Gestures and the in-app AI | The focus canvas and gestures with their keyboard paths; the AI panel with a bring-your-own key (Anthropic first, then providers that pass the browser check); what-if branches; the activity timeline | (passed 22 October) Live in the browser, by hand and with the AI, Alex checks a nontrivial computation: for example, that given elements form a complete set of orthogonal idempotents in NH₃ or in R(2α₁+α₂) of type A₂, or that a KLR relation such as the braid relation with its correction term holds. Alex also tries the gestures. |
 | 5. Full 2-categories | Cups, caps, bubbles, weights and the biadjunction layer; KL 2-category and BE2 super 2-category presentations; Lean export for both | (passed 23 October) A set of KL and BE2 relations computed by the calculator agree with the Lean libraries, and one exported chain builds in odd-lean. Evidence: CI builds 43 KL chains against categorification-lean and 26 BE2 chains against odd-lean, one instance of every relation in both presentations |
 | 6. Accounts and sharing | Our own Google sign-in replacing Access; D1 and R2 storage; upload of local documents on first sign-in; share links with view and edit permissions | (passed 23 October) A document made anonymously survives sign-in, opens on a second device, and is shared read-only with a second account. Evidence: `tests/accounts.spec.ts` runs this end to end in CI, against the API's rules, and the API is live on diagcalc.pages.dev with D1 and R2 since 23 October; the free plans sufficed, so Workers Paid was not needed |
-| 7. Multiplayer | Committed-edit Yjs rooms with hibernation; authenticated presence; personal branches and recovery; shared AI decisions and recomputable pins. Specification and accepted decisions: `docs/phase7.md` | Concurrent, offline and late-joining browsers converge without losing private drafts; viewers and revocation are enforced; closed rooms cease maintenance |
-| Public release | When Alex decides: public repository (licence in place), Google sign-in published, Python package on PyPI (Access was removed on 23 October) | Alex's go-ahead |
+| 7. Multiplayer | Committed-edit Yjs rooms with hibernation; authenticated presence; personal branches and recovery; shared AI decisions and recomputable pins. Specification and accepted decisions: `docs/phase7.md` | (passed) Concurrent, offline and late-joining browsers converge without losing private drafts; viewers and revocation are enforced; closed rooms cease maintenance. Implementation `7cfe45d` passed [CI](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129703) and [deployment](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129712); the authenticated production revocation check remains in phase 8 |
+| 8. Pre-release and public release | View mode and remaining viewer-facing polish; accurate certificate presentation; deployed revocation/pruning checks and Google publication; tested Python distribution on PyPI and public repository with licence in place | Phase 7 passed; pre-release work and external publication dependencies in `docs/roadmap.md` resolved; Alex's go-ahead for publication |
+| 9. Post-release | Stronger mathematical certificates, measured performance improvements and optional share notifications, as listed in `docs/roadmap.md` | Each selected item is verified on its own merits; none blocks public release |
 
 Phases 1 to 5 run with no server and no running cost. Phase 6 runs on the free plans; Workers Paid ($5 a month) may come with phase 7 (`docs/phase7.md`, Cost).
 

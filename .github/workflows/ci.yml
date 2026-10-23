@@ -41,6 +41,12 @@ jobs:
           cargo clippy -p diagcalc-bench --features trace -- -D warnings
       - name: Test
         run: cargo test --workspace
+      - name: Deployment and Python packaging checks
+        run: |
+          bash -n .github/scripts/provision-accounts.sh
+          python3 -m unittest discover -s .github/scripts -p 'test_prune_deployments.py' -v
+          python3 crates/py/tests/test_packaging.py
+          python3 crates/py/tests/test_audit.py
       - name: WebAssembly build
         run: cargo build -p diagcalc-wasm --target wasm32-unknown-unknown --release
       - name: Benchmarks (quick)

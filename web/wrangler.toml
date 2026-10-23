@@ -8,11 +8,12 @@ pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
 
 [vars]
-EMAIL_FROM = "diagrammatic-calculator <share@send.ape.computer>"
+# Share e-mails stay off until a sender on a separately verified sending domain is configured.
+EMAIL_FROM = ""
 # The site's address: sign-in redirects and links in e-mails use it, and the API refuses requests
-# reaching it under any other host (old deployments' own addresses, previews). Change it when the
-# custom domain moves over (and add the new callback URL to the Google OAuth client first). For
-# `wrangler pages dev`, override it in .dev.vars (APP_ORIGIN=http://localhost:8788).
+# reaching it under any other host (old deployments' own addresses, previews). The public site
+# stays on this hostname. For `wrangler pages dev`, override it in .dev.vars
+# (APP_ORIGIN=http://localhost:8788).
 APP_ORIGIN = "https://diagcalc.pages.dev"
 
 [[d1_databases]]

@@ -1,13 +1,13 @@
 name: Deploy web app
 
-# Every push to master deploys the web app to Cloudflare Pages (project "diagcalc"), where
-# Cloudflare Access keeps it private until the public release. The deploy job does nothing until the
+# Every push to master deploys the web app to https://diagcalc.pages.dev (project "diagcalc").
+# The production site allows anonymous use. The deploy job does nothing until the
 # repository has the secrets CLOUDFLARE_API_TOKEN (a token with Cloudflare Pages: Edit) and
 # CLOUDFLARE_ACCOUNT_ID. The Pages project "diagcalc" already exists.
 #
 # The accounts API (web/functions/, phase 6) deploys with the site. Before each deploy,
 # .github/scripts/provision-accounts.sh creates what is missing on Cloudflare (D1 database and R2
-# bucket "diagcalc", the Pages secret SESSION_SECRET, the DMARC record of send.ape.computer) as far
+# bucket "diagcalc", the Pages secret SESSION_SECRET) as far
 # as the API token's permissions allow, and says in the run summary what it did or why it could
 # not. The D1 database ID is looked up by name (the secret D1_DATABASE_ID, if set, overrides it).
 # Without both the database and the bucket the site is deployed without web/wrangler.toml, the API
