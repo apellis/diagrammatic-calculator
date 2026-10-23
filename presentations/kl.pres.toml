@@ -272,7 +272,7 @@ certificate.hypotheses = "Q = klq2 (the default)"
 
 [lean]
 encoding = "kl3-dg"
-module = "Categorification.Diagrams.KL3.Rewriting Categorification.Diagrams.KL3.BubbleSlidesGen"
+module = "Categorification.Diagrams.KL3.Rewriting Categorification.Diagrams.KL3.BubbleSlidesGen Categorification.Diagrams.KL3.Pitchfork DiagcalcSupport.KL3"
 namespace = "Categorification.KL3.Diagram"
 open = "CategoryTheory StringDiagrams QuantumGroup UDot Presentation"
 generators = { cap = ".cap (dn {a})", capd = ".cap (up {a})", cup = ".cup (up {a})", cupd = ".cup (dn {a})", psi = ".cross true {a} {b}", psid = ".cross false {a} {b}", x = ".dot (up {a})", xd = ".dot (dn {a})" }
@@ -284,6 +284,56 @@ lemma = "dg_braid RD k ν {a} {b} {c} {simp}"
 lemma = "dg_braidQ RD k ν {a} {b} {a!=b} (by assumption)"
 facts = ["dot≠0 {a} {b}", "dij {a} {b}"]
 layering = "left-first"
+
+[lean.relations.bubble-ccw-negative]
+lemma = "dg_ccwNeg RD k ν {a} {m} (by rw [{ip a}]; norm_num)"
+proof = "exact"
+
+[lean.relations.bubble-ccw-one]
+lemma = "(by have L := dg_ccwOne RD k ν {a} (by rw [{ip a}]; norm_num); rw [{ip a}] at L; exact L)"
+proof = "exact"
+
+[lean.relations.bubble-cw-negative]
+lemma = "dg_cwNeg RD k ν {a} {m} (by rw [{ip a}]; norm_num)"
+proof = "exact"
+
+[lean.relations.bubble-cw-one]
+lemma = "(by have L := dg_cwOne RD k ν {a} (by rw [{ip a}]; norm_num); rw [{ip a}] at L; exact L)"
+proof = "exact"
+
+[lean.relations.curl-left]
+lemma = "rw [dg_curlL RD k {a} ν]; dc_bub {ip a}"
+layering = "bubbles-first"
+proof = "tactic"
+
+[lean.relations.curl-right]
+lemma = "rw [dg_curlR RD k {a} ν]; dc_bub {ip a}"
+layering = "bubbles-first"
+proof = "tactic"
+
+[lean.relations.cyclic-crossing-left]
+lemma = "(dg_cycCrossL RD k {a} {b} ν).symm"
+proof = "exact"
+
+[lean.relations.cyclic-crossing-right]
+lemma = "(dg_cycCrossR RD k {a} {b} ν).symm"
+proof = "exact"
+
+[lean.relations.cyclic-dot-left]
+lemma = "(dg_cycDotL RD k {a} ν).symm"
+proof = "exact"
+
+[lean.relations.cyclic-dot-right]
+lemma = "(dg_cycDotR RD k {a} ν).symm"
+proof = "exact"
+
+[lean.relations.decompose-ef]
+lemma = "rw [dg_decompEF RD k {a} ν]; dc_bub {ip a}"
+proof = "tactic"
+
+[lean.relations.decompose-fe]
+lemma = "rw [dg_decompFE RD k {a} ν]; dc_bub {ip a}"
+proof = "tactic"
 
 [lean.relations.dot-slide-left-distinct]
 lemma = "dg_slideLNe RD k ν {a} {b} {a!=b}"
@@ -297,9 +347,33 @@ lemma = "dg_slideRNe RD k ν {a} {b} {a!=b}"
 [lean.relations.dot-slide-right-same]
 lemma = "dg_slideREq RD k ν {a}"
 
+[lean.relations.mixed-ef]
+lemma = "dg_downupEF RD k {a} {b} {a!=b} ν"
+proof = "exact"
+
+[lean.relations.mixed-fe]
+lemma = "dg_downupFE RD k {a} {b} {a!=b} ν"
+proof = "exact"
+
 [lean.relations.square-distinct]
 lemma = "dg_sqNe RD k ν {a} {b} {a!=b}"
 facts = ["dot {a} {b}", "dij {a} {b}", "dij {b} {a}"]
 
 [lean.relations.square-same]
 lemma = "dg_sqEq RD k ν {a}"
+
+[lean.relations.zigzag-down-left]
+lemma = "dg_zigL' RD k ν (dn {a})"
+proof = "exact"
+
+[lean.relations.zigzag-down-right]
+lemma = "dg_zigR' RD k ν (up {a})"
+proof = "exact"
+
+[lean.relations.zigzag-up-left]
+lemma = "dg_zigL' RD k ν (up {a})"
+proof = "exact"
+
+[lean.relations.zigzag-up-right]
+lemma = "dg_zigR' RD k ν (dn {a})"
+proof = "exact"

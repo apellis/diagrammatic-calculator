@@ -127,7 +127,7 @@
             ],
             "properties": {
               "lemma": {
-                "description": "The lemma, applied at the weight ν.",
+                "description": "The lemma, applied at the weight ν. Placeholders: {a} a colour variable, {a!=b} a proof that two colours differ, {m} an integer variable, {ip a} the hypothesis ip RD a ν = n of a weight-dependent relation, {simp} a simp call with the colour inequalities.",
                 "type": "string"
               },
               "facts": {
@@ -140,7 +140,16 @@
               "layering": {
                 "enum": [
                   "canonical",
-                  "left-first"
+                  "left-first",
+                  "bubbles-first"
+                ]
+              },
+              "proof": {
+                "description": "How the lemma proves the relation as the calculator states it: 'rw' (rewrite with it, then normalize sums), 'exact' (it is the statement up to unfolding) or 'tactic' (the lemma field is a tactic script, steps separated by '; ').",
+                "enum": [
+                  "rw",
+                  "exact",
+                  "tactic"
                 ]
               }
             }

@@ -183,6 +183,17 @@ enum Fact {
     Dot(u16, u16, bool),
     /// `C.dij a b = n`.
     Dij(u16, u16, i64),
+    /// `A C a b = n`, for chains through weight-dependent relations.
+    A(u16, u16, i64),
+    /// `ip RD a μ = n`: the weight of the rightmost region.
+    Ip(u16, i64),
+}
+
+fn word_colours(w: &Word, out: &mut BTreeSet<u16>) {
+    out.extend(w.source.iter().map(|l| l.colour));
+    for l in &w.layers {
+        out.extend(l.binding.iter().copied());
+    }
 }
 
 fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<String> {
@@ -205,10 +216,11 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
     let mut rules: Vec<&Rule<R>> = Vec::new();
     for ch in &it.chains {
         for (w, _) in ch.start.terms.iter().chain(&ch.end.terms) {
-            colours.extend(w.source.iter().map(|l| l.colour));
+            word_colours(w, &mut colours);
         }
         for st in &ch.steps {
-            colours.extend(st.word.source.iter().map(|l| l.colour));
+            word_colours(&st.word, &mut colours);
+            colours.extend(st.rule.binding.iter().map(|&c| c as u16));
             if st.at.sign || st.summands.iter().any(|s| s.sign) {
                 return Err(Error::precondition(
                     "the chain uses Koszul signs, which the kl3-dg encoding does not have",
@@ -269,6 +281,19 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
             }
         }
     }
+    if rules.iter().any(|r| r.region.is_some()) {
+        let mu = ctx.mu.as_ref().ok_or_else(|| {
+            Error::precondition("a weight-dependent relation needs the context's weight mu")
+        })?;
+        for &a in &colours {
+            facts.insert(Fact::Ip(a, mu[a as usize]));
+            for &b in &colours {
+                if a != b {
+                    facts.insert(Fact::A(a, b, cartan.a[a as usize][b as usize]));
+                }
+            }
+        }
+    }
     let ne_name = |a: u16, b: u16| {
         let (x, y) = distinct(a, b);
         format!("h_{}_{}", wr.colour(x), wr.colour(y))
@@ -307,6 +332,8 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
         .map(|f| match f {
             Fact::Dot(a, b, _) => format!("hdot_{}_{}", wr.colour(*a), wr.colour(*b)),
             Fact::Dij(a, b, _) => format!("hdij_{}_{}", wr.colour(*a), wr.colour(*b)),
+            Fact::A(a, b, _) => format!("hA_{}_{}", wr.colour(*a), wr.colour(*b)),
+            Fact::Ip(a, _) => format!("hμ_{}", wr.colour(*a)),
         })
         .collect();
     for (f, n) in facts.iter().zip(&fact_names) {
@@ -318,6 +345,8 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
                 if *nz { "≠" } else { "=" }
             ),
             Fact::Dij(a, b, v) => format!("C.dij {} {} = {v}", wr.colour(*a), wr.colour(*b)),
+            Fact::A(a, b, v) => format!("A C {} {} = {v}", wr.colour(*a), wr.colour(*b)),
+            Fact::Ip(a, v) => format!("ip RD {} μ = {v}", wr.colour(*a)),
         };
         o.push_str(&format!("\n    ({n} : {s})"));
     }
@@ -339,14 +368,33 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
         .collect();
     for (ri, r) in rules.iter().enumerate() {
         let rel = &decl.relations[&r.relation];
-        let names = &ctx
+        let prel = ctx
             .pres
             .relations
             .iter()
             .find(|x| x.name == r.relation)
-            .expect("relation")
-            .vars;
+            .expect("relation");
+        let names = &prel.vars;
         let mut lemma = rel.lemma.clone();
+        // The weight hypotheses `ip RD c ν = n` of a weight-dependent rule, one per colour.
+        let mut weight_hyps: Vec<(u16, i64)> = Vec::new();
+        if let Some(region) = &r.region {
+            for &c in &r.binding {
+                let c = c as u16;
+                if !weight_hyps.iter().any(|h| h.0 == c) {
+                    weight_hyps.push((c, region[c as usize]));
+                }
+            }
+        }
+        for (i, v) in names.iter().enumerate() {
+            lemma = lemma.replace(
+                &format!("{{ip {v}}}"),
+                &format!("hν_{}", wr.colour(r.binding[i] as u16)),
+            );
+        }
+        for ((v, _, _), n) in prel.ints.iter().zip(&r.ints) {
+            lemma = lemma.replace(&format!("{{{v}}}"), &n.to_string());
+        }
         for (i, v) in names.iter().enumerate() {
             for (j, u) in names.iter().enumerate() {
                 let (a, b) = (r.binding[i] as u16, r.binding[j] as u16);
@@ -387,11 +435,33 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
             },
             binding_note(ctx, names, &r.binding)
         ));
+        let premises: String = weight_hyps
+            .iter()
+            .map(|(c, n)| format!("ip RD {} ν = {n} → ", wr.colour(*c)))
+            .collect();
+        let binders: String = weight_hyps
+            .iter()
+            .map(|(c, _)| format!(" hν_{}", wr.colour(*c)))
+            .collect();
         o.push_str(&format!(
-            "  have E{ri} : ∀ ν : X, {} =\n      {} := fun ν => by\n    rw [{lemma}]\n",
+            "  have E{ri} : ∀ ν : X, {premises}{} =\n      {} := fun ν{binders} => by\n",
             wr.word(&r.pattern, "ν")?,
             wr.term(&relaid(ctx, &rel.layering, &r.replacement)?, "ν")?
         ));
+        match rel.proof.as_str() {
+            "exact" => {
+                o.push_str(&format!("    exact {lemma}\n"));
+                continue;
+            }
+            "tactic" => {
+                for line in lemma.split("; ") {
+                    o.push_str(&format!("    {line}\n"));
+                }
+                continue;
+            }
+            _ => {}
+        }
+        o.push_str(&format!("    rw [{lemma}]\n"));
         if !rel.facts.is_empty() {
             o.push_str(&format!(
                 "    try simp only [{}, ↓reduceIte, Finset.sum_range_succ, Finset.sum_range_zero, \
@@ -455,13 +525,16 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
                     .collect(),
             };
             let kn = format!("K{tag}{si}");
+            let place = match width {
+                0 => format!("left of strand {}", m.window + 1),
+                1 => format!("strand {}", m.window + 1),
+                _ => format!("strands {}–{}", m.window + 1, m.window + width),
+            };
             o.push_str(&format!(
-                "  -- step {}: {} at layer {}, strands {}–{}\n",
+                "  -- step {}: {} at layer {}, {place}\n",
                 si + 1,
                 st.rule.relation,
                 m.at + 1,
-                m.window + 1,
-                m.window + width
             ));
             o.push_str(&format!(
                 "  have {kn} : {} =\n      {} := by\n",
@@ -471,8 +544,31 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
             for s in &m.swaps {
                 o.push_str(&format!("    dswap {s}\n"));
             }
+            // Proofs of the rule's weight hypotheses at the region right of the rectangle.
+            let mut weight_args = String::new();
+            if st.rule.region.is_some() {
+                let mut seen = Vec::new();
+                for &c in &st.rule.binding {
+                    let c = c as u16;
+                    if seen.contains(&c) {
+                        continue;
+                    }
+                    seen.push(c);
+                    let hs: Vec<String> = colours
+                        .iter()
+                        .filter(|&&d| d != c)
+                        .map(|&d| format!("hA_{}_{}", wr.colour(c), wr.colour(d)))
+                        .collect();
+                    let hc = format!("hμ_{}", wr.colour(c));
+                    weight_args.push_str(&format!(
+                        " (by simp only [ip, wt_cons, wt_nil, sh, map_add, map_zsmul, \
+                         RD.pair_iY_iX_eq_A, smul_eq_mul] at {hc} ⊢; simp [sgn, A_self{}, {hc}])",
+                        hs.iter().map(|h| format!(", {h}")).collect::<String>()
+                    ));
+                }
+            }
             o.push_str(&format!(
-                "    rw [dg_stepL_at _ {} {u} {v} (E{ri} _) (by (try dnorm); schain) \
+                "    rw [dg_stepL_at _ {} {u} {v} (E{ri} _{weight_args}) (by (try dnorm); schain) \
                  (by (try dnorm); schain) (by dnorm)]\n",
                 m.at
             ));
@@ -551,11 +647,83 @@ fn relaid<R: Ring>(ctx: &Context<R>, layering: &str, t: &CTerm<R>) -> Result<CTe
                     }
                 }
             }
+            "bubbles-first" => {
+                // Interchange moves only: closed components (bubbles) go lower, as far as they
+                // can, past the other generators.
+                let mut w = w.clone();
+                let mut bub = bubble_layers(ctx, &w);
+                loop {
+                    let mut moved = false;
+                    for i in 0..w.layers.len().saturating_sub(1) {
+                        if bub[i] || !bub[i + 1] {
+                            continue;
+                        }
+                        if let Some((lo, up, odd)) =
+                            ctx.swap_adjacent(&w.layers[i], &w.layers[i + 1])
+                        {
+                            if odd {
+                                return Err(Error::precondition(
+                                    "relaying a word costs a Koszul sign",
+                                ));
+                            }
+                            w.layers[i] = lo;
+                            w.layers[i + 1] = up;
+                            bub.swap(i, i + 1);
+                            moved = true;
+                        }
+                    }
+                    if !moved {
+                        break w;
+                    }
+                }
+            }
             _ => w.clone(),
         };
         terms.push((w, c.clone()));
     }
     Ok(crate::term::Term { terms })
+}
+
+/// For each layer of `w`, whether it belongs to a closed component: one that meets neither the
+/// source nor the target, such as a bubble with its dots. Every generator joins its ends.
+fn bubble_layers<R: Ring>(ctx: &Context<R>, w: &Word) -> Vec<bool> {
+    fn find(p: &mut [usize], mut x: usize) -> usize {
+        while p[x] != x {
+            p[x] = p[p[x]];
+            x = p[x];
+        }
+        x
+    }
+    let mut parent: Vec<usize> = (0..w.source.len()).collect();
+    let mut cur: Vec<usize> = (0..w.source.len()).collect();
+    let mut open: Vec<usize> = cur.clone();
+    let mut ends: Vec<usize> = Vec::new();
+    for l in &w.layers {
+        let g = l.generator as usize;
+        let (sl, tl) = (ctx.source_len(g), ctx.target_len(g));
+        let p = l.pos as usize;
+        let ins: Vec<usize> = cur[p..p + sl].to_vec();
+        let outs: Vec<usize> = (0..tl)
+            .map(|_| {
+                parent.push(parent.len());
+                parent.len() - 1
+            })
+            .collect();
+        let all: Vec<usize> = ins.iter().chain(&outs).copied().collect();
+        if let Some(&first) = all.first() {
+            for &x in &all[1..] {
+                let (a, b) = (find(&mut parent, first), find(&mut parent, x));
+                parent[b] = a;
+            }
+        }
+        ends.push(all.first().copied().unwrap_or(usize::MAX));
+        cur.splice(p..p + sl, outs);
+    }
+    open.extend(cur.iter().copied());
+    let open_roots: Vec<usize> = open.iter().map(|&x| find(&mut parent, x)).collect();
+    ends.iter()
+        .map(|&e| e != usize::MAX && !open_roots.contains(&find(&mut parent, e)))
+        .collect()
 }
 
 fn push_rewrites(o: &mut String, rewrites: &[String], indent: &str) {
@@ -566,7 +734,11 @@ fn push_rewrites(o: &mut String, rewrites: &[String], indent: &str) {
 }
 
 fn same_rule<R: Ring>(a: &Rule<R>, b: &Rule<R>) -> bool {
-    a.relation == b.relation && a.binding == b.binding && a.forward == b.forward
+    a.relation == b.relation
+        && a.binding == b.binding
+        && a.ints == b.ints
+        && a.region == b.region
+        && a.forward == b.forward
 }
 
 fn binding_note<R: Ring>(ctx: &Context<R>, vars: &[String], b: &[usize]) -> String {
@@ -601,6 +773,14 @@ struct ChainEntry {
     rhs: Option<String>,
     #[serde(default)]
     doc: String,
+    /// How each side is rewritten: `straighten` (the default: to the basis of crossings and
+    /// dots), `shrink` (by rules that make words shorter, until none applies) or `once` (one
+    /// step).
+    #[serde(default)]
+    strategy: Option<String>,
+    /// For `shrink` and `once`: the relations whose rules may be used (all if empty).
+    #[serde(default)]
+    relations: Vec<String>,
 }
 
 fn camel(name: &str) -> String {
@@ -623,26 +803,53 @@ impl crate::ops::RingVisitor for Entry<'_> {
         let spec = crate::context::ContextSpec::parse(&e.context)?;
         let pres = crate::builtin::presentation(&spec.presentation)?;
         let ctx = Context::new(pres, spec, base)?;
-        let rules = crate::rewrite::rules(&ctx)?;
-        let decl = ctx
-            .pres
-            .representations
-            .iter()
-            .find(|d| crate::rep::basis_layout(&ctx, d).is_ok())
-            .ok_or_else(|| Error::precondition("no basis of crossings and dots"))?;
-        let layout = crate::rep::basis_layout(&ctx, decl)?;
-        let ev = crate::rep::evaluator(&ctx, decl)?;
+        let strategy = e.strategy.as_deref().unwrap_or("straighten");
         let mut chains = Vec::new();
-        for side in std::iter::once(&e.lhs).chain(e.rhs.as_ref()) {
-            let t = ctx.parse_term(side)?;
-            let ch = crate::rewrite::straighten(&ctx, &rules, &layout, &t, 100_000)?;
-            if ev.normal_form(&t)? != ch.end {
-                return Err(Error::invalid(format!(
-                    "{}: straightening {side} disagrees with the representation",
-                    e.name
-                )));
+        if strategy == "straighten" {
+            let rules = crate::rewrite::rules(&ctx)?;
+            let decl = ctx
+                .pres
+                .representations
+                .iter()
+                .find(|d| crate::rep::basis_layout(&ctx, d).is_ok())
+                .ok_or_else(|| Error::precondition("no basis of crossings and dots"))?;
+            let layout = crate::rep::basis_layout(&ctx, decl)?;
+            let ev = crate::rep::evaluator(&ctx, decl)?;
+            for side in std::iter::once(&e.lhs).chain(e.rhs.as_ref()) {
+                let t = ctx.parse_term(side)?;
+                let ch = crate::rewrite::straighten(&ctx, &rules, &layout, &t, 100_000)?;
+                if ev.normal_form(&t)? != ch.end {
+                    return Err(Error::invalid(format!(
+                        "{}: straightening {side} disagrees with the representation",
+                        e.name
+                    )));
+                }
+                chains.push(ch);
             }
-            chains.push(ch);
+        } else {
+            let once = match strategy {
+                "once" => true,
+                "shrink" => false,
+                s => return Err(Error::invalid(format!("unknown strategy '{s}'"))),
+            };
+            // The chain is checked against the first representation that decides equality.
+            let ev = ctx
+                .pres
+                .representations
+                .iter()
+                .find_map(|d| crate::rep::evaluator(&ctx, d).ok())
+                .ok_or_else(|| Error::precondition("no representation to check the chain"))?;
+            for side in std::iter::once(&e.lhs).chain(e.rhs.as_ref()) {
+                let t = ctx.parse_term(side)?;
+                let ch = crate::rewrite::shrink(&ctx, &t, &e.relations, once, 10_000)?;
+                if ev.normal_form(&t)? != ev.normal_form(&ch.end)? {
+                    return Err(Error::invalid(format!(
+                        "{}: rewriting {side} disagrees with the representation",
+                        e.name
+                    )));
+                }
+                chains.push(ch);
+            }
         }
         let mut header = format!(
             "-- Generated by `diagcalc lean-chains` from lean/chains/chains.toml; do not edit.\n\

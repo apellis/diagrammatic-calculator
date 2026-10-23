@@ -8,8 +8,10 @@ name: Lean chains
 # the export always touches lean/chains/.
 #
 # A cold build of the categorification-lean modules the chains import is slow, so the built
-# dependencies are cached by manifest; Mathlib comes from its own cache. The pin never moves by
-# itself, so the job runs when lean/chains changes, and twice a week to keep the cache alive.
+# dependencies are cached by manifest and by the hand-written support library, whose imports
+# name the library modules the chains use (a new import builds once and is saved under a new
+# key); Mathlib comes from its own cache. The pin never moves by itself, so the job runs when
+# lean/chains changes, and twice a week to keep the cache alive.
 
 on:
   push:
@@ -46,7 +48,9 @@ jobs:
             lean/chains/.lake/packages/Categorification/.lake
             lean/chains/.lake/packages/StringDiagrams/.lake
             lean/chains/.lake/packages/LieLean/.lake
-          key: lean-chains-deps-${{ hashFiles('lean/chains/lake-manifest.json', 'lean/chains/lean-toolchain') }}
+          key: lean-chains-deps-${{ hashFiles('lean/chains/lake-manifest.json', 'lean/chains/lean-toolchain') }}-${{ hashFiles('lean/chains/DiagcalcSupport/**', 'lean/chains/Checks.lean') }}
+          restore-keys: |
+            lean-chains-deps-${{ hashFiles('lean/chains/lake-manifest.json', 'lean/chains/lean-toolchain') }}-
       - name: Build the chains
         run: lake build < /dev/null
       - name: Print the KLR relations from Lean and compare

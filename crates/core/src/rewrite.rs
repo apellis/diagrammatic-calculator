@@ -589,6 +589,56 @@ pub fn apply_everywhere<R: Ring>(
     Ok(chain)
 }
 
+/// Rewrites `t` one match at a time: in the first word that has a match, the first match of
+/// the rules of `relations` (all relations if empty), forward rules first. With `once`, the
+/// chain has one step; otherwise only rules whose replacement words all have fewer layers than
+/// the pattern are used, until none applies (at most `max_steps` steps). The rules are those of
+/// the regions of the current term, so weight-dependent relations apply where they hold.
+pub fn shrink<R: Ring>(
+    ctx: &Context<R>,
+    t: &CTerm<R>,
+    relations: &[String],
+    once: bool,
+    max_steps: usize,
+) -> Result<Chain<R>> {
+    let mut chain = Chain::new(t.clone());
+    loop {
+        if chain.steps.len() >= max_steps {
+            return Err(Error::limit(format!(
+                "rewriting did not stop within {max_steps} steps"
+            )));
+        }
+        let mut rules: Vec<Rule<R>> = rules_for_term(ctx, &chain.end)?
+            .into_iter()
+            .filter(|r| relations.is_empty() || relations.contains(&r.relation))
+            .filter(|r| {
+                once || r
+                    .replacement
+                    .terms
+                    .iter()
+                    .all(|(w, _)| w.layers.len() < r.pattern.layers.len())
+            })
+            .collect();
+        rules.sort_by_key(|r| !r.forward);
+        let found = chain.end.terms.iter().find_map(|(w, _)| {
+            find_matches(ctx, &rules, w, None)
+                .into_iter()
+                .next()
+                .map(|m| (w.clone(), m))
+        });
+        let Some((w, m)) = found else {
+            if once {
+                return Err(Error::invalid("no rule applies"));
+            }
+            return Ok(chain);
+        };
+        rewrite(ctx, &rules, &mut chain, &w, m)?;
+        if once {
+            return Ok(chain);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Straightening to the basis `ψ_ŵ x^a` (dots at the bottom) or `x^a ψ_ŵ` (dots on top).
 

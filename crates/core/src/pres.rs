@@ -177,8 +177,13 @@ pub struct LeanRelation {
     /// of the lemma: the relation exports only where the pairing is nonzero.
     pub facts: Vec<String>,
     /// How the lemma lays out the words of its right-hand side: `canonical` (as the calculator
-    /// does) or `left-first` (generators on the left strands lower).
+    /// does), `left-first` (generators on the left strands lower) or `bubbles-first` (closed
+    /// components, such as bubbles, lower).
     pub layering: String,
+    /// How the lemma proves the relation as the calculator states it: `rw` (rewrite with it,
+    /// then normalize the sums), `exact` (it is the statement, up to unfolding) or `tactic`
+    /// (`lemma` is a tactic script, its steps separated by `; `).
+    pub proof: String,
 }
 
 impl Presentation {
@@ -272,6 +277,12 @@ struct RawLeanRel {
     facts: Vec<String>,
     #[serde(default = "canonical_layering")]
     layering: String,
+    #[serde(default = "rw_proof")]
+    proof: String,
+}
+
+fn rw_proof() -> String {
+    "rw".into()
 }
 
 fn canonical_layering() -> String {
@@ -580,10 +591,17 @@ impl Presentation {
                     if !relations.iter().any(|y| &y.name == r) {
                         return Err(Error::invalid(format!("lean: no relation '{r}'")));
                     }
-                    if !["canonical", "left-first"].contains(&x.layering.as_str()) {
+                    if !["canonical", "left-first", "bubbles-first"].contains(&x.layering.as_str())
+                    {
                         return Err(Error::invalid(format!(
                             "lean: relation {r} has unknown layering '{}'",
                             x.layering
+                        )));
+                    }
+                    if !["rw", "exact", "tactic"].contains(&x.proof.as_str()) {
+                        return Err(Error::invalid(format!(
+                            "lean: relation {r} has unknown proof '{}'",
+                            x.proof
                         )));
                     }
                 }
@@ -603,6 +621,7 @@ impl Presentation {
                                     lemma: r.lemma,
                                     facts: r.facts,
                                     layering: r.layering,
+                                    proof: r.proof,
                                 },
                             )
                         })
@@ -773,6 +792,9 @@ impl Presentation {
                 }
                 if r.layering != "canonical" {
                     o.push_str(&format!("layering = {}\n", q(&r.layering)));
+                }
+                if r.proof != "rw" {
+                    o.push_str(&format!("proof = {}\n", q(&r.proof)));
                 }
             }
         }

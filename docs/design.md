@@ -169,13 +169,28 @@ relation, the library lemma that proves it and the Cartan facts it needs, so the
 generic in the presentation and only the encoding (`kl3-dg`) is specific. Each step becomes a
 `have` proved by that lemma whiskered into place, and the theorem is the chain of these steps
 under rewriting. A layering that the lemma states differently from canonical layering is declared
-(`layering = "left-first"`) and bridged with `dswap`. The exporter refuses what it cannot state
-faithfully (scalars outside ℤ, odd generators) instead of exporting something weaker.
+(`layering = "left-first"`, or `"bubbles-first"` for closed components below the strands) and
+bridged with `dswap`. A lemma proves its relation in one of three ways (`proof`): by rewriting
+(`rw`, then normalizing the sums), by being the statement itself (`exact`), or through a tactic
+script (`tactic`), used for the weight-dependent KL relations whose library form sums over labelled
+bubbles. A rule that applies only at some weights gives the exported theorem the hypothesis
+`hμ_c : ip RD c μ = n` for the region right of the diagram, and each step proves the lemma's own
+weight condition from it. The exporter refuses what it cannot state faithfully (scalars outside ℤ,
+odd generators) instead of exporting something weaker.
+
+A chain rewrites each side by one of three strategies: `straighten` (to the basis of crossings and
+dots, the KLR default), `shrink` (rules whose replacement words are all shorter than the pattern,
+until none applies) or `once` (one step of the named relations, which checks the presentation's
+reading of that relation against the library's lemma). For `shrink` and `once` the exporter checks
+that both ends have the same normal form under the presentation's equality strategy.
 
 `lean/chains/` is a Lake project pinned to one categorification-lean commit. `chains.toml` lists
 the chains to export; `diagcalc lean-chains` writes `DiagcalcChains/*.lean`, a Rust test keeps
 them current, and the Lean chains workflow builds them, with `Checks.lean` deriving the library's
-own statement of a relation from an exported theorem.
+own statement of a relation from an exported theorem. `DiagcalcSupport/KL3.lean` is written by
+hand: it evaluates the library's labelled bubbles at a concrete label (real, degree zero, zero, or
+fake through the infinite Grassmannian relation) and provides the tactic `dc_bub`, which finishes
+a curl or decomposition relation once the library's lemma has been rewritten.
 
 Generating presentation files from Lean was tried for KLR. The relations can be read: the
 metaprogram `lean/chains/PrintRelations.lean` walks the equations of the library's `relation`

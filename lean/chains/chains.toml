@@ -39,3 +39,350 @@ name = "straighten_A3"
 context = "klr type=A3 nu=i+j+k"
 lhs = "psi_2 x_1 psi_1 psi_2 psi_1 e(ijk)"
 doc = "A word of type A3 with a non-reduced crossing pattern, straightened to the basis."
+
+# KL 2-category (Khovanov–Lauda, arXiv:0807.3250), checked against categorification-lean's KL3
+# diagrams. The `rel_*` entries take one step of the named relation at a weight where it applies
+# (`strategy = "once"`), which checks the presentation file's reading of that relation against
+# the library's lemma; the others shorten a diagram with the length-decreasing rules
+# (`strategy = "shrink"`). Left curls at ⟨i,μ⟩ ≥ 2 are not exported: the interchange steps that
+# bring the calculator's diagram to the library's layer order exceed Lean's default heartbeats.
+
+[[chain]]
+name = "rel_zigzag_up_left"
+context = "kl type=A1 mu=0"
+lhs = "cap_2 cup_{1,i} e(i)"
+strategy = "once"
+relations = ["zigzag-up-left"]
+doc = "One zigzag on an upward strand: the library's `dg_zigL'`."
+
+[[chain]]
+name = "rel_zigzag_up_right"
+context = "kl type=A1 mu=0"
+lhs = "cap_1 cup_{2,i*} e(i)"
+strategy = "once"
+relations = ["zigzag-up-right"]
+doc = "The other zigzag on an upward strand: `dg_zigR'`."
+
+[[chain]]
+name = "rel_zigzag_down_left"
+context = "kl type=A1 mu=0"
+lhs = "cap_2 cup_{1,i*} e(i*)"
+strategy = "once"
+relations = ["zigzag-down-left"]
+doc = "A zigzag on a downward strand: `dg_zigL'`."
+
+[[chain]]
+name = "rel_zigzag_down_right"
+context = "kl type=A1 mu=0"
+lhs = "cap_1 cup_{2,i} e(i*)"
+strategy = "once"
+relations = ["zigzag-down-right"]
+doc = "The other zigzag on a downward strand: `dg_zigR'`."
+
+[[chain]]
+name = "rel_cyclic_dot_right"
+context = "kl type=A1 mu=0"
+lhs = "cap_1 x_2 cup_{2,i} e(i*)"
+strategy = "once"
+relations = ["cyclic-dot-right"]
+doc = "A dot rotated by a cup and a cap: `dg_cycDotR`."
+
+[[chain]]
+name = "rel_cyclic_dot_left"
+context = "kl type=A1 mu=0"
+lhs = "cap_2 x_2 cup_{1,i*} e(i*)"
+strategy = "once"
+relations = ["cyclic-dot-left"]
+doc = "The mirror rotation of a dot: `dg_cycDotL`."
+
+[[chain]]
+name = "rel_cyclic_crossing_right"
+context = "kl type=A2 mu=0"
+lhs = "cap_1 cap_2 psi_3 cup_{4,j} cup_{3,i} e(i* j*)"
+strategy = "once"
+relations = ["cyclic-crossing-right"]
+doc = "A crossing rotated by cups and caps: `dg_cycCrossR`."
+
+[[chain]]
+name = "rel_cyclic_crossing_left"
+context = "kl type=A2 mu=0"
+lhs = "cap_3 cap_4 psi_3 cup_{2,i*} cup_{1,j*} e(i* j*)"
+strategy = "once"
+relations = ["cyclic-crossing-left"]
+doc = "The mirror rotation of a crossing: `dg_cycCrossL`."
+
+[[chain]]
+name = "rel_mixed_ef"
+context = "kl type=A2 mu=0"
+lhs = "cap_1 psi_2 cup_{3,j} cap_3 psi_2 cup_{1,j*} e(i j*)"
+strategy = "once"
+relations = ["mixed-ef"]
+doc = "The mixed relation for two distinct colours, E then F: `dg_downupEF`."
+
+[[chain]]
+name = "rel_mixed_fe"
+context = "kl type=A2 mu=0"
+lhs = "cap_3 psi_2 cup_{1,i*} cap_1 psi_2 cup_{3,i} e(i* j)"
+strategy = "once"
+relations = ["mixed-fe"]
+doc = "The mixed relation for two distinct colours, F then E: `dg_downupFE`."
+
+[[chain]]
+name = "rel_bubble_cw_negative"
+context = "kl type=A1 mu=3"
+lhs = "cap_1 x_2 cup_{1,i} e()"
+strategy = "once"
+relations = ["bubble-cw-negative"]
+doc = "A clockwise bubble of negative degree vanishes: `dg_cwNeg`."
+
+[[chain]]
+name = "rel_bubble_ccw_negative"
+context = "kl type=A1 mu=-3"
+lhs = "cap_1 x_2 cup_{1,i*} e()"
+strategy = "once"
+relations = ["bubble-ccw-negative"]
+doc = "A counterclockwise bubble of negative degree vanishes: `dg_ccwNeg`."
+
+[[chain]]
+name = "rel_bubble_cw_one"
+context = "kl type=A1 mu=2"
+lhs = "cap_1 x_2 cup_{1,i} e()"
+strategy = "once"
+relations = ["bubble-cw-one"]
+doc = "A clockwise bubble of degree zero is the identity: `dg_cwOne`."
+
+[[chain]]
+name = "rel_bubble_ccw_one"
+context = "kl type=A1 mu=-2"
+lhs = "cap_1 x_2 cup_{1,i*} e()"
+strategy = "once"
+relations = ["bubble-ccw-one"]
+doc = "A counterclockwise bubble of degree zero is the identity: `dg_ccwOne`."
+
+[[chain]]
+name = "zigzag_dot"
+context = "kl type=A1 mu=0"
+lhs = "cap_2 x_1 cup_{1,i} e(i)"
+strategy = "shrink"
+doc = "A dot on a zigzag, straightened by the shortening rules."
+
+[[chain]]
+name = "bubble_beside_strand"
+context = "kl type=A1 mu=0"
+lhs = "cap_1 x_2 cup_{1,i} e(i)"
+strategy = "shrink"
+doc = "A dotted bubble beside a strand, evaluated by the shortening rules."
+
+[[chain]]
+name = "mixed_with_dot"
+context = "kl type=A2 mu=i"
+lhs = "x_1 cap_1 psi_2 cup_{3,j} cap_3 psi_2 cup_{1,j*} e(i j*)"
+strategy = "shrink"
+doc = "The mixed relation with a dot on the outer strand, in type A2."
+
+[[chain]]
+name = "two_zigzags"
+context = "kl type=A1 mu=1"
+lhs = "cap_2 cup_{1,i} cap_2 cup_{1,i} e(i)"
+rhs = "e(i)"
+strategy = "shrink"
+doc = "Two zigzags in a row reduce to the identity."
+
+[[chain]]
+name = "cyclic_crossing_beside"
+context = "kl type=A2 mu=0"
+lhs = "cap_2 cap_3 psi_4 cup_{5,j} cup_{4,i} e(i i* j*)"
+strategy = "shrink"
+doc = "A rotated crossing next to a cap, in type A2."
+
+[[chain]]
+name = "rel_curl_right_m3"
+context = "kl type=A1 mu=-3"
+lhs = "cap_2 psi_1 cup_{2,i} e(i)"
+strategy = "once"
+relations = ["curl-right"]
+doc = "A right curl at ⟨i,μ⟩ = -3: `dg_curlR`, with the bubbles evaluated (fake ones by the Grassmannian relation)."
+
+[[chain]]
+name = "rel_curl_left_m3"
+context = "kl type=A1 mu=-3"
+lhs = "cap_1 psi_2 cup_{1,i*} e(i)"
+strategy = "once"
+relations = ["curl-left"]
+doc = "A left curl at ⟨i,μ⟩ = -3: `dg_curlL`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_ef_m3"
+context = "kl type=A1 mu=-3"
+lhs = "cap_1 psi_2 cup_{3,i} cap_3 psi_2 cup_{1,i*} e(i i*)"
+strategy = "once"
+relations = ["decompose-ef"]
+doc = "The sl2 decomposition of EF at ⟨i,μ⟩ = -3: `dg_decompEF`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_curl_right_m2"
+context = "kl type=A1 mu=-2"
+lhs = "cap_2 psi_1 cup_{2,i} e(i)"
+strategy = "once"
+relations = ["curl-right"]
+doc = "A right curl at ⟨i,μ⟩ = -2: `dg_curlR`, with the bubbles evaluated (fake ones by the Grassmannian relation)."
+
+[[chain]]
+name = "rel_curl_left_m2"
+context = "kl type=A1 mu=-2"
+lhs = "cap_1 psi_2 cup_{1,i*} e(i)"
+strategy = "once"
+relations = ["curl-left"]
+doc = "A left curl at ⟨i,μ⟩ = -2: `dg_curlL`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_ef_m2"
+context = "kl type=A1 mu=-2"
+lhs = "cap_1 psi_2 cup_{3,i} cap_3 psi_2 cup_{1,i*} e(i i*)"
+strategy = "once"
+relations = ["decompose-ef"]
+doc = "The sl2 decomposition of EF at ⟨i,μ⟩ = -2: `dg_decompEF`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_fe_m2"
+context = "kl type=A1 mu=-2"
+lhs = "cap_3 psi_2 cup_{1,i*} cap_1 psi_2 cup_{3,i} e(i* i)"
+strategy = "once"
+relations = ["decompose-fe"]
+doc = "The sl2 decomposition of FE at ⟨i,μ⟩ = -2: `dg_decompFE`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_curl_right_m1"
+context = "kl type=A1 mu=-1"
+lhs = "cap_2 psi_1 cup_{2,i} e(i)"
+strategy = "once"
+relations = ["curl-right"]
+doc = "A right curl at ⟨i,μ⟩ = -1: `dg_curlR`, with the bubbles evaluated (fake ones by the Grassmannian relation)."
+
+[[chain]]
+name = "rel_curl_left_m1"
+context = "kl type=A1 mu=-1"
+lhs = "cap_1 psi_2 cup_{1,i*} e(i)"
+strategy = "once"
+relations = ["curl-left"]
+doc = "A left curl at ⟨i,μ⟩ = -1: `dg_curlL`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_ef_m1"
+context = "kl type=A1 mu=-1"
+lhs = "cap_1 psi_2 cup_{3,i} cap_3 psi_2 cup_{1,i*} e(i i*)"
+strategy = "once"
+relations = ["decompose-ef"]
+doc = "The sl2 decomposition of EF at ⟨i,μ⟩ = -1: `dg_decompEF`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_fe_m1"
+context = "kl type=A1 mu=-1"
+lhs = "cap_3 psi_2 cup_{1,i*} cap_1 psi_2 cup_{3,i} e(i* i)"
+strategy = "once"
+relations = ["decompose-fe"]
+doc = "The sl2 decomposition of FE at ⟨i,μ⟩ = -1: `dg_decompFE`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_curl_right_0"
+context = "kl type=A1 mu=0"
+lhs = "cap_2 psi_1 cup_{2,i} e(i)"
+strategy = "once"
+relations = ["curl-right"]
+doc = "A right curl at ⟨i,μ⟩ = 0: `dg_curlR`, with the bubbles evaluated (fake ones by the Grassmannian relation)."
+
+[[chain]]
+name = "rel_curl_left_0"
+context = "kl type=A1 mu=0"
+lhs = "cap_1 psi_2 cup_{1,i*} e(i)"
+strategy = "once"
+relations = ["curl-left"]
+doc = "A left curl at ⟨i,μ⟩ = 0: `dg_curlL`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_ef_0"
+context = "kl type=A1 mu=0"
+lhs = "cap_1 psi_2 cup_{3,i} cap_3 psi_2 cup_{1,i*} e(i i*)"
+strategy = "once"
+relations = ["decompose-ef"]
+doc = "The sl2 decomposition of EF at ⟨i,μ⟩ = 0: `dg_decompEF`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_fe_0"
+context = "kl type=A1 mu=0"
+lhs = "cap_3 psi_2 cup_{1,i*} cap_1 psi_2 cup_{3,i} e(i* i)"
+strategy = "once"
+relations = ["decompose-fe"]
+doc = "The sl2 decomposition of FE at ⟨i,μ⟩ = 0: `dg_decompFE`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_curl_right_1"
+context = "kl type=A1 mu=1"
+lhs = "cap_2 psi_1 cup_{2,i} e(i)"
+strategy = "once"
+relations = ["curl-right"]
+doc = "A right curl at ⟨i,μ⟩ = 1: `dg_curlR`, with the bubbles evaluated (fake ones by the Grassmannian relation)."
+
+[[chain]]
+name = "rel_curl_left_1"
+context = "kl type=A1 mu=1"
+lhs = "cap_1 psi_2 cup_{1,i*} e(i)"
+strategy = "once"
+relations = ["curl-left"]
+doc = "A left curl at ⟨i,μ⟩ = 1: `dg_curlL`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_ef_1"
+context = "kl type=A1 mu=1"
+lhs = "cap_1 psi_2 cup_{3,i} cap_3 psi_2 cup_{1,i*} e(i i*)"
+strategy = "once"
+relations = ["decompose-ef"]
+doc = "The sl2 decomposition of EF at ⟨i,μ⟩ = 1: `dg_decompEF`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_fe_1"
+context = "kl type=A1 mu=1"
+lhs = "cap_3 psi_2 cup_{1,i*} cap_1 psi_2 cup_{3,i} e(i* i)"
+strategy = "once"
+relations = ["decompose-fe"]
+doc = "The sl2 decomposition of FE at ⟨i,μ⟩ = 1: `dg_decompFE`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_curl_right_2"
+context = "kl type=A1 mu=2"
+lhs = "cap_2 psi_1 cup_{2,i} e(i)"
+strategy = "once"
+relations = ["curl-right"]
+doc = "A right curl at ⟨i,μ⟩ = 2: `dg_curlR`, with the bubbles evaluated (fake ones by the Grassmannian relation)."
+
+[[chain]]
+name = "rel_decompose_ef_2"
+context = "kl type=A1 mu=2"
+lhs = "cap_1 psi_2 cup_{3,i} cap_3 psi_2 cup_{1,i*} e(i i*)"
+strategy = "once"
+relations = ["decompose-ef"]
+doc = "The sl2 decomposition of EF at ⟨i,μ⟩ = 2: `dg_decompEF`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_decompose_fe_2"
+context = "kl type=A1 mu=2"
+lhs = "cap_3 psi_2 cup_{1,i*} cap_1 psi_2 cup_{3,i} e(i* i)"
+strategy = "once"
+relations = ["decompose-fe"]
+doc = "The sl2 decomposition of FE at ⟨i,μ⟩ = 2: `dg_decompFE`, with the bubbles evaluated."
+
+[[chain]]
+name = "rel_curl_right_3"
+context = "kl type=A1 mu=3"
+lhs = "cap_2 psi_1 cup_{2,i} e(i)"
+strategy = "once"
+relations = ["curl-right"]
+doc = "A right curl at ⟨i,μ⟩ = 3: `dg_curlR`, with the bubbles evaluated (fake ones by the Grassmannian relation)."
+
+[[chain]]
+name = "rel_decompose_fe_3"
+context = "kl type=A1 mu=3"
+lhs = "cap_3 psi_2 cup_{1,i*} cap_1 psi_2 cup_{3,i} e(i* i)"
+strategy = "once"
+relations = ["decompose-fe"]
+doc = "The sl2 decomposition of FE at ⟨i,μ⟩ = 3: `dg_decompFE`, with the bubbles evaluated."
