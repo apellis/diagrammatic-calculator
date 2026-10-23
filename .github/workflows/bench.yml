@@ -13,16 +13,20 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   native:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # appends to bench/history
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master, 2026-10-08
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Run the suite
         run: |
           label="$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}"
@@ -47,7 +51,7 @@ jobs:
           git commit -m "Benchmark history: $LABEL"
           git pull --rebase -q origin master
           git push
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: bench-${{ env.LABEL }}

@@ -1,0 +1,13 @@
+# Keeps the actions the workflows use current. Every action is pinned to a commit (with its
+# version in a comment); Dependabot proposes new commits as pull requests, which CI checks.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ["*"]

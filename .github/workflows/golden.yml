@@ -22,17 +22,26 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   lean:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # commits the regenerated files when run with "update"
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Install Lean
+        # elan, at a fixed release whose archive is checked against its known SHA-256
+        env:
+          ELAN_VERSION: v4.2.4
+          ELAN_SHA256: 42b94d4244e8353142c456ec0e4ca6528fd898a6c604d4059f494e706e431f63
         run: |
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain "$(cat lean/golden/lean-toolchain)"
+          curl -sSfL -o "$RUNNER_TEMP/elan.tar.gz" "https://github.com/leanprover/elan/releases/download/$ELAN_VERSION/elan-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$ELAN_SHA256  $RUNNER_TEMP/elan.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/elan.tar.gz" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/elan-init" -y --default-toolchain "$(cat lean/golden/lean-toolchain)"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: Compute the golden corpus
         run: |
@@ -58,7 +67,7 @@ jobs:
           git add tests/golden/actions.json tests/lean-values/values.json
           git diff --cached --quiet || git commit -m "Regenerate the golden corpus and Lean values in Lean"
           git push
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: golden-actions
