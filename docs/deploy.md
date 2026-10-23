@@ -8,7 +8,9 @@ deploy skips the accounts part with a line in the run summary, the API answers t
 not available, and the app stays anonymous exactly as before.
 
 The site is served without Cloudflare Access (Alex, 23 October): anyone can use it anonymously,
-and Google sign-in is the only authentication. Until the Google consent screen is published, only
+and Google sign-in is the only authentication. The per-deployment addresses
+(`<hash>.diagcalc.pages.dev`) stay behind Access ("Preview access: restrict previews" in the Pages
+project's settings, with its Zero Trust application for `*.diagcalc.pages.dev`). Until the Google consent screen is published, only
 its test users can sign in.
 
 ## Steps for Alex
