@@ -109,7 +109,7 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
   key when `APP_ORIGIN` changes. Without a terminal: paste the key's whole JSON into a repository
   secret `GOOGLE_RISC_KEY` (GitHub, Settings, Secrets and variables, Actions), run the workflow
   "Register Google security events" (Actions, Run workflow), check its notices, then delete the
-  secret and the key.
+  secret and the key. Registered on 23 October 2026 for `https://diagcalc.pages.dev`.
 - **Rate limit.** Cloudflare, the zone, Security, WAF, Rate limiting rules (once the site is on the
   custom domain; `pages.dev` cannot have rules): one rule on URI path starting with `/api/` and
   method not GET, for example 60 requests per minute per IP, action Block for 1 minute.

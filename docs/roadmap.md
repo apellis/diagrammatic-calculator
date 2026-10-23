@@ -19,13 +19,13 @@ Owner steps (dashboards; see `docs/deploy.md` "Hardening that needs a person"):
   `/privacy`, submit for brand verification, then publish. Until then only test users can sign
   in.
 - Custom domain `diagcalc.ape.computer`, when wanted: add its callback URL to the OAuth client,
-  then change `APP_ORIGIN`; add the WAF rate limit on `/api/` writes; Resend for share e-mails.
+  then change `APP_ORIGIN`; register Google's security events again for the new origin
+  (`docs/deploy.md`, "Revoked Google access"); add the WAF rate limit on `/api/` writes; Resend
+  for share e-mails.
 - Before that, ask GitHub Support to remove the pre-rewrite history (master was rewritten on
   23 October to replace a personal e-mail address with the owner's noreply address): the refs of
   pull requests #1 and #2 and the cached old commits. Delete the branch `wip/odd-normal-form`
   (old history; its work landed on master).
-- Register the receiver of Google's security events, so sessions end when Google access is
-  revoked (`docs/deploy.md`, "Revoked Google access"; a service account key and one script run).
 - Make the repository public, with the licence already in place.
 
 Polish (all remaining UX polish happens before going public): none open.
