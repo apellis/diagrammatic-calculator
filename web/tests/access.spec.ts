@@ -94,6 +94,9 @@ test('a conditional certificate is named, and says which verdict rests on it', a
   // the badge opens on the reference and hypotheses
   await cell(page, 1).getByTestId('badge').click();
   await expect(cell(page, 1).getByTestId('provenance')).toContainText('arXiv:1701.04133');
+  // the presentation file's prose is typeset: its formulas through KaTeX, Lean names as code
+  await expect(cell(page, 1).getByTestId('cert-hypotheses').locator('.katex').first()).toBeVisible();
+  await expect(cell(page, 1).getByTestId('cert-reference').locator('code').first()).toBeVisible();
 });
 
 test('a long computation shows how long it has run and stops from its cell', async ({ page }) => {

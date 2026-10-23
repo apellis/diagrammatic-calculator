@@ -400,6 +400,8 @@ polynomials.
 its previous value, shows the vanished ones faded for two seconds, and lists the changes under
 "Changed". Every result carries a badge with its equality strategy and certificate, in the warning
 colour when it rests on an assumption or a finite quotient or truncation, whose notes are shown.
+The badge's hypotheses and reference keep the presentation file's text and are shown typeset
+(`src/ui/prose.ts`: short formulas through KaTeX, Lean names in the fixed-width font).
 
 **Tests.** Unit tests (`npm test`, Vitest) run the evaluator and the document model in Node
 against the real WebAssembly engine. The Playwright suite (`npx playwright test`) drives the app in

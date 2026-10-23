@@ -5,6 +5,7 @@ import type { Provenance, Summand, WorkspaceRunCell } from '../engine/ops.gen';
 import katex from 'katex';
 import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
+import { proseHtml } from './prose';
 
 type Ok = WorkspaceRunCell;
 
@@ -190,8 +191,8 @@ export function Badge(props: { p?: Provenance; value?: Ok; compact?: boolean }) 
                 <tr><td>strategy</td><td>{p().strategy}</td></tr>
                 <tr><td>method</td><td>{p().method}</td></tr>
                 <tr><td>certificate</td><td>{STATUS[p().certificate.status] ?? p().certificate.status}</td></tr>
-                <Show when={p().certificate.reference}><tr><td>reference</td><td>{p().certificate.reference}</td></tr></Show>
-                <Show when={p().certificate.hypotheses}><tr><td>hypotheses</td><td>{p().certificate.hypotheses}</td></tr></Show>
+                <Show when={p().certificate.reference}><tr><td>reference</td><td class="prose" data-testid="cert-reference" innerHTML={proseHtml(p().certificate.reference)} /></tr></Show>
+                <Show when={p().certificate.hypotheses}><tr><td>hypotheses</td><td class="prose" data-testid="cert-hypotheses" innerHTML={proseHtml(p().certificate.hypotheses)} /></tr></Show>
                 <Show when={props.compact}><For each={p().notes ?? []}>{(n) => <tr><td>note</td><td><NoteView text={n} inline /></td></tr>}</For></Show>
               </tbody>
             </table>

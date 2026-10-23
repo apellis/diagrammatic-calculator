@@ -40,8 +40,6 @@ Polish (all remaining UX polish happens before going public):
   the AI and accepted branches give their new summands fresh IDs; strands are numbered per summand.
 - Clicking a summand to see which terms of the definitions produced it.
 - Size diagnostics when a job is stopped at its time limit.
-- Certificate hypotheses and references are printed as raw ASCII from the presentation files
-  (`Q_ab != 0`); typeset them.
 
 Certificates:
 
