@@ -1,1 +1,1 @@
-list (the first word: list or delete; see .github/workflows/prune-deployments.yml)
+delete (the first word: list or delete; see .github/workflows/prune-deployments.yml)
