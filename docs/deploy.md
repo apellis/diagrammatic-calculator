@@ -146,7 +146,9 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
 - **Old deployments.** Every deployment keeps its own files and server code with production
   bindings. "Prune old deployments" now follows successful "Deploy web app" runs on `master`.
   It skips superseded runs, selects only deployments older than production at selection time,
-  stops on a detected production change, and verifies that deleted deployments are absent. It runs
+  stops on a detected production change, and does not take Cloudflare's acknowledgements as proof:
+  it reads the deployment listing back (for up to a minute) until every deleted deployment is
+  absent, and otherwise fails. Failures are reported as run annotations. It runs
   only trusted `master` code, never artifacts from the triggering run. The script is
   `.github/scripts/prune_deployments.py`; its tests run without credentials. For a manual dry
   run: GitHub, Actions, "Prune old deployments", Run workflow, leave "dry run" checked. Uncheck

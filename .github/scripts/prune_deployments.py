@@ -12,7 +12,17 @@ from datetime import datetime
 import json
 import os
 import re
+import sys
+import time
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+# Transient failures of a read are retried; a write (DELETE) is never repeated blindly.
+READ_ATTEMPTS = 3
+# Cloudflare's listing can lag a delete by a few seconds: read it back this many times.
+READBACK_ATTEMPTS = 6
+READBACK_DELAY = 10
+sleep = time.sleep
 
 
 class Cloudflare:
@@ -25,6 +35,18 @@ class Cloudflare:
         self.token = token
 
     def request(self, method, path=""):
+        attempts = READ_ATTEMPTS if method == "GET" else 1
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._request(method, path)
+            except (HTTPError, URLError, TimeoutError) as error:
+                transient = not isinstance(error, HTTPError) or error.code == 429 or error.code >= 500
+                if not transient or attempt == attempts:
+                    raise RuntimeError(f"Cloudflare {method} {path or '/project'} failed: "
+                                       f"{describe(error)}") from error
+                sleep(5 * attempt)
+
+    def _request(self, method, path):
         request = Request(self.url + path, method=method,
                           headers={"Authorization": f"Bearer {self.token}"})
         with urlopen(request, timeout=30) as response:
@@ -32,6 +54,18 @@ class Cloudflare:
         if body.get("success") is not True or "result" not in body:
             raise RuntimeError(f"Cloudflare rejected {method} {path or '/project'}")
         return body["result"]
+
+
+def describe(error):
+    """The HTTP status and Cloudflare's error codes and messages; never request headers."""
+    if not isinstance(error, HTTPError):
+        return f"{type(error).__name__}: {getattr(error, 'reason', error)}"
+    try:
+        errors = json.loads(error.read()).get("errors") or []
+        detail = "; ".join(f"{e.get('code')} {e.get('message')}" for e in errors if isinstance(e, dict))
+    except Exception:
+        detail = ""
+    return f"HTTP {error.code}" + (f" ({detail})" if detail else "")
 
 
 def identity(item):
@@ -95,22 +129,35 @@ def prune(api, *, delete=False, expected_commit=""):
         # permits removing aliases on obsolete, non-current deployments.
         api.request("DELETE", f"/deployments/{name}?force=true")
         result["deleted"].append(name)
-    remaining = deployments(api)
-    survivors = sorted(set(candidates) & remaining.keys())
-    if survivors:
-        raise RuntimeError("deleted deployments still present: " + ", ".join(survivors))
-    return result
+    # The DELETE acknowledgements are not proof: read the listing back until it agrees.
+    for attempt in range(1, READBACK_ATTEMPTS + 1):
+        survivors = sorted(set(candidates) & deployments(api).keys())
+        if not survivors:
+            return result
+        if attempt < READBACK_ATTEMPTS:
+            sleep(READBACK_DELAY)
+    raise RuntimeError("deleted deployments still present: " + ", ".join(survivors))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--delete", action="store_true", help="delete candidates (default: dry run)")
     args = parser.parse_args()
-    api = Cloudflare(os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
-                     os.environ.get("CLOUDFLARE_API_TOKEN", ""))
-    result = prune(api, delete=args.delete, expected_commit=os.environ.get("EXPECTED_COMMIT_HASH", ""))
-    print(json.dumps(result, sort_keys=True))
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    try:
+        api = Cloudflare(os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
+                         os.environ.get("CLOUDFLARE_API_TOKEN", ""))
+        result = prune(api, delete=args.delete,
+                       expected_commit=os.environ.get("EXPECTED_COMMIT_HASH", ""))
+    except Exception as error:
+        # An annotation, so the cause is readable without the job log.
+        message = f"Pruning failed: {type(error).__name__}: {error}"
+        print(f"::error::{message}")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as output:
+                output.write(message + "\n")
+        return 1
+    print(json.dumps(result, sort_keys=True))
     if summary:
         with open(summary, "a", encoding="utf-8") as output:
             if result["skipped"]:
@@ -119,7 +166,8 @@ def main():
                 output.write(f"Pages pruning: {len(result['candidates'])} obsolete deployments, "
                              f"{len(result['deleted'])} deleted and verified absent. "
                              f"Production `{result['production']}` retained.\n")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

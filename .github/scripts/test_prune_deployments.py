@@ -1,9 +1,12 @@
 """Exercise the production pruning predicate without Cloudflare credentials."""
+import contextlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 SPEC = importlib.util.spec_from_file_location(
     "prune_deployments", Path(__file__).with_name("prune_deployments.py")
@@ -47,6 +50,12 @@ class FakeAPI:
 
 
 class PruneTests(unittest.TestCase):
+    def setUp(self):
+        self.sleeps = []
+        sleeper = patch.object(prune, "sleep", self.sleeps.append)
+        sleeper.start()
+        self.addCleanup(sleeper.stop)
+
     def test_default_dry_run_changes_nothing(self):
         api = FakeAPI()
         result = prune.prune(api)
@@ -90,11 +99,27 @@ class PruneTests(unittest.TestCase):
             prune.prune(api, delete=True)
         self.assertEqual(api.deleted, [])
 
-    def test_acknowledgement_without_deletion_is_failure(self):
+    def test_acknowledgement_without_deletion_is_failure_after_every_readback(self):
         api = FakeAPI()
         api.keep_deleted = True
-        with self.assertRaisesRegex(RuntimeError, "still present"):
+        with self.assertRaisesRegex(RuntimeError, "still present: old"):
             prune.prune(api, delete=True)
+        self.assertEqual(self.sleeps, [prune.READBACK_DELAY] * (prune.READBACK_ATTEMPTS - 1))
+
+    def test_listing_that_lags_the_delete_is_read_back_again(self):
+        api = FakeAPI()
+        api.keep_deleted = True
+        base = api.request
+        listings = []
+        def request(method, path=""):
+            if method == "GET" and path.startswith("/deployments?page=1"):
+                listings.append(path)
+                if len(listings) == 3:  # selection, first readback (stale), second readback
+                    api.items = [item for item in api.items if item["id"] not in api.deleted]
+            return base(method, path)
+        api.request = request
+        self.assertEqual(prune.prune(api, delete=True)["deleted"], ["old"])
+        self.assertEqual(self.sleeps, [prune.READBACK_DELAY])
 
     def test_manual_rollback_between_requests_is_not_atomic(self):
         # Document the operator constraint, not a lock the API cannot provide.
@@ -149,6 +174,37 @@ class PruneTests(unittest.TestCase):
             request = opener.call_args.args[0]
             self.assertEqual(request.full_url, "https://api.cloudflare.com/client/v4/accounts/" + "a" * 32 + "/pages/projects/diagcalc")
             self.assertEqual(opener.call_args.kwargs["timeout"], 30)
+
+    def test_transient_read_errors_are_retried_and_others_described(self):
+        class Response:
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                pass
+            def read(self):
+                return json.dumps({"success": True, "result": {"ok": 1}}).encode()
+        def failure(code):
+            body = io.BytesIO(json.dumps({"errors": [{"code": 8000007, "message": "nope"}]}).encode())
+            return HTTPError("https://api.example/x", code, "error", {}, body)
+        api = prune.Cloudflare("a" * 32, "test-token")
+        with patch.object(prune, "urlopen", side_effect=[failure(502), Response()]):
+            self.assertEqual(api.request("GET"), {"ok": 1})
+        with patch.object(prune, "urlopen", side_effect=[failure(400)]) as opener:
+            with self.assertRaisesRegex(RuntimeError, r"GET /project failed: HTTP 400 \(8000007 nope\)"):
+                api.request("GET")
+            self.assertEqual(opener.call_count, 1)
+        with patch.object(prune, "urlopen", side_effect=[failure(503)]) as opener:
+            with self.assertRaisesRegex(RuntimeError, "HTTP 503"):
+                api.request("DELETE", "/deployments/old?force=true")
+            self.assertEqual(opener.call_count, 1)
+
+    def test_failure_is_reported_as_an_annotation(self):
+        out = io.StringIO()
+        with patch.dict(prune.os.environ, {"CLOUDFLARE_ACCOUNT_ID": "bad", "CLOUDFLARE_API_TOKEN": "t",
+                                           "GITHUB_STEP_SUMMARY": ""}), \
+             patch.object(prune.sys, "argv", ["prune"]), contextlib.redirect_stdout(out):
+            self.assertEqual(prune.main(), 1)
+        self.assertIn("::error::Pruning failed: ValueError: CLOUDFLARE_ACCOUNT_ID", out.getvalue())
 
 
 if __name__ == "__main__":
