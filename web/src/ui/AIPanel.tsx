@@ -251,6 +251,14 @@ export function AIPanel(props: AIPanelProps) {
         </div>
       </Show>
 
+      <Show when={props.host.readOnly?.()}>
+        <div class="banner" data-testid="ai-read-only">
+          {props.host.viewMode?.()
+            ? 'View mode is on: the AI can read this document and answer, but it changes nothing until you switch view mode off.'
+            : 'This document is view only: the AI can read it and answer, but not change it. Make a personal branch for it to work on a copy.'}
+        </div>
+      </Show>
+
       <Show when={!ready()}>
         <div class="banner" data-testid="ai-setup">
           No AI provider is set up yet. <a href="#/settings" data-testid="ai-setup-link">Set one up in Settings</a>: choose a provider and model and enter your key.

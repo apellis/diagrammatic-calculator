@@ -19,11 +19,6 @@ The authenticated production revocation check below remains a separate phase 8 c
 
 ### Reading and sharing
 
-- **View mode:** an explicit mode with no editing affordances, for reviewing a document. Keep
-  the existing document model and rendering; this is not a new commenting or review system.
-- **Viewer-facing polish:** check that read-only recipients have no unusable
-  editing controls and that owners/editors can choose view mode. Fix remaining affordance gaps,
-  not a second permission implementation.
 - **Certificate presentation:** check the released app's mathematical provenance. KL's `basis`
   and `kl-evaluation` stay `literature`; conclusions depending on odd BE2 nondegeneracy remain
   explicitly conditional. Stronger certificates are phase 9, not a release condition.

@@ -905,7 +905,10 @@ export function Canvas(props: CanvasProps) {
     if (props.readOnly && !mod(e) && (
       ['r', 'i', 'delete', 'backspace'].includes(e.key.toLowerCase()) ||
       (e.key.startsWith('Arrow') && (e.altKey || !e.shiftKey && ['ArrowUp', 'ArrowDown'].includes(e.key)))
-    )) return handled();
+    )) {
+      say('This diagram is read only: it can be selected and inspected, not changed.');
+      return handled();
+    }
     if (e.key === 'Tab' && (e.target as HTMLElement).closest('.canvas-bar, .canvas-actions, .palette-bar')) {
       // the toolbar and the palette take Tab as usual; forward from the last generator comes back to the pieces
       const gens = [...root.querySelectorAll<HTMLElement>('.palette-bar .gen')];

@@ -60,10 +60,13 @@ export function ContextChip(props: { context: string; scalars: string[]; readOnl
   };
   return (
     <span style={{ position: 'relative', 'min-width': '0' }} ref={wrap}>
-      <button class="chip" disabled={props.readOnly} title="Change the context" data-testid="context" aria-expanded={open()} aria-haspopup="dialog" ref={chip}
-        onClick={() => { if (open()) close(); else { change(props.context); setOpen(true); } }}>
-        <ContextText context={props.context} />
-      </button>
+      {/* read-only, the context is shown to read, not as a control that does nothing */}
+      <Show when={!props.readOnly} fallback={<span class="chip readonly" title="The context of this document" data-testid="context"><ContextText context={props.context} /></span>}>
+        <button class="chip" title="Change the context" data-testid="context" aria-expanded={open()} aria-haspopup="dialog" ref={chip}
+          onClick={() => { if (open()) close(); else { change(props.context); setOpen(true); } }}>
+          <ContextText context={props.context} />
+        </button>
+      </Show>
       <Show when={open()}>
         <div class="pop context-options" style={{ top: '30px', left: 0 }} role="dialog" aria-label="Presentation and options"
           onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close(true); } }}>

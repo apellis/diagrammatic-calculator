@@ -26,6 +26,7 @@ export const ACTIONS: Action[] = [
   { id: 'ai', name: 'Show or hide the AI panel', default: 'Mod+J', anywhere: true },
   { id: 'ask', name: 'Ask the AI about the selection', default: 'Mod+L', anywhere: true },
   { id: 'branch', name: 'Start a scratch branch', default: 'Mod+B', anywhere: true },
+  { id: 'view', name: 'Switch view mode on or off', default: 'Mod+Shift+E', anywhere: true },
   { id: 'export', name: 'Export the document as a file', default: 'Mod+Shift+S', anywhere: true },
   { id: 'import', name: 'Import a file as a new document', default: 'Mod+O', anywhere: true },
   { id: 'insert', name: 'Insert a cell below the active cell', default: 'Alt+Enter', anywhere: false },

@@ -30,6 +30,7 @@ import { CloudRecovery } from './CloudRecovery';
 import { PersonalBranches } from '../account/recovery';
 import { PinnedRecompute } from './PinnedRecompute';
 import { useAuthors } from './authors';
+import { loadViewMode, saveViewMode } from './viewmode';
 
 export function WorkspacePage(props: { id: string }) {
   const [od] = createResource(() => props.id, openDoc);
@@ -53,6 +54,20 @@ export interface Branching {
   preview: () => { before: Inputs; after: Inputs; comparison: Comparison } | null;
   accept: () => Comparison | null;
   discard: () => void;
+}
+
+/**
+ * Who may change what is shown. One notion for every control, key, and AI tool: `readOnly` is
+ * what they all check.
+ */
+export interface Access {
+  /** The person cannot change the shared document (a view-only recipient, or not known yet). */
+  viewOnly: () => boolean;
+  /** View mode, switched on by the person viewing (kept in this browser, never shared). */
+  viewing: () => boolean;
+  setViewing: (on: boolean) => void;
+  /** What is shown cannot be changed: view mode, or a view-only document (not a personal branch of it). */
+  readOnly: () => boolean;
 }
 
 /** What the workspace view offers the AI and the page around it. */
@@ -144,7 +159,7 @@ function Workspace(props: { o: OpenDoc }) {
       return c ? main.previewBranch(c.id, c.doc) : null;
     },
     accept: () => {
-      if ((sync()?.link() ?? props.o.info.cloud) && !sync()?.canEdit) return null;
+      if (access.viewOnly() || access.viewing()) return null;
       const c = current();
       if (!c) return null;
       flush();
@@ -162,6 +177,17 @@ function Workspace(props: { o: OpenDoc }) {
   // link without signing in gets others' changes)
   const [sync, setSync] = createSignal<DocSync | null>(null);
   const authorLabel = useAuthors(sync);
+  const [viewing, setViewing] = createSignal(loadViewMode(props.o.info.id));
+  const access: Access = {
+    viewOnly: () => !!(sync()?.link() ?? props.o.info.cloud) &&
+      (sync() ? !sync()!.canEdit : props.o.info.cloud?.role === 'viewer' || !user()),
+    viewing,
+    setViewing: (on) => {
+      setViewing(on);
+      saveViewMode(props.o.info.id, on);
+    },
+    readOnly: () => viewing() || (!current() && access.viewOnly()),
+  };
   createEffect(
     on(account, (a) => {
       const u = a.status === 'signed-in' ? a.user : null;
@@ -235,12 +261,14 @@ function Workspace(props: { o: OpenDoc }) {
       return full;
     },
     foreign,
-    readOnly: () => !current() && !!(sync()?.link() ?? props.o.info.cloud) && !sync()?.canEdit,
+    readOnly: access.readOnly,
+    viewMode: viewing,
   };
   const deciding = new Set<string | number>();
   const decide = async (p: Proposal, accept: boolean) => {
     const key = p.key ?? p.id;
     if (deciding.has(key) || p.state !== 'open') return;
+    if (access.readOnly()) return setProposalError(viewing() ? 'View mode is on: switch it off to decide proposals.' : 'This document is view only.');
     deciding.add(key); setProposalError('');
     let release: (() => void) | undefined;
     try {
@@ -308,7 +336,7 @@ function Workspace(props: { o: OpenDoc }) {
       <div class="docpane">
         <Show when={current()?.doc ?? main} keyed>
           {(doc) => (
-            <DocView o={props.o} doc={doc} branching={branching} linked={linked} aiOpen={aiOpen()} onToggleAI={toggleAI} onAsk={ask}
+            <DocView o={props.o} doc={doc} branching={branching} access={access} linked={linked} aiOpen={aiOpen()} onToggleAI={toggleAI} onAsk={ask}
               onSelection={setSelection} api={(a) => (view = a)} sync={sync()} authorLabel={authorLabel} comments={comments} onComment={comment} />
           )}
         </Show>
@@ -329,6 +357,7 @@ function DocView(props: {
   o: OpenDoc;
   doc: Doc;
   branching: Branching;
+  access: Access;
   linked: Signal<FileSystemFileHandle | null>;
   aiOpen: boolean;
   onToggleAI: () => void;
@@ -345,9 +374,13 @@ function DocView(props: {
   const doc = props.doc;
   const main = props.o.doc;
   const onBranch = () => props.branching.current !== null;
-  const mainReadOnly = () => !!(props.sync?.link() ?? props.o.info.cloud) &&
-    (props.sync ? !props.sync.canEdit : props.o.info.cloud?.role === 'viewer' || !user());
-  const readOnly = () => !onBranch() && mainReadOnly();
+  /** The person cannot change the shared document (pinning and accepting a branch write to it). */
+  const mainReadOnly = props.access.viewOnly;
+  /** View mode, switched on by the person (off again by them): not a view-only document's view. */
+  const viewing = props.access.viewing;
+  /** View mode that cannot be switched off here: a view-only document itself. */
+  const locked = () => !onBranch() && mainReadOnly();
+  const readOnly = props.access.readOnly;
   const authorLabel = props.authorLabel;
   const [drafts, setDrafts] = createSignal<Record<string, string>>({});
   const rememberDraft = (id: string, text: string | null) => {
@@ -397,6 +430,19 @@ function DocView(props: {
   };
   const [linked, setLinked] = props.linked;
   const [message, setMessage] = createSignal('');
+  /** Says why an edit (a key or a command) does nothing here. */
+  const refuse = () => setMessage(viewing()
+    ? `View mode is on: switch it off (${keysOf('view')}) to edit.`
+    : 'This document is view only. Export it or make a personal branch to work on a copy.');
+  // whether the new-cell composer holds text that closing it would lose
+  let composerDirty = false;
+  const toggleView = () => {
+    if (locked()) return setMessage('This document is view only for you, so view mode stays on. Make a personal branch to work on a copy.');
+    if (!viewing() && (previewing() || (adding() !== null && composerDirty)))
+      return setMessage('Finish or discard the edit first (Enter or Esc), then switch view mode on.');
+    props.access.setViewing(!viewing());
+    setMessage(viewing() ? 'View mode: reading only.' : 'View mode off: editing again.');
+  };
   const [canvasTarget, setCanvasTarget] = createSignal<{ key: string; word?: string } | null>(null);
   const canvas = () => {
     const target = canvasTarget(), id = target && idOf(target.key);
@@ -643,7 +689,7 @@ function DocView(props: {
     return 'error' in p ? p.error : null;
   };
   const commitNew = (index: number, text: string, draw = false, restoreFocus = false) => {
-    if (readOnly()) return;
+    if (readOnly()) return refuse();
     const t = normalize(text);
     setAdding(null);
     setTemplate(undefined);
@@ -721,7 +767,7 @@ function DocView(props: {
 
   /** A new cell at `index`, starting from the template of a cell kind when one is given. */
   const addAt = (index: number, kind?: string) => {
-    if (readOnly()) return;
+    if (readOnly()) return refuse();
     const t = TEMPLATES.find(([k]) => k === kind);
     setTemplate(t ? { text: t[1], cursor: t[2] } : undefined);
     setAdding(index);
@@ -744,7 +790,7 @@ function DocView(props: {
     return ws && `cat > cell.dcw <<'EOF'\n${ws}EOF\ndiagcalc run cell.dcw\n`;
   };
   const rename = (n: string) => {
-    if (readOnly()) return;
+    if (readOnly()) return refuse();
     setRenaming(false);
     const t = n.trim();
     if (t && t !== name()) doc.rename(t);
@@ -752,9 +798,11 @@ function DocView(props: {
 
   const newBranch = (name?: string) => {
     setBranchName(null);
+    if (viewing()) return refuse();
     props.branching.create(name?.trim() || undefined);
   };
   const discardBranch = () => {
+    if (viewing()) return refuse();
     if (props.branching.current) setModal('discard');
   };
 
@@ -765,7 +813,8 @@ function DocView(props: {
     setMessage(canonical ? 'Exported.' : 'Exported as entered: some cells do not parse.');
     // a copy of the file is kept with the document in the account
     const s = props.sync;
-    if (s?.canEdit && s.cloudId && !onBranch()) {
+    // in view mode nothing is written, not even a copy kept with the document
+    if (s?.canEdit && s.cloudId && !onBranch() && !viewing()) {
       try {
         await api.putFile(s.cloudId, fileName(name(), 'dcw'), text);
         setMessage(`${canonical ? 'Exported' : 'Exported as entered'}; a copy is kept with the document in your account.`);
@@ -796,24 +845,30 @@ function DocView(props: {
     setMessage(`Saving to ${h.name} after every step; the link is kept for the next visit.`);
   };
 
+  // the commands that edit are left out where nothing can be edited
   const commands = (): Command[] => [
-    ...['def', 'watch', 'solve', 'check', 'note'].map((k) => ({ name: `New ${k} cell`, run: () => addAt(cells().length, k) })),
-    { name: 'Insert a cell below the active cell', keys: keysOf('insert'), run: () => insertBelow(active()) },
-    { name: 'Rename document', run: () => setRenaming(true) },
-    { name: 'Undo', keys: `${K}Z`, run: () => !readOnly() && doc.undo() },
-    { name: 'Redo', keys: isMac ? '⇧⌘Z' : 'Ctrl+Y', run: () => !readOnly() && doc.redo() },
+    ...(locked() ? [] : [{ name: viewing() ? 'Switch view mode off (edit)' : 'Switch view mode on (read without editing)', keys: keysOf('view'), run: toggleView }]),
+    ...(readOnly() ? [] : [
+      ...['def', 'watch', 'solve', 'check', 'note'].map((k) => ({ name: `New ${k} cell`, run: () => addAt(cells().length, k) })),
+      { name: 'Insert a cell below the active cell', keys: keysOf('insert'), run: () => insertBelow(active()) },
+      { name: 'Rename document', run: () => setRenaming(true) },
+      { name: 'Undo', keys: `${K}Z`, run: () => doc.undo() },
+      { name: 'Redo', keys: isMac ? '⇧⌘Z' : 'Ctrl+Y', run: () => doc.redo() },
+    ]),
     { name: 'Export workspace (.dcw)', keys: keysOf('export'), run: exportFile },
     { name: 'Export history (.dch)', run: () => download(fileName(name(), 'dch'), exportDch(doc), 'application/json') },
     { name: 'Import a workspace or history file as a new document', keys: keysOf('import'), run: importFile },
     { name: 'Save to a file on disk after every step', run: linkFile },
     ...(linked() || relink() ? [{ name: 'Stop saving to the file on disk', run: unlink }] : []),
-    { name: 'Start a scratch branch', keys: keysOf('branch'), run: () => setBranchName(defaultBranchName()) },
+    ...(viewing() ? [] : [{ name: 'Start a scratch branch', keys: keysOf('branch'), run: () => setBranchName(defaultBranchName()) }]),
     ...(props.sync?.cloudId && user() ? [{ name: 'Share this document', run: share }] : []),
     ...(props.sync?.cloudId ? [{ name: 'Files kept with this document', run: () => setModal('files') }] : []),
     ...(onBranch()
       ? [
-          { name: 'Compare and accept this branch', run: () => setModal('branch') },
-          { name: 'Discard this branch', run: discardBranch },
+          ...(viewing() ? [] : [
+            { name: 'Compare and accept this branch', run: () => setModal('branch') },
+            { name: 'Discard this branch', run: discardBranch },
+          ]),
           { name: 'Back to the document', run: () => props.branching.open(null) },
         ]
       : props.branching.list.map((b) => ({ name: `Open branch “${b.name}”`, run: () => props.branching.open(b.id) }))),
@@ -835,12 +890,13 @@ function DocView(props: {
     if (is('palette')) { e.preventDefault(); setModal(modal() === 'palette' ? null : 'palette'); return; }
     if (is('export')) { e.preventDefault(); void exportFile(); return; }
     if (is('import')) { e.preventDefault(); void importFile(); return; }
-    if (is('branch')) { e.preventDefault(); setBranchName(defaultBranchName()); return; }
+    if (is('branch')) { e.preventDefault(); if (viewing()) refuse(); else setBranchName(defaultBranchName()); return; }
+    if (is('view')) { e.preventDefault(); toggleView(); return; }
     if (is('ai')) { e.preventDefault(); props.onToggleAI(); return; }
     if (is('ask')) { e.preventDefault(); props.onAsk(); return; }
     if (inEditor) return;
-    if (mod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); !readOnly() && (e.shiftKey ? doc.redo() : doc.undo()); return; }
-    if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); if (!readOnly()) doc.redo(); return; }
+    if (mod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (readOnly()) refuse(); else if (e.shiftKey) doc.redo(); else doc.undo(); return; }
+    if (mod(e) && e.key.toLowerCase() === 'y') { e.preventDefault(); if (readOnly()) refuse(); else doc.redo(); return; }
     if (is('keys')) { e.preventDefault(); setModal('keys'); return; }
     if (is('canvas') && active() && !canvas()) { e.preventDefault(); openCanvas(active()!); return; }
     if (is('insert')) { e.preventDefault(); insertBelow(active()); return; }
@@ -872,7 +928,7 @@ function DocView(props: {
   };
 
   const NewCell = (p: { index: number }) => (
-    <CellComposer context={context()} position={p.index} name={freshName()} initial={template()}
+    <CellComposer context={context()} position={p.index} name={freshName()} initial={template()} onDirty={(d) => (composerDirty = d)}
       drawing={(onStart, onChange) => <DiagramStart context={context()} onStart={onStart} onChange={onChange} />}
       onCommit={(t, draw, restoreFocus) => commitNew(p.index, t, draw, restoreFocus)} onCancel={() => {
         setAdding(null);
@@ -892,8 +948,10 @@ function DocView(props: {
         </Show>
         <button class="ghost" title="Show or hide the outline" aria-label={outline() ? 'Hide the outline' : 'Show the outline'} aria-expanded={outline()} onClick={() => setOutline(!outline())}>☰</button>
         <Show when={canvas()} fallback={
-          <Show when={renaming()} fallback={
-            <button class="ghost name" title="Rename" disabled={readOnly()} aria-label={`Rename the document ${name()}`} onClick={() => setRenaming(true)}>{name()}</button>
+          <Show when={renaming() && !readOnly()} fallback={
+            <Show when={!readOnly()} fallback={<span class="name name-text" data-testid="doc-name">{name()}</span>}>
+              <button class="ghost name" title="Rename" aria-label={`Rename the document ${name()}`} onClick={() => setRenaming(true)}>{name()}</button>
+            </Show>
           }>
             <input class="name-input" value={name()} aria-label="Document name" ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); rename(e.currentTarget.value); } if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); } }}
@@ -910,7 +968,7 @@ function DocView(props: {
         </Show>
         <ContextChip context={context()} scalars={scalars()} readOnly={readOnly()} onSet={(c) => !readOnly() && doc.setContext(c)} />
         <Show when={props.branching.current} fallback={<>
-          <span class="branch-start" style={{ position: 'relative' }}>
+          <Show when={!viewing()}><span class="branch-start" style={{ position: 'relative' }}>
             <button class="ghost" title={`Try something on a scratch branch, then accept or discard it (${keysOf('branch')})`} aria-expanded={branchName() !== null}
               data-testid="branch-start" onClick={() => setBranchName(branchName() === null ? defaultBranchName() : null)}>⑂ Branch</button>
             <Show when={branchName() !== null}>
@@ -924,7 +982,7 @@ function DocView(props: {
                 </div>
               </div>
             </Show>
-          </span>
+          </span></Show>
           <Show when={props.branching.list.length}>
             <select class="branches" aria-label="Branches" onChange={(e) => { if (e.currentTarget.value) props.branching.open(e.currentTarget.value); }}>
               <option value="">{props.branching.list.length} {props.branching.list.length === 1 ? 'branch' : 'branches'}</option>
@@ -935,8 +993,11 @@ function DocView(props: {
           {(b) => (
             <span class="row branch" data-testid="branch">
               <span class="branch-name" title="A scratch branch: changes here leave the document alone until you accept them">⑂ {b().name}</span>
-              <button class="primary" disabled={mainReadOnly()} onClick={() => setModal('branch')}>Accept…</button>
-              <button onClick={discardBranch}>Discard</button>
+              <Show when={!viewing()}>
+                <button class="primary" disabled={mainReadOnly()} onClick={() => setModal('branch')}
+                  title={mainReadOnly() ? 'Only people who can edit the document can accept a branch into it' : undefined}>Accept…</button>
+                <button onClick={discardBranch}>Discard</button>
+              </Show>
               <button class="ghost" title="Back to the document; the branch is kept" onClick={() => props.branching.open(null)}>Leave</button>
             </span>
           )}
@@ -972,8 +1033,14 @@ function DocView(props: {
             </>
           )}
         </Show>
-        <button class="ghost" title={`Undo (${K}Z)`} disabled={readOnly() || !canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
-        <button class="ghost" title="Redo" disabled={readOnly() || !canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
+        <Show when={!locked()}>
+          <button class="ghost view-toggle" classList={{ on: viewing() }} aria-pressed={viewing()} data-testid="view-mode" onClick={toggleView}
+            title={`${viewing() ? 'View mode is on: click to edit again' : 'View mode: read without editing'} (${keysOf('view')})`}>View mode</button>
+        </Show>
+        <Show when={!readOnly()}>
+          <button class="ghost" title={`Undo (${K}Z)`} disabled={!canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
+          <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
+        </Show>
         <button class={`light ${jobs() ? 'busy' : ''}`} disabled={!jobs()} data-testid="light"
           title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'}
           aria-label={jobs() ? `Cancel ${jobs()} ${jobs() === 1 ? 'computation' : 'computations'}` : 'No computations running'}
@@ -1003,7 +1070,14 @@ function DocView(props: {
               <div class="banner">This document changed and has not been exported for a week. <a href="#" onClick={(e) => { e.preventDefault(); void exportFile(); }}>Export it</a> to keep a copy.</div>
             </Show>
             <CloudRecovery o={props.o} sync={props.sync} onBranch={(inputs, name) => props.branching.create(name, inputs)} />
-            <Show when={readOnly()}><div class="banner" data-testid="read-only">View only. Export or make a personal branch to work on a copy.</div></Show>
+            <Show when={readOnly()}>
+              <Show when={viewing()} fallback={<div class="banner" data-testid="read-only">View only. Export or make a personal branch to work on a copy.</div>}>
+                <div class="banner row" data-testid="view-mode-banner">
+                  <span class="grow">View mode: reading only. Nothing here can be changed until you switch it off ({keysOf('view')}).</span>
+                  <Show when={!locked()}><button onClick={toggleView}>Edit</button></Show>
+                </div>
+              </Show>
+            </Show>
             <Show when={previewing()}><div class="banner" data-testid="draft-preview" role="status">Results preview your uncommitted edits. Enter or leaving the cell saves them; Esc discards them. Shared documents, exports, and AI reads still use the saved inputs.</div></Show>
             <For each={Object.entries(drafts()).filter(([key]) => !cells().some((c) => c.key === key))}>
               {([id, text]) => <div class="banner" data-testid="deleted-draft">
@@ -1023,7 +1097,7 @@ function DocView(props: {
                 const text = () => row()?.text ?? '';
                 return <>
 
-                  <div class="insert"><button tabindex={-1} aria-hidden="true" disabled={readOnly()} onClick={() => addAt(i())}>+ cell</button></div>
+                  <Show when={!readOnly()}><div class="insert"><button tabindex={-1} aria-hidden="true" onClick={() => addAt(i())}>+ cell</button></div></Show>
                   <Show when={props.sync?.presence().some((p) => p.cell === id())}>
                     <div class="cell-presence hint" aria-live="polite">{props.sync?.presence().filter((p) => p.cell === id()).map((p) => p.user?.name ?? 'Viewer').join(', ')} here</div>
                   </Show>
@@ -1034,13 +1108,13 @@ function DocView(props: {
                     onPin={() => pin(id())} pinDisabled={mainReadOnly() || previewing()} onRerun={() => visibleEvaluator()?.rerun(id())} onCopyTikz={() => copyTikz(id())}
                     onCanvas={(w) => openCanvas(id(), w)} validate={validate} onInsertBelow={() => insertBelow(id())}
                     onStop={() => stop(id())} onRunLonger={() => runLonger(id())} commandLine={() => commandLine(id())} trace={trace(id())}
-                    comments={props.comments().filter((x) => x.cell === id())} onComment={(t) => props.onComment(id(), text(), t)} />
+                    comments={props.comments().filter((x) => x.cell === id())} onComment={readOnly() ? undefined : (t) => props.onComment(id(), text(), t)} />
                 </>;
               }}
             </For>
 
-            <Show when={adding() === null}><div style={{ 'margin-top': '10px' }}>
-              <button disabled={readOnly()} onClick={() => addAt(cells().length)} data-testid="add-cell">+ New cell</button>
+            <Show when={adding() === null && !readOnly()}><div style={{ 'margin-top': '10px' }}>
+              <button onClick={() => addAt(cells().length)} data-testid="add-cell">+ New cell</button>
             </div></Show>
           </div>
         </main>
@@ -1071,7 +1145,7 @@ function DocView(props: {
           onCleanCopy={async () => { setModal(null); location.hash = `#/doc/${await createCleanCopy(main, `${name()} (clean copy)`)}`; }} />}
       </Show>
       <Show when={modal() === 'files' && props.sync?.cloudId}>
-        {(id) => <FilesDialog cloudId={id()} name={name()} canEdit={!!props.sync?.canEdit} token={props.o.info.cloud?.token} onClose={() => setModal(null)}
+        {(id) => <FilesDialog cloudId={id()} name={name()} canEdit={!!props.sync?.canEdit && !viewing()} token={props.o.info.cloud?.token} onClose={() => setModal(null)}
           onOpen={async (file, text) => {
             const r = await importText(file, text);
             if (r.note) importNotes.set(r.id, r.note);
@@ -1115,7 +1189,7 @@ function DocView(props: {
         )}
       </Show>
       <Show when={(() => { const m = modal(); return m && typeof m === 'object' && 'version' in m ? m.version : null; })()} keyed>
-        {(n) => <VersionView n={n} canRestore={!readOnly()} at={doc.at(n)} dcw={(s) => doc.toDcw(s)} current={doc.toDcw()} onClose={() => setModal(null)}
+        {(n) => <VersionView n={n} canRestore={!readOnly()} canBranch={!viewing()} at={doc.at(n)} dcw={(s) => doc.toDcw(s)} current={doc.toDcw()} onClose={() => setModal(null)}
           onRestore={(s) => { if (readOnly()) return; doc.replace(s.context, s.cells, `restore version ${n}`); setModal(null); }}
           onBranch={(s) => {
             setModal(null);
@@ -1135,7 +1209,8 @@ function DocView(props: {
               </tbody></table>
               <Show when={stateOf(s.cellId)?.valueKey !== s.key}><p class="hint" data-testid="snapshot-outdated">The current inputs or engine differ from this snapshot, or its cell was removed. The saved result is unchanged.</p></Show>
               <PinnedRecompute snapshot={s} />
-              <Show when={s.run} fallback={<p class="hint">This older snapshot does not retain its dependency inputs.</p>}>
+              <Show when={!s.run}><p class="hint">This older snapshot does not retain its dependency inputs.</p></Show>
+              <Show when={s.run && !viewing()}>
                 <button onClick={() => void parseDcw(s.run!.workspace).then((inputs) => { setModal(null); props.branching.create(`Recompute ${s.name}`, { ...inputs, hints: {} }); }).catch((e) => setMessage(`Cannot reopen snapshot inputs: ${e.message}`))}>Open inputs in personal branch</button>
               </Show>
               <div style={{ 'margin-top': '10px' }}>
@@ -1319,6 +1394,8 @@ export function lineDiff(a: string[], b: string[]): [' ' | '−' | '+', string][
 
 function VersionView(props: {
   canRestore: boolean;
+  /** Whether it can be opened as a branch (not in view mode). */
+  canBranch: boolean;
   n: number;
   at: { context: string; cells: CellData[] } | null;
   dcw: (s: { context: string; cells: CellData[] }) => string;
@@ -1343,8 +1420,8 @@ function VersionView(props: {
                 </For>
               </pre>
               <div class="row" style={{ 'margin-top': '10px' }}>
-                <button class="primary" disabled={!props.canRestore} onClick={() => props.onRestore(s())}>Restore this version</button>
-                <button onClick={() => props.onBranch(s())}>Open as a branch</button>
+                <Show when={props.canRestore}><button class="primary" onClick={() => props.onRestore(s())}>Restore this version</button></Show>
+                <Show when={props.canBranch}><button onClick={() => props.onBranch(s())}>Open as a branch</button></Show>
                 <button onClick={props.onClose}>Close</button>
               </div>
             </>
@@ -1369,6 +1446,7 @@ function Keys(props: { onClose: () => void }) {
     ['Command palette', keysOf('palette'), '⋯'],
     ['Import a workspace, export this one', `${keysOf('import')}, ${keysOf('export')}`, ''],
     ['Start a scratch branch: try something, then accept or discard it', keysOf('branch'), '⑂ Branch'],
+    ['Switch view mode on or off: read without editing (kept in this browser, not shared)', keysOf('view'), 'View mode'],
     ['Show or hide the AI panel; ask the AI about the selection', `${keysOf('ai')}, ${keysOf('ask')}`, 'AI'],
     ['Open the active definition or watch in the focus canvas (? there lists its gestures)', keysOf('canvas'), 'Canvas'],
     ['This sheet', keysOf('keys'), ''],

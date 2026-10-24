@@ -680,7 +680,7 @@ choice is kept in local storage (`diagcalc.theme`) and applied by an inline scri
 `index.html` before the first paint, so a page never flashes in the other theme.
 
 It also lists the keyboard shortcuts (`src/ui/shortcuts.ts`). The main ones (command palette, AI
-panel, ask the AI, scratch branch, export, import, insert a cell below, open the canvas, the
+panel, ask the AI, scratch branch, view mode, export, import, insert a cell below, open the canvas, the
 shortcut sheet) can be rebound: Change listens for the next combination, which is refused when it
 is fixed (undo, redo, commit, Esc, Tab, select all), already taken, a plain key for an action that
 also works while typing in a cell, or a key needed for moving around. Only bindings that differ
@@ -836,6 +836,25 @@ signed in can edit), with the link to copy. Non-owners see who has access and ca
 with me" on the document list opens `#/s/<id>`, which finds or makes the local copy and goes on to
 `#/doc/<local id>`; `#/s/<id>/<token>` does the same through a link, without an account for
 viewing.
+
+**View mode and read-only access.** One notion decides what can be changed: `Access` in
+`src/ui/WorkspacePage.tsx`. `viewOnly` is the permission (a view-only recipient, a view link, or a
+shared document whose access is not known yet); `viewing` is view mode, switched on and off by an
+owner or editor with the View mode button in the top bar or `⌘⇧E` (rebindable, listed with the
+other shortcuts); `readOnly`, which every control, key handler, palette command, the canvas, and
+the AI tools check, is view mode, or a view-only document shown as itself (a personal branch of it
+is the recipient's to edit). A view-only recipient is therefore always in view mode on the
+document, without a toggle. Read-only, editing controls are absent rather than disabled: no cell
+editor, no add, insert, move, pin, or delete, no rename, context form, undo or redo, no AI comment
+on a cell, no accepting or rejecting AI proposals, and the canvas has no gestures or insertion
+palette. In view mode the scratch-branch controls are put away too, and exporting writes no copy
+into the account. Reading, the outline, the canvas for inspection, recomputing, export, and asking
+the AI stay; a key that would edit does nothing and says why in the top bar. Switching view mode on
+is refused while an edit is unfinished, so it never throws a draft away. The choice is the
+viewer's own: it is kept per document in this browser's local storage (`diagcalc.viewMode`, a list
+of local document ids) and never in the shared Yjs document, so co-editors do not see it and it
+changes nothing they read. `tests/viewmode.spec.ts` covers an editor switching it (including the
+per-viewer state against a live co-editor) and a view-only recipient.
 
 **Browser tests.** `tests/accounts.spec.ts` runs the app against `tests/mockapi.ts`, an in-memory
 stand-in for the API with the same routes and rules (roles, CSRF token, versioned saves), shared by

@@ -22,6 +22,8 @@ export function NewCell(props: {
   validate: (text: string) => Promise<string | null>;
   onCommit: (text: string, draw: boolean, restoreFocus: boolean) => void;
   onCancel: () => void;
+  /** Whether the composer holds text of the person's that closing it would lose. */
+  onDirty?: (dirty: boolean) => void;
   drawing?: (onStart: (term: string) => void, onChange: () => void) => JSX.Element;
 }) {
   const [draft, setDraft] = createSignal(props.initial?.text ?? '');
@@ -38,10 +40,11 @@ export function NewCell(props: {
   let incompleteCheck = props.initial?.text === 'check idempotent()';
   let revision = 0;
   const invalidate = () => { revision++; setProblem(''); setBusy(false); };
-  onCleanup(() => revision++);
+  onCleanup(() => { revision++; props.onDirty?.(false); });
   createEffect(on(() => [props.context, props.position] as const, invalidate, { defer: true }));
   const changed = (text: string) => {
     invalidate();
+    props.onDirty?.(text.trim() !== (props.initial?.text ?? '').trim());
     if (kind() === 'check' && text !== 'check idempotent()') incompleteCheck = false;
     setDraft(text);
     const k = kindOf(text);

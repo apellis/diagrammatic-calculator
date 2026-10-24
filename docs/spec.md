@@ -277,6 +277,7 @@ The app is one page with three columns: an outline of everything in the document
 | ⌘L | Ask the AI about the current selection |
 | ⌘J | Show or hide the AI panel |
 | ⌘B | Start a scratch branch |
+| ⌘⇧E | Switch view mode on or off: read without editing |
 | ⌘O, ⌘⇧S | Open a file, export the document as a file |
 | Tab, ⇧Tab | Move between pieces in a diagram |
 | F | Focus the selected diagram |

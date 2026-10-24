@@ -72,7 +72,10 @@ export interface ToolHost {
    * and the AI's notes are not written into it.
    */
   foreign(): boolean;
+  /** Whether what is shown cannot be changed: a view-only document, or view mode is on. */
   readOnly?(): boolean;
+  /** Whether that is because the person switched view mode on (they can switch it off). */
+  viewMode?(): boolean;
 }
 
 const note = { type: 'string', description: 'One line saying why, shown in the history and the activity timeline.' };
@@ -324,7 +327,9 @@ export async function runTool(host: ToolHost, name: string, input: unknown): Pro
   if (problem) return { content: JSON.stringify({ INVALID_INPUT: problem, received: input }), isError: true, summary: `${name}: ${problem}` };
   const a = input as Record<string, unknown>;
   if (host.readOnly?.() && (WRITES.has(name) || ['cell_remove', 'branch_accept', 'timeline_note', 'milestone_write'].includes(name)))
-    return { content: 'This document is view only. Make a personal branch to edit.', isError: true, summary: 'view only' };
+    return host.viewMode?.()
+      ? { content: 'View mode is on: nothing can be changed until the person switches it off. Answer without changing the document.', isError: true, summary: 'view mode' }
+      : { content: 'This document is view only. Make a personal branch to edit.', isError: true, summary: 'view only' };
   try {
     const op = OPS.get(name);
     if (op) return await runOp(host, op, a);

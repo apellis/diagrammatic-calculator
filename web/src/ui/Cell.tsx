@@ -214,7 +214,7 @@ export function Cell(props: CellProps) {
       </div>
       <Show when={props.expanded}>
         <div class="body" id={`body-${props.id}`}>
-          <Show when={editing() && !props.readOnly} fallback={<CellText text={props.text} kind={kind()} onEdit={edit} />}>
+          <Show when={editing() && !props.readOnly} fallback={<CellText text={props.text} kind={kind()} onEdit={props.readOnly ? undefined : edit} />}>
             <Editor
               text={draft()} remoteCursors={draft() === props.text ? props.remoteCursors : []}
               onSelection={(selection) => props.onSelection?.(draft() === props.text ? selection : null)}
@@ -264,12 +264,17 @@ export function Cell(props: CellProps) {
             <div class="tools"><div class="grow" /><button class="ghost" onClick={props.onRemove}>Discard (Esc)</button></div>
           }>
             <div class="tools">
-              <button class="ghost" title="Move up" aria-label="Move the cell up" disabled={props.readOnly} onClick={() => props.onMove(-1)}>↑</button>
-              <button class="ghost" title="Move down" aria-label="Move the cell down" disabled={props.readOnly} onClick={() => props.onMove(1)}>↓</button>
+              {/* read-only, the tools that change the document are not offered at all */}
+              <Show when={!props.readOnly}>
+                <button class="ghost" title="Move up" aria-label="Move the cell up" onClick={() => props.onMove(-1)}>↑</button>
+                <button class="ghost" title="Move down" aria-label="Move the cell down" onClick={() => props.onMove(1)}>↓</button>
+              </Show>
               <Show when={props.state?.status === 'failed' && props.state.value?.status === 'error' && 'message' in props.state.value && props.state.value.message === 'cancelled'}>
                 <button class="ghost" onClick={props.onRerun}>Retry</button>
               </Show>
-              <button class="ghost" onClick={props.onPin} disabled={props.readOnly || props.pinDisabled || !canPin()}>Pin result</button>
+              <Show when={!props.readOnly}>
+                <button class="ghost" onClick={props.onPin} disabled={props.pinDisabled || !canPin()}>Pin result</button>
+              </Show>
               <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
               <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>
                 <button class="ghost" onClick={() => props.onCanvas?.()} title="Open the focus canvas (F)" data-testid="open-canvas">Canvas</button>
@@ -280,7 +285,7 @@ export function Cell(props: CellProps) {
               </Show>
               <div class="grow" />
               <span class="hint">{props.id}</span>
-              <button class="ghost" disabled={props.readOnly} onClick={props.onRemove}>Delete</button>
+              <Show when={!props.readOnly}><button class="ghost" onClick={props.onRemove}>Delete</button></Show>
             </div>
             <Show when={props.comments?.length}>
               <ul class="cell-comments" data-testid="cell-comments">
@@ -322,15 +327,20 @@ export function Cell(props: CellProps) {
   );
 }
 
-/** A cell's text typeset (its kind is in the head above); options on lines of their own. */
-function CellText(props: { text: string; kind: string; onEdit: () => void }) {
+/**
+ * A cell's text typeset (its kind is in the head above); options on lines of their own. Without
+ * `onEdit` (read-only) it is text to read, not a control.
+ */
+function CellText(props: { text: string; kind: string; onEdit?: () => void }) {
   const lines = () => props.text.split('\n');
   const first = () => lines()[0].replace(/^(def|watch|solve|check)\s+/, '');
   const options = () => lines().slice(1).map((l) => l.trim()).filter(Boolean);
   const note = () => /^note\s*"""([\s\S]*?)("""\s*)?$/.exec(props.text.trim())?.[1] ?? '';
   return (
-    <div class="celltext" data-testid="cell-display" data-text={props.text} role="button" tabindex={0} title="Click to edit"
-      onClick={(e) => (e.target as HTMLElement).closest('a') || props.onEdit()} onKeyDown={(e) => e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), props.onEdit())}>
+    <div class="celltext" classList={{ readonly: !props.onEdit }} data-testid="cell-display" data-text={props.text}
+      role={props.onEdit ? 'button' : undefined} tabindex={props.onEdit ? 0 : undefined} title={props.onEdit ? 'Click to edit' : undefined}
+      onClick={(e) => (e.target as HTMLElement).closest('a') || props.onEdit?.()}
+      onKeyDown={(e) => props.onEdit && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), props.onEdit())}>
       <Show when={props.kind === 'note' || props.kind === 'comment'} fallback={
         <Show when={props.text.trim()} fallback={<span class="muted">empty cell</span>}>
           <Typeset text={first()} display />
