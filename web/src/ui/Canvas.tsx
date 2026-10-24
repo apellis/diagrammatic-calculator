@@ -13,6 +13,7 @@ import { isMac, mod } from '../app';
 import { Typeset } from './Typeset';
 import { isAction, keysOf } from './shortcuts';
 import { ValueBadge } from './Results';
+import { Dialog } from './Dialog';
 import { patterns } from './theme';
 import type { CellValue } from '../eval/evaluator';
 import {
@@ -892,6 +893,7 @@ export function Canvas(props: CanvasProps) {
   };
 
   const onKey = (e: KeyboardEvent) => {
+    if ((e.target as HTMLElement).closest('.modal')) { e.stopPropagation(); return; }
     if ((e.target as HTMLElement).closest('input, textarea, .cm-editor')) return;
     const s = sel();
     const l = layouts()[s.summand];
@@ -904,7 +906,7 @@ export function Canvas(props: CanvasProps) {
       ['r', 'i', 'delete', 'backspace'].includes(e.key.toLowerCase()) ||
       (e.key.startsWith('Arrow') && (e.altKey || !e.shiftKey && ['ArrowUp', 'ArrowDown'].includes(e.key)))
     )) return handled();
-    if (e.key === 'Tab' && (e.target as HTMLElement).closest('.canvas-bar, .palette-bar')) {
+    if (e.key === 'Tab' && (e.target as HTMLElement).closest('.canvas-bar, .canvas-actions, .palette-bar')) {
       // the toolbar and the palette take Tab as usual; forward from the last generator comes back to the pieces
       const gens = [...root.querySelectorAll<HTMLElement>('.palette-bar .gen')];
       if (!e.shiftKey && e.target === gens.at(-1)) {
@@ -913,7 +915,7 @@ export function Canvas(props: CanvasProps) {
       }
       return;
     }
-    if ((e.target as HTMLElement).closest('.canvas-bar, .palette-bar, .relmenu') && (e.key === 'Enter' || e.key === ' ')) return;
+    if ((e.target as HTMLElement).closest('.canvas-bar, .canvas-actions, .palette-bar, .relmenu') && (e.key === 'Enter' || e.key === ' ')) return;
     if (e.key === ' ') {
       space = true;
       return handled();
@@ -973,7 +975,7 @@ export function Canvas(props: CanvasProps) {
         const list = allPieces();
         const first = !s.layers.length || (list[0] && list[0].k === s.summand && list[0].layer === s.layers[s.layers.length - 1]);
         if (e.shiftKey && first) {
-          const out = root.querySelector<HTMLElement>('.palette-bar .gen:last-child') ?? root.querySelector<HTMLElement>('.canvas-bar button:last-of-type');
+          const out = root.querySelector<HTMLElement>('.palette-bar .gen:last-child') ?? root.querySelector<HTMLElement>('.canvas-actions button:last-of-type');
           if (out) {
             handled();
             setSel({ summand: s.summand, layers: [] });
@@ -1359,8 +1361,18 @@ export function Canvas(props: CanvasProps) {
       <Show when={props.expanded}>
         <div class="banner">{props.readOnly ? 'This term uses definitions and is shown written out.' : 'This term uses definitions; it is shown written out, and a gesture writes it out in full in the cell.'}</div>
       </Show>
+      <div class="canvas-actions" role="group" aria-label="Diagram actions">
+        <Show when={!props.readOnly}>
+          <button onClick={() => void openMenu(sel().summand)} disabled={busy() || !layouts().length} title="Rewrite using a relation without changing the element (R)">Relations</button>
+          <button onClick={removeSelected} disabled={busy() || !sel().layers.length} aria-label="Remove selected pieces" title="Remove selected pieces; this changes the element (Delete)">Remove</button>
+        </Show>
+        <div class="grow" />
+        <button class="ghost" onClick={() => zoomBy(0.8)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+        <button class="ghost" onClick={fit} aria-label="Fit diagram" title="Fit the selected summand (F)">Fit</button>
+        <button class="ghost" onClick={() => zoomBy(1.25)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+      </div>
       <Show when={!props.readOnly}>
-        <div class="canvas-insert-help hint">Click a strand, then choose a piece below. You can also drag a piece onto a strand.</div>
+        <div class="canvas-insert-help hint">Select a strand to add a piece; select a piece to remove it. Relations rewrite without changing the element.</div>
       </Show>
       <div class="canvas-body">
         <Show when={!props.readOnly}><div class="palette-bar" aria-label="Generators">
@@ -1432,19 +1444,19 @@ export function Canvas(props: CanvasProps) {
               </div>
             )}
           </Show>
-          <Show when={help()}>
-            <div class="relmenu wide" role="dialog" aria-label="Gestures and keys">
-              <div class="row"><strong class="grow">Gestures and keys</strong><button class="ghost" onClick={() => setHelp(false)} aria-label="Close the gestures">×</button></div>
-              <table class="kv keys gestures">
-                <thead><tr><th>Action</th><th>Pointer</th><th>Keys</th></tr></thead>
-                <tbody>
-                  <For each={GESTURES.filter(([, , , edits]) => !props.readOnly || !edits)}>{([a, p, k]) => <tr><td>{a}</td><td>{p || '—'}</td><td>{k}</td></tr>}</For>
-                </tbody>
-              </table>
-            </div>
-          </Show>
         </div>
       </div>
+      <Show when={help()}>
+        <Dialog label="Gestures and keys" class="canvas-help" noClose onClose={() => setHelp(false)}>
+          <div class="row"><h3 class="grow">Gestures and keys</h3><button class="ghost" onClick={() => setHelp(false)} aria-label="Close the gestures">×</button></div>
+          <table class="kv keys gestures">
+            <thead><tr><th>Action</th><th>Pointer</th><th>Keys</th></tr></thead>
+            <tbody>
+              <For each={GESTURES.filter(([, , , edits]) => !props.readOnly || !edits)}>{([a, p, k]) => <tr><td>{a}</td><td>{p || '—'}</td><td>{k}</td></tr>}</For>
+            </tbody>
+          </table>
+        </Dialog>
+      </Show>
     </div>
   );
 }
@@ -1468,18 +1480,18 @@ const GESTURES: [action: string, pointer: string, keys: string, edits?: boolean]
   ['Slide a dot through the next crossing on its strand (dot-slide relation)', 'drag the dot; a crossing glows as it nears and rings once passed', '↑ ↓ on a selected dot', true],
   ['Interchange a piece with pieces on other strands; a −1 badge shows when two odd pieces swap', 'drag it up or down', `${ALT}↑ ${ALT}↓`, true],
   ['Braid relation (middle crossing of a triangle) or square relation (a stacked pair)', 'drag the crossing sideways; the result shows before you let go', 'R, then the relation’s number', true],
-  ['Relations that apply to the selection, or inside a box', 'right-click', 'R, then 1–9 applies one', true],
+  ['Relations that apply to the selection, or inside a box', 'Relations, or right-click', 'R, then 1–9 applies one', true],
   ['Select a piece; add or remove one', `click; ${K}click`, 'Tab, ⇧Tab'],
   ['Select a whole strand', 'double-click the strand', 'S, ⇧S (next, previous strand)'],
   ['Select several pieces', `drag a box on empty space; ${K}click adds or removes one`, `Tab to a piece, X keeps it; Tab on, X adds (or removes) the piece at the dashed ring; ${K}A selects all`],
   ['Clear the selection', 'click empty space', 'Esc'],
   ['Set the insertion point (a green ring)', 'click a strand', 'I, then the arrows', true],
   ['Insert a generator', 'drag it from the palette, or click it after setting the insertion point', 'I, then 1–9; or Tab to the palette and Enter', true],
-  ['Remove the selected pieces', '', 'Delete', true],
+  ['Remove the selected pieces', 'Remove', 'Delete', true],
   ['Move a piece for looks only (a layout hint)', `${ALT}drag`, `${ALT}⇧ arrows`, true],
   ['Move between summands', 'click a summand', '← →'],
   ['Pan', 'space-drag, scroll', '⇧ arrows'],
-  ['Zoom', `${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
+  ['Zoom', `+ / − buttons, Fit; ${K}scroll, pinch`, '+ −; F fits the summand, 0 resets'],
   ['Show or hide occurrence IDs (d dot, c crossing, u cup, n cap, b bubble, g other piece, s strand: numbered through the document in the order they were made, kept through rewrites and edits)', 'hover a piece; IDs', 'L'],
   ['Ask the AI about the selection', '', keysOf('ask')],
   ['Leave the canvas for its controls', 'click', '⇧Tab from the first piece'],

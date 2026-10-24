@@ -418,6 +418,19 @@ and offers preset selection and adjacent swaps without enumerating permutations.
 with explicit oriented objects instead offer upward/downward strand buttons or an empty boundary.
 Every identity is checked with `term.layout` before Start drawing is enabled; stale validation
 cannot escape its context/selection snapshot. Switching Type/Draw keeps an unfinished boundary.
+New-cell text never commits on blur: moving to the outline or another control leaves the draft
+private until an explicit submission. Existing-cell edits retain their commit-on-leave behavior.
+The composer has one stable key among the cell rows: choosing another insertion position moves
+the same component, preserving text, names, per-kind drafts and the drawing boundary. Moving it
+invalidates any pending submission validated at the previous position.
+Explicit submission and cancellation restore keyboard focus only when the editor still owns it;
+late validation must not take focus back from another control. Validation feedback is associated
+with the editor's accessible invalid state.
+
+The context popover similarly owns a revision of its draft. Editing, closing, unmounting, or a
+change to the document context or permission invalidates pending Apply validation. Its technical
+details describe the current committed context, not an unsubmitted choice. Phone layouts keep
+the context and scratch-branch input fields visible; only top-level toolbar spacers are hidden.
 
 **Evaluation.** `src/eval/evaluator.ts`. A cell's result is keyed by a hash of its inputs: the
 engine build, the context, the unknowns it mentions, its text and the keys of the definitions it
@@ -655,6 +668,10 @@ Replies are shown as formatted text by `src/ui/markdown.ts`: a small, escaped Ma
 (paragraphs, headings, lists, emphasis, code spans and fenced code in the fixed-width font) with
 LaTeX mathematics (`\(…\)`, `$…$`, `\[…\]`, `$$…$$`) typeset by KaTeX in the same style as the
 rest of the app.
+
+Appearance and shortcut changes save immediately. Provider settings and keys require the explicit
+Save AI settings action and show an unsaved state when changed. Leaving Settings offers to keep
+editing or discard the AI draft; native unload warnings remain subject to browser restrictions.
 
 The settings page also holds the appearance: a three-position switch (Light, System, Dark).
 System, the default, follows the operating system's `prefers-color-scheme`; Light and Dark set

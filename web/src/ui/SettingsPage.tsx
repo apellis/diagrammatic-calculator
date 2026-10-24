@@ -1,6 +1,8 @@
 // Settings for this device: the appearance, and the AI provider with its key.
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { AISettingsForm } from './AISettingsForm';
+import { Dialog } from './Dialog';
+import './entry-ux.css';
 import { askBeforeContext, setAskBeforeContext } from '../ai/tools';
 import { ACTIONS, FIXED, changed, comboOf, keysOf, label, rebind, resetAll, type ActionId } from './shortcuts';
 import { SignOutEverywhere } from './Account';
@@ -14,13 +16,43 @@ const THEMES: { id: Theme; name: string }[] = [
 
 /** `from`: the route the settings were opened from, returned to by Back (the document list if none). */
 export function SettingsPage(props: { from?: string }) {
+  const [dirty, setDirty] = createSignal(false);
+  const [leaving, setLeaving] = createSignal<string | null>(null);
+  const leave = (target: string) => {
+    if (dirty()) setLeaving(target);
+    else location.hash = target;
+  };
+  // popstate precedes the app's hashchange router for same-document navigation.
+  // Restore the settings URL before the router can unmount this draft. This local
+  // guard replaces the destination history entry; it does not reconstruct history.
+  const guardHash = (event: Event) => {
+    if (!dirty() || location.hash === '#/settings') return;
+    const target = location.hash || '#/';
+    event.stopImmediatePropagation();
+    history.replaceState(history.state, '', '#/settings');
+    setLeaving(target);
+  };
+  const guardUnload = (event: BeforeUnloadEvent) => {
+    if (!dirty()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  };
+  window.addEventListener('popstate', guardHash);
+  window.addEventListener('hashchange', guardHash, true);
+  window.addEventListener('beforeunload', guardUnload);
+  onCleanup(() => {
+    window.removeEventListener('popstate', guardHash);
+    window.removeEventListener('hashchange', guardHash, true);
+    window.removeEventListener('beforeunload', guardUnload);
+  });
   return (
     <div class="doclist settings">
       <div class="row">
-        <button class="ghost" onClick={() => (location.hash = props.from || '#/')} data-testid="settings-back">← Back{props.from?.startsWith('#/doc/') ? ' to the document' : ''}</button>
+        <button class="ghost" onClick={() => leave(props.from || '#/')} data-testid="settings-back">← Back{props.from?.startsWith('#/doc/') ? ' to the document' : ''}</button>
       </div>
       <h1>Settings</h1>
       <p class="muted">These settings are kept in this browser and apply to every document.</p>
+      <p class="hint">Appearance, shortcuts and the context confirmation save automatically.</p>
       <section>
         <h3>Appearance</h3>
         <ThemeSwitch />
@@ -32,7 +64,7 @@ export function SettingsPage(props: { from?: string }) {
       <section>
         <h3>AI assistant</h3>
         <p class="muted">The assistant uses your own key with the provider you choose. Every message goes from this browser straight to that provider.</p>
-        <AISettingsForm />
+        <AISettingsForm onDirtyChange={setDirty} />
         <label class="row" style={{ 'margin-top': '12px' }}>
           <input type="checkbox" checked={askBeforeContext()} onChange={(e) => setAskBeforeContext(e.currentTarget.checked)} data-testid="ask-context" />
           Ask before the AI changes a document's context (on documents of others it always asks)
@@ -40,6 +72,21 @@ export function SettingsPage(props: { from?: string }) {
       </section>
       <Shortcuts />
       <SignOutEverywhere />
+      <Show when={leaving()}>
+        <Dialog label="Unsaved AI settings" class="small" onClose={() => setLeaving(null)}>
+          <h3>Unsaved AI settings</h3>
+          <p>Your AI changes have not been saved. Keep editing to save them, or discard them and leave.</p>
+          <div class="row">
+            <button onClick={() => setLeaving(null)}>Keep editing</button>
+            <button class="danger" onClick={() => {
+              const target = leaving()!;
+              setDirty(false);
+              setLeaving(null);
+              location.hash = target;
+            }}>Discard changes</button>
+          </div>
+        </Dialog>
+      </Show>
     </div>
   );
 }

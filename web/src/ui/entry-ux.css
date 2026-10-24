@@ -1,0 +1,26 @@
+/* Entry-page overrides, scoped away from workspace tables and controls. */
+.doclist .documents .open { overflow-wrap: anywhere; }
+.doclist .documents td.actions button { opacity: 1; }
+.doclist .documents td.actions { white-space: normal; }
+
+.settings .ai-settings > .row { flex-wrap: wrap; }
+.settings .ai-settings [data-testid="ai-dirty"] { color: var(--text); font-weight: 600; }
+.getting-started { margin: 24px 0; }
+.getting-started li { margin: 10px 0; }
+
+@media (max-width: 600px) {
+  .settings table.keys, .settings table.keys tbody { display: block; width: 100%; }
+  .settings table.keys thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .settings table.keys tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .settings table.keys td { padding: 0; }
+  .settings table.keys td:first-child { grid-column: 1 / -1; }
+  .settings table.keys td:nth-child(2) { white-space: normal; }
+  .settings table.keys .row { flex-wrap: wrap; }
+  .doclist .documents thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .doclist .documents, .doclist .documents tbody { display: block; }
+  .doclist .documents tr[data-doc] { display: grid; grid-template-columns: minmax(0, 1fr); padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .doclist .documents tr[data-doc] td { display: block; border: 0; padding: 4px 8px; }
+  .doclist .documents td.actions { display: flex; flex-wrap: wrap; gap: 4px; text-align: left; }
+  .doclist .documents td.actions button { min-height: 40px; }
+  .doclist .documents input { max-width: 100%; box-sizing: border-box; }
+}

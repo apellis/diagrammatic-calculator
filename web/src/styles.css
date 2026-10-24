@@ -352,7 +352,7 @@ a.button.icon:hover { color: var(--text); }
   .main { padding: 12px 16px 80px; }
   /* the top bar wraps onto a second line instead of widening the page */
   .topbar { flex-wrap: wrap; row-gap: 4px; padding: 6px 10px; gap: 6px; }
-  .topbar .grow { display: none; }
+  .topbar > .grow { display: none; }
   .topbar .chip { max-width: 100%; }
   .topbar .name { max-width: 16ch; }
   .doclist { padding: 20px 16px; }
@@ -362,17 +362,29 @@ a.button.icon:hover { color: var(--text); }
 .stage { position: relative; min-width: 0; overflow: hidden; }
 .stage > .main { height: 100%; }
 .canvas { position: absolute; inset: 0; z-index: 4; background: var(--bg); display: flex; flex-direction: column; outline: none; }
-.canvas-bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.canvas-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.canvas-bar > button, .canvas-bar > strong { flex: none; white-space: nowrap; }
+.canvas .canvas-badge { max-width: 100%; flex-wrap: wrap; }
 .canvas .banner { margin: 8px 12px 0; }
 .canvas-insert-help { padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .gen-label { font-weight: 500; }
-.canvas-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Status changes must not move the drawing underneath an active pointer gesture. */
+.canvas-msg { position: absolute; bottom: 8px; left: 12px; right: 12px; z-index: 5; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: normal; overflow-wrap: anywhere; }
+.canvas-msg:empty { display: none; }
+.canvas-actions { display: flex; align-items: center; gap: 6px; padding: 0 12px 6px; }
+.canvas-actions button { min-height: 32px; }
+.canvas-help .row { align-items: baseline; }
+.canvas-help .gestures { width: 100%; }
 @media (max-width: 600px) {
-  .canvas-bar { flex-wrap: wrap; gap: 6px 10px; }
-  .canvas-bar > button, .canvas-bar > strong { flex: none; white-space: nowrap; }
-  .canvas .canvas-badge { max-width: 100%; flex-wrap: wrap; }
-  .canvas-msg { order: 1; flex-basis: 100%; white-space: normal; overflow-wrap: anywhere; }
-  .canvas-msg:empty { display: none; }
+  .cell > .head[aria-expanded="false"] { display: grid; grid-template-columns: 14px 7px auto minmax(0, 1fr); gap: 6px; }
+  .cell > .head[aria-expanded="false"] > .summary-wrap { grid-column: 3 / -1; justify-self: end; max-width: 100%; white-space: normal; text-align: right; }
+  .canvas-help .gestures thead { display: none; }
+  .canvas-help .gestures tr { display: grid; gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .canvas-help .gestures td { display: block; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+  .canvas-help .gestures td:first-child { font-weight: 600; }
+  .canvas-help .gestures td:nth-child(2)::before { content: 'Pointer: '; color: var(--muted); }
+  .canvas-help .gestures td:nth-child(3)::before { content: 'Keys: '; color: var(--muted); }
+
 }
 .canvas-badge { gap: 6px; flex: none; }
 .canvas-body { flex: 1; display: flex; min-height: 0; }
@@ -545,6 +557,10 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
 .ctx-advanced summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 10px; }
 .ctx-advanced input { width: 100%; margin: 6px 0 4px; }
 .ctx-line { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; }
+.context-options { max-height: min(680px, calc(100dvh - 120px)); overflow: auto; }
+.context-details { margin-top: 12px; font-size: 13px; }
+.context-details summary { cursor: pointer; color: var(--muted); }
+.context-details td { overflow-wrap: anywhere; }
 @media (max-width: 560px) {
   .ctx-fields { grid-template-columns: 1fr; }
 }

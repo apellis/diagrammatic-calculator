@@ -375,6 +375,14 @@ function DocView(props: {
   const active = () => idOf(activeKey());
   const setActive = (id: string | null) => setActiveKey(id ? keyOf(id) ?? null : null);
   const [adding, setAdding] = createSignal<number | null>(null);
+  // A stable keyed row keeps every private draft (including the drawing chooser) when moved.
+  const composerKey = Symbol('new-cell');
+  const insertionIndex = () => Math.min(adding() ?? cells().length, cells().length);
+  const rowKeys = () => {
+    const keys: (string | typeof composerKey)[] = cells().map((c) => c.key);
+    if (adding() !== null) keys.splice(insertionIndex(), 0, composerKey);
+    return keys;
+  };
   // on a narrow screen the outline is a drawer over the cells, closed at first
   const narrow = () => window.matchMedia?.('(max-width: 760px)').matches ?? false;
   const [outline, setOutline] = createSignal(!narrow());
@@ -634,7 +642,7 @@ function DocView(props: {
     const p = await ev.parse(t);
     return 'error' in p ? p.error : null;
   };
-  const commitNew = (index: number, text: string, draw = false) => {
+  const commitNew = (index: number, text: string, draw = false, restoreFocus = false) => {
     if (readOnly()) return;
     const t = normalize(text);
     setAdding(null);
@@ -643,6 +651,9 @@ function DocView(props: {
     const id = doc.addCell(t, index);
     focusCell(id);
     if (draw) setCanvas({ id });
+    else if (restoreFocus) queueMicrotask(() => {
+      if (document.activeElement === document.body) document.getElementById(`cell-${id}`)?.querySelector<HTMLElement>('.head')?.focus();
+    });
   };
   const commit = (id: string, text: string) => {
     if (readOnly()) return;
@@ -714,6 +725,11 @@ function DocView(props: {
     const t = TEMPLATES.find(([k]) => k === kind);
     setTemplate(t ? { text: t[1], cursor: t[2] } : undefined);
     setAdding(index);
+    queueMicrotask(() => {
+      const draft = document.querySelector<HTMLElement>('[data-cell="new"]');
+      draft?.scrollIntoView({ block: 'nearest' });
+      (draft?.querySelector<HTMLElement>('.cm-content') ?? draft?.querySelector<HTMLElement>('.entry-modes button[aria-pressed="true"]'))?.focus();
+    });
   };
   const insertBelow = (id: string | null) => {
     const i = id ? cells().findIndex((c) => c.id === id) : -1;
@@ -856,9 +872,14 @@ function DocView(props: {
   };
 
   const NewCell = (p: { index: number }) => (
-    <CellComposer context={context()} name={freshName()} initial={template()}
+    <CellComposer context={context()} position={p.index} name={freshName()} initial={template()}
       drawing={(onStart, onChange) => <DiagramStart context={context()} onStart={onStart} onChange={onChange} />}
-      onCommit={(t, draw) => commitNew(p.index, t, draw)} onCancel={() => setAdding(null)} validate={validate} />
+      onCommit={(t, draw, restoreFocus) => commitNew(p.index, t, draw, restoreFocus)} onCancel={() => {
+        setAdding(null);
+        queueMicrotask(() => {
+          if (document.activeElement === document.body) document.querySelector<HTMLElement>('[data-testid="add-cell"]')?.focus();
+        });
+      }} validate={validate} />
   );
   const defaultBranchName = () => `what if ${main.branches.size + 1}`;
 
@@ -992,14 +1013,16 @@ function DocView(props: {
                 <button onClick={() => rememberDraft(id, null)}>Discard draft</button>
               </div>}
             </For>
-            <For each={cells().map((c) => c.key)}>
-              {(key, i) => {
+            <For each={rowKeys()}>
+              {(key, rowIndex) => {
+                if (key === composerKey) return <NewCell index={insertionIndex()} />;
+                const i = () => rowIndex() - (adding() !== null && rowIndex() > insertionIndex() ? 1 : 0);
                 // UUID owns the editor and draft; callbacks resolve the current public ID.
                 const row = () => cells().find((c) => c.key === key);
                 const id = () => row()?.id ?? '';
                 const text = () => row()?.text ?? '';
                 return <>
-                  <Show when={adding() === i()}><NewCell index={i()} /></Show>
+
                   <div class="insert"><button tabindex={-1} aria-hidden="true" disabled={readOnly()} onClick={() => addAt(i())}>+ cell</button></div>
                   <Show when={props.sync?.presence().some((p) => p.cell === id())}>
                     <div class="cell-presence hint" aria-live="polite">{props.sync?.presence().filter((p) => p.cell === id()).map((p) => p.user?.name ?? 'Viewer').join(', ')} here</div>
@@ -1015,7 +1038,7 @@ function DocView(props: {
                 </>;
               }}
             </For>
-            <Show when={adding() !== null && adding()! >= cells().length}><NewCell index={cells().length} /></Show>
+
             <Show when={adding() === null}><div style={{ 'margin-top': '10px' }}>
               <button disabled={readOnly()} onClick={() => addAt(cells().length)} data-testid="add-cell">+ New cell</button>
             </div></Show>

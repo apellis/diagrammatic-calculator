@@ -13,7 +13,7 @@ export const TEMPLATES: [string, string, number?][] = [
   ['def', 'def a := ', undefined],
   ['watch', 'watch ', undefined],
   ['solve', 'solve  = 0 for c1, c2', 6],
-  ['check', 'check idempotent()', 16],
+  ['check', 'check idempotent()', 17],
   ['note', 'note """"""', 8],
 ];
 
@@ -80,6 +80,10 @@ export function Cell(props: CellProps) {
     setCommenting(false);
   };
   let editor: { set: (t: string, c?: number, focus?: boolean) => void; focus: () => void } | undefined;
+  let host!: HTMLDivElement;
+  const restoreFocus = () => queueMicrotask(() => {
+    if (document.activeElement === document.body) (host.querySelector<HTMLElement>('[data-testid="cell-display"]') ?? host.querySelector<HTMLElement>('.head'))?.focus();
+  });
   let base = props.text;
   const [conflict, setConflict] = createSignal(false);
   const kind = () => props.state?.parsed?.kind ?? kindOf(props.text) ?? (props.text ? 'def' : 'new');
@@ -143,15 +147,17 @@ export function Cell(props: CellProps) {
     const why = await check(t);
     // A cancelled or superseded edit must not commit (or steal focus) after validation.
     if (attempt !== revision) return;
-    if (why) return editor?.focus();
+    if (why) return;
     // A remote commit while validation runs is a new conflict.
     if (props.readOnly || observed !== props.text || (conflict() && !resolve)) return;
+    const ownedFocus = host.contains(document.activeElement);
     base = t;
     setDraft(t);
     setConflict(false);
     if (!props.isNew) setEditing(false);
     props.onCommit(t);
     props.onDraft?.(null);
+    if (ownedFocus) restoreFocus();
   };
   const takeTheirs = () => {
     revision++;
@@ -168,7 +174,7 @@ export function Cell(props: CellProps) {
   const canTikz = () => canPin() && ['watch', 'def'].includes((props.state!.value as { kind: string }).kind);
 
   return (
-    <div class={`cell ${props.active ? 'active' : ''}`} id={`cell-${props.id}`} data-cell={props.id} data-kind={kind()} data-status={props.state?.status ?? ''}>
+    <div ref={host} class={`cell ${props.active ? 'active' : ''}`} id={`cell-${props.id}`} data-cell={props.id} data-kind={kind()} data-status={props.state?.status ?? ''}>
       {/* the head is the cell's keyboard stop: Enter or Space opens or closes it, ↑ and ↓ move
           between cells, Alt+Enter inserts a cell below */}
       <div class="head" role="button" tabindex={0} aria-expanded={props.expanded} aria-controls={`body-${props.id}`}
@@ -191,6 +197,7 @@ export function Cell(props: CellProps) {
             moveFocus(e.currentTarget, e.key === 'ArrowDown' ? 1 : -1);
           }
         }}>
+        <span aria-hidden="true" data-testid="cell-disclosure" style={{ width: '1em', "flex-shrink": 0 }}>{props.expanded ? '▾' : '▸'}</span>
         <span class={`dot ${props.state?.status ?? ''}`} />
         <span class="kind">{kind()}</span>
         {/* expanded, the text is shown once, below, where it is edited */}
@@ -214,13 +221,14 @@ export function Cell(props: CellProps) {
               autofocus={props.active || editing()}
               placeholder="Type a term to define it, or / for a cell kind"
               onChange={changed}
-              invalid={!!problem()}
+              invalid={!!problem()} errorId={`problem-${props.id}`}
               onCommit={(t) => void commit(t)}
               onCancel={() => {
                 takeTheirs();
                 setProblem('');
                 if (!props.isNew) setEditing(false);
                 props.onCancel();
+                restoreFocus();
               }}
               onLeave={() => !props.isNew && !problem() && draft() === props.text && setEditing(false)}
               ref={(api) => {
@@ -239,7 +247,7 @@ export function Cell(props: CellProps) {
             </div>
           </Show>
           <Show when={editing() && problem()}>
-            <div class="error small" data-testid="cell-problem">{problem()}. Fix it, or press Esc to {props.isNew ? 'discard it' : 'keep the previous text'}.</div>
+            <div class="error small" data-testid="cell-problem" id={`problem-${props.id}`} role="status">{problem()}. Fix it, or press Esc to {props.isNew ? 'discard it' : 'keep the previous text'}.</div>
           </Show>
           <Show when={slash()}>
             <div class="kindmenu">
@@ -322,7 +330,7 @@ function CellText(props: { text: string; kind: string; onEdit: () => void }) {
   const note = () => /^note\s*"""([\s\S]*?)("""\s*)?$/.exec(props.text.trim())?.[1] ?? '';
   return (
     <div class="celltext" data-testid="cell-display" data-text={props.text} role="button" tabindex={0} title="Click to edit"
-      onClick={(e) => (e.target as HTMLElement).closest('a') || props.onEdit()} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), props.onEdit())}>
+      onClick={(e) => (e.target as HTMLElement).closest('a') || props.onEdit()} onKeyDown={(e) => e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), props.onEdit())}>
       <Show when={props.kind === 'note' || props.kind === 'comment'} fallback={
         <Show when={props.text.trim()} fallback={<span class="muted">empty cell</span>}>
           <Typeset text={first()} display />

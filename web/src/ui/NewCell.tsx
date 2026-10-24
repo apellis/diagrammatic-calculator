@@ -16,10 +16,11 @@ const TYPES = [
 
 export function NewCell(props: {
   context: string;
+  position: number;
   name: string;
   initial?: { text: string; cursor?: number };
   validate: (text: string) => Promise<string | null>;
-  onCommit: (text: string, draw: boolean) => void;
+  onCommit: (text: string, draw: boolean, restoreFocus: boolean) => void;
   onCancel: () => void;
   drawing?: (onStart: (term: string) => void, onChange: () => void) => JSX.Element;
 }) {
@@ -33,12 +34,15 @@ export function NewCell(props: {
   const drafts = new Map<string, string>();
   const elementDraft = () => kind() === 'def' ? draft() : drafts.get('def') ?? '';
   let editor: { set: (t: string, c?: number) => void; focus: () => void } | undefined;
+  let host!: HTMLElement;
+  let incompleteCheck = props.initial?.text === 'check idempotent()';
   let revision = 0;
   const invalidate = () => { revision++; setProblem(''); setBusy(false); };
   onCleanup(() => revision++);
-  createEffect(on(() => props.context, invalidate, { defer: true }));
+  createEffect(on(() => [props.context, props.position] as const, invalidate, { defer: true }));
   const changed = (text: string) => {
     invalidate();
+    if (kind() === 'check' && text !== 'check idempotent()') incompleteCheck = false;
     setDraft(text);
     const k = kindOf(text);
     if (k && TYPES.some(([key]) => key === k)) setKind(k);
@@ -51,6 +55,7 @@ export function NewCell(props: {
     setMode('text');
     const template = TEMPLATES.find(([key]) => key === k);
     const text = drafts.get(k) ?? (k === 'def' ? '' : template?.[1] ?? '');
+    if (k === 'check' && !drafts.has(k)) incompleteCheck = true;
     setDraft(text);
     queueMicrotask(() => editor?.set(text, drafts.has(k) ? undefined : template?.[2]));
   };
@@ -60,17 +65,22 @@ export function NewCell(props: {
     if (busy()) return;
     if (!text.trim()) return cancel();
     if (text.startsWith('/')) return;
+    if (incompleteCheck && text === 'check idempotent()') {
+      setProblem('Add an element inside idempotent(...), for example idempotent(a) if a is defined above.');
+      return;
+    }
     const source = asCell(text);
     if (draw && kindOf(source) !== 'def') return setProblem('Choose Element to edit a drawing. Watches only display results.');
     const attempt = ++revision;
     const context = props.context;
+    const ownedFocus = host.contains(document.activeElement);
     setBusy(true);
     try {
       const why = await props.validate(source);
       if (revision !== attempt || context !== props.context) return;
       setBusy(false);
       if (why) return setProblem(why);
-      props.onCommit(source, draw);
+      props.onCommit(source, draw, ownedFocus && (host.contains(document.activeElement) || document.activeElement === document.body));
     } catch (e) {
       if (revision !== attempt) return;
       setBusy(false);
@@ -79,7 +89,7 @@ export function NewCell(props: {
   };
   const switchMode = (m: 'text' | 'draw') => { invalidate(); if (m === 'draw') setDrawingOpened(true); setMode(m); };
   return (
-    <section class="cell active new-cell" data-cell="new" aria-label="New cell"
+    <section ref={host} class="cell active new-cell" data-cell="new" aria-label="New cell"
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancel(); } }}>
       <div class="new-cell-heading"><strong>New cell</strong><button class="ghost" onClick={cancel} aria-label="Discard new cell" title="Discard (Esc)">×</button></div>
       <div class="new-cell-types" role="group" aria-label="Cell type">
@@ -106,13 +116,13 @@ export function NewCell(props: {
           </div>
         </Show>
         <Show when={mode() === 'text'}>
-          <Editor text={draft()} autofocus placeholder="Enter an expression, or paste a cell command"
+          <Editor text={draft()} autofocus commitOnBlur={false} placeholder="Enter an expression, or paste a cell command"
             ref={(api) => { editor = api; if (props.initial) queueMicrotask(() => api.set(draft(), props.initial?.cursor)); }}
-            invalid={!!problem()} onChange={changed} onCommit={(t) => void submit(t)} onCancel={cancel} />
+            invalid={!!problem()} errorId="new-cell-problem" onChange={changed} onCommit={(t) => void submit(t)} onCancel={cancel} />
           <Show when={draft().startsWith('/')}>
             <div class="kindmenu">
               <For each={TEMPLATES.filter(([k]) => k.startsWith(draft().slice(1).trim()))}>
-                {([k, text, cursor]) => <button onClick={() => { setKind(k); editor?.set(text, cursor); }}>{k}</button>}
+                {([k, text, cursor]) => <button onClick={() => { setKind(k); incompleteCheck = k === 'check'; editor?.set(text, cursor); }}>{k}</button>}
               </For>
             </div>
           </Show>
@@ -121,7 +131,7 @@ export function NewCell(props: {
             <span class="hint">{kind() === 'note' ? 'Ctrl / ⌘ + Enter' : 'Enter'} to add</span>
           </div>
         </Show>
-        <Show when={problem()}><div class="error" data-testid="cell-problem" role="status">{problem()} Edit to fix, or Esc to discard.</div></Show>
+        <Show when={problem()}><div class="error" id="new-cell-problem" data-testid="cell-problem" role="status">{problem()} Edit to fix, or Esc to discard.</div></Show>
       </div>
     </section>
   );

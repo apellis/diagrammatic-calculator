@@ -53,6 +53,9 @@ export async function expectReadOnlyCanvas(page: Page) {
   await expect(dot).toHaveCSS('cursor', 'default');
   await expect(canvas.locator('.hit-strand').first()).toHaveCSS('cursor', 'default');
   await expect(canvas.locator('.palette-bar')).toHaveCount(0);
+  await expect(canvas.getByRole('button', { name: 'Relations', exact: true })).toHaveCount(0);
+  await expect(canvas.getByRole('button', { name: 'Remove selected pieces' })).toHaveCount(0);
+  await expect(canvas.getByRole('button', { name: 'Fit diagram', exact: true })).toBeEnabled();
   await expect(canvas.getByText('Read only', { exact: true })).toBeVisible();
 
   // Selection remains useful for inspection and AI questions, not editing.
