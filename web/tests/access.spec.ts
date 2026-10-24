@@ -80,24 +80,30 @@ test('a conditional certificate is named, and says which verdict rests on it', a
   await typeCell(page, 'check zero(psi_1 psi_1 e(ii))');
   await addCell(page, 'check zero(x_1 e(i))');
   await addCell(page, 'watch x_1 e(i)');
-  // holds: proven by the computation, so no mark; fails: conditional, in the summary and the outline
-  await expect(cell(page, 0).getByTestId('summary')).toHaveText('holds');
-  await expect(cell(page, 1).getByTestId('summary')).toHaveText('fails');
-  await expect(cell(page, 0).locator('.cond-mark')).toHaveCount(0);
-  await expect(cell(page, 1).locator('.cond-mark')).toHaveText('Assuming nondegeneracy');
-  await expect(cell(page, 2).locator('.cond-mark')).toHaveText('Assuming nondegeneracy');
-  await expect(page.locator('.outline .cond-mark')).toHaveCount(2);
-  // collapsed, each check's verdict is also a pill beside its kind, marked as the summary is
+  // holds: proven by the computation, so no mark; fails: conditional. Collapsed, a check's verdict
+  // and its mark are shown once, in the pill beside its kind, not again in the summary
   await expect(cell(page, 0).locator('.head > .kind + .outcome')).toHaveText('holds');
   await expect(cell(page, 0).getByTestId('outcome-mark')).toHaveCount(0);
   await expect(cell(page, 1).locator('.head > .kind + .outcome')).toHaveText(/^fails/);
   await expect(cell(page, 1).getByTestId('outcome')).toHaveClass(/fails/);
   await expect(cell(page, 1).getByTestId('outcome-mark')).toHaveText('Assuming nondegeneracy');
+  for (const i of [0, 1]) {
+    await expect(cell(page, i).getByTestId('summary')).toHaveCount(0);
+    await expect(cell(page, i).locator('.cond-mark')).toHaveCount(0);
+    expect((await cell(page, i).locator('.head').innerText()).match(/holds|fails/g)).toHaveLength(1);
+  }
+  // a watch has no verdict: its summary keeps the mark
+  await expect(cell(page, 2).locator('.cond-mark')).toHaveText('Assuming nondegeneracy');
+  await expect(page.locator('.outline .cond-mark')).toHaveCount(2);
   await expect(cell(page, 2).getByTestId('outcome')).toHaveCount(0);
   await cell(page, 0).locator('.head').click();
   await expect(cell(page, 0).getByTestId('verdict-note')).toHaveText('unconditional');
   await cell(page, 1).locator('.head').click();
   await expect(cell(page, 1).getByTestId('verdict-note')).toHaveText('Assuming nondegeneracy');
+  // expanded, the head's summary is as before, and the pill gives way to the verdict below
+  await expect(cell(page, 1).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 1).locator('.head .cond-mark')).toHaveText('Assuming nondegeneracy');
+  await expect(cell(page, 1).getByTestId('outcome')).toHaveCount(0);
   await expect(cell(page, 2).getByTestId('cond-text')).toHaveText('Assuming nondegeneracy');
   await expect(cell(page, 2).getByTestId('badge')).not.toHaveClass(/warn/);
   // the badge opens on the reference and hypotheses, not a falsely upgraded certificate

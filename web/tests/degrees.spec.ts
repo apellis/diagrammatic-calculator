@@ -22,5 +22,5 @@ test('high-degree nonzero values survive while known-zero quotient terms vanish'
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term, degree 20');
   await expect(cell(page, 0).getByTestId('textform')).toHaveAttribute('data-text', 'x_1^10');
   await addCell(page, 'check zero(x_1^20)');
-  await expect(cell(page, 1).getByTestId('summary')).toHaveText('holds');
+  await expect(cell(page, 1).getByTestId('verdict')).toHaveText('holds');
 });

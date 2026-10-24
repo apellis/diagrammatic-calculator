@@ -456,8 +456,10 @@ computed, amber while it is computing or recomputing, red when it failed or stop
 tooltip says which (`dotTitle` in `src/ui/Results.tsx`). It says nothing about a check's verdict. A
 collapsed cell with a yes/no result (a check) shows the verdict as a pill, "holds" or "fails", right
 after its kind, in the outline's colours and with the same mark when the verdict is conditional
-(`Outcome`); like the summary, the pill is shown only while the value is current, in edit and view
-mode alike.
+(`Outcome`); the collapsed head's summary then leaves out the verdict and its mark, so they appear
+once, while other summary content (a warning mark) stays. Like the summary, the pill is shown only
+while the value is current (a stale check's summary says it is recomputing), in edit and view mode
+alike. Expanded, the head's summary shows the verdict as before.
 
 **Showing results.** `workspace.run` draws the summands of definitions and watches
 (`summands`, each with its word, degree, and SVG). A watch outlines summands that are new since

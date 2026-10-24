@@ -22,25 +22,25 @@ async function editDefinition(page: Page, text: string, commit: boolean) {
 test('committed edits update transitive watches and checks, undo and redo automatically', async ({ page }) => {
   await example(page);
   await editDefinition(page, 'def e := x_1', true);
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 3).getByTestId('verdict')).toHaveText('fails');
   await expect(cell(page, 2).getByTestId('summary')).toHaveText('2 terms, degrees 2 to 4');
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('holds');
+  await expect(cell(page, 3).getByTestId('verdict')).toHaveText('holds');
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 3).getByTestId('verdict')).toHaveText('fails');
 });
 
 test('editing a definition previews downstream results without Enter or Recompute', async ({ page }) => {
   await example(page);
   await editDefinition(page, 'def e := x_1', false);
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 3).getByTestId('verdict')).toHaveText('fails');
   await expect(cell(page, 2).getByTestId('summary')).toHaveText('2 terms, degrees 2 to 4');
   await expect(page.getByRole('button', { name: 'Recompute', exact: true })).toHaveCount(0);
   // A broken draft cannot leave a successful verdict visible either.
   await cell(page, 0).locator('.cm-content').fill('def e := x_1 +');
   await expect(cell(page, 3).getByTestId('summary')).not.toHaveText(/holds|fails/);
   await cell(page, 0).locator('.cm-content').press('Escape');
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('holds');
+  await expect(cell(page, 3).getByTestId('verdict')).toHaveText('holds');
 });
 
 test('removing an idempotent crossing on the canvas updates its dependents automatically', async ({ page }) => {
@@ -53,7 +53,7 @@ test('removing an idempotent crossing on the canvas updates its dependents autom
   await expect(canvas.locator('.hit-piece[data-draw="crossing"]')).toHaveCount(0);
   await canvas.getByTestId('canvas-back').click();
   await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 'e := x_1');
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 3).getByTestId('outcome')).toHaveText('fails');
   await expect(cell(page, 2).getByTestId('summary')).toHaveText('2 terms, degrees 2 to 4');
 });
 
@@ -68,7 +68,7 @@ test('drafts update solves and direct check edits, and committing persists the r
   await cell(page, 0).locator('.cm-content').press('Enter');
   await expect(page.getByTestId('draft-preview')).toHaveCount(0);
   await page.reload();
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 3).getByTestId('outcome')).toHaveText('fails');
   await expect(cell(page, 4).getByTestId('summary')).toHaveText('no solution');
   await cell(page, 3).locator('.head').click();
   await cell(page, 3).locator('.cm-content').fill('check idempotent(1)');

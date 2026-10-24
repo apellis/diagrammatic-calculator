@@ -53,14 +53,14 @@ test('private previews update dependents locally, and committed edits update a v
     await connected(mock, 2);
     await edit(a.page, 0, 'def e := psi_1 psi_2 psi_1 e(iji)');
     await edit(a.page, 1, 'check idempotent(e)');
-    await expect(cell(a.page, 1).getByTestId('summary')).toHaveText('holds');
-    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('holds');
+    await expect(cell(a.page, 1).getByTestId('verdict')).toHaveText('holds');
+    await expect(cell(b.page, 1).getByTestId('outcome')).toHaveText('holds');
     const before = Buffer.from(Y.encodeStateAsUpdate(mock.room(ID).doc));
     await cell(a.page, 0).getByTestId('cell-display').click();
     const editor = cell(a.page, 0).locator('.cm-content');
     await editor.fill('def e := x_1 e(iji)');
-    await expect(cell(a.page, 1).getByTestId('summary')).toHaveText('fails');
-    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('holds');
+    await expect(cell(a.page, 1).getByTestId('verdict')).toHaveText('fails');
+    await expect(cell(b.page, 1).getByTestId('outcome')).toHaveText('holds');
     expect(Buffer.from(Y.encodeStateAsUpdate(mock.room(ID).doc))).toEqual(before);
     await cell(a.page, 0).getByTestId('open-canvas').click();
     await expect(a.page.locator('.canvas .hit-piece[data-draw="dot"]')).toBeVisible();
@@ -72,12 +72,12 @@ test('private previews update dependents locally, and committed edits update a v
     expect(Buffer.from(Y.encodeStateAsUpdate(mock.room(ID).doc))).toEqual(before);
     await expect(cell(b.page, 1).locator('.head > .kind + .outcome')).toHaveText('holds');
     await editor.press('Enter');
-    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('fails');
+    await expect(cell(b.page, 1).getByTestId('outcome')).toHaveText('fails');
     // the viewer's collapsed check: computed (the dot), and fails (the pill)
     await expect(cell(b.page, 1).locator('.head > .kind + .outcome')).toHaveText('fails');
     await expect(cell(b.page, 1).getByTestId('cell-dot')).toHaveAttribute('title', 'Computed');
     await a.page.getByRole('button', { name: 'Undo', exact: true }).click();
-    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('holds');
+    await expect(cell(b.page, 1).getByTestId('outcome')).toHaveText('holds');
     await expect(cell(b.page, 1).locator('.head > .kind + .outcome')).toHaveText('holds');
   } finally { await a.context.close(); await b.context.close(); mock.dispose(); }
 });

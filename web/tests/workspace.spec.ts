@@ -43,8 +43,8 @@ test('solve and check cells, and parse errors', async ({ page }) => {
   // one that parses but names nothing known is written, and its error shown
   await addCell(page, 'watch foo_1');
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('4 solutions');
-  await expect(cell(page, 2).getByTestId('summary')).toHaveText('holds');
-  await expect(cell(page, 3).getByTestId('summary')).toHaveText('fails');
+  await expect(cell(page, 2).getByTestId('outcome')).toHaveText('holds');
+  await expect(cell(page, 3).getByTestId('outcome')).toHaveText('fails');
   await expect(cell(page, 4).getByTestId('summary')).toHaveText('error');
   await cell(page, 1).locator('.head').click();
   await expect(cell(page, 1).getByTestId('outcome')).toHaveText('4 solutions');
@@ -124,7 +124,7 @@ test('export to .dcw and import it back', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'def a:=psi_1   e(iji)');
   await addCell(page, 'check idempotent(a a)');
-  await expect(cell(page, 1).getByTestId('summary')).toHaveText('holds');
+  await expect(cell(page, 1).getByTestId('verdict')).toHaveText('holds');
   await page.keyboard.press('Escape');
   const download = page.waitForEvent('download');
   await page.keyboard.press('ControlOrMeta+Shift+S');
@@ -136,7 +136,7 @@ test('export to .dcw and import it back', async ({ page }) => {
   await page.getByRole('button', { name: 'Import .dcw or .dch…' }).click();
   await (await chooser).setFiles({ name: 'mine.dcw', mimeType: 'text/plain', buffer: Buffer.from(text) });
   await expect(page.locator('.topbar .name')).toHaveText('mine');
-  await expect(cell(page, 1).getByTestId('summary')).toHaveText('holds');
+  await expect(cell(page, 1).getByTestId('outcome')).toHaveText('holds');
 });
 
 test('a history file (.dch) imports as a document with its versions, snapshots, and AI timeline', async ({ page }) => {
@@ -242,8 +242,10 @@ test('pinning a result keeps a snapshot', async ({ page }) => {
 test('the gate example: idempotents of a cyclotomic quotient', async ({ page }) => {
   await page.goto('/');
   await page.locator('[data-example="klr-a2-idempotents"]').click();
+  // collapsed checks show their verdict once, in the pill beside the kind, not in the summary
   const summaries = page.locator('.cell[data-cell] [data-testid=summary]');
-  await expect(summaries).toHaveText(['', '2 terms', '2 terms, degree 0', '4 solutions', '1 term', '2 terms', 'holds', 'holds', 'holds', 'holds', 'holds', 'holds', '1 term, degree 0'], { timeout: 30_000 });
+  await expect(summaries).toHaveText(['', '2 terms', '2 terms, degree 0', '4 solutions', '1 term', '2 terms', '1 term, degree 0'], { timeout: 30_000 });
+  await expect(page.locator('.cell[data-cell] [data-testid=outcome]')).toHaveText(['holds', 'holds', 'holds', 'holds', 'holds', 'holds']);
   // the quotient's notes under the badge are typeset
   const watch = page.locator('.cell[data-cell]').nth(2);
   await watch.locator('.head').click();

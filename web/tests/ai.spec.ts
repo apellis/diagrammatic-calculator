@@ -205,7 +205,7 @@ test('a multi-step AI request undoes as one step; pinned watches sit at the top 
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('chat')).toContainText('e is idempotent.');
   await expect(page.locator('.cell[data-cell]:not([data-cell="new"])')).toHaveCount(3);
-  await expect(cell(page, 2).getByTestId('summary')).toHaveText('holds');
+  await expect(cell(page, 2).getByTestId('outcome')).toHaveText('holds');
   await expect(page.getByTestId('pinned').locator('.t')).toHaveAttribute('data-text', /e e - e/);
   await page.getByTestId('activity-tab').click();
   await expect(page.getByTestId('timeline').locator('.tl-milestone')).toContainText('e e - e = 0 and the check holds.');

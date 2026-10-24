@@ -74,14 +74,18 @@ function Elapsed(props: { since?: number }) {
  * The one-line summary of a cell's value, for collapsed cells and the outline: what the value is,
  * how long it has been computing, and a mark when the value rests on an open hypothesis.
  */
-export function Summary(props: { state?: CellState; small?: boolean }) {
-  const c = () => (props.state?.status === 'fresh' && ok(props.state.value) ? certainty(props.state.value) : null);
+export function Summary(props: { state?: CellState; small?: boolean; withoutVerdict?: boolean }) {
+  // with `withoutVerdict`, a current yes/no verdict and its mark are left to the `Outcome` pill
+  const pilled = () => !!props.withoutVerdict && !!verdictOf(props.state);
+  const c = () => (props.state?.status === 'fresh' && ok(props.state.value) && !pilled() ? certainty(props.state.value) : null);
   const running = () => props.state?.status === 'running' || props.state?.status === 'stale';
   return (
     <span class="summary-wrap" classList={{ small: props.small }}>
-      <span class="summary" data-testid="summary" classList={{ fails: !!props.state && ok(props.state.value) && props.state.value.kind === 'check' && !props.state.value.holds && props.state.status === 'fresh' }}>
-        {props.state ? summary(props.state) : ''}
-      </span>
+      <Show when={!pilled()}>
+        <span class="summary" data-testid="summary" classList={{ fails: !!props.state && ok(props.state.value) && props.state.value.kind === 'check' && !props.state.value.holds && props.state.status === 'fresh' }}>
+          {props.state ? summary(props.state) : ''}
+        </span>
+      </Show>
       <Show when={running()}><Elapsed since={props.state?.since} /></Show>
       <Show when={c()?.mark}>{(m) => <span class="cond-mark" title={c()!.text}>{m()}</span>}</Show>
       <Show when={props.state && ok(props.state.value) && props.state.value.warnings?.length}>
@@ -108,16 +112,18 @@ export function dotTitle(s?: CellState): string {
   }
 }
 
+/** A current yes/no result (a check's value), whose verdict `Outcome` shows; null otherwise. */
+export function verdictOf(s?: CellState): Ok | null {
+  return s && s.status === 'fresh' && !s.parseError && ok(s.value) && typeof s.value.holds === 'boolean' ? s.value : null;
+}
+
 /**
  * The verdict of a current yes/no result (a check) as a small pill, "holds" or "fails", with the
  * same mark as the summary when the verdict rests on an open hypothesis. Nothing while the value
  * is not current: a stale verdict is never shown.
  */
 export function Outcome(props: { state?: CellState }) {
-  const r = () => {
-    const s = props.state;
-    return s && s.status === 'fresh' && !s.parseError && ok(s.value) && typeof s.value.holds === 'boolean' ? s.value : null;
-  };
+  const r = () => verdictOf(props.state);
   const c = () => (r() ? certainty(r()!) : null);
   return (
     <Show when={r()}>

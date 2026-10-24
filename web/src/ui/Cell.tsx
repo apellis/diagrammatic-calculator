@@ -212,7 +212,8 @@ export function Cell(props: CellProps) {
           </Show>
           </Show>
         </span>
-        <Summary state={props.state} />
+        {/* collapsed, a check's verdict is shown once, in the pill */}
+        <Summary state={props.state} withoutVerdict={!props.expanded} />
       </div>
       <Show when={props.expanded}>
         <div class="body" id={`body-${props.id}`}>
