@@ -82,7 +82,7 @@ test('changing the context recomputes every cell, and a bad context is refused',
   await expect(page.locator('.pop .error')).toBeVisible();
 });
 
-test('history: versions, read-only view and restore', async ({ page }) => {
+test('history: versions, read-only view, and restore', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'watch x_1 e(ij)');
   await addCell(page, 'watch x_2 e(ij)');
@@ -102,7 +102,7 @@ test('history: versions, read-only view and restore', async ({ page }) => {
   await expect(items.first()).toHaveAttribute('data-note', /^restore version/);
 });
 
-test('documents persist across reloads, and the list can rename, duplicate and delete', async ({ page }) => {
+test('documents persist across reloads, and the list can rename, duplicate, and delete', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'watch x_1 x_1 e(iij)');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term, degree 4');
@@ -139,7 +139,7 @@ test('export to .dcw and import it back', async ({ page }) => {
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('holds');
 });
 
-test('a history file (.dch) imports as a document with its versions, snapshots and AI timeline', async ({ page }) => {
+test('a history file (.dch) imports as a document with its versions, snapshots, and AI timeline', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'watch x_1 psi_1 e(iij)');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('2 terms, degree 0');

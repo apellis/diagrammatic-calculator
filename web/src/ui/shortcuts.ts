@@ -1,6 +1,6 @@
 // Keyboard shortcuts of the workspace: the main ones can be rebound on the settings page. The
 // bindings are kept in this browser (only those changed from the defaults) and read here by every
-// key handler, the command palette and the shortcut sheets.
+// key handler, the command palette, and the shortcut sheets.
 import { createSignal } from 'solid-js';
 import { isMac, mod } from '../app';
 
@@ -104,7 +104,7 @@ export function matches(e: KeyboardEvent, c: Combo): boolean {
   if (isMac && mods.has('Ctrl') !== e.ctrlKey) return false;
   if (mods.has('Alt') !== e.altKey) return false;
   const letter = /^[A-Z0-9]$/.test(key);
-  // Shift is part of a symbol such as ? (Shift+/): it counts only for letters, digits and named keys
+  // Shift is part of a symbol such as ? (Shift+/): it counts only for letters, digits, and named keys
   if ((letter || key.length > 1) && mods.has('Shift') !== e.shiftKey) return false;
   if (letter) return e.key.toUpperCase() === key || e.code === (/[0-9]/.test(key) ? `Digit${key}` : `Key${key}`);
   return e.key === key;
@@ -164,7 +164,7 @@ export function problem(id: ActionId, c: Combo): string | null {
   const other = ACTIONS.find((x) => x.id !== id && binding(x.id) === c);
   if (other) return `${label(c)} is already the shortcut for ${lower(other.name)}.`;
   const plain = !mods.has('Mod') && !mods.has('Ctrl') && !mods.has('Alt');
-  if (plain && a.anywhere) return `${a.name} also works while you type in a cell, so it needs ${isMac ? '⌘, ⌃ or ⌥' : 'Ctrl or Alt'}.`;
+  if (plain && a.anywhere) return `${a.name} also works while you type in a cell, so it needs ${isMac ? '⌘, ⌃, or ⌥' : 'Ctrl or Alt'}.`;
   if (plain && ['Enter', 'Tab', 'Space', 'Backspace', 'Delete'].includes(key)) return `${label(c)} is needed for moving around and editing.`;
   if (plain && key.startsWith('Arrow')) return 'The arrow keys move between cells and pieces.';
   return null;

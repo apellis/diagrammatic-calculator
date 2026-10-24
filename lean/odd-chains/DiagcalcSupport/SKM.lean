@@ -1,7 +1,7 @@
 /-
 Support for the exported chains of the super Kac–Moody 2-category (hand-written): positional
 tactics for odd-lean's normal-form diagrams `cl D Sc μ s t L`, after categorification-lean's
-`dnorm`, `dswap` and `schain` for the even calculus, with the Koszul sign of each interchange,
+`dnorm`, `dswap`, and `schain` for the even calculus, with the Koszul sign of each interchange,
 and the simp sets that evaluate the signs `zsign k p` once the parities of the colours are known.
 -/
 import OddMath.SKM.Rewriting

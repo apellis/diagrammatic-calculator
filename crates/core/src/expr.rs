@@ -6,7 +6,7 @@
 //! and, in a 2-category, the pairing `h(a)` = ⟨h_a, λ⟩ with a region's weight λ: for a generator's
 //! degree the region just right of the generator, for a relation the region right of the whole
 //! relation. Conditions: `a = b`, `a != b`, comparisons of integer expressions
-//! (`(a,b) = 0`, `a_ab <= -2`), `and`, `or`, `not` and parentheses.
+//! (`(a,b) = 0`, `a_ab <= -2`), `and`, `or`, `not`, and parentheses.
 
 use crate::error::{Error, Result};
 
@@ -516,9 +516,9 @@ impl P<'_> {
 }
 
 /// An integer expression inside a term: exponents `x_1^{h(i) - 1 - f}`, the bounds of sums
-/// `sum_{f=0..h(i)-1}` and the labels of bubbles. Names are resolved when the term is
+/// `sum_{f=0..h(i)-1}`, and the labels of bubbles. Names are resolved when the term is
 /// elaborated: a name is a summation index or an integer variable of a relation; `h(c)` is the
-/// pairing ⟨h_c, μ⟩ with the weight of the rightmost region, `p(c)` the parity and `a_cd` the
+/// pairing ⟨h_c, μ⟩ with the weight of the rightmost region, `p(c)` the parity, and `a_cd` the
 /// Cartan entry ⟨h_c, α_d⟩, for colours or colour variables `c`, `d` (one letter each in `a_cd`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TermInt {

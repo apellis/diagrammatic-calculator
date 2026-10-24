@@ -12,7 +12,7 @@ describe('certificate prose', () => {
     expect(proseHtml('Q_ab != 0')).toContain('≠');
   });
 
-  it('leaves names, versions and plain words alone', () => {
+  it('leaves names, versions, and plain words alone', () => {
     expect(formulas('Q = klq2 (the default)')).toBe(0);
     expect(formulas('Khovanov-Lauda, arXiv:0807.3250, Proposition 3.11 and Theorem 1.2')).toBe(0);
     expect(formulas('odd-lean: EvenBridge.nondegeneracyConjecture_of_isEven and SKM theorem_8_1')).toBe(0);

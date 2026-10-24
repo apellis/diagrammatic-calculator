@@ -615,7 +615,7 @@ mod tests {
     }
 
     /// Even colours, where this is the session's representation with a Lean certificate: every
-    /// relation in types A1, A2, B2 and G2 at the conformance checker's weights, against the
+    /// relation in types A1, A2, B2, and G2 at the conformance checker's weights, against the
     /// translation into `kl`.
     #[test]
     fn relations_have_equal_normal_forms_even() {

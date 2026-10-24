@@ -30,7 +30,7 @@ async function legacy() {
   return { o, data };
 }
 
-it('owner migration preserves detached source, private recovery and legacy personal branches', async () => {
+it('owner migration preserves detached source, private recovery, and legacy personal branches', async () => {
   const { o, data } = await legacy();
   const api = new Api(); let current = { data, version: 1, generation: 0, role: 'owner' as const };
   const uploads = personalApi(api);

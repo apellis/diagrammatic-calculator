@@ -57,7 +57,7 @@ export interface Identity {
   email_verified?: boolean;
 }
 
-/** A Google account server: an RSA key, its JWKS, authorization codes and the token endpoint. */
+/** A Google account server: an RSA key, its JWKS, authorization codes, and the token endpoint. */
 export class FakeGoogle {
   kid = 'key-1';
   keys!: CryptoKeyPair;
@@ -126,7 +126,7 @@ export interface Mail {
   auth: string | null;
 }
 
-/** Everything a test needs: the API with its storage, Google, Resend and a clock. */
+/** Everything a test needs: the API with its storage, Google, Resend, and a clock. */
 export class World {
   clock = Date.UTC(2026, 9, 23, 12);
   mails: Mail[] = [];

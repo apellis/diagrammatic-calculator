@@ -1,5 +1,5 @@
 // Test-only phase-6 byte-store substitute for LIVE. The old accounts suite exercises CAS,
-// quotas and auth with arbitrary bytes, not Yjs. Real room semantics live in live/*.test.ts.
+// quotas, and auth with arbitrary bytes, not Yjs. Real room semantics live in live/*.test.ts.
 import type { Session } from './auth';
 import { randomToken } from './crypto';
 import { LIMITS, need, ownerBytes, cleanName, type Access } from './docs';

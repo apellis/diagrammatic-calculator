@@ -45,7 +45,7 @@ test('phone document actions fit beside a readable name and export a reusable wo
 test('AI settings explain saving and guard Back without autosaving', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#/settings');
-  await expect(page.getByText('Appearance, shortcuts and the context confirmation save automatically.')).toBeVisible();
+  await expect(page.getByText('Appearance, shortcuts, and the context confirmation save automatically.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save AI settings', exact: true })).toBeVisible();
   const budget = page.getByTestId('ai-budget');
   await budget.selectOption('250000');

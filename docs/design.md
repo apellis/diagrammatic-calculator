@@ -9,7 +9,7 @@ The calculator is for diagrammatic algebras in general, not for KLR algebras alo
 describe a presentation of a strict monoidal supercategory:
 
 - **colours**, each with a parity and an orientation mode; objects are words in signed colours;
-- **generators**, each with a source word, a target word, a degree and a parity, possibly given as
+- **generators**, each with a source word, a target word, a degree, and a parity, possibly given as
   schemas over colour variables (a KLR crossing `psi` of colours `a, b` has source `a b`, target
   `b a`, degree `-(a,b)`);
 - **relations** as schemas with side conditions and parameters;
@@ -17,7 +17,7 @@ describe a presentation of a strict monoidal supercategory:
   every other region's weight follows from the strands to its right, so degrees (`h(a)`) and side
   conditions can depend on the region without words storing weights.
 
-Nothing in `crates/core` may assume that a presentation is KLR, nilHecke or of any other family.
+Nothing in `crates/core` may assume that a presentation is KLR, nilHecke, or of any other family.
 What a family needs beyond its presentation file plugs in through one trait per strategy:
 
 | Strategy | Trait | First implementations |
@@ -32,7 +32,7 @@ A representation is attached to a presentation in its file (`[representation]` s
 built-in action kind and mapping each generator to an operator of that kind; the file also states
 the representation's faithfulness certificate. A new family (webs, Temperley–Lieb, Soergel
 diagrammatics, Heisenberg categories) needs a new presentation file and, only if no existing action
-kind fits, a new representation module. The term model, the formats, the operation API and the user
+kind fits, a new representation module. The term model, the formats, the operation API, and the user
 interface do not change.
 
 ## Rings as contexts
@@ -40,7 +40,7 @@ interface do not change.
 Ring arithmetic goes through a context object rather than through operator overloading on element
 types: `ring.add(&a, &b)`, `ring.mul(&a, &b)`. This lets one element type serve rings that need
 run-time data (the prime of ℤ/p, the relations among parameters such as π² = 1, the variables of a
-polynomial ring) and keeps every ring behind one trait, `Ring`. The phase 1 rings are ℤ, ℚ, ℤ/p and
+polynomial ring) and keeps every ring behind one trait, `Ring`. The phase 1 rings are ℤ, ℚ, ℤ/p, and
 ℤ[√−1]; polynomial rings over any of them (commutative or skew) are rings in the same sense.
 
 ## Terms
@@ -78,7 +78,7 @@ use: show a quick result first from a faster method that may not be correct, mar
 pending reduction (a shimmer), and replace it with the normal form when that finishes. The quick
 result is never reported as decided. Not planned unless timings force it.
 
-A certificate's status is one of `lean`, `literature`, `conditional`, `assumed` or
+A certificate's status is one of `lean`, `literature`, `conditional`, `assumed`, or
 `unknown`. `conditional` means equal normal forms are proven equal, while distinct normal forms
 differ only under a named open hypothesis; results that rely on it say so, and the UI marks them
 like `assumed` results.
@@ -120,7 +120,7 @@ one generator); a translation that would need more is refused with a reason.
 Rouquier and Khovanov–Lauda definitions (arXiv:1501.00350) and KL III nondegeneracy. It is the
 second representation, after the BE2 basis normal form below, which is about ten times faster on
 the same diagrams; it stays as a cross-check (`--strategy kl-translation`). The conformance checker
-checks every relation of `be2` through both, in types A1, A2, B2 and G2 at every test weight. A
+checks every relation of `be2` through both, in types A1, A2, B2, and G2 at every test weight. A
 translation that does not apply in a context (odd colours, no `mu=`) is skipped, and the
 conformance report lists it as unchecked. For odd colours the relations are checked through the
 BE2 basis normal form, and those that define the leftward cups and caps and the downward dots and
@@ -138,7 +138,7 @@ The decompositions come from the presentation's `decompose-*` and `mixed-*` rela
 upward diagram is an element of `R(ν) ⊗ Π`: the KLR polynomial representation, with the
 clockwise bubbles of a reference region as extra variables. `Φ` is evaluated run by run:
 
-- A run of cups `1 → FE`, caps `EF → 1`, dots and crossings (type RL) takes right-sorted
+- A run of cups `1 → FE`, caps `EF → 1`, dots, and crossings (type RL) takes right-sorted
   coordinates to left-sorted ones. It straightens `q_k ≫ run ≫ p'_r` to an upward diagram and
   closes the bent strands with right partial traces (curls, bubble slides).
 - A run of the opposite type (LR) goes back with left partial traces.
@@ -179,10 +179,10 @@ evaluations of the basis words of a hom space in a degree, brought to echelon fo
 the context and the hom space, not on the term being normalised, and cost almost all of the time.
 They are kept in a least-recently-used cache that outlives one evaluator (in the browser, everything
 one worker computes): at most 64 hom spaces and 200,000 coefficients. The key holds the strategy
-and representation names, the ground ring's type and the complete debug form of the context
+and representation names, the ground ring's type, and the complete debug form of the context
 (presentation, specification, colours and parities, Cartan datum, weights, `μ`, parameters,
 scalars, the ground ring with its run-time data), compared in full, plus the source, target,
-degree and the numbers of dot and bubble variables. The tests change each component and check
+degree, and the numbers of dot and bubble variables. The tests change each component and check
 that the cache is missed, and check that a hit gives the same normal form as no cache.
 
 ### The BE2 basis normal form (`rep/skm`, representation kind `skm-basis`)
@@ -219,10 +219,10 @@ condition for the Nondegeneracy Conjecture; a failure would contradict it and is
 error), and the target to lie in their span (BE2 Theorem 8.1). With an odd colour the
 certificate is `conditional`, as for the quiver Hecke basis. When every colour is even the
 conjecture is a theorem (odd-lean `EvenBridge.nondegeneracyConjecture_of_isEven`, for Khovanov–Lauda
-scalars, a symmetrizable Cartan datum with finitely many colours and any commutative ground ring),
+scalars, a symmetrizable Cartan datum with finitely many colours, and any commutative ground ring),
 so the representation declares a second certificate, `even_certificate`, with status `lean`, and
 results in such a context carry it: this is the session's representation for even data. The tests
-check every relation in types A1, A2, B2 and G2 at the conformance checker's weights, plain and
+check every relation in types A1, A2, B2, and G2 at the conformance checker's weights, plain and
 next to a strand of each colour and orientation, against the translation into `kl`: both sides'
 normal forms are identical to KL's, written in `be2`'s names (with every colour even a bubble's
 dots are drawn where KL's basis puts them), and each strategy fixes the other's normal form; so
@@ -234,7 +234,7 @@ it as the rotated upward crossing), declared `even_only`, and refuses a `Q` othe
 `klq2` as KL's evaluation does. Under the renaming of the roles the two presentations agree for
 even colours and these scalars (Brundan, arXiv:1501.00350), so the certificate is KL's. KL's own
 evaluation stays as the second representation, `kl-evaluation`; the tests check that the two give
-exactly the same normal forms on both sides of every relation of `kl` in types A1, A2, B2 and G2 at
+exactly the same normal forms on both sides of every relation of `kl` in types A1, A2, B2, and G2 at
 the conformance checker's weights, on every basis word of up to three strands, and on composites
 with curls and bubbles. The BE2 evaluation is several times faster: its upward diagrams are sums
 `Σ ψ_ŵ f` straightened by the quiver Hecke relations, where KL's are operators on polynomials
@@ -252,7 +252,7 @@ Nothing in it is specific to KLR algebras: a new family needs only an evaluator 
 basis, and a cyclotomic quotient needs a generator in the role `dot`. Every result names the
 quotient and the degrees computed.
 
-A quotient is itself an `Evaluator`, so a context with `Lambda`, `dotcap` or `degcap` runs every
+A quotient is itself an `Evaluator`, so a context with `Lambda`, `dotcap`, or `degcap` runs every
 operation in the quotient and its provenance says so. The ideal's degree-`d` part is spanned by the
 sandwiches `ψ_u g ψ_w` of degree `d` and dot multiples of lower parts, which needs only that the
 words `x^a ψ_w` and `ψ_w x^a` both span. A cyclotomic quotient `R^Λ(ν)` is graded symmetric with
@@ -266,20 +266,20 @@ expansion; a component above an explicit `degcap` is rejected unless vanishing i
 known. Quotients without a known global bound compute requested pieces on demand and do not
 claim whole-algebra completeness. Whole-basis and graded-dimension enumeration still require a
 finite window. KL and BE2 bubble-variable allocation grows on demand, without the former fixed
-retry ceiling; address-space, runtime and memory limits remain operational constraints.
+retry ceiling; address-space, runtime, and memory limits remain operational constraints.
 
 ## Linear algebra toolkit and solving
 
 `linalg.rs` does exact linear algebra over any field, ranks over domains, Hermite and Smith forms
-over ℤ, word-size elimination over 𝔽_p and multimodular elimination over ℚ. `toolkit.rs` works on
+over ℤ, word-size elimination over 𝔽_p, and multimodular elimination over ℚ. `toolkit.rs` works on
 any `Graded` algebra (a truncated ambient algebra or a quotient): bases, multiplication and Gram
 matrices, the centre, the radical by the trace form, the semisimple quotient, blocks, idempotent
-lifting and the primitivity test, each refusing inputs that break its preconditions (for example
+lifting, and the primitivity test, each refusing inputs that break its preconditions (for example
 the trace-form radical needs characteristic 0 and a complete finite algebra).
 
 `solve.rs` solves `lhs = rhs` for unknown scalars: the coefficients of the normal form of
 `lhs − rhs` are the equations. Linear systems are solved exactly (tier 1); others go to
-`groebner.rs` (tier 2), whose basis-size, degree and step limits make running out of budget an
+`groebner.rs` (tier 2), whose basis-size, degree, and step limits make running out of budget an
 answer rather than a hang. Over ℚ the step count bounds operations but not coefficient growth, so
 wall time is not bounded there; prime fields do not have this problem.
 
@@ -338,7 +338,7 @@ odd generators in `kl3-dg`) instead of exporting something weaker.
 
 A chain rewrites each side by one of three strategies: `straighten` (to the basis of crossings and
 dots, the KLR default), `shrink` (rules whose replacement words are all shorter than the pattern,
-until none applies) or `once` (one step of the named relations, which checks the presentation's
+until none applies), or `once` (one step of the named relations, which checks the presentation's
 reading of that relation against the library's lemma). For `shrink` and `once` the exporter checks
 that both ends have the same normal form under the presentation's equality strategy.
 
@@ -356,7 +356,7 @@ definition and prints each relation, with its side condition, in the calculator'
 rest of a presentation file (degrees, parities, drawing, representations and their certificates,
 the Lean lemma table) has no counterpart in the Lean definition, so the file stays hand-written.
 Instead the printed relations guard it: a Rust test checks that each one, at every colouring its
-side condition allows in types A₂, B₂, G₂ and A₃, is one of the calculator's rules up to sign and
+side condition allows in types A₂, B₂, G₂, and A₃, is one of the calculator's rules up to sign and
 vanishes in the representation, and that every relation of the file arises this way; CI checks
 that the printed file is current.
 
@@ -379,7 +379,7 @@ needs it.
 
 ## Web app
 
-`web/` is the browser workspace (phase 4a): Vite, TypeScript and Solid. Solid won a small trial
+`web/` is the browser workspace (phase 4a): Vite, TypeScript, and Solid. Solid won a small trial
 against Preact on what the workspace does most, a keyed list of SVG diagrams: rendering 1000
 summands took 171 ms against 216 ms, a diff update of 10% of them 39 ms against 47 ms, and the
 bundle was 5.0 KB against 8.4 KB gzipped (headless Chromium, median of five).
@@ -393,15 +393,15 @@ worker. Requests and responses are typed by `src/engine/ops.gen.ts`, generated f
 (`npm run gen-ops`; CI checks it is current).
 
 **Document.** `src/doc/model.ts`: a shared Yjs document holding the context, committed cells,
-pinned snapshots, proposals and activity. Each cell has an immutable UUID, a repairable public ID
-and committed `Y.Text`; `cellOrder` orders UUIDs. The UI keys rows, private drafts and focus by UUID,
+pinned snapshots, proposals, and activity. Each cell has an immutable UUID, a repairable public ID,
+and committed `Y.Text`; `cellOrder` orders UUIDs. The UI keys rows, private drafts, and focus by UUID,
 resolving the current public ID only when an operation runs. `Doc.step` supplies session-specific
 undo origins. A separate private Yjs sidecar holds personal branches and recovery: the latest 50
 automatic steps plus explicitly retained checkpoints, not every intermediate edit. Both are stored in
 IndexedDB (`y-indexeddb`) with an index for the document list; `.dcw` export and import go through
 `workspace.parse`, so the file is canonical. A `.dch` file holds the history (`spec/history.md`);
 importing one rebuilds the document version by version (`src/doc/dcw.ts`): each version's
-workspace becomes the document's state, recorded as a version with its author, note and time; the
+workspace becomes the document's state, recorded as a version with its author, note, and time; the
 snapshots and the AI timeline come along, entries that cannot be read are left out and counted in
 a message, and new cells take numbers no version used. A document linked to a file on disk (Chrome,
 Edge) keeps the file handle in IndexedDB (`diagcalc-links`), so after a reload it saves to the file
@@ -410,7 +410,7 @@ bar until the person allows it (browsers ask once per visit).
 
 **Cell creation.** `src/ui/NewCell.tsx` owns the visible kind picker and local per-kind drafts.
 The existing text editor retains direct commands and slash shortcuts. The composer validates
-before committing and invalidates pending submissions when the draft, context or mode changes,
+before committing and invalidates pending submissions when the draft, context, or mode changes,
 or when it is cancelled or unmounted. The parent makes one undoable document insertion; drawing
 continues in the same focus canvas used by existing definitions, not a separate diagram format.
 `DiagramStart` reads available boundaries from `context.describe`, defaults to its first object,
@@ -421,7 +421,7 @@ cannot escape its context/selection snapshot. Switching Type/Draw keeps an unfin
 New-cell text never commits on blur: moving to the outline or another control leaves the draft
 private until an explicit submission. Existing-cell edits retain their commit-on-leave behavior.
 The composer has one stable key among the cell rows: choosing another insertion position moves
-the same component, preserving text, names, per-kind drafts and the drawing boundary. Moving it
+the same component, preserving text, names, per-kind drafts, and the drawing boundary. Moving it
 invalidates any pending submission validated at the previous position.
 Explicit submission and cancellation restore keyboard focus only when the editor still owns it;
 late validation must not take focus back from another control. Validation feedback is associated
@@ -433,7 +433,7 @@ details describe the current committed context, not an unsubmitted choice. Phone
 the context and scratch-branch input fields visible; only top-level toolbar spacers are hidden.
 
 **Evaluation.** `src/eval/evaluator.ts`. A cell's result is keyed by a hash of its inputs: the
-engine build, the context, the unknowns it mentions, its text and the keys of the definitions it
+engine build, the context, the unknowns it mentions, its text, and the keys of the definitions it
 uses. An edit changes the keys of exactly the cells downstream of it, so every other cell, and
 every state reached again by undo, is a cache hit (`src/eval/cache.ts`: memory, then IndexedDB
 with a size cap and least-recently-used eviction). A cell with a new key is computed by
@@ -443,7 +443,7 @@ a whole `.dcw` file the same way: each cell's context has only the unknowns that
 definitions it uses, mention, so an unrelated solve cell never turns a cell's coefficients into
 polynomials.
 
-Input changes invalidate displayed results synchronously, before parsing, cache reads or remote
+Input changes invalidate displayed results synchronously, before parsing, cache reads, or remote
 coalescing. Once keys are known, unaffected cells reuse their values without new engine jobs.
 Stale checks and solves show only computation progress, never the previous verdict or solution.
 An unparseable cell conservatively blocks later computational cells: skipping it could resolve a
@@ -453,7 +453,7 @@ reads and frozen snapshots; exports still read the document. Discarding a draft 
 results without writing the document. Preview results cannot be pinned or used for canvas writes.
 
 **Showing results.** `workspace.run` draws the summands of definitions and watches
-(`summands`, each with its word, degree and SVG). A watch outlines summands that are new since
+(`summands`, each with its word, degree, and SVG). A watch outlines summands that are new since
 its previous value, shows the vanished ones faded for two seconds, and lists the changes under
 "Changed". Every result carries a compact "How computed" disclosure containing its equality
 strategy and certificate. Dependent odd BE2 results say "Assuming nondegeneracy" without
@@ -491,10 +491,10 @@ example, and latency. On the development container a computed edit shows its new
 **Focus canvas (4b).** `src/ui/Canvas.tsx` with the geometry in `src/canvas/geometry.ts`. It
 edits a definition's term as written; a term that uses definitions is drawn written
 out, and a gesture writes it out in full. Watches and viewer canvases are read-only: no editing
-gestures, previews, insertion palette, editing cursors or editing help. Selection for inspection
-and AI questions, pan and zoom remain available. The drawing comes from `term.layout`: one frame per
+gestures, previews, insertion palette, editing cursors, or editing help. Selection for inspection
+and AI questions, pan, and zoom remain available. The drawing comes from `term.layout`: one frame per
 summand, with pieces (layer, generator, box, strand positions), strands with colours and
-directions, lines to draw and the heights between rows. Layers are drawn at the lowest height
+directions, lines to draw, and the heights between rows. Layers are drawn at the lowest height
 their dependencies allow, two consecutive layers sharing a height only when the earlier is left of
 the later and their canonical order agrees, so a canonical word is drawn at its canonical levels
 and any other order is reached by adjacent interchanges whose Koszul signs `term.layout`
@@ -608,15 +608,15 @@ the branch's text and is reported. Any version opens as a branch.
 (bundled with `?raw`; `diagcalc skill` prints the same file). The tools are the workspace
 operations in `src/ai/tools.ts` and the term operations generated from `spec/ops/` into
 `src/ai/optools.gen.ts` (`npm run gen-ops`: references inlined, `context` optional and filled from
-the document). The loop (`src/ai/agent.ts`) streams each turn, runs the tool calls in the page and
+the document). The loop (`src/ai/agent.ts`) streams each turn, runs the tool calls in the page, and
 sends the results back, up to 40 turns a request. With Anthropic it uses the official SDK with its
 browser opt-in, Claude Opus 5.5 by default, adaptive thinking with summaries, an effort level, and
-cache breakpoints on the system prompt, the tool list and the conversation. Tool inputs stream
+cache breakpoints on the system prompt, the tool list, and the conversation. Tool inputs stream
 eagerly, so each input is checked against its schema in the page before it runs, and turns cut
 off at the length limit or refused never run their tools. Workspace edits are steps with the AI as
 author and the model's note; a whole request undoes as one (the undo manager's capture window is
 held open for the request). Removing a cell and accepting a branch are only proposed, as cards the
-person accepts or rejects. Every request, step, note, milestone and proposal is logged in the
+person accepts or rejects. Every request, step, note, milestone, and proposal is logged in the
 document's activity timeline (`Doc.timeline`). Pinned watches show at the top of the outline with
 their term counts over the session.
 
@@ -644,13 +644,13 @@ Open for the snapshot dialog, so a later edit never changes what a milestone rep
 
 OpenAI is called through its Responses API (`store: false`); a local OpenAI-compatible server
 speaks the chat-completions protocol. Both stream through the SSE parser in
-`src/ai/provider-stream.ts`, including text, tool calls and usage. The Responses adapter requests
+`src/ai/provider-stream.ts`, including text, tool calls, and usage. The Responses adapter requests
 encrypted reasoning and retains the ordered provider output in memory alongside each assistant
 content array, so later tool/user turns replay the original reasoning and tool arguments. This
-continuation data is not rendered, serialized or synchronized; it lasts only as long as the
+continuation data is not rendered, serialized, or synchronized; it lasts only as long as the
 conversation. Compatible servers returning JSON instead of SSE still work; a server rejecting
 the streaming request reports its error rather than silently retrying a potentially billed call.
-The provider, model, effort and key are set on the settings page
+The provider, model, effort, and key are set on the settings page
 (`#/settings`, reached from the document list or from the panel, which links there while no
 provider is set up); the panel itself only chats. "Check the connection" there makes the kind of call the chat
 makes (for OpenAI a Responses request of a few tokens to the chosen model; for Anthropic and a
@@ -665,7 +665,7 @@ typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay
 device" is ticked, and go only to the chosen provider. The first time the panel opens it says what
 leaves the browser (there is no per-document switch: nothing is sent unless one writes to the AI).
 Replies are shown as formatted text by `src/ui/markdown.ts`: a small, escaped Markdown subset
-(paragraphs, headings, lists, emphasis, code spans and fenced code in the fixed-width font) with
+(paragraphs, headings, lists, emphasis, code spans, and fenced code in the fixed-width font) with
 LaTeX mathematics (`\(…\)`, `$…$`, `\[…\]`, `$$…$$`) typeset by KaTeX in the same style as the
 rest of the app.
 
@@ -685,16 +685,16 @@ shortcut sheet) can be rebound: Change listens for the next combination, which i
 is fixed (undo, redo, commit, Esc, Tab, select all), already taken, a plain key for an action that
 also works while typing in a cell, or a key needed for moving around. Only bindings that differ
 from the defaults are kept, in local storage (`diagcalc.shortcuts`); every key handler, the
-palette and the sheets read them. The AI section has "Ask before the AI changes a document's
+palette, and the sheets read them. The AI section has "Ask before the AI changes a document's
 context" (`diagcalc.ai.askBeforeContext`, off by default): when on, `context_set` on one's own
 document becomes a proposal like the changes the AI makes to someone else's document.
 
 **Tests (4b).** Unit tests for the canvas geometry, branches and merging, AI tool schemas,
-validation and the chat-completions translation. Playwright drives the gestures (drag-slide,
+validation, and the chat-completions translation. Playwright drives the gestures (drag-slide,
 keyboard paths, insert and remove, odd interchange signs, look-only moves), branches (leave,
-reopen, accept, undo, discard) and the AI panel against a recorded model: requests to the
+reopen, accept, undo, discard), and the AI panel against a recorded model: requests to the
 Messages API are answered with scripted streamed turns, so a what-if on a branch runs end to end,
-including the request's headers, caching and thinking settings.
+including the request's headers, caching, and thinking settings.
 
 **Session boundaries.** The chat itself is kept only while the page is open (the timeline is
 kept with the document), and pinned watches' trends cover the session only. Provider reachability
@@ -708,16 +708,16 @@ path under `/api/`), not a separate Worker. They are served from the app's own o
 session cookie is first-party and needs no CORS; they deploy with the site in the same
 `wrangler pages deploy`, so the app and the API never disagree about versions and every preview
 deployment has its API. A Worker routed under the same
-host would give the same origin, but needs a route, its own deploy and its own configuration. The
+host would give the same origin, but needs a route, its own deploy, and its own configuration. The
 function is invoked only for `/api/*` (the generated `_routes.json`); static files are served
 without it, so they cost nothing and behave exactly as before. The code is in `web/server/`, plain
 TypeScript on Web APIs (`fetch`, Web Crypto), so the same modules run in Workers and, for tests, in
 Node.
 
 **Sign-in.** Google OpenID Connect, authorization code flow with PKCE. `/api/auth/login` makes a
-state, a nonce and a code verifier, keeps them in a short-lived cookie encrypted with AES-GCM
+state, a nonce, and a code verifier, keeps them in a short-lived cookie encrypted with AES-GCM
 (a key derived from `SESSION_SECRET` with HKDF), and sends the browser to Google with the state,
-nonce and S256 challenge. `/api/auth/callback` checks the state against the cookie, exchanges the
+nonce, and S256 challenge. `/api/auth/callback` checks the state against the cookie, exchanges the
 code with the verifier and the client secret, and validates the ID token: an RS256 signature by a
 key from Google's JWKS (cached as long as Google's `Cache-Control` says, fetched again once for an
 unknown key ID), issuer, audience (our client ID, and `azp` when there are several audiences),
@@ -727,7 +727,7 @@ keyed by Google's `sub`; the address is refreshed at each sign-in.
 **Sessions and CSRF.** The session cookie `__Host-dc_session` is `HttpOnly; Secure;
 SameSite=Lax; Path=/`, holds a random 256-bit ID and its HMAC, and lasts 30 days; D1 stores only
 the SHA-256 of the ID, so the table alone cannot be used to sign in, and signing out deletes the
-row. Every POST, PUT, PATCH and DELETE needs the header `X-CSRF-Token`, an HMAC of the session ID
+row. Every POST, PUT, PATCH, and DELETE needs the header `X-CSRF-Token`, an HMAC of the session ID
 that `GET /api/me` hands to the page, and is refused when `Origin` or `Sec-Fetch-Site` shows
 another site. Lax cookies already keep other sites' forms from carrying the session; the token
 covers the rest.
@@ -737,7 +737,7 @@ Protection, push delivery), the one route that takes neither a session nor a CSR
 a security event token, checked like an ID token: an RS256 signature by a key from Google's JWKS
 (the keys Google's RISC discovery document names), issuer Google, audience our client ID, issued
 no later than now (such tokens have no expiry). For the events sessions-revoked, tokens-revoked
-(the person removed this app's access) and account-disabled, every session of the Google account
+(the person removed this app's access), and account-disabled, every session of the Google account
 it names is deleted, as "Sign out everywhere" does; other events are acknowledged with 202. Nothing
 about an event is stored, so a delivery Google repeats at most signs the person out again. This
 costs one request per event and nothing between them, where re-checking with Google at each
@@ -745,8 +745,8 @@ session rotation would need a refresh token kept for every user. It works once t
 the receiver (`docs/deploy.md`, "Revoked Google access"); until then sessions end at their limits.
 
 **Data.** D1 (`web/migrations/`) holds `users`, `sessions`, `documents` (owner, name, times,
-version, size, the R2 key of the current snapshot, link role and token), `shares` (document,
-lower-case e-mail address, role) and `sent_mail` (only sender and time, for the daily limit). Shares
+version, size, the R2 key of the current snapshot, link role, and token), `shares` (document,
+lower-case e-mail address, role), and `sent_mail` (only sender and time, for the daily limit). Shares
 are by address, so a document can be shared with someone who has never signed in. R2 holds each
 document's content, a Yjs update, under `docs/<id>/snapshots/<random>`, and exported files under
 `docs/<id>/files/<name>`. The live room reads snapshots to validate and merge CRDT structure; it
@@ -758,7 +758,7 @@ metadata, and bounded socket/nonce admission records.
 with WebSocket writes and stages structural validation before changing authority. Content is written to
 a fresh R2 key, then D1 moves the version on only if it is still the one the page read; otherwise
 the fresh object is deleted and the answer is 409 with the current version. The page then fetches
-the current content, merges it into its own (Yjs merges without losing either side's steps) and
+the current content, merges it into its own (Yjs merges without losing either side's steps), and
 saves again within the same generation. A generation mismatch instead preserves a detached local
 recovery copy and reopens a fresh current-generation document; it must never merge old schema
 updates into the new room. A save that loses the race never overwrites another, and the previous
@@ -767,8 +767,8 @@ snapshot is deleted only after the new one is current.
 **Access.** Every document route first works out the caller's role: owner, a share to their
 address (editor or viewer), or the document's link (token in `X-Link-Token`, compared in constant
 time), taking the highest. Without one the answer is 404, so a document's existence is not
-revealed. Viewers read; editors also save, rename and keep files; only the owner shares, sets the
-link and deletes. A link can be read without an account, but editing through a link needs one, so
+revealed. Viewers read; editors also save, rename, and keep files; only the owner shares, sets the
+link, and deletes. A link can be read without an account, but editing through a link needs one, so
 every change has an author. Turning link sharing off and on issues a new token, which revokes old
 links. Someone may remove their own share.
 
@@ -788,7 +788,7 @@ names and the steps.
 **Tests.** `npm run test:server` (its own Vitest configuration, `vitest.server.config.ts`, without
 the Solid plugin) runs the API in Node against Miniflare's D1 and R2, the same SQLite and object
 store as the Workers runtime, with the migrations applied as wrangler applies them. A fake Google
-checks the PKCE verifier, client secret and redirect URI at its token endpoint and signs real RS256
+checks the PKCE verifier, client secret, and redirect URI at its token endpoint and signs real RS256
 ID tokens and security event tokens; a fake Resend records messages; a clock is injected. The
 tests cover the PKCE test vector of RFC 7636, every ID-token check, Google's security events and
 their checks, the whole sign-in and its failures (wrong state, missing
@@ -810,22 +810,22 @@ cache; its index entry gains a link to the account (the server's ID and version,
 vector of that version, the role, and a link token when it was opened by one). Syncing
 (`src/account/sync.ts`) fetches the server's content only when its version moved on, applies it
 with the origin `cloud` (so it is neither a step nor undoable), and saves only when this copy has
-updates the server's state vector lacks; a 409 means fetch, merge and save again. Viewers only
+updates the server's state vector lacks; a 409 means fetch, merge, and save again. Viewers only
 fetch. On sign-in the document list syncs everything (`syncAll`): documents made here are saved to
 the account (each once, even if an open document tries at the same moment), the account's
 documents missing here are copied here, and changed copies are brought in step. A document that
 belongs to another account signed in earlier on this browser is left alone and tagged. An open
 document (`src/account/docsync.ts`) prefers the live provider. Local commits and evaluation happen
 immediately, independent of network acknowledgement; remote evaluation coalesces bursts. REST
-fallback syncs on open, after changes, on hide and periodically. The top bar distinguishes live,
-saving, offline, view-only and migration/recovery states. Viewers have no editable shared controls.
+fallback syncs on open, after changes, on hide, and periodically. The top bar distinguishes live,
+saving, offline, view-only, and migration/recovery states. Viewers have no editable shared controls.
 Detached recovery copies carry a durable local-only marker respected by all upload paths.
 Exporting a `.dcw` also keeps a copy with the document in R2; "Files kept with this document" in
-the command palette lists them, to download, open as a new document or (for editors) remove.
+the command palette lists them, to download, open as a new document, or (for editors) remove.
 Deleting an owned document deletes it from the account; removing a shared one only removes the
 copy here. Signing out keeps the copies in this browser, unless the person ticks "Also remove this
 account's documents from this browser" (for a shared computer): every copy is first synced, then
-removed, except one with unsaved work, local-only recovery or private branches, which is kept and
+removed, except one with unsaved work, local-only recovery, or private branches, which is kept and
 counted in the notice. Clear-sign-out explicitly warns that private checkpoints of removed copies
 are permanently lost; checkpoint-only history does not force every copy to be retained. The
 result cache is cleared too.
@@ -850,7 +850,7 @@ with a document, and deleting from the account.
 
 `web/live/room.ts` exports the SQLite-backed `DocRoom`. The production Worker fetch handler is
 always forbidden; Pages reaches the class through its external `LIVE` binding. Signed short-lived
-tickets bind document, generation and session/link access, with one-use nonce admission. The room
+tickets bind document, generation, and session/link access, with one-use nonce admission. The room
 rechecks access on messages and within one minute while idle. Terminal status frames revoke the
 client immediately without relying on a peer's close handshake. Viewers never write.
 
@@ -862,16 +862,16 @@ until an owner migrates them, preserving the exact legacy checkpoint and detache
 
 `src/account/live.ts` speaks the Yjs protocol and maintains authenticated presence. A private
 editor draft is never a shared Yjs edit. Committed-text cursors use relative positions; private
-branches publish only generic branch/AI-active presence, not their names, text or selections.
+branches publish only generic branch/AI-active presence, not their names, text, or selections.
 
 Shared proposal decisions use a hash of the full shared update (including deletions), a staged
-candidate and a room compare-and-set. The successful client applies the decided change as one
+candidate, and a room compare-and-set. The successful client applies the decided change as one
 local undo step; competing decisions fail without a second application. Pinned results capture
 their dependency workspace and run settings; recomputation compares value and provenance, not
 incidental SVG/drawing IDs, and leaves the shared document unchanged.
 
 `tests/live.spec.ts` and `tests/recovery.spec.ts` exercise multiple independent browser contexts,
-private drafts, UUID repair, reconnect, recovery, proposals and presence privacy. The separate
+private drafts, UUID repair, reconnect, recovery, proposals, and presence privacy. The separate
 `live/` Miniflare tests execute the production room and Pages router with real storage and session
-signatures, including save readback, nonce/session/origin rejection, revocation, generation fencing
+signatures, including save readback, nonce/session/origin rejection, revocation, generation fencing,
 and idle-alarm cessation. Browser transport fixtures alone are not a security or persistence proof.

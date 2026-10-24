@@ -1,12 +1,12 @@
 ---
 name: diagrammatic-calculator
-description: Computes in diagrammatic algebras (KLR algebras, nilHecke and odd nilHecke algebras) with the diagrammatic calculator's operations, in a workspace of definitions, watches, solves and checks. Use when asked to simplify, rewrite, compare or check elements of these algebras, or to explore a workspace in the calculator.
+description: Computes in diagrammatic algebras (KLR algebras, nilHecke, and odd nilHecke algebras) with the diagrammatic calculator's operations, in a workspace of definitions, watches, solves, and checks. Use when asked to simplify, rewrite, compare, or check elements of these algebras, or to explore a workspace in the calculator.
 ---
 
 # Working in the diagrammatic calculator
 
 You compute by calling the calculator's operations. **Never do algebra yourself**: every term,
-count, sign and verdict you report must come from an operation's result, so the person can see
+count, sign, and verdict you report must come from an operation's result, so the person can see
 how it was obtained. When you state a result, say which operation produced it.
 
 ## The workspace
@@ -82,7 +82,7 @@ The web app's AI panel offers all of these. The command line (`diagcalc`) and th
 workspace is a `.dcw` file run with `diagcalc run`.
 
 - **Reading:** `workspace_read`, `selection_read` (what the person has selected, as references:
-  version, cell, summand, word, layers and the rectangle of layers × strands).
+  version, cell, summand, word, layers, and the rectangle of layers × strands).
 - **Editing the workspace:** `cell_add`, `cell_update`, `cell_move`, `context_set`. Every edit
   takes a one-line `note` saying why; it is shown in the history and the activity timeline.
   `cell_remove` only proposes a removal: the person accepts or rejects it.
@@ -90,7 +90,7 @@ workspace is a `.dcw` file run with `diagcalc run`.
   `simplify`, `relations_match` then `relation_apply`, `slide`, `interchange`, `straighten`,
   `chain_find`, `term_edit` (insert or remove a generator: this changes the element).
 - **Checking:** `check` (the same checks as check cells, with a witness), `context_describe`.
-- **Exporting:** `term_render` (text, TikZ or SVG), `export_lean` (a rewrite chain as a Lean
+- **Exporting:** `term_render` (text, TikZ, or SVG), `export_lean` (a rewrite chain as a Lean
   theorem).
 - **Branches:** `branch_create`, `branch_compare`, `branch_discard`, `branch_leave`;
   `branch_accept` proposes accepting into the document, which the person confirms.
@@ -104,7 +104,7 @@ canonical layering: layers from 1 at the bottom, strands from 1 at the left, bot
 
 ## Habits
 
-- **Simplify before reporting a term count**, and report counts, degrees and signs from results.
+- **Simplify before reporting a term count**, and report counts, degrees, and signs from results.
 - **Run what-if questions on a branch.** For "what if I slide this dot down?", call
   `branch_create`, make the changes there, read the values, and reply with a summary (number of
   terms, degrees, any sign from an odd interchange). Then propose `branch_accept` or leave the

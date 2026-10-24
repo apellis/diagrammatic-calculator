@@ -1,5 +1,5 @@
-//! A context: a presentation instantiated at a Cartan datum, a weight, a ground ring and
-//! parameter values. Typing, canonical layering, composition and printing of terms happen here.
+//! A context: a presentation instantiated at a Cartan datum, a weight, a ground ring, and
+//! parameter values. Typing, canonical layering, composition, and printing of terms happen here.
 
 use crate::cartan::Cartan;
 use crate::error::{Error, Result};
@@ -1112,7 +1112,7 @@ impl<R: Ring> Context<R> {
     // -----------------------------------------------------------------------------------------
     // Term arithmetic. Coefficients live in `self.coeff`.
 
-    /// Sorts, combines and drops zeros. Words must already be canonical.
+    /// Sorts, combines, and drops zeros. Words must already be canonical.
     pub fn normalize(&self, mut v: Vec<(Word, Poly<R::Elem>)>) -> Term<Poly<R::Elem>> {
         v.sort_by(|a, b| a.0.cmp(&b.0));
         let mut out: Vec<(Word, Poly<R::Elem>)> = Vec::with_capacity(v.len());

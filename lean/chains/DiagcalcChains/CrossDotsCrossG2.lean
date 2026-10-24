@@ -19,7 +19,7 @@ open CategoryTheory StringDiagrams QuantumGroup UDot Presentation
 
 universe w u v
 
-/-- A crossing, a dot and the crossing back for the two colours of type G2. Found by the calculator: a rewrite chain of 2 steps. -/
+/-- A crossing, a dot, and the crossing back for the two colours of type G2. Found by the calculator: a rewrite chain of 2 steps. -/
 theorem cross_dots_cross_G2 {I : Type u} {C : CartanDatum I} {X Y : Type v} [AddCommGroup X]
     [AddCommGroup Y] (RD : WeightDatum C X Y) (k : Type w) [CommRing k] (μ : X)
     (ci cj : I)

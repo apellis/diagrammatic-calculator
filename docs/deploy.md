@@ -28,7 +28,7 @@ that need a person, done once.
 2. Google Cloud console, Google Auth Platform: create the consent screen (external audience, app
    name "diagrammatic-calculator", your support address, scopes `openid`, `email`, `profile` only).
    Testing is not an access-control boundary for these basic sign-in scopes. For production,
-   review Audience, Branding and Data Access separately; branding needs a homepage and privacy
+   review Audience, Branding, and Data Access separately; branding needs a homepage and privacy
    policy on a verified site. Then Clients: create an OAuth client of type Web application with the authorized
    redirect URI `https://diagcalc.pages.dev/api/auth/callback` (the redirect URI is built from the
    variable `APP_ORIGIN` in `web/wrangler.toml`). This is the chosen public hostname; no
@@ -37,7 +37,7 @@ that need a person, done once.
    secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 2.
 4. (Optional share e-mails; not required for release.) Resend needs a separately controlled
    sending domain, not the site's `pages.dev` hostname. If enabling this later, verify a sending
-   domain with the records Resend lists, configure its SPF, DKIM and DMARC, and create an API key
+   domain with the records Resend lists, configure its SPF, DKIM, and DMARC, and create an API key
    restricted to that domain. Add the key as the Pages secret `RESEND_API_KEY` (as in step 3), and
    set `EMAIL_FROM` in `web/wrangler.toml` to a sender on that domain. No sending domain is selected
    or provisioned by this repository.
@@ -70,7 +70,7 @@ those keep serving the static app but not the API.
 - If the database and bucket exist: writes the database ID (looked up by name, or the secret
   `D1_DATABASE_ID` if set) into `web/wrangler.toml`, applies the migrations in `web/migrations/`
   with `wrangler d1 migrations apply diagcalc --remote` (wrangler records which have run), then
-  deploys with the D1 binding `DB`, the R2 binding `FILES` and the variables `EMAIL_FROM` and
+  deploys with the D1 binding `DB`, the R2 binding `FILES`, and the variables `EMAIL_FROM` and
   `APP_ORIGIN`. Preview deployments (any branch but `master`) get no bindings (`[env.preview]`).
 - Otherwise: removes `web/wrangler.toml` and deploys the site and functions with no bindings.
 
@@ -116,13 +116,13 @@ npx wrangler@4.149.0 deploy --dry-run --config live/wrangler.toml
 ```
 
 Browser fixtures exercise the UI with multiple independent contexts. The separate Miniflare
-suite exercises the real room, persistence, authentication and Pages-to-room boundary; fixture
+suite exercises the real room, persistence, authentication, and Pages-to-room boundary; fixture
 tests alone are not a security or durability proof. Production Google sign-in remains a separate
 live review step when no authenticated browser is available to the deployer.
 
 ## Running the accounts API locally
 
-From `web/`, after `npm ci`, `npm run wasm` and `npm run build`:
+From `web/`, after `npm ci`, `npm run wasm`, and `npm run build`:
 
 ```sh
 printf 'GOOGLE_CLIENT_ID=...\nGOOGLE_CLIENT_SECRET=...\nSESSION_SECRET=...\nAPP_ORIGIN=http://localhost:8788\n' > .dev.vars   # not committed

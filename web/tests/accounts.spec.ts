@@ -170,7 +170,7 @@ test('on a shared computer, signing out can remove the account\'s documents from
   await b.context.close();
 });
 
-test('the files kept with a document are listed, and can be downloaded, opened and removed', async ({ browser }) => {
+test('the files kept with a document are listed, and can be downloaded, opened, and removed', async ({ browser }) => {
   const mock = new MockAccounts();
   const ada = mock.user('ada@example.org', 'Ada');
   const a = await device(browser, mock, ada);

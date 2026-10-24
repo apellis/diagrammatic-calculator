@@ -7,7 +7,7 @@
 // A shared document's content comes from every editor, so nothing in it is trusted to have the
 // shape this code writes: every read checks it and skips or replaces what does not fit, so a
 // malformed or hostile update cannot stop the document from opening (`problems` says what was
-// skipped, and `cleanCopy` makes a fresh document without it). The history, its authors and the
+// skipped, and `cleanCopy` makes a fresh document without it). The history, its authors, and the
 // timeline are a cooperative record, not evidence: any editor can write any entry.
 import * as Y from 'yjs';
 

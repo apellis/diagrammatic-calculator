@@ -1,4 +1,4 @@
-// Responses, errors and cookies.
+// Responses, errors, and cookies.
 
 export class HttpError extends Error {
   constructor(

@@ -1,5 +1,5 @@
 //! The graded linear-algebra toolkit: bases, multiplication and Gram matrices, ranks, centres,
-//! the Jacobson radical, the semisimple quotient, blocks, idempotent lifting and primitivity.
+//! the Jacobson radical, the semisimple quotient, blocks, idempotent lifting, and primitivity.
 //!
 //! Everything works on a [`Graded`] algebra: an algebra whose graded pieces `A_d e(i)` have a
 //! basis of words and a normal form in that basis. The ambient algebra of a context with a basis

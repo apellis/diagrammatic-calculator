@@ -55,7 +55,7 @@ pub(super) enum UpEv<E> {
     Dot(usize),
     /// A crossing of the strands at `k` and `k + 1`.
     Cross(usize),
-    /// Multiplication on top by a polynomial in the dots at this height, the bubbles and the
+    /// Multiplication on top by a polynomial in the dots at this height, the bubbles, and the
     /// scalars, its monomials read with the first variable highest.
     Poly(Poly<E>),
     /// A bubble in the region left of position `pos`, given by its degree index.
@@ -187,7 +187,7 @@ impl<'a, R: Ring> Up<'a, R> {
         self.plain.monomial(Monomial(m), self.plain.base.one())
     }
 
-    /// Whether variable `v` is a dot, a bubble or a scalar.
+    /// Whether variable `v` is a dot, a bubble, or a scalar.
     #[cfg(test)]
     fn is_dot(&self, v: usize) -> bool {
         v < self.nx
@@ -527,7 +527,7 @@ impl<'a, R: Ring> Up<'a, R> {
         out
     }
 
-    /// `p · v`: a polynomial in the dots at the top of `v`, the bubbles and the scalars,
+    /// `p · v`: a polynomial in the dots at the top of `v`, the bubbles, and the scalars,
     /// multiplied on top, its monomials read as products in variable order (the first variable
     /// highest).
     pub fn mul_top(&self, cols: &[u16], v: &Val<R::Elem>, p: &P<R>) -> Val<R::Elem> {
@@ -699,7 +699,7 @@ impl<'a, R: Ring> Up<'a, R> {
     /// The coefficients up to `t^upto` of `τ` (or `τ⁻¹`) for bubbles of colour `c` across an
     /// upward `j`-strand with dot `x`: `W_left = τ W_right`, `C_right = C_left τ` with
     /// `τ = Σ (2r+1) x^{2r} t^{2r}` for `c = j` odd, `τ = Σ (r+1) x^r t^r` for `c = j` even,
-    /// `τ = 1 + x^{d_jc} t^{d_cj}` for `a_cj < 0` and `τ = 1` otherwise (BE2 (7.9)–(7.12), with
+    /// `τ = 1 + x^{d_jc} t^{d_cj}` for `a_cj < 0`, and `τ = 1` otherwise (BE2 (7.9)–(7.12), with
     /// `t_ij = 1`, `s_ij^pq = 0`). Every coefficient is even, so it commutes with everything.
     fn tau(&self, c: u16, j: u16, x: &P<R>, upto: usize, inverse: bool) -> Vec<P<R>> {
         let r = &self.plain;
@@ -864,7 +864,7 @@ impl<'a, R: Ring> Up<'a, R> {
     }
 
     /// Splits a monomial into its dot exponents (`nx` of them), its bubble exponents (`z`, then
-    /// `δ`) and its scalar monomial.
+    /// `δ`), and its scalar monomial.
     pub fn split(&self, m: &Monomial) -> (Vec<i32>, Vec<i32>, Monomial) {
         let (z, s) = (self.zoff(), self.soff());
         (

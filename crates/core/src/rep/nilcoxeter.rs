@@ -11,7 +11,7 @@
 //! In the even case `s_k` swaps `x_k` and `x_{k+1}` and `∂_k f = (f − s_k f)/(x_k − x_{k+1})`.
 //! In the odd case (Ellis–Khovanov–Lauda) the `x` anticommute, `s_k(x_j) = −x_{s_k(j)}`,
 //! `∂_k(x_j) = 1` for `j ∈ {k, k+1}` and 0 otherwise, `∂_k(fg) = ∂_k(f) g + s_k(f) ∂_k(g)`, distant
-//! `∂`s anticommute and braid moves carry no sign; [`odd_word_sign`] compares reduced words.
+//! `∂`s anticommute, and braid moves carry no sign; [`odd_word_sign`] compares reduced words.
 
 use super::{
     BasisShape, Evaluator, PolyVector, Provenance, basis_word, lift_coeff, permute_object,

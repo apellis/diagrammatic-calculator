@@ -52,7 +52,7 @@ export function SettingsPage(props: { from?: string }) {
       </div>
       <h1>Settings</h1>
       <p class="muted">These settings are kept in this browser and apply to every document.</p>
-      <p class="hint">Appearance, shortcuts and the context confirmation save automatically.</p>
+      <p class="hint">Appearance, shortcuts, and the context confirmation save automatically.</p>
       <section>
         <h3>Appearance</h3>
         <ThemeSwitch />

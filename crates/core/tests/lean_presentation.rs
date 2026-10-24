@@ -40,7 +40,7 @@ fn lean_relations() -> Vec<LeanRelation> {
         .collect()
 }
 
-/// Evaluates a side condition printed by Lean: `=`, `≠`, `∧`, `∨`, `¬` and parentheses over
+/// Evaluates a side condition printed by Lean: `=`, `≠`, `∧`, `∨`, `¬`, and parentheses over
 /// the colour variables.
 fn holds(cond: &str, value: &dyn Fn(&str) -> char) -> bool {
     fn expr(t: &[String], i: &mut usize, v: &dyn Fn(&str) -> char) -> bool {

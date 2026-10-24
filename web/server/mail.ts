@@ -34,7 +34,7 @@ export interface ShareMail {
   unsubscribeUrl: string;
 }
 
-/** The message, as subject, plain text and HTML (every inserted value escaped). */
+/** The message, as subject, plain text, and HTML (every inserted value escaped). */
 export function shareMessage(m: ShareMail): { subject: string; text: string; html: string } {
   const name = defang(oneLine(m.inviterName, 60));
   const addr = oneLine(m.inviterEmail, 254);

@@ -15,7 +15,7 @@ const examples = import.meta.glob('../../../examples/*.dcw', { query: '?raw', im
 
 const open = (id: string) => (location.hash = `#/doc/${id}`);
 
-/** An example's name, context and first line of description (its first comment or note). */
+/** An example's name, context, and first line of description (its first comment or note). */
 function describeExample(path: string, text: string) {
   const name = path.split('/').pop()!.replace(/\.dcw$/, '');
   const context = /^context (.*)$/m.exec(text)?.[1] ?? '';
@@ -35,7 +35,7 @@ const dismissedRecently = () => {
 };
 
 /**
- * Makes a document from a file: a workspace (.dcw), or a history (.dch), whose versions, snapshots
+ * Makes a document from a file: a workspace (.dcw), or a history (.dch), whose versions, snapshots,
  * and AI timeline come back as they were. Returns the new document's ID, and a note when part of a
  * history could not be read.
  */

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/apellis/diagrammatic-calculator/spec/presentation.schema.json",
   "title": "Presentation file (.pres.toml), as the JSON value of its TOML",
-  "description": "A presentation of a strict monoidal supercategory: colours, generators (possibly schemas over colour variables), parameters, relation schemas and representations. Terms inside are in the text term format (spec/text-term.md).",
+  "description": "A presentation of a strict monoidal supercategory: colours, generators (possibly schemas over colour variables), parameters, relation schemas, and representations. Terms inside are in the text term format (spec/text-term.md).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -85,7 +85,7 @@
       }
     },
     "lean": {
-      "description": "The Lean counterpart, for exporting rewrite chains: where the diagrams live and which lemma proves each relation. Templates write {a} for a colour variable, {a!=b} for a proof that two colours differ and {simp} for a side condition simp proves.",
+      "description": "The Lean counterpart, for exporting rewrite chains: where the diagrams live and which lemma proves each relation. Templates write {a} for a colour variable, {a!=b} for a proof that two colours differ, and {simp} for a side condition simp proves.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -171,7 +171,7 @@
                 "type": "string"
               },
               "facts": {
-                "description": "Cartan data the lemma depends on: 'dot {a} {b}', 'dot≠0 {a} {b}' or 'dij {a} {b}' (kl3-dg); 'd {a} {b}', 'dn {a} {b}', 't {a} {b}' (t_ab = 1) or 's {a} {b}' (s_ab = 0) (skm-cl).",
+                "description": "Cartan data the lemma depends on: 'dot {a} {b}', 'dot≠0 {a} {b}', or 'dij {a} {b}' (kl3-dg); 'd {a} {b}', 'dn {a} {b}', 't {a} {b}' (t_ab = 1), or 's {a} {b}' (s_ab = 0) (skm-cl).",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -195,7 +195,7 @@
                 ]
               },
               "proof": {
-                "description": "How the lemma proves the relation as the calculator states it: 'rw' (rewrite with it, then normalize sums), 'exact' (it is the statement up to unfolding) or 'tactic' (the lemma field is a tactic script, steps separated by '; ').",
+                "description": "How the lemma proves the relation as the calculator states it: 'rw' (rewrite with it, then normalize sums), 'exact' (it is the statement up to unfolding), or 'tactic' (the lemma field is a tactic script, steps separated by '; ').",
                 "enum": [
                   "rw",
                   "exact",
@@ -405,7 +405,7 @@
           "type": "boolean"
         },
         "roles": {
-          "description": "Generator names by role: dot and crossing for klr-polynomial, quiver-hecke-basis and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis, and also lcross for skm-basis.",
+          "description": "Generator names by role: dot and crossing for klr-polynomial, quiver-hecke-basis, and the nil-Coxeter kinds; x, xd, psi, psid, cup_ef, cup_fe, cap_ef, cap_fe for kl-basis, and also lcross for skm-basis.",
           "type": "object",
           "additionalProperties": {
             "type": "string"

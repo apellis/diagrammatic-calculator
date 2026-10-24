@@ -1,6 +1,6 @@
 # Registers the accounts API with Google as the receiver of its security events (Cross-Account
 # Protection), so that a person's sessions end when Google revokes this app's access, ends their
-# Google sessions or disables their account (docs/deploy.md, "Revoked Google access"). Run by hand
+# Google sessions, or disables their account (docs/deploy.md, "Revoked Google access"). Run by hand
 # (Actions, this workflow, Run workflow) once the repository secret GOOGLE_RISC_KEY holds the JSON
 # key of a service account with the role RISC Configuration Admin; delete the secret and the key
 # afterwards. Run again, with a new key, when APP_ORIGIN changes.

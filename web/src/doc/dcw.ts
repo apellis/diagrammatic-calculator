@@ -139,7 +139,7 @@ const IMPORT = { author: 'import' };
 
 /**
  * Fills an empty document with a history: each version becomes a version again, with its author,
- * note and time, and the workspace as it was then; the last one is the document's state. Pinned
+ * note, and time, and the workspace as it was then; the last one is the document's state. Pinned
  * snapshots and the AI timeline come along. Cell numbers used anywhere in the history are never
  * given to new cells.
  */

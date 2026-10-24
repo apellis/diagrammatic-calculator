@@ -34,8 +34,8 @@ Account access and external review are dependencies, not unimplemented applicati
 See `docs/deploy.md` for instructions.
 
 - **Google sign-in readiness and branding — owner access required.** Inspect the existing
-  project's Audience, Branding and Data Access settings; verify the chosen site in Search
-  Console, complete any required brand verification and use the production audience for release.
+  project's Audience, Branding, and Data Access settings; verify the chosen site in Search
+  Console, complete any required brand verification, and use the production audience for release.
   The code requests only `openid email profile`: Google's basic-sign-in exception means Testing
   is not by itself a test-user-only restriction. Branding verification and audience publication
   are separate. The current About route is `/#/about`, not `/about`; privacy is `/privacy`.
@@ -57,7 +57,7 @@ See `docs/deploy.md` for instructions.
   `IntegralSpanning.twoB`: a canonical chord diagram on `rd s ++ t` from the empty word, dots at
   the arcs' left ends, bubbles composed on, and the lower endpoints bent back down by nested
   caps. The calculator's set (`rep/kl/basis.rs`) instead has caps at the bottom, a reduced word
-  of the through strands, cups at the top, dots at the arcs' left ends and bubbles at bottom
+  of the through strands, cups at the top, dots at the arcs' left ends, and bubbles at bottom
   right. Identical indexing is not a proved identification. A `lean` certificate needs a
   unitriangular change-of-basis proof, a proof that the calculator's evaluation is well defined
   on KL Hom spaces, or a deliberate change to literally use `twoB`. Preserve the drawing
@@ -73,9 +73,9 @@ retain changes only with measured benefits.
 - Persist the basis cache to IndexedDB, with engine-version/context invalidation, to avoid cold
   hom-space evaluations after reopening a document.
 - Evaluate independent basis rows in parallel, keeping thread management outside the core.
-- Compact monomials, in-place polynomial addition and `SmallVec` denominators where allocation
+- Compact monomials, in-place polynomial addition, and `SmallVec` denominators where allocation
   profiles justify them.
-- Lazy-load the AI SDK, canvas and KaTeX fallback fonts where startup measurements justify it.
+- Lazy-load the AI SDK, canvas, and KaTeX fallback fonts where startup measurements justify it.
 - Cache results by canonical text rather than trimmed input text. Reassess worker warming after
   phase 7; retain only residual work supported by measurements, not duplicate worker-lifetime work.
 

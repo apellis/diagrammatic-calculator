@@ -757,7 +757,7 @@ export interface ExportLeanRequest1 {
    */
   rhs?: string;
   /**
-   * The theorem's name: a letter, then letters, digits and _ (diagcalc_chain if empty).
+   * The theorem's name: a letter, then letters, digits, and _ (diagcalc_chain if empty).
    */
   name?: string;
   /**

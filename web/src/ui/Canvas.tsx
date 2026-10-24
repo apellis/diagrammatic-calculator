@@ -1,7 +1,7 @@
 // The focus canvas: one cell's term drawn full size, edited by gestures.
 //
 // The canvas edits a definition as written; watches and viewer canvases are inspection-only.
-// Rewrites by relations, slides and interchanges are equalities, so the cell's value stays
+// Rewrites by relations, slides, and interchanges are equalities, so the cell's value stays
 // the same while its text changes;
 // inserting or removing a piece changes the value. Every gesture is one undoable step of the
 // document, and positions moved only for looks are layout hints, never part of the term.

@@ -1,5 +1,5 @@
 // A modal dialog: takes the focus when it opens and keeps it inside, closes on Esc, a click on the
-// backdrop or its close button, and gives the focus back to where it was.
+// backdrop, or its close button, and gives the focus back to where it was.
 import { onCleanup, onMount, type JSX } from 'solid-js';
 
 const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';

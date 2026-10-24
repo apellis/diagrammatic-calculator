@@ -1,4 +1,4 @@
--- Storage quotas, shares bound to accounts, session idle timeout, mail limits and resumable
+-- Storage quotas, shares bound to accounts, session idle timeout, mail limits, and resumable
 -- deletion (security review of 2026-10-23).
 
 -- Bytes of exported files kept with a document (the snapshot's bytes are `size`); together they

@@ -123,7 +123,7 @@ pub(super) fn koszul<K: Ord>(items: &[(K, bool)]) -> bool {
     neg
 }
 
-/// The position, number of inputs and number of outputs of a step.
+/// The position, number of inputs, and number of outputs of a step.
 fn extent(ev: &Ev) -> (usize, usize, usize) {
     match *ev {
         Ev::Dot(q) => (q, 1, 1),

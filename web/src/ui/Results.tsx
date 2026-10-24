@@ -163,7 +163,7 @@ const STATUS: Record<string, string> = {
 };
 
 /**
- * Quiet disclosure of the strategy, certificate and exact hypotheses. Accepted BE2
+ * Quiet disclosure of the strategy, certificate, and exact hypotheses. Accepted BE2
  * assumptions stay explicit without warning styling; other uncertainty and notes still warn.
  */
 export function Badge(props: { p?: Provenance; value?: Ok; compact?: boolean }) {

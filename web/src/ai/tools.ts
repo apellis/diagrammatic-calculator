@@ -80,17 +80,17 @@ const note = { type: 'string', description: 'One line saying why, shown in the h
 const WORKSPACE_TOOLS: ToolDef[] = [
   {
     name: 'workspace_read',
-    description: 'The context, the branch shown (if any), and every cell with its ID, kind, text, status and value. Waits until the values are computed.',
+    description: 'The context, the branch shown (if any), and every cell with its ID, kind, text, status, and value. Waits until the values are computed.',
     input_schema: { type: 'object', properties: { cells: { type: 'array', items: { type: 'string' }, description: 'Only these cell IDs.' } } },
   },
   {
     name: 'selection_read',
-    description: "What the person has selected in the canvas: version, cell, summand, word, layers and the rectangle of layers × strands. Null when nothing is selected.",
+    description: "What the person has selected in the canvas: version, cell, summand, word, layers, and the rectangle of layers × strands. Null when nothing is selected.",
     input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'cell_add',
-    description: 'Adds a cell (def, watch, solve, check or note, in the workspace syntax) and returns its ID.',
+    description: 'Adds a cell (def, watch, solve, check, or note, in the workspace syntax) and returns its ID.',
     input_schema: {
       type: 'object',
       required: ['text', 'note'],
@@ -123,12 +123,12 @@ const WORKSPACE_TOOLS: ToolDef[] = [
   },
   {
     name: 'branch_create',
-    description: 'Starts a scratch branch from what is shown and shows it; later edits happen on the branch until it is accepted, discarded or left.',
+    description: 'Starts a scratch branch from what is shown and shows it; later edits happen on the branch until it is accepted, discarded, or left.',
     input_schema: { type: 'object', required: ['name'], properties: { name: { type: 'string', description: 'A short name, e.g. "slide the dot down".' } } },
   },
   {
     name: 'branch_compare',
-    description: 'What accepting the branch shown would change in the document: cells changed, added and removed, and conflicts.',
+    description: 'What accepting the branch shown would change in the document: cells changed, added, and removed, and conflicts.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -384,7 +384,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
       return ok('read the selection', { selection: host.selection() });
     case 'cell_add': {
       const text = (a.text as string).trim();
-      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check or note.');
+      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check, or note.');
       const after = a.after as string | undefined;
       const at = after ? doc.index(after) + 1 : doc.cells.length;
       if (after && at === 0) return fail(`There is no cell ${after}.`);
@@ -395,7 +395,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
       const id = a.id as string;
       if (doc.index(id) < 0) return fail(`There is no cell ${id}.`);
       const text = (a.text as string).trim();
-      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check or note.');
+      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check, or note.');
       doc.updateCell(id, text, n);
       return stepped(`changed ${id}`);
     }

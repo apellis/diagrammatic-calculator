@@ -1,4 +1,4 @@
-//! End-to-end checks of elaboration, the equality strategies and the conformance checker.
+//! End-to-end checks of elaboration, the equality strategies, and the conformance checker.
 
 use diagcalc_core::builtin;
 use diagcalc_core::conformance::{self, Status};

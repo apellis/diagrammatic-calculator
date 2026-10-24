@@ -152,7 +152,7 @@ pub struct BasisShape<'c, R: Ring> {
 }
 
 impl<R: Ring> BasisShape<'_, R> {
-    /// For each permutation: its reduced word, the degree of `ψ_ŵ e(src)` and the degrees of a dot
+    /// For each permutation: its reduced word, the degree of `ψ_ŵ e(src)`, and the degrees of a dot
     /// on each strand (at the bottom, or at the top when dots are on top).
     fn shapes(&self, src: &Object) -> Result<Vec<Shape>> {
         let n = src.len();

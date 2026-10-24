@@ -9,10 +9,10 @@
 //! one cell of a document: in the browser, everything one worker computes).
 //!
 //! The key holds everything the rows depend on. The context enters as a fingerprint: the name of
-//! the strategy and representation, the type of the ground ring and the complete debug form of the
+//! the strategy and representation, the type of the ground ring, and the complete debug form of the
 //! [`Context`] (presentation, specification, colours, Cartan datum, weights, region weight `μ`,
 //! parameters, scalars, ground ring with its run-time data, coefficient rings), compared in full,
-//! not by a hash. The rest of the key is the source and target, the degree and the numbers of dot
+//! not by a hash. The rest of the key is the source and target, the degree, and the numbers of dot
 //! and bubble variables of the evaluation ring. Results are the same with or without the cache.
 
 use crate::context::Context;
@@ -142,7 +142,7 @@ pub fn start_kz(key: &Key, estimate: usize) -> usize {
 /// the largest degree of a bottom part of any of the words, `h`, the largest `|⟨i, μ⟩|`, and `d`,
 /// the smallest symmetrizer entry: `prefix / 2d + h + 2` bubble indices, halved when every colour
 /// is odd (an odd colour's `kz` variables cover the indices up to `2 kz + 1`), rounded up to a
-/// power of two and at least 4. On every workload measured (KL and BE2, types A1, A2, B2 and G2, degrees up to 18, `μ` from
+/// power of two and at least 4. On every workload measured (KL and BE2, types A1, A2, B2, and G2, degrees up to 18, `μ` from
 /// −4 to 4) the bubble indices met stayed below it. It is only a starting point: an index above it
 /// restarts the evaluation with twice as many variables. Starting too high costs little (a few
 /// more ring variables); starting too low costs a whole failed evaluation.

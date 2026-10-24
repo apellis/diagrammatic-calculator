@@ -23,7 +23,7 @@ id       := letters digits                           df def, wt watch, sv solve,
 
 Rings: `ZZ`, `QQ`, `GF(p)`, `ZZ[I]`; polynomials `ZZ[q]`, `QQ[q]`; Laurent polynomials
 `ZZ[q,q^-1]`, `QQ[q,q^-1]`; rational functions `QQ(q)`. The variable is a word of lowercase
-letters other than `u`, `v`, `w`, `x` and `e`, and no scalar may share its name.
+letters other than `u`, `v`, `w`, `x`, and `e`, and no scalar may share its name.
 
 Terms are in the text term format (`text-term.md`). Only inputs are stored, never results.
 Printing writes canonical terms, two spaces before each option and before `# id=`, and keeps
@@ -32,11 +32,11 @@ not used by any cell (one count for every kind). Occurrence IDs in a diagram are
 number (d dot, c crossing, …), so no cell ID reads as one.
 
 Checks: `equal(a, b)`, `zero(a)`, `idempotent(e)`, `orthogonal(e, f)`, `homogeneous(a)`,
-`central(z)` (commutes with every generator and lies in the sum of the `e(i) A e(i)`) and
+`central(z)` (commutes with every generator and lies in the sum of the `e(i) A e(i)`), and
 `primitive(e)` (`e A e / e J e` is one-dimensional; needs a finite quotient over a field of
 characteristic 0).
 
-A context with `Lambda`, `dotcap` or `degcap` computes in that finite quotient or truncation:
+A context with `Lambda`, `dotcap`, or `degcap` computes in that finite quotient or truncation:
 results carry the quotient and the degrees computed under `provenance.notes`.
 
 A term that names an idempotent `e(...)` (or identity `1_...`) of an object outside the context,
@@ -48,8 +48,8 @@ as TeX between `$` signs.
 them; each cell's context has the unknowns that it, or the definitions it uses, mention, so a
 cell that mentions none keeps coefficients in the ground ring) and solves for every coefficient
 of the normal form of `lhs − rhs` to vanish, over the ground field. Tier 1 (all coefficients linear in the unknowns) gives `outcome` `none`, `unique`
-(with `solution`) or `family` (with `particular`, `directions` and `dimension`). Tier 2 uses
+(with `solution`), or `family` (with `particular`, `directions`, and `dimension`). Tier 2 uses
 Gröbner bases with limits: `none`, `finite` (solution counts with and without multiplicity,
 `points` in the ground field, `all_found`, the grevlex and lex bases), `family` (`dimension`,
-`independent_variables`, `basis`) or `limit_reached`. Other scalars may not occur in the
+`independent_variables`, `basis`), or `limit_reached`. Other scalars may not occur in the
 equation.

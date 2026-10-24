@@ -41,7 +41,7 @@ describe('without configuration', () => {
 });
 
 describe('sign-in', () => {
-  it('sends the browser to Google with state, nonce and a PKCE challenge in a sealed cookie', async () => {
+  it('sends the browser to Google with state, nonce, and a PKCE challenge in a sealed cookie', async () => {
     const b = w.browser();
     const r = await b.fetch('/api/auth/login?return=%2F%23%2Fdoc%2Fabc');
     expect(r.status).toBe(302);
@@ -290,7 +290,7 @@ describe('documents', () => {
     a = await w.signedIn(ada);
   });
 
-  it('are created, listed, saved and read back exactly', async () => {
+  it('are created, listed, saved, and read back exactly', async () => {
     const r = await a.fetch('/api/docs', { method: 'POST', json: { name: '  Gram\nmatrices ' } });
     expect(r.status).toBe(201);
     const doc = (await r.json()) as { id: string; name: string; version: number; role: string; link: unknown };
@@ -539,7 +539,7 @@ describe('share notifications', () => {
 });
 
 describe('deleting an account', () => {
-  it('removes the user, sessions, documents, stored objects and shares to them', async () => {
+  it('removes the user, sessions, documents, stored objects, and shares to them', async () => {
     const zed = await w.signedIn({ sub: 'g-zed', email: 'zed@example.org', name: 'Zed' });
     const id = await zed.newDoc();
     const other = await w.signedIn({ sub: 'g-yan', email: 'yan@example.org', name: 'Yan' });

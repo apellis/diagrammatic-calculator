@@ -17,7 +17,7 @@
   --on-accent: #ffffff;
   --field-border: #8a8a90;
   --backdrop: rgba(0, 0, 0, 0.3);
-  /* strand colours, by the colour's place in the context (3:1 on panel, sunken and good-soft) */
+  /* strand colours, by the colour's place in the context (3:1 on panel, sunken, and good-soft) */
   --strand-0: #2f6fdf; --strand-1: #b85c00; --strand-2: #1e8449; --strand-3: #9b3fb0;
   --strand-4: #c0392b; --strand-5: #7a6a00; --strand-6: #11809a; --strand-7: #6b6b70;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -285,7 +285,7 @@ kbd { font-size: 12px; white-space: nowrap; border: 1px solid var(--border); bor
 .doclist .open a:hover { text-decoration: underline; }
 .doclist .toolbar { flex-wrap: wrap; }
 .doclist td.actions { text-align: right; white-space: nowrap; }
-/* a row's Rename, Duplicate and Delete show on hover or focus, where there is a pointer that hovers */
+/* a row's Rename, Duplicate, and Delete show on hover or focus, where there is a pointer that hovers */
 @media (hover: hover) {
   .doclist tr td.actions button { opacity: 0; transition: opacity 0.1s; }
   .doclist tr:hover td.actions button, .doclist tr:focus-within td.actions button { opacity: 1; }
@@ -565,7 +565,7 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
   .ctx-fields { grid-template-columns: 1fr; }
 }
 
-/* engine drawings: a strand's lines, dots, arrowheads and label carry its colour's class */
+/* engine drawings: a strand's lines, dots, arrowheads, and label carry its colour's class */
 svg path.k0 { stroke: var(--strand-0); } svg :is(circle, polygon, text).k0 { fill: var(--strand-0); }
 svg path.k1 { stroke: var(--strand-1); } svg :is(circle, polygon, text).k1 { fill: var(--strand-1); }
 svg path.k2 { stroke: var(--strand-2); } svg :is(circle, polygon, text).k2 { fill: var(--strand-2); }

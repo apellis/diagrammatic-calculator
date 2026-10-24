@@ -53,7 +53,7 @@ export interface Env {
   FILES?: R2Bucket;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
-  /** At least 32 random bytes; signs session cookies, CSRF tokens and the sign-in state. */
+  /** At least 32 random bytes; signs session cookies, CSRF tokens, and the sign-in state. */
   SESSION_SECRET?: string;
   /** Share notifications are sent only when this and EMAIL_FROM are set. */
   RESEND_API_KEY?: string;

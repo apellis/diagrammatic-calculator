@@ -37,7 +37,7 @@ pub enum Prim {
 }
 
 /// The primitives of one word, with its width and height, and what each primitive belongs to:
-/// the layer of a piece and the strand of a line. Pieces, strands and the objects between
+/// the layer of a piece and the strand of a line. Pieces, strands, and the objects between
 /// heights are what an interactive canvas needs to hit-test and to place new pieces.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Picture {
@@ -928,7 +928,7 @@ pub fn svg<R: Ring>(ctx: &Context<R>, t: &Term<Poly<R::Elem>>) -> String {
         let px = |dx: f64| num(x + dx * U);
         let py = |dy: f64| num(base - (dy + off) * U);
         for (p, tag) in pic.prims.iter().zip(&pic.tags) {
-            // a strand's lines, dots, arrowheads and label carry its colour's class (`k0` for the
+            // a strand's lines, dots, arrowheads, and label carry its colour's class (`k0` for the
             // context's first colour); a page's style sheet may colour them, plain SVG stays black
             let k = tag
                 .strand

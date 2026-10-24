@@ -19,7 +19,7 @@ export const LIMITS = {
   ownerBytes: 2 * 1024 * 1024 * 1024,
   docsPerOwner: 1000,
   sharesPerDoc: 100,
-  /** Share notifications per sender, per recipient and in all, in any 24 hours. */
+  /** Share notifications per sender, per recipient, and in all, in any 24 hours. */
   mailsPerDay: 20,
   mailsPerRecipientPerDay: 3,
   mailsGlobalPerDay: 100,
@@ -225,7 +225,7 @@ export async function patchDoc(req: Request, env: ReadyEnv, a: Access, s: Sessio
     } else if (body.link === 'viewer' || body.link === 'editor') {
       // changing the rights keeps the link; turning it on issues a new one
       await env.DB.prepare('UPDATE documents SET link_role = ?, link_token = COALESCE(link_token, ?) WHERE id = ?').bind(body.link, randomToken(), a.doc.id).run();
-    } else throw new HttpError(400, 'link must be off, viewer or editor');
+    } else throw new HttpError(400, 'link must be off, viewer, or editor');
   }
   if (body.link !== undefined) await revokeDoc(env, a.doc.id);
   return json(meta(await access(env, a.doc.id, s, null)));
@@ -315,7 +315,7 @@ export type MailOutcome = 'sent' | 'unavailable' | 'new-account' | 'opted-out' |
 
 /**
  * Sends a share notification within the limits: the sender's account must be old enough, the
- * recipient must not have opted out, and the per-sender, per-recipient and global daily counts
+ * recipient must not have opted out, and the per-sender, per-recipient, and global daily counts
  * must allow it. The count is reserved before sending (one transaction with the check), so
  * concurrent shares cannot pass the limit together, and released if sending fails.
  */
@@ -414,7 +414,7 @@ export async function getFile(env: ReadyEnv, a: Access, name: string): Promise<R
 }
 
 /**
- * DELETE /api/me: deletes the account, its documents and shares to it at once (one transaction),
+ * DELETE /api/me: deletes the account, its documents, and shares to it at once (one transaction),
  * and the documents' stored objects in bounded batches, finished by later requests if need be.
  */
 export async function deleteAccount(env: ReadyEnv, s: Session, deps: Deps): Promise<void> {

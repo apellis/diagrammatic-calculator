@@ -18,8 +18,11 @@ design notes are `docs/design.md`; the reading of every notation is fixed in
 4. **Conventions are pinned.** Any change to how text is read or printed, to signs, or to the
    drawing updates `docs/conventions.md` and the golden corpus in the same commit.
 5. **Publication-ready at all times.** The repository will become public. No secrets or keys, no
-   machine names, private addresses or local paths, nothing copied from papers or books (cite by
-   author, title, arXiv number and statement number; formulas written in our own notation are fine).
+   machine names, private addresses, or local paths, nothing copied from papers or books (cite by
+   author, title, arXiv number, and statement number; formulas written in our own notation are fine).
+6. **Use the Oxford comma.** Use a serial comma in English lists of three or more items, including
+   in documentation, comments, prompts, and user-facing text. Preserve verbatim quotations and
+   legal text.
 
 ## Workflow
 
@@ -27,7 +30,7 @@ design notes are `docs/design.md`; the reading of every notation is fixed in
   Before pushing, run the checks below locally; if CI turns red, fixing it comes first.
 - Commit messages: a summary line saying what changed mathematically or functionally, then a body
   with the details. No co-author trailers, no "generated with" footers, no model names.
-- Keep commits focused; formats, conventions and the golden corpus change together.
+- Keep commits focused; formats, conventions, and the golden corpus change together.
 
 ## Checks
 

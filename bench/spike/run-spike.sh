@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Reproduces the arithmetic spike (docs/spike-arithmetic.md). Needs FLINT and GMP headers
-# (e.g. libflint-dev), a C compiler and Python 3; with Node or the wasmtime Python package it
+# (e.g. libflint-dev), a C compiler, and Python 3; with Node or the wasmtime Python package it
 # also runs the WebAssembly replays. Results go to $OUT (default /tmp/diagcalc-spike).
 set -euo pipefail
 cd "$(dirname "$0")/../.."

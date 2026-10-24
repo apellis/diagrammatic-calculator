@@ -1,7 +1,7 @@
 //! Export of rewrite chains as Lean proofs.
 //!
 //! A presentation's `[lean]` table names the Lean library its diagrams live in, the Lean shape of
-//! each generator and the lemma proving each relation. The exporter writes one theorem per
+//! each generator, and the lemma proving each relation. The exporter writes one theorem per
 //! chain, stating `start = end` over an arbitrary Cartan datum whose entries agree with the
 //! context's wherever the chain uses them, and proving it step by step: the interchange moves
 //! of each step are `dswap` moves, the rewrite is `dg_stepL_at` with the relation's lemma placed
@@ -32,7 +32,7 @@ pub struct Item<'a, R: Ring> {
     pub chains: Vec<&'a Chain<R>>,
 }
 
-/// Checks a theorem or module name: a letter, then letters, digits and `_`. Anything else (a
+/// Checks a theorem or module name: a letter, then letters, digits, and `_`. Anything else (a
 /// dot, a slash, a newline) could reach outside the export directory or into the Lean code.
 pub fn check_name(name: &str) -> Result<()> {
     let mut chars = name.chars();
@@ -40,7 +40,7 @@ pub fn check_name(name: &str) -> Result<()> {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
     if !ok {
         return Err(Error::invalid(format!(
-            "'{}' is not a valid name: use a letter, then letters, digits and _",
+            "'{}' is not a valid name: use a letter, then letters, digits, and _",
             name.escape_debug()
         )));
     }
@@ -526,7 +526,7 @@ fn theorem<R: Ring>(ctx: &Context<R>, decl: &LeanDecl, it: &Item<R>) -> Result<S
             "the two chains end at different terms: the sides are not shown equal",
         ));
     }
-    // Colours, facts and lemmas the chains use.
+    // Colours, facts, and lemmas the chains use.
     let mut colours: BTreeSet<u16> = BTreeSet::new();
     let mut facts: BTreeSet<Fact> = BTreeSet::new();
     let mut rules: Vec<&Rule<R>> = Vec::new();
@@ -1277,7 +1277,7 @@ struct ChainEntry {
     #[serde(default)]
     doc: String,
     /// How each side is rewritten: `straighten` (the default: to the basis of crossings and
-    /// dots), `shrink` (by rules that make words shorter, until none applies) or `once` (one
+    /// dots), `shrink` (by rules that make words shorter, until none applies), or `once` (one
     /// step).
     #[serde(default)]
     strategy: Option<String>,

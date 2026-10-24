@@ -12,7 +12,7 @@ function math(tex: string, display: boolean): string {
   return `<code>${escape(tex)}</code>`;
 }
 
-/** Bold, italic and code spans, with mathematics, in one line of prose. */
+/** Bold, italic, and code spans, with mathematics, in one line of prose. */
 function inline(src: string): string {
   // code and mathematics first, so nothing inside them is read as emphasis
   const token = /`([^`]+)`|\\\[([\s\S]+?)\\\]|\$\$([\s\S]+?)\$\$|\\\(([\s\S]+?)\\\)|\$([^\s$](?:[^$]*[^\s$])?)\$(?!\d)/g;

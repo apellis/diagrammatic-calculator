@@ -454,7 +454,7 @@ mod tests {
     }
 
     /// The BE2 evaluation gives exactly this module's normal forms: both sides of every relation
-    /// in types A1, A2, B2 and G2 at the conformance checker's weights.
+    /// in types A1, A2, B2, and G2 at the conformance checker's weights.
     #[test]
     fn the_skm_evaluation_agrees_on_every_relation() {
         let mut checked = 0;

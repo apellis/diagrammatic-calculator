@@ -1,4 +1,4 @@
-// Sign-in with Google (authorization code flow with PKCE), sessions and CSRF protection.
+// Sign-in with Google (authorization code flow with PKCE), sessions, and CSRF protection.
 import { appOrigin, type Deps, type ReadyEnv } from './env';
 import { equal, pkceChallenge, randomToken, seal, sha256, sign, unseal, verify } from './crypto';
 import { clearCookie, cookies, redirect, setCookie } from './http';
@@ -50,7 +50,7 @@ export function safeReturn(ret: string | null): string {
 
 export const redirectUri = (env: ReadyEnv, req: Request) => `${appOrigin(env, req)}/api/auth/callback`;
 
-/** GET /api/auth/login?return=<path>: off to Google, with fresh state, nonce and PKCE verifier. */
+/** GET /api/auth/login?return=<path>: off to Google, with fresh state, nonce, and PKCE verifier. */
 export async function login(req: Request, env: ReadyEnv, deps: Deps): Promise<Response> {
   const flow: Flow = {
     state: randomToken(),
@@ -128,7 +128,7 @@ async function sessionCookie(env: ReadyEnv, id: string, seconds: number): Promis
 }
 
 /**
- * The session of a request, if its cookie is genuine, unexpired and not idle for longer than
+ * The session of a request, if its cookie is genuine, unexpired, and not idle for longer than
  * IDLE_MS. Marks the session as seen (at most once per TOUCH_MS).
  */
 export async function currentSession(req: Request, env: ReadyEnv, deps: Deps): Promise<Session | null> {

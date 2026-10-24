@@ -74,7 +74,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Provisions storage, migrates the database and deploys the built site. Wrangler is installed
+  # Provisions storage, migrates the database, and deploys the built site. Wrangler is installed
   # before any secret is in the environment, without running install scripts.
   deploy:
     needs: build

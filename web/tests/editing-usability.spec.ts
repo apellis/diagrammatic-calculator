@@ -7,7 +7,7 @@ async function existing(page: import('@playwright/test').Page) {
   await expect(cell(page, 0).getByTestId('cell-display')).toBeVisible();
 }
 
-test('existing text supports Space, accessible errors, cancellation and disclosure', async ({ page }) => {
+test('existing text supports Space, accessible errors, cancellation, and disclosure', async ({ page }) => {
   await existing(page);
   const c = cell(page, 0);
   const display = c.getByTestId('cell-display');
@@ -87,7 +87,7 @@ test('intentional check evaluation errors are not globally forbidden', async ({ 
 
 const composer = (page: import('@playwright/test').Page) => page.locator('[data-cell="new"]');
 
-test('moving the insertion position preserves the new text, name and per-kind drafts', async ({ page }) => {
+test('moving the insertion position preserves the new text, name, and per-kind drafts', async ({ page }) => {
   await existing(page);
   await addCell(page, 'def b := x_1 e(iij)');
   await page.getByTestId('add-cell').click();

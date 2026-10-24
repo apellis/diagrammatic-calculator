@@ -3,7 +3,7 @@
 //! categorification-lean `KL3.Diagram.canonicalBasis`).
 //!
 //! A matching pairs the boundary points of `s → t` (the letters of `*s t`, an `E_i` with an
-//! `F_i`). Its diagram has no closed loops, no arc crossing itself and two arcs crossing at most
+//! `F_i`). Its diagram has no closed loops, no arc crossing itself, and two arcs crossing at most
 //! once ([`basis_between`]); crossings of strands with opposite orientations are sideways
 //! crossings. Each arc carries dots at one end, and a monomial in the bubbles of positive degree
 //! index sits in the rightmost region (clockwise ones when `⟨i, μ⟩ ≥ 0`, counterclockwise ones

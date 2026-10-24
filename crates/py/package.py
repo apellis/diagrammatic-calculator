@@ -19,7 +19,7 @@ def private_roots(extra=()):
 
 
 def audit(artifact, roots):
-    """Scan decompressed names, headers and every payload, including native code/SBOMs."""
+    """Scan decompressed names, headers, and every payload, including native code/SBOMs."""
     needles = set()
     for root in roots:
         for text in (root, root.replace("\\", "/"), quote(root, safe=""),

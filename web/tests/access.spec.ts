@@ -27,7 +27,7 @@ test('at phone width the pages fit the window and the cells show', async ({ page
   await expect(page.locator('.outline')).toHaveCount(0);
 });
 
-test('cells, the outline and the document list are reachable and operable by keyboard', async ({ page }) => {
+test('cells, the outline, and the document list are reachable and operable by keyboard', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'def a := x_1 e(iji)');
   await addCell(page, 'watch a a');

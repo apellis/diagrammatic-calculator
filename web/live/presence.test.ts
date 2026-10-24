@@ -1,6 +1,6 @@
 import {it,expect} from 'vitest';
 import {navigation,colour} from './presence';
-it('keeps bounded branch, AI, selection and Yjs relative cursor fields but not client identity',()=>{
+it('keeps bounded branch, AI, selection, and Yjs relative cursor fields but not client identity',()=>{
  const cursor={anchor:{item:{client:123,clock:3},assoc:0},head:{tname:'cells',assoc:-1}};
  const selection={cellId:'df1',word:0,summand:1,layers:[0,1],rectangle:{layers:[0,1],strands:[1,2]}};
  expect(navigation({user:{id:'forged'},branch:'b1',cell:'df1',ai:{active:true,target:'df1'},selection,cursor})).toEqual({branch:'b1',cell:'df1',ai:{active:true,target:'df1'},selection,cursor});

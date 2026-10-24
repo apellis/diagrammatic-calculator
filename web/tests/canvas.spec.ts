@@ -383,7 +383,7 @@ test('summands fill rows as wide as the canvas, so new ones go below', async ({ 
   }
 });
 
-test('keyboard paths for strands, the insertion point, panning, zooming and leaving for the palette', async ({ page }) => {
+test('keyboard paths for strands, the insertion point, panning, zooming, and leaving for the palette', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'def a := psi_1 e(iij)');
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('1 term');

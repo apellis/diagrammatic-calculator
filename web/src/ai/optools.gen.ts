@@ -506,7 +506,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
   {
     "op": "term.render",
     "name": "term_render",
-    "description": "a term as text, TikZ or SVG",
+    "description": "a term as text, TikZ, or SVG",
     "input_schema": {
       "required": [
         "term"
@@ -587,7 +587,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "string"
         },
         "name": {
-          "description": "The theorem's name: a letter, then letters, digits and _ (diagcalc_chain if empty).",
+          "description": "The theorem's name: a letter, then letters, digits, and _ (diagcalc_chain if empty).",
           "type": "string",
           "pattern": "^([A-Za-z][A-Za-z0-9_]*)?$"
         },

@@ -45,7 +45,7 @@ async function browser(): Promise<Browser> {
     .bind(user, user, email, 'Seam user', now, now).run();
   await db.prepare('INSERT INTO sessions(id_hash,user_id,created,expires,last_seen) VALUES (?,?,?,?,?)')
     .bind(hash, user, now, now + 3600000, now).run();
-  // Same purpose-prefixed HMAC, cookie format and hashed D1 key as auth.ts.
+  // Same purpose-prefixed HMAC, cookie format, and hashed D1 key as auth.ts.
   const b = { user, email, hash, cookie: `__Host-dc_session=${id}.${await sign(SECRET, 'session', id)}`, csrf: '' };
   const me = await request(b, 'me');
   expect(me.status).toBe(200);

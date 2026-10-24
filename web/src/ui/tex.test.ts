@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contextTex, render, ringTex, toTex } from './tex';
 
 describe('typesetting text', () => {
-  it('writes generators, scripts and idempotents as mathematics', () => {
+  it('writes generators, scripts, and idempotents as mathematics', () => {
     expect(toTex('x_1^2 psi_1 e(iij)')).toBe('x_{1}^{2}\\psi_{1}e(\\mathit{iij})');
     expect(toTex('q^-1 x_12')).toBe('q^{-1}x_{12}');
     expect(toTex('Q_ij(x_1, x_2) e(ij)')).toBe('Q_{\\mathit{ij}}(x_{1},\\,x_{2})e(\\mathit{ij})');
@@ -34,7 +34,7 @@ describe('typesetting text', () => {
     expect(render(contextTex('type=B2 nu=i+2j ring=GF(5) Lambda=2i dotcap=3'))).not.toBeNull();
   });
 
-  it('renders document text without links, HTML or page-sized boxes', () => {
+  it('renders document text without links, HTML, or page-sized boxes', () => {
     const big = render('\\rule{100000em}{100000em}')!;
     for (const m of big.matchAll(/(?:width|height)[:=]"?(\d+(?:\.\d+)?)em/g)) expect(Number(m[1])).toBeLessThanOrEqual(20);
     expect(big).toContain('20em');
