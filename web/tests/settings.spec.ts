@@ -36,7 +36,7 @@ test('the theme follows the system unless Settings chooses light or dark, and th
 test('AI settings abbreviate the token limits, and the key can be shown and hidden from inside its box', async ({ page }) => {
   await page.goto('/#/settings');
   const budget = page.getByTestId('ai-budget');
-  await expect(budget.locator('option')).toHaveText(['250K tokens', '1M tokens', '4M tokens', 'no limit']);
+  await expect(budget.locator('option')).toHaveText(['250k tokens', '1M tokens', '4M tokens', 'no limit']);
   // display only: the stored values are the numbers
   expect(await budget.locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).toEqual(['250000', '1000000', '4000000', '0']);
 

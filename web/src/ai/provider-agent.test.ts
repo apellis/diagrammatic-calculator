@@ -37,3 +37,14 @@ it('never executes a length-truncated streamed tool call', async () => {
   expect(messages).toHaveLength(1);
   expect(emit).toHaveBeenCalledWith({ type: 'stopped', reason: expect.stringContaining('nothing was run') });
 });
+it('stops at the token limit, naming it abbreviated as the settings do', async () => {
+  const turn = vi.fn(async () => ({
+    content: [{ type: 'tool_use', id: 'tu_1', name: 'inspect', input: {} }] as unknown as Anthropic.ContentBlock[],
+    stop: 'tool_use' as const,
+    usage: { input: 200_000, output: 60_000, cacheRead: 0, cacheWrite: 0 },
+  }));
+  const emit = vi.fn();
+  await run({ provider: { label: 'Test', turn }, host: {} as ToolHost, messages: [{ role: 'user', content: 'inspect' }], signal: new AbortController().signal, emit, budget: 250_000 });
+  expect(turn).toHaveBeenCalledOnce();
+  expect(emit).toHaveBeenCalledWith({ type: 'stopped', reason: 'Stopped at the limit of 250k tokens for one request (Settings); send another message to continue.' });
+});

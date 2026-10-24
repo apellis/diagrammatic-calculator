@@ -169,10 +169,10 @@ describe('OpenAI Responses transport', () => {
 });
 
 describe('token limit labels', () => {
-  it('abbreviate with K and M, leaving the stored values alone', () => {
+  it('abbreviate with k (thousands) and M, leaving the stored values alone', () => {
     expect(BUDGETS).toEqual([250_000, 1_000_000, 4_000_000, 0]);
-    expect(BUDGETS.map(budgetLabel)).toEqual(['250K tokens', '1M tokens', '4M tokens', 'no limit']);
-    expect(budgetLabel(100_000)).toBe('100K tokens');
+    expect(BUDGETS.map(budgetLabel)).toEqual(['250k tokens', '1M tokens', '4M tokens', 'no limit']);
+    expect(budgetLabel(100_000)).toBe('100k tokens');
     expect(budgetLabel(1_500_000)).toBe('1.5M tokens');
     expect(budgetLabel(500)).toBe('500 tokens');
   });

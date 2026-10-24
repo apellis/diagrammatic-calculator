@@ -682,7 +682,7 @@ server's as given), kept per provider in local storage and fetched again with â†
 typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay in session storage unless "Remember on this
 device" is ticked, and go only to the chosen provider. The key box is a password field with an eye
 button at its right end ("Show key" / "Hide key", `aria-pressed`) that shows the key as text in that
-box only. The token limit per request is offered as 250K, 1M, or 4M tokens, or no limit (the stored
+box only. The token limit per request is offered as 250k, 1M, or 4M tokens, or no limit (the stored
 value is the number). The first time the panel opens it says what
 leaves the browser (there is no per-document switch: nothing is sent unless one writes to the AI).
 Replies are shown as formatted text by `src/ui/markdown.ts`: a small, escaped Markdown subset

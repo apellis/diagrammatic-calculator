@@ -24,11 +24,11 @@ export interface AISettings {
 
 export const BUDGETS = [250_000, 1_000_000, 4_000_000, 0];
 
-/** A token limit as shown in the settings: abbreviated with K and M (250K tokens, 1M tokens); 0 is no limit. */
+/** A token limit as shown in the settings: abbreviated with k (thousands) and M (250k tokens, 1M tokens); 0 is no limit. */
 export function budgetLabel(tokens: number): string {
   if (!tokens) return 'no limit';
   const short = (n: number, unit: number, suffix: string) => `${Number.isInteger(n / unit) ? n / unit : (n / unit).toFixed(1).replace(/\.0$/, '')}${suffix}`;
-  const n = tokens >= 1_000_000 ? short(tokens, 1_000_000, 'M') : tokens >= 1_000 ? short(tokens, 1_000, 'K') : String(tokens);
+  const n = tokens >= 1_000_000 ? short(tokens, 1_000_000, 'M') : tokens >= 1_000 ? short(tokens, 1_000, 'k') : String(tokens);
   return `${n} tokens`;
 }
 

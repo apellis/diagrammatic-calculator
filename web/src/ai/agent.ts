@@ -4,7 +4,7 @@
 // whole request into one undo step.
 import type Anthropic from '@anthropic-ai/sdk';
 import skill from '../../../skill/SKILL.md?raw';
-import { explain, type Provider } from './providers';
+import { budgetLabel, explain, type Provider } from './providers';
 import { runTool, TOOLS, type SelectionRef, type ToolHost } from './tools';
 
 export const SYSTEM = `${skill.replace(/^---[\s\S]*?---\s*/, '')}
@@ -94,7 +94,7 @@ export async function run(p: {
   let used = 0;
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     if (p.budget && used >= p.budget) {
-      emit({ type: 'stopped', reason: `Stopped at the limit of ${p.budget.toLocaleString('en')} tokens for one request (Settings); send another message to continue.` });
+      emit({ type: 'stopped', reason: `Stopped at the limit of ${budgetLabel(p.budget)} for one request (Settings); send another message to continue.` });
       return;
     }
     let t;
