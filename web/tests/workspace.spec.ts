@@ -60,7 +60,7 @@ test('a bare term becomes a definition, and / offers the cell kinds', async ({ p
   await expect(cell(page, 0).locator('.head .text')).toHaveAttribute('data-text', 't1 := psi_1 e(iji)');
   await page.getByTestId('add-cell').click();
   await page.keyboard.type('/wa');
-  await page.getByRole('button', { name: 'watch' }).click();
+  await page.locator('.kindmenu').getByRole('button', { name: 'watch', exact: true }).click();
   await typeCell(page, 't1');
   await expect(cell(page, 1)).toHaveAttribute('data-kind', 'watch');
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('1 term, degree 1');
@@ -277,16 +277,14 @@ test('latency: edits and cached watches meet the interactive target', { tag: '@t
   const first = '1 term, degree 6';
   await expect(w).toHaveText(first);
   const id = await cell(page, 0).getAttribute('data-cell');
-  const edit = async (text: string) => {
-    await page.locator(`#cell-${id} .head`).click();
-    await page.locator(`#cell-${id} .cm-content`).click();
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.keyboard.type(text);
-  };
-  // an edit that needs the engine
+  await page.locator(`#cell-${id} .head`).click();
+  const editor = page.locator(`#cell-${id} .cm-content`);
+  await editor.click();
+  // Preview recomputes on input, before Enter. Start the clock at the actual edit.
   const second = '3 terms, degrees 4 to 6';
-  await edit('def a := (x_1 + x_2) psi_1 e(iij) + x_3 e(iij)');
-  const computed = await timeUntil(page, 1, second, 'keydown', () => page.keyboard.press('Enter'));
+  const computed = await timeUntil(page, 1, second, 'input', () => editor.fill('def a := (x_1 + x_2) psi_1 e(iij) + x_3 e(iij)'));
+  await editor.press('Enter');
+  await expect(page.getByTestId('draft-preview')).toHaveCount(0);
   // undo and redo: the values come from the cache
   await page.locator('.main').click({ position: { x: 5, y: 5 } });
   // one round first, not timed: the first undo and redo also load the cached results into memory
@@ -315,8 +313,10 @@ test('latency: a 50-cell dependency chain computes locally and undoes from cache
   await expect(page.locator('.cell[data-cell]')).toHaveCount(50);
   await expect(cell(page, 49).getByTestId('summary')).toHaveText('1 term, degree 2');
   await cell(page, 0).locator('.head').click();
-  await cell(page, 0).locator('.cm-content').fill('def a0 := x_1^2 e(iji)');
-  const computed = await timeUntil(page, 49, '1 term, degree 4', 'keydown', () => page.keyboard.press('Enter'));
+  const editor = cell(page, 0).locator('.cm-content');
+  const computed = await timeUntil(page, 49, '1 term, degree 4', 'input', () => editor.fill('def a0 := x_1^2 e(iji)'));
+  await editor.press('Enter');
+  await expect(page.getByTestId('draft-preview')).toHaveCount(0);
   const undo = await timeUntil(page, 49, '1 term, degree 2', 'click', () => page.getByRole('button', { name: 'Undo', exact: true }).click());
   console.log(`50-cell real WASM/browser chain: edit ${computed.toFixed(1)} ms; cached undo ${undo.toFixed(1)} ms`);
   expect(Number.isFinite(computed) && Number.isFinite(undo)).toBe(true);

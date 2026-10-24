@@ -364,7 +364,16 @@ a.button.icon:hover { color: var(--text); }
 .canvas { position: absolute; inset: 0; z-index: 4; background: var(--bg); display: flex; flex-direction: column; outline: none; }
 .canvas-bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .canvas .banner { margin: 8px 12px 0; }
+.canvas-insert-help { padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.gen-label { font-weight: 500; }
 .canvas-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .canvas-bar { flex-wrap: wrap; gap: 6px 10px; }
+  .canvas-bar > button, .canvas-bar > strong { flex: none; white-space: nowrap; }
+  .canvas .canvas-badge { max-width: 100%; flex-wrap: wrap; }
+  .canvas-msg { order: 1; flex-basis: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .canvas-msg:empty { display: none; }
+}
 .canvas-badge { gap: 6px; flex: none; }
 .canvas-body { flex: 1; display: flex; min-height: 0; }
 .palette-bar { width: 108px; flex: none; border-right: 1px solid var(--border); background: var(--panel); padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
@@ -526,11 +535,10 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
 .modal.new-doc { width: min(640px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; }
 .ctx-name-field { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
 .ctx-form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-.ctx-presentations { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.ctx-presentations legend { font-size: 13px; padding: 0; margin-bottom: 4px; }
-.ctx-pres { display: grid; grid-template-columns: auto 7.5em 1fr; gap: 8px; align-items: baseline; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
-.ctx-pres:has(input:checked) { background: var(--accent-soft); }
-.ctx-pres .mono { font-size: 13px; }
+.ctx-presentation { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 0; }
+.ctx-options { grid-column: 1 / -1; font-size: 13px; }
+.ctx-options summary { cursor: pointer; padding: 6px 0; }
+.ctx-options > .ctx-fields { margin-top: 8px; }
 .ctx-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
 .ctx-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; min-width: 0; }
 .ctx-fields .hint { font-size: 11.5px; }
@@ -539,8 +547,6 @@ select.branches { font: inherit; font-size: 12.5px; color: var(--muted); backgro
 .ctx-line { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; }
 @media (max-width: 560px) {
   .ctx-fields { grid-template-columns: 1fr; }
-  .ctx-pres { grid-template-columns: auto 1fr; }
-  .ctx-pres .hint { grid-column: 2; }
 }
 
 /* engine drawings: a strand's lines, dots, arrowheads and label carry its colour's class */
@@ -574,7 +580,7 @@ svg path.k15 { stroke: var(--strand-7); } svg :is(circle, polygon, text).k15 { f
 :root[data-patterns] svg path.k13 { stroke-dasharray: 4.3 2.4; }
 :root[data-patterns] svg path.k14 { stroke-dasharray: 1.2 2.4; }
 :root[data-patterns] svg path.k15 { stroke-dasharray: 7.2 1.9 1.4 1.9; }
-.ctx-fields select { font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--field-border); border-radius: 6px; padding: 6px 8px; }
+.ctx-fields select, .ctx-presentation select { font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--field-border); border-radius: 6px; padding: 6px 8px; width: 100%; }
 pre.diff > div { white-space: pre-wrap; }
 pre.diff > .add { background: var(--good-soft); color: var(--good); }
 pre.diff > .del { background: var(--bad-soft); color: var(--bad); }

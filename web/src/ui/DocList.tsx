@@ -1,4 +1,4 @@
-import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
+import { createEffect, createResource, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { createDoc, deleteDoc, duplicateDoc, isPersisted, listDocs, openDoc, type DocInfo } from '../doc/store';
 import { fillFromHistory, isDch, parseDch, parseDcw } from '../doc/dcw';
 import { ago, engine, pickFile } from '../app';
@@ -121,14 +121,22 @@ export function DocList() {
 
   /** The new-document dialog: a name and a context, checked by the engine before the document is made. */
   const [creating, setCreating] = createSignal<{ name: string; line: string } | null>(null);
+  const [creatingBusy, setCreatingBusy] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
   const create = async () => {
     const c = creating();
-    if (!c) return;
-    const o = await engine.call('context.describe', { context: c.line }, { lane: 'interactive' });
-    if (o.status !== 'done' || o.response.status !== 'ok') return; // the form shows why
-    const context = o.response.context;
-    setCreating(null);
-    open(await createDoc(c.name.trim() || 'Untitled', (d) => d.setContext(context)));
+    if (!c || creatingBusy()) return;
+    setCreatingBusy(true);
+    try {
+      const o = await engine.call('context.describe', { context: c.line }, { lane: 'interactive' });
+      if (disposed || creating() !== c || o.status !== 'done' || o.response.status !== 'ok') return; // the form shows why
+      const context = o.response.context;
+      setCreating(null);
+      open(await createDoc(c.name.trim() || 'Untitled', (d) => d.setContext(context)));
+    } finally {
+      if (!disposed) setCreatingBusy(false);
+    }
   };
   /** An example opened again gets a numbered name, so two copies are told apart. */
   const openExample = async (name: string, text: string) => {
@@ -318,7 +326,7 @@ export function DocList() {
             </details>
             <div class="row" style={{ 'margin-top': '12px', 'justify-content': 'flex-end' }}>
               <button onClick={() => setCreating(null)}>Cancel</button>
-              <button class="primary" onClick={() => void create()}>Create</button>
+              <button class="primary" disabled={creatingBusy()} onClick={() => void create()}>Create</button>
             </div>
           </Dialog>
         )}

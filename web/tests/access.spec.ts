@@ -122,10 +122,11 @@ test('a new document starts from a chosen presentation, with its options as fiel
   const d = page.getByRole('dialog', { name: 'New document' });
   await expect(d.getByLabel('Name')).toBeFocused();
   await d.getByLabel('Name').fill('Odd bubbles');
-  await d.getByRole('radio', { name: /^be2/ }).check();
+  await d.getByLabel('Presentation', { exact: true }).selectOption('be2');
   // a 2-category: the weight is μ, and the Cartan type and odd colours are fields
   await expect(d.getByLabel('Context line')).toHaveValue('be2 type=A2 mu=i ring=QQ');
   await d.getByLabel('Cartan type').fill('A1');
+  await d.getByText('Quotient and parity', { exact: true }).click();
   await d.getByLabel('Odd colours').fill('i');
   await d.getByLabel(/Weight/).fill('-1');
   await expect(d.getByLabel('Context line')).toHaveValue('be2 type=A1 mu=-1 ring=QQ odd=i');
