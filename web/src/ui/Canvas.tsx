@@ -1359,6 +1359,9 @@ export function Canvas(props: CanvasProps) {
       <Show when={props.expanded}>
         <div class="banner">{props.readOnly ? 'This term uses definitions and is shown written out.' : 'This term uses definitions; it is shown written out, and a gesture writes it out in full in the cell.'}</div>
       </Show>
+      <Show when={!props.readOnly}>
+        <div class="canvas-insert-help hint">Click a strand, then choose a piece below. You can also drag a piece onto a strand.</div>
+      </Show>
       <div class="canvas-body">
         <Show when={!props.readOnly}><div class="palette-bar" aria-label="Generators">
           <For each={props.generators}>
@@ -1377,6 +1380,7 @@ export function Canvas(props: CanvasProps) {
                 }}
                 onClick={() => insertGenerator(g)}>
                 <PaletteIcon g={g} />
+                <span class="gen-label">{g.draw === 'dot' ? 'Dot' : g.draw === 'crossing' ? 'Crossing' : g.draw === 'cup' ? 'Cup' : g.draw === 'cap' ? 'Cap' : g.name}</span>
                 <span>{inserting() ? `${i() + 1} ` : ''}<Typeset text={g.written ?? g.name} /></span>
               </button>
             )}

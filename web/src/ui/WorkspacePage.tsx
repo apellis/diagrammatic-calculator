@@ -7,6 +7,8 @@ import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
 import { exportDch, exportDcw, parseDcw, fileName } from '../doc/dcw';
 import { Cell, TEMPLATES } from './Cell';
+import { NewCell as CellComposer } from './NewCell';
+import { DiagramStart } from './DiagramStart';
 import { Outline } from './Outline';
 import { ContextChip, ContextText } from './ContextChip';
 import { Typeset } from './Typeset';
@@ -613,14 +615,17 @@ function DocView(props: {
     requestAnimationFrame(() => document.getElementById(`cell-${id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
   };
 
+  const freshName = () => {
+    const used = new Set(cells().map((c) => /^\s*def\s+(\w+)\s*:=/.exec(c.text)?.[1]));
+    let n = 1;
+    while (used.has(`t${n}`)) n++;
+    return `t${n}`;
+  };
   /** A bare term becomes a definition with a fresh name. */
   const normalize = (text: string): string => {
     const t = text.trim();
     if (!t || kindOf(t) || t.startsWith('/')) return t;
-    const used = new Set(cells().map((c) => stateOf(c.id)?.parsed?.defines));
-    let n = 1;
-    while (used.has(`t${n}`)) n++;
-    return `def t${n} := ${t}`;
+    return `def ${freshName()} := ${t}`;
   };
   /** Why a cell's text does not parse, as the engine reads it; null when it does. */
   const validate = async (text: string): Promise<string | null> => {
@@ -629,7 +634,7 @@ function DocView(props: {
     const p = await ev.parse(t);
     return 'error' in p ? p.error : null;
   };
-  const commitNew = (index: number, text: string) => {
+  const commitNew = (index: number, text: string, draw = false) => {
     if (readOnly()) return;
     const t = normalize(text);
     setAdding(null);
@@ -637,6 +642,7 @@ function DocView(props: {
     if (!t || t.startsWith('/')) return;
     const id = doc.addCell(t, index);
     focusCell(id);
+    if (draw) setCanvas({ id });
   };
   const commit = (id: string, text: string) => {
     if (readOnly()) return;
@@ -850,9 +856,9 @@ function DocView(props: {
   };
 
   const NewCell = (p: { index: number }) => (
-    <Cell id="new" text="" expanded active isNew initial={template()} onToggle={() => setAdding(null)}
-      onCommit={(t) => commitNew(p.index, t)} onCancel={() => setAdding(null)} onRemove={() => setAdding(null)}
-      onMove={() => {}} onPin={() => {}} onRerun={() => {}} onCopyTikz={() => {}} validate={validate} />
+    <CellComposer context={context()} name={freshName()} initial={template()}
+      drawing={(onStart, onChange) => <DiagramStart context={context()} onStart={onStart} onChange={onChange} />}
+      onCommit={(t, draw) => commitNew(p.index, t, draw)} onCancel={() => setAdding(null)} validate={validate} />
   );
   const defaultBranchName = () => `what if ${main.branches.size + 1}`;
 
@@ -1010,10 +1016,9 @@ function DocView(props: {
               }}
             </For>
             <Show when={adding() !== null && adding()! >= cells().length}><NewCell index={cells().length} /></Show>
-            <div style={{ 'margin-top': '10px' }}>
+            <Show when={adding() === null}><div style={{ 'margin-top': '10px' }}>
               <button disabled={readOnly()} onClick={() => addAt(cells().length)} data-testid="add-cell">+ New cell</button>
-              <span class="hint" style={{ 'margin-left': '10px' }}>Type a term to define it, or <kbd>/</kbd> for a cell kind; <kbd>Enter</kbd> commits.</span>
-            </div>
+            </div></Show>
           </div>
         </main>
         <Show when={canvas()?.id && `${canvas()!.id}:${previewing()}`} keyed>

@@ -56,21 +56,20 @@ function switchTo(p: PresentationInfo, from: [string, string][]): [string, strin
   let opts: [string, string][] = [];
   if (p.cartan) opts = set(opts, 'type', get(from, 'type') || (p.weight === 'nu' ? 'A2' : 'A1'));
   if (p.cartan && get(from, 'odd')) opts = set(opts, 'odd', get(from, 'odd'));
-  const w = get(from, p.weight);
+  // A coloured weight is not a strand count (nor conversely).
+  const compatible = p.cartan === !!get(from, 'type');
+  const w = compatible ? get(from, p.weight) : '';
   const a1 = get(opts, 'type') === 'A1';
   opts = set(opts, p.weight, w || (p.weight === 'mu' ? (p.cartan && !a1 ? 'i' : '2') : p.cartan ? (a1 ? '2i' : '2i+j') : '3'));
-  if (p.weight === 'nu' && get(from, 'Lambda')) opts = set(opts, 'Lambda', get(from, 'Lambda'));
+  if (compatible && p.weight === 'nu' && get(from, 'Lambda')) opts = set(opts, 'Lambda', get(from, 'Lambda'));
   return set(opts, 'ring', get(from, 'ring') || 'QQ');
 }
-
-let forms = 0;
 
 /**
  * The fields of a context line. `line` is the current line, `onLine` receives every change; the
  * error of the line as the engine reads it shows under the fields (after a short pause).
  */
 export function ContextForm(props: { line: string; onLine: (l: string) => void; onSubmit?: () => void }) {
-  const uid = ++forms;
   const [list] = createResource(presentations);
   const parsed = () => parseLine(props.line);
   const current = () => list()?.find((p) => p.name === parsed().name);
@@ -78,13 +77,17 @@ export function ContextForm(props: { line: string; onLine: (l: string) => void; 
   const put = (k: string, v: string) => props.onLine(printLine(parsed().name, set(parsed().opts, k, v.trim())));
   const choose = (p: PresentationInfo) => props.onLine(printLine(p.name, switchTo(p, parsed().opts)));
   const [error, setError] = createSignal('');
+  const [optionsOpen, setOptionsOpen] = createSignal(!!field('Lambda') || !!field('odd'));
+  createEffect(() => { if (field('Lambda') || field('odd')) setOptionsOpen(true); });
   // the engine's reading of the line, a moment after the last change
   createEffect(on(() => props.line, (line) => {
+    let current = true;
+    setError('');
     const t = setTimeout(async () => {
       const o = await engine.call('context.describe', { context: line }, { lane: 'interactive' });
-      if (o.status === 'done') setError(o.response.status === 'ok' ? '' : o.response.message);
+      if (current && o.status === 'done') setError(o.response.status === 'ok' ? '' : o.response.message);
     }, 250);
-    onCleanup(() => clearTimeout(t));
+    onCleanup(() => { current = false; clearTimeout(t); });
   }));
   const enter = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && props.onSubmit) {
@@ -94,18 +97,16 @@ export function ContextForm(props: { line: string; onLine: (l: string) => void; 
   };
   return (
     <div class="ctx-form">
-      <fieldset class="ctx-presentations">
-        <legend>Presentation</legend>
-        <For each={list() ?? []}>
-          {(p) => (
-            <label class="ctx-pres">
-              <input type="radio" name={`presentation-${uid}`} value={p.name} checked={p.name === parsed().name} onChange={() => choose(p)} />
-              <span class="mono">{p.name}</span>
-              <span class="hint"><PresentationTitle text={p.title} />{p.weight === 'nu' ? ' · an algebra' : ' · a 2-category'}</span>
-            </label>
-          )}
-        </For>
-      </fieldset>
+      <label class="ctx-presentation">
+        <span>Presentation</span>
+        <select aria-label="Presentation" value={parsed().name} onChange={(e) => {
+          const p = list()?.find((p) => p.name === e.currentTarget.value);
+          if (p) choose(p);
+        }}>
+          <For each={list() ?? []}>{(p) => <option value={p.name}>{p.title}</option>}</For>
+          <Show when={!current()}><option value={parsed().name}>{parsed().name}</option></Show>
+        </select>
+      </label>
       <Show when={current()}>
         {(p) => (
           <div class="ctx-fields">
@@ -115,24 +116,12 @@ export function ContextForm(props: { line: string; onLine: (l: string) => void; 
                 <input class="mono" value={field('type')} placeholder="A2" onInput={(e) => put('type', e.currentTarget.value)} onKeyDown={enter} />
                 <span class="hint">An, Bn, Cn, Dn, G2, F4, or a product such as A1xA1; colours i, j, k, …</span>
               </label>
-              <label>
-                <span>Odd colours</span>
-                <input class="mono" value={field('odd')} placeholder="none" onInput={(e) => put('odd', e.currentTarget.value)} onKeyDown={enter} />
-                <span class="hint">comma-separated, such as i</span>
-              </label>
             </Show>
             <label>
               <span>Weight <Typeset text={p().weight === 'nu' ? 'nu' : 'mu'} tex={p().weight === 'nu' ? '\\nu' : '\\mu'} /></span>
               <input class="mono" value={field(p().weight)} onInput={(e) => put(p().weight, e.currentTarget.value)} onKeyDown={enter} />
               <span class="hint">{p().weight === 'nu' ? (p().cartan ? 'a sum of colours, such as 2i+j' : 'the number of strands') : 'the weight of the rightmost region, such as 2 or i-j'}</span>
             </label>
-            <Show when={p().weight === 'nu'}>
-              <label>
-                <span>Cyclotomic <Typeset text="Lambda" tex="\Lambda" /></span>
-                <input class="mono" value={field('Lambda')} placeholder="none" onInput={(e) => put('Lambda', e.currentTarget.value)} onKeyDown={enter} />
-                <span class="hint">optional: a dominant weight for the finite quotient, such as 2i</span>
-              </label>
-            </Show>
             <label>
               <span>Ring</span>
               <select value={RINGS.some(([r]) => r === field('ring')) ? field('ring') : ''} onChange={(e) => e.currentTarget.value && put('ring', e.currentTarget.value)}>
@@ -140,6 +129,27 @@ export function ContextForm(props: { line: string; onLine: (l: string) => void; 
                 <Show when={!RINGS.some(([r]) => r === field('ring'))}><option value="">{field('ring') || 'other'} (as written)</option></Show>
               </select>
             </label>
+            <Show when={p().cartan || p().weight === 'nu'}>
+              <details class="ctx-options" open={optionsOpen()} onToggle={(e) => setOptionsOpen(e.currentTarget.open)}>
+                <summary>Quotient and parity</summary>
+                <div class="ctx-fields">
+                  <Show when={p().weight === 'nu'}>
+                    <label>
+                      <span>Cyclotomic <Typeset text="Lambda" tex="\Lambda" /></span>
+                      <input class="mono" value={field('Lambda')} placeholder="none" onInput={(e) => put('Lambda', e.currentTarget.value)} onKeyDown={enter} />
+                      <span class="hint">Optional: a dominant weight for the finite quotient, such as {p().cartan ? '2i' : '2'}.</span>
+                    </label>
+                  </Show>
+                  <Show when={p().cartan}>
+                    <label>
+                      <span>Odd colours</span>
+                      <input class="mono" value={field('odd')} placeholder="none" onInput={(e) => put('odd', e.currentTarget.value)} onKeyDown={enter} />
+                      <span class="hint">Comma-separated, such as i.</span>
+                    </label>
+                  </Show>
+                </div>
+              </details>
+            </Show>
           </div>
         )}
       </Show>

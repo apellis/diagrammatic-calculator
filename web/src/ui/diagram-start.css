@@ -1,0 +1,17 @@
+.diagram-start { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.diagram-start-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 12px; }
+.diagram-start-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.diagram-start-presets button { min-height: 32px; padding: 4px 12px; }
+.diagram-start-presets button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.diagram-start-select { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.diagram-start-select select { max-width: 100%; padding: 5px 8px; color: var(--text); background: var(--panel); border: 1px solid var(--field-border); border-radius: 6px; font: inherit; }
+.diagram-start-preview { overflow-x: auto; min-height: 196px; border: 1px solid var(--border); border-radius: 6px; background: var(--sunken); }
+.diagram-start-preview > p { padding: 16px; }
+.diagram-start-strands { margin: 0 auto; padding-top: 4px; }
+.diagram-start-strands svg { display: block; font: 14px var(--mono); }
+.diagram-start-swaps { height: 38px; position: relative; }
+.diagram-start-swaps button { position: absolute; transform: translateX(-50%); width: 34px; height: 30px; padding: 0; font-size: 20px; line-height: 1; }
+.diagram-start-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.diagram-start-footer button { min-height: 36px; padding: 6px 16px; }
+.diagram-start .error { overflow-wrap: anywhere; }
+@media (max-width: 480px) { .diagram-start { padding: 12px; } .diagram-start-footer button { width: 100%; } }

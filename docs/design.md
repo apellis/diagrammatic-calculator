@@ -408,6 +408,17 @@ Edge) keeps the file handle in IndexedDB (`diagcalc-links`), so after a reload i
 again at once if the browser still allows writing, and otherwise shows "resume saving" in the top
 bar until the person allows it (browsers ask once per visit).
 
+**Cell creation.** `src/ui/NewCell.tsx` owns the visible kind picker and local per-kind drafts.
+The existing text editor retains direct commands and slash shortcuts. The composer validates
+before committing and invalidates pending submissions when the draft, context or mode changes,
+or when it is cancelled or unmounted. The parent makes one undoable document insertion; drawing
+continues in the same focus canvas used by existing definitions, not a separate diagram format.
+`DiagramStart` reads available boundaries from `context.describe`, defaults to its first object,
+and offers preset selection and adjacent swaps without enumerating permutations. Presentations
+with explicit oriented objects instead offer upward/downward strand buttons or an empty boundary.
+Every identity is checked with `term.layout` before Start drawing is enabled; stale validation
+cannot escape its context/selection snapshot. Switching Type/Draw keeps an unfinished boundary.
+
 **Evaluation.** `src/eval/evaluator.ts`. A cell's result is keyed by a hash of its inputs: the
 engine build, the context, the unknowns it mentions, its text and the keys of the definitions it
 uses. An edit changes the keys of exactly the cells downstream of it, so every other cell, and

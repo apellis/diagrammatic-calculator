@@ -78,7 +78,7 @@ export async function expectReadOnlyCanvas(page: Page) {
  * key) until the summary of cell `n` reads `want`, measured in the page with the event's own time
  * stamp and a mutation observer, so neither Playwright's round trips nor its polling count.
  */
-export async function timeUntil(page: Page, n: number, want: string, input: 'click' | 'keydown', act: () => Promise<void>): Promise<number> {
+export async function timeUntil(page: Page, n: number, want: string, input: 'click' | 'keydown' | 'input', act: () => Promise<void>): Promise<number> {
   await page.evaluate(([n, want, input]) => {
     const w = window as unknown as { __t: Promise<number> };
     const el = () => document.querySelectorAll('.cell[data-cell]:not([data-cell="new"])')[n as number]?.querySelector('[data-testid=summary]');
