@@ -25,15 +25,32 @@ const headers = pagesHeaders();
 // than the policy allows. `vite preview` (and so the browser tests) serves all of them.
 const isolation = { 'Cross-Origin-Opener-Policy': headers['Cross-Origin-Opener-Policy'], 'Cross-Origin-Embedder-Policy': headers['Cross-Origin-Embedder-Policy'] };
 
-/** The short hash of the commit being built (GitHub's on CI), shown on the About page. */
+/** The full hash of the commit being built (GitHub's on CI), or `unknown` outside a checkout. */
 function commit(): string {
   const sha = process.env.GITHUB_SHA;
-  if (sha) return sha.slice(0, 7);
+  if (sha) return sha;
   try {
-    return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    return execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
   } catch {
     return 'unknown';
   }
+}
+
+const buildCommit = commit();
+/** The About page shows the short hash. */
+const shortCommit = buildCommit === 'unknown' ? buildCommit : buildCommit.slice(0, 7);
+
+/**
+ * `/build-info.json`: the full commit hash of this build, which the deploy workflow reads back from
+ * the production site (.github/scripts/check_deployed.py) to confirm it serves what was deployed.
+ */
+function buildInfo(): Plugin {
+  return {
+    name: 'build-info',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'build-info.json', source: `${JSON.stringify({ commit: buildCommit })}\n` });
+    },
+  };
 }
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -83,8 +100,8 @@ function privacy(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [solid(), privacy()],
-  define: { __COMMIT__: JSON.stringify(commit()) },
+  plugins: [solid(), privacy(), buildInfo()],
+  define: { __COMMIT__: JSON.stringify(shortCommit) },
   server: { headers: isolation, fs: { allow: ['..'] } },
   preview: { headers },
   worker: { format: 'es' },

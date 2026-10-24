@@ -17,7 +17,7 @@ name: Deploy web app
 on:
   push:
     branches: [master]
-    paths: ["web/**", "PRIVACY.md", "crates/core/**", "crates/wasm/**", "presentations/**", "examples/**", "Cargo.lock", ".github/workflows/deploy-web.yml", ".github/scripts/provision-accounts.sh"]
+    paths: ["web/**", "PRIVACY.md", "crates/core/**", "crates/wasm/**", "presentations/**", "examples/**", "Cargo.lock", ".github/workflows/deploy-web.yml", ".github/scripts/provision-accounts.sh", ".github/scripts/check_deployed.py"]
   workflow_dispatch:
 
 concurrency:
@@ -152,3 +152,10 @@ jobs:
           workingDirectory: web
           wranglerVersion: "4.149.0"
           command: pages deploy dist --project-name=diagcalc --branch=master --commit-dirty=true
+      # Read the deployment back as a visitor sees it: the production site must serve this commit
+      # (/build-info.json) and the privacy policy of this commit (/privacy). Retries for propagation;
+      # a lasting mismatch fails the job. Old deployments are pruned by prune-deployments.yml.
+      - name: Check that the site serves this deployment
+        if: env.CONFIGURED == 'true'
+        working-directory: .
+        run: python3 .github/scripts/check_deployed.py --commit "$GITHUB_SHA" --privacy PRIVACY.md

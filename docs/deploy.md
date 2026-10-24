@@ -73,6 +73,11 @@ those keep serving the static app but not the API.
   deploys with the D1 binding `DB`, the R2 binding `FILES`, and the variables `EMAIL_FROM` and
   `APP_ORIGIN`. Preview deployments (any branch but `master`) get no bindings (`[env.preview]`).
 - Otherwise: removes `web/wrangler.toml` and deploys the site and functions with no bindings.
+- Then reads the deployment back as any visitor would (`.github/scripts/check_deployed.py`, no
+  credentials): `https://diagcalc.pages.dev/build-info.json` (emitted by the Vite build) must name
+  the deployed commit, and the title and paragraphs of `/privacy` must be the text of `PRIVACY.md`
+  at that commit. It retries for about three minutes; a lasting mismatch fails the deploy job, and
+  pruning (below) then does not run. Wrangler's success message alone is not taken as proof.
 
 A migration is never edited once it is on `master`; a schema change is the next numbered file.
 

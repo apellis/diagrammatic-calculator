@@ -45,6 +45,7 @@ jobs:
         run: |
           bash -n .github/scripts/provision-accounts.sh
           python3 -m unittest discover -s .github/scripts -p 'test_prune_deployments.py' -v
+          python3 -m unittest discover -s .github/scripts -p 'test_check_deployed.py' -v
           python3 crates/py/tests/test_packaging.py
           python3 crates/py/tests/test_audit.py
       - name: WebAssembly build
