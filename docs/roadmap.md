@@ -33,21 +33,16 @@ The authenticated production revocation check below remains a separate phase 8 c
 Account access and external review are dependencies, not unimplemented application features.
 See `docs/deploy.md` for instructions.
 
-- **Google sign-in readiness and branding — owner access required.** Inspect the existing
-  project's Audience, Branding, and Data Access settings; verify the chosen site in Search
-  Console, complete any required brand verification, and use the production audience for release.
-  The code requests only `openid email profile`: Google's basic-sign-in exception means Testing
-  is not by itself a test-user-only restriction. Branding verification and audience publication
-  are separate. The current About route is `/#/about`, not `/about`; privacy is `/privacy`.
-- **Live revocation check:** Google's security-event receiver has been registered for
-  `https://diagcalc.pages.dev`. Verify that revocation also ends
-  access through an already-open live room. Registration alone is not this end-to-end check.
-- **Release deployment:** run the applicable release checks, verify the deployed build, and
-  confirm obsolete deployments are pruned. Do not treat a workflow acknowledgement as proof
-  that obsolete endpoints disappeared.
-- **Publish on Alex's go-ahead:** publish the tested Python distribution on PyPI, publish Google
-  sign-in, and make the repository public with the licence already in place. Configure the
-  PyPI publisher/account before the upload; packaging tests are not publication.
+- **Google sign-in:** the audience was published on 24 October. If Google later asks for brand
+  verification, complete it in the existing project (About is `/#/about`, privacy `/privacy`).
+- **Release deployment:** after each production deploy, check automatically that the site serves
+  the deployed commit and its privacy page, and that obsolete deployments are pruned. Do not
+  treat a workflow acknowledgement as proof that obsolete endpoints disappeared.
+- **PyPI:** build and test wheels for macOS, Linux, and Windows in CI so that `pip install
+  diagcalc` needs no Rust, and publish through PyPI trusted publishing on Alex's go-ahead.
+  Configure the PyPI publisher before the upload; packaging tests are not publication.
+
+The repository was made public on 24 October with the licence in place.
 
 ## Phase 9: post-release, non-blocking
 
@@ -78,6 +73,13 @@ retain changes only with measured benefits.
 - Lazy-load the AI SDK, canvas, and KaTeX fallback fonts where startup measurements justify it.
 - Cache results by canonical text rather than trimmed input text. Reassess worker warming after
   phase 7; retain only residual work supported by measurements, not duplicate worker-lifetime work.
+
+### Live revocation check
+
+Google's security-event receiver is registered for `https://diagcalc.pages.dev`, and the tests
+cover each half (a security event ends the person's sessions; ending a session closes their live
+sockets). An end-to-end check in production needs a real Google account revoking access while a
+room is open, which needs the owner's manual work; deferred from phase 8 (Alex, 24 October).
 
 ### Optional share notifications
 

@@ -190,10 +190,10 @@ Publication belongs to phase 8 and needs Alex's go-ahead.
   `https://diagcalc.pages.dev/#/about` (the app uses hash routing); the privacy policy is
   `https://diagcalc.pages.dev/privacy`. Both were reachable anonymously in the browser on
   23 October. Configure branding and authorized domains, complete any verification Google
-  requires, then switch the audience to production at release. Console configuration still
+  requires, then switch the audience to production at release (done 24 October). Console configuration still
   needs an authenticated owner; reachable pages do not establish domain verification or approval.
   See [Google's brand-verification requirements](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification).
-- **GitHub Support:** Alex has submitted the cached-history removal ticket and is waiting for
-  a response. Do not submit a duplicate request or treat the ticket as confirmation of removal.
+- **GitHub history:** the pre-rewrite commits and the refs of pull requests #1 and #2 no longer
+  resolve on GitHub (checked 24 October); the repository was made public that day.
 - **Python distribution:** build/install checks and publisher setup are documented in
   `docs/python.md`. Do not upload to PyPI or change repository visibility merely to test packaging.
