@@ -3,7 +3,8 @@
 `diagcalc` provides the exact, deterministic Rust calculator through a small Python API.
 The distribution and import are both named `diagcalc`; the version comes from the Cargo
 workspace. This is alpha software. Python distribution preparation does **not** imply
-that a release has been published to PyPI. Public publication is a Phase 8 release task.
+that a release has been published to PyPI. Publication waits for a Pythonic API
+(phase 9 in `docs/roadmap.md`).
 
 ## Install a locally built wheel
 

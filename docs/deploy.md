@@ -202,5 +202,6 @@ Publication belongs to phase 8 and needs Alex's go-ahead.
   See [Google's brand-verification requirements](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification).
 - **GitHub history:** the pre-rewrite commits and the refs of pull requests #1 and #2 no longer
   resolve on GitHub (checked 24 October); the repository was made public that day.
-- **Python distribution:** build/install checks and publisher setup are documented in
-  `docs/python.md`. Do not upload to PyPI or change repository visibility merely to test packaging.
+- **Python distribution:** not published in phase 8; PyPI waits for a Pythonic API (phase 9 in
+  `docs/roadmap.md`). Local build/install checks are in `docs/python.md`. Do not upload to PyPI
+  merely to test packaging.

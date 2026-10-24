@@ -30,12 +30,6 @@ See `docs/deploy.md` for instructions.
 
 - **Google sign-in:** the audience was published on 24 October. If Google later asks for brand
   verification, complete it in the existing project (About is `/#/about`, privacy `/privacy`).
-- **Release deployment:** after each production deploy, check automatically that the site serves
-  the deployed commit and its privacy page, and that obsolete deployments are pruned. Do not
-  treat a workflow acknowledgement as proof that obsolete endpoints disappeared.
-- **PyPI:** build and test wheels for macOS, Linux, and Windows in CI so that `pip install
-  diagcalc` needs no Rust, and publish through PyPI trusted publishing on Alex's go-ahead.
-  Configure the PyPI publisher before the upload; packaging tests are not publication.
 
 The repository was made public on 24 October with the licence in place.
 
@@ -68,6 +62,11 @@ retain changes only with measured benefits.
 - Lazy-load the AI SDK, canvas, and KaTeX fallback fonts where startup measurements justify it.
 - Cache results by canonical text rather than trimmed input text. Reassess worker warming after
   phase 7; retain only residual work supported by measurements, not duplicate worker-lifetime work.
+
+### Python
+
+- **Pythonic Python API**, designed so it could be upstreamed into SageMath; publish to PyPI only
+  after that. The current `call(op, json)` bindings stay a local-build convenience until then.
 
 ### Live revocation check
 
