@@ -72,6 +72,8 @@ export class Evaluator {
   /** Time limits asked for once, by cell id, for the next job of that cell. */
   private limits = new Map<string, number>();
   private states = new Map<string, CellState>();
+  /** States before synchronous invalidation, retained until the new keys are known. */
+  private invalidated = new Map<string, CellState>();
   private generation = 0;
   private appliedGeneration = 0;
   private remoteTimer?: ReturnType<typeof setTimeout>;
@@ -157,8 +159,19 @@ export class Evaluator {
   /** Brings every cell's state up to date with the workspace's inputs. */
   update(context: string, cells: CellData[], mode: 'local' | 'remote' = 'local'): Promise<void> {
     const gen = ++this.generation;
+    const changed = context !== this.current.context || cells.length !== this.current.cells.length ||
+      cells.some((c, i) => c.id !== this.current.cells[i]?.id || c.text !== this.current.cells[i]?.text);
     // Own the snapshot: a caller may mutate its array during the asynchronous parse.
     this.current = { context, cells: cells.map(c => ({ ...c })) };
+    if (changed) {
+      // Dependency discovery and cache reads are asynchronous. Until they finish, no old
+      // mathematical result may claim to be current, including in collapsed cells.
+      for (const s of this.states.values()) {
+        if (s.status === 'static') continue;
+        if (!this.invalidated.has(s.id)) this.invalidated.set(s.id, s);
+        this.set({ ...s, status: s.value ? 'stale' : 'running', parseError: undefined });
+      }
+    }
     if (mode === 'remote') {
       const waiting = new Promise<void>((resolve, reject) => this.remoteWaiters.push({ resolve, reject }));
       // Fixed small window, not a trailing debounce: continuous remote traffic cannot starve it.
@@ -192,11 +205,17 @@ export class Evaluator {
     const deps: number[][] = [];
     const scalars: string[][] = [];
     const defined = new Map<string, number>(); // name → index of the latest definition so far
+    const blocked: (string | undefined)[] = [];
+    let invalid: string | undefined;
     cells.forEach((c, i) => {
       const p = parsed[i];
       deps[i] = [];
       scalars[i] = [];
-      if (!('cell' in p) || p.cell.kind === 'note' || p.cell.kind === 'comment' || p.cell.kind === 'blank') return;
+      if (!('cell' in p)) { invalid ??= c.id; return; }
+      if (p.cell.kind === 'note' || p.cell.kind === 'comment' || p.cell.kind === 'blank') return;
+      // An unparseable cell may introduce/shadow a name. Omitting it from a mini-workspace
+      // could silently use an older binding. Fail closed until that syntax is repaired.
+      if (invalid) { blocked[i] = invalid; return; }
       const used = p.cell.uses.filter((n) => defined.has(n)).map((n) => defined.get(n)!);
       deps[i] = used;
       scalars[i] = [...new Set([...p.cell.uses.filter((n) => unknowns.has(n)), ...(p.cell.unknowns ?? []), ...used.flatMap((j) => scalars[j])])].sort();
@@ -216,7 +235,7 @@ export class Evaluator {
     for (let i = 0; i < cells.length; i++) {
       const c = cells[i];
       const p = parsed[i];
-      const old = this.states.get(c.id);
+      const old = this.invalidated.get(c.id) ?? this.states.get(c.id);
       const s: CellState = { id: c.id, text: c.text, status: 'static', value: old?.value, valueKey: old?.valueKey, previous: old?.previous, ms: old?.ms };
       if ('error' in p) {
         s.parseError = p.error;
@@ -224,6 +243,13 @@ export class Evaluator {
         s.value = s.valueKey = undefined;
       } else {
         s.parsed = p.cell;
+        if (blocked[i]) {
+          s.status = 'failed';
+          s.value = { kind: 'error', status: 'error', message: `Cannot compute: cell ${blocked[i]} does not parse.` };
+          s.valueKey = undefined;
+          this.set(s);
+          continue;
+        }
         s.key = keys[i];
         if (s.key) {
           const hit = this.completed.get(s.key) ?? hits.get(s.key)
@@ -247,6 +273,7 @@ export class Evaluator {
       }
       this.set(s);
     }
+    this.invalidated.clear();
     for (const id of [...this.states.keys()]) if (!cells.some((c) => c.id === id)) this.states.delete(id);
     // jobs no longer needed by any cell are cancelled
     for (const [key, a] of this.jobs) if (!wanted.has(key)) { a.abort(); this.jobs.delete(key); }

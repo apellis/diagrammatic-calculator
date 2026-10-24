@@ -348,13 +348,17 @@ function DocView(props: {
   const readOnly = () => !onBranch() && mainReadOnly();
   const authorLabel = props.authorLabel;
   const [drafts, setDrafts] = createSignal<Record<string, string>>({});
-  const rememberDraft = (id: string, text: string | null) => setDrafts((previous) => {
-    if (text === null && !(id in previous) || previous[id] === text) return previous;
-    const next = { ...previous };
-    if (text === null) delete next[id]; else next[id] = text;
-    return next;
-  });
+  const rememberDraft = (id: string, text: string | null) => {
+    setDrafts((previous) => {
+      if (text === null && !(id in previous) || previous[id] === text) return previous;
+      const next = { ...previous };
+      if (text === null) delete next[id]; else next[id] = text;
+      return next;
+    });
+    refreshPreview();
+  };
   const [cells, setCells] = createSignal(doc.keyedList());
+  const previewing = () => cells().some(c => drafts()[c.key] !== undefined && drafts()[c.key] !== c.text);
   const keyOf = (id: string) => cells().find((c) => c.id === id)?.key;
   const idOf = (key: string | null) => cells().find((c) => c.key === key)?.id ?? null;
   const [context, setContext] = createSignal(doc.context);
@@ -423,20 +427,21 @@ function DocView(props: {
 
   // cell states, one signal per cell so only changed cells re-render
   const states = new Map<string, Signal<CellState | undefined>>();
-  const slot = (id: string) => {
-    let s = states.get(id);
-    if (!s) states.set(id, (s = createSignal<CellState | undefined>(undefined, { equals: false })));
+  const previewStates = new Map<string, Signal<CellState | undefined>>();
+  const slot = (id: string, slots = states) => {
+    let s = slots.get(id);
+    if (!s) slots.set(id, (s = createSignal<CellState | undefined>(undefined, { equals: false })));
     return s;
   };
-  const stateOf = (id: string) => slot(id)[0]();
+  const stateOf = (id: string) => slot(id, previewing() ? previewStates : states)[0]();
   const scalars = () => [...new Set(cells().flatMap((c) => stateOf(c.id)?.parsed?.unknowns ?? []))].sort();
   /** The context with the workspace's scalars, for operations on a single term. */
-  const termContext = () => {
-    const sc = scalars();
+  const termContext = (preview = true) => {
+    const sc = preview ? scalars() : [...new Set(doc.list().flatMap(c => ev?.state(c.id)?.parsed?.unknowns ?? []))].sort();
     return sc.length && !/\bscalars=/.test(context()) ? `${context()} scalars=${sc.join(',')}` : context();
   };
   props.api({
-    termContext,
+    termContext: () => termContext(false),
     snapshotRun: (id) => ev?.snapshotRun(id),
     showSnapshot: (key) => {
       const i = snapshots().findIndex((s) => s.key === key);
@@ -449,10 +454,10 @@ function DocView(props: {
       for (;;) {
         const list = doc.list();
         const done = list.every((c) => {
-          const st = stateOf(c.id);
+          const st = ev?.state(c.id);
           return st && st.text === c.text && st.status !== 'running' && st.status !== 'stale';
         });
-        if (done || Date.now() > deadline) return new Map(list.map((c) => [c.id, stateOf(c.id)!]));
+        if (done || Date.now() > deadline) return new Map(list.map((c) => [c.id, ev?.state(c.id)!]));
         await new Promise((r) => setTimeout(r, 50));
       }
     },
@@ -464,6 +469,17 @@ function DocView(props: {
   });
 
   let ev: Evaluator | undefined;
+  let previewEv: Evaluator | undefined;
+  const visibleEvaluator = () => previewing() ? previewEv : ev;
+  function refreshPreview() {
+    if (!previewEv) return;
+    // Local overlays must never change the document read by collaborators, AI or exports.
+    if (previewing()) void previewEv.update(doc.context, cells().map(c => ({ id: c.id, text: drafts()[c.key] ?? c.text })));
+    else {
+      void previewEv.update(doc.context, []);
+      for (const s of previewStates.values()) s[1](undefined);
+    }
+  }
   const refresh = (_event?: unknown, transaction?: Y.Transaction) => {
     // Never reuse another UUID's row merely because its public ID and text match.
     const old = new Map(cells().map((c) => [c.key, c]));
@@ -477,6 +493,7 @@ function DocView(props: {
     setCanRedo(doc.undoManager.canRedo());
     const remote = transaction && !transaction.local && transaction.origin !== doc.localOrigin && transaction.origin !== doc.aiOrigin;
     void ev?.update(doc.context, doc.list(), remote ? 'remote' : 'local');
+    refreshPreview();
     scheduleFileSave();
   };
   const onHistory = () => setVersions(doc.versions());
@@ -511,6 +528,7 @@ function DocView(props: {
   engine.onLoad = setJobs;
   engineId.then((id) => {
     ev = new Evaluator(engine, cache, { engineId: id }, (s) => slot(s.id)[1](s));
+    previewEv = new Evaluator(engine, cache, { engineId: id }, (s) => slot(s.id, previewStates)[1](s));
     refresh();
   });
   if (!doc.cells.length && !readOnly()) setAdding(0);
@@ -629,13 +647,13 @@ function DocView(props: {
   };
 
   const pin = (id: string) => {
-    if (mainReadOnly()) return;
+    if (readOnly() || mainReadOnly() || previewing()) return;
     const s = stateOf(id);
     if (s?.value && s.valueKey) setModal({ pin: id });
   };
   const pinAs = (id: string, label: string) => {
     if (mainReadOnly()) return;
-    if (readOnly()) return;
+    if (readOnly() || previewing()) return;
     setModal(null);
     const s = stateOf(id);
     if (!s?.value || !s.valueKey || s.status !== 'fresh' || !label.trim()) return;
@@ -668,7 +686,7 @@ function DocView(props: {
   };
   const canvasTerm = (id: string): string | null => {
     const s = stateOf(id);
-    if (!s?.parsed?.term) return null;
+    if (s?.status !== 'fresh' || !s.parsed?.term) return null;
     if (!usesDefinitions(id)) return s.parsed.term;
     const v = s.value as { status: string; term?: string } | undefined;
     return s.status === 'fresh' && v?.status === 'ok' && v.term ? v.term : null;
@@ -679,7 +697,7 @@ function DocView(props: {
   };
   const writeCanvas = (id: string, term: string, note: string, ids?: (fresh: (letter: string) => string) => Record<string, string[]>) => {
     const p = stateOf(id)?.parsed;
-    if (readOnly() || p?.kind !== 'def') return;
+    if (readOnly() || previewing() || p?.kind !== 'def') return;
     const head = `def ${p.defines} := ${term}`;
     doc.updateCell(id, head + Object.entries(p.options).map(([k, v]) => `  ${k}=${v}`).join(''), `${note} in ${p.defines ?? id}`, ids);
   };
@@ -695,12 +713,12 @@ function DocView(props: {
     const i = id ? cells().findIndex((c) => c.id === id) : -1;
     addAt(i < 0 ? cells().length : i + 1);
   };
-  const stop = (id: string) => ev?.cancel(id);
-  const runLonger = (id: string) => ev?.rerun(id, 600_000);
+  const stop = (id: string) => visibleEvaluator()?.cancel(id);
+  const runLonger = (id: string) => visibleEvaluator()?.rerun(id, 600_000);
   const trace = (id: string) => (word: string, signal: AbortSignal) =>
-    ev ? ev.trace(id, word, signal) : Promise.resolve({ status: 'cancelled' as const, ms: 0 });
+    visibleEvaluator()?.trace(id, word, signal) ?? Promise.resolve({ status: 'cancelled' as const, ms: 0 });
   const commandLine = (id: string) => {
-    const ws = ev?.workspaceOf(id);
+    const ws = visibleEvaluator()?.workspaceOf(id);
     return ws && `cat > cell.dcw <<'EOF'\n${ws}EOF\ndiagcalc run cell.dcw\n`;
   };
   const rename = (n: string) => {
@@ -777,7 +795,7 @@ function DocView(props: {
           { name: 'Back to the document', run: () => props.branching.open(null) },
         ]
       : props.branching.list.map((b) => ({ name: `Open branch “${b.name}”`, run: () => props.branching.open(b.id) }))),
-    { name: 'Cancel running computations', run: () => ev?.cancelAll() },
+    { name: 'Cancel running computations', run: () => { ev?.cancelAll(); previewEv?.cancelAll(); } },
     { name: 'Clear the result cache', run: async () => { await cache.clear(); setMessage('Result cache cleared; results are computed again as needed.'); } },
     { name: 'Show or hide the outline', run: () => setOutline(!outline()) },
     { name: 'Open the active cell in the canvas', keys: keysOf('canvas'), run: () => active() && openCanvas(active()!) },
@@ -822,6 +840,7 @@ function DocView(props: {
     um.off('stack-item-added', onStack);
     um.off('stack-item-popped', onStack);
     ev?.cancelAll();
+    previewEv?.cancelAll();
   });
 
   const reminder = () => {
@@ -931,7 +950,7 @@ function DocView(props: {
         <button class={`light ${jobs() ? 'busy' : ''}`} disabled={!jobs()} data-testid="light"
           title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'}
           aria-label={jobs() ? `Cancel ${jobs()} ${jobs() === 1 ? 'computation' : 'computations'}` : 'No computations running'}
-          onClick={() => jobs() && ev?.cancelAll()} />
+          onClick={() => { if (jobs()) { ev?.cancelAll(); previewEv?.cancelAll(); } }} />
         <button class="ghost" classList={{ on: props.aiOpen }} onClick={props.onToggleAI} title={`AI panel (${keysOf('ai')})`} data-testid="ai-toggle">AI</button>
         <button class="ghost" onClick={() => setModal('palette')} title={`Commands (${keysOf('palette')})`} aria-label="Commands">⋯</button>
       </header>
@@ -958,6 +977,7 @@ function DocView(props: {
             </Show>
             <CloudRecovery o={props.o} sync={props.sync} onBranch={(inputs, name) => props.branching.create(name, inputs)} />
             <Show when={readOnly()}><div class="banner" data-testid="read-only">View only. Export or make a personal branch to work on a copy.</div></Show>
+            <Show when={previewing()}><div class="banner" data-testid="draft-preview" role="status">Results preview your uncommitted edits. Enter or leaving the cell saves them; Esc discards them. Shared documents, exports and AI reads still use the saved inputs.</div></Show>
             <For each={Object.entries(drafts()).filter(([key]) => !cells().some((c) => c.key === key))}>
               {([id, text]) => <div class="banner" data-testid="deleted-draft">
                 Cell {id} was deleted elsewhere. Your uncommitted draft is still here.
@@ -982,7 +1002,7 @@ function DocView(props: {
                     readOnly={readOnly()} onDraft={(t) => { if (row()) rememberDraft(key, t); }} remoteCursors={cursorsFor(id())} onSelection={(s) => textSelection(id(), s)}
                     onToggle={() => toggle(id())} onCommit={(t) => commit(id(), t)} onCancel={() => setActive(null)}
                     onRemove={() => !readOnly() && doc.removeCell(id())} onMove={(d) => !readOnly() && doc.moveCell(id(), i() + d)}
-                    onPin={() => pin(id())} pinDisabled={mainReadOnly()} onRerun={() => ev?.rerun(id())} onCopyTikz={() => copyTikz(id())}
+                    onPin={() => pin(id())} pinDisabled={mainReadOnly() || previewing()} onRerun={() => visibleEvaluator()?.rerun(id())} onCopyTikz={() => copyTikz(id())}
                     onCanvas={(w) => openCanvas(id(), w)} validate={validate} onInsertBelow={() => insertBelow(id())}
                     onStop={() => stop(id())} onRunLonger={() => runLonger(id())} commandLine={() => commandLine(id())} trace={trace(id())}
                     comments={props.comments().filter((x) => x.cell === id())} onComment={(t) => props.onComment(id(), text(), t)} />
@@ -996,13 +1016,21 @@ function DocView(props: {
             </div>
           </div>
         </main>
-        <Show when={canvas()?.id} keyed>
-          {(id) => {
+        <Show when={canvas()?.id && `${canvas()!.id}:${previewing()}`} keyed>
+          {(_identity) => {
+            const id = canvas()!.id;
+            // Remount across the preview boundary: a delayed private layout must never become
+            // a shared selection merely because the draft was discarded meanwhile.
+            const privateCanvas = previewing();
             const key = keyOf(id)!;
-            return <Canvas doc={doc} readOnly={readOnly() || stateOf(id)?.parsed?.kind !== 'def'} remoteSelections={canvasPresence()} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
+            return <Canvas doc={doc} readOnly={readOnly() || previewing() || stateOf(id)?.parsed?.kind !== 'def'} remoteSelections={canvasPresence()} engine={engine} cellId={id} title={canvasTitle(id)} context={termContext()}
               term={canvasTerm(id)} expanded={usesDefinitions(id)} generators={described()?.generators ?? []}
               colours={described()?.colours ?? []} hintsVersion={hintsVersion()} initialWord={canvas()?.word} value={stateOf(id)?.value}
-              onWrite={(t, note, ids) => { const current = idOf(key); if (!readOnly() && current) writeCanvas(current, t, note, ids); }} onSelection={(s) => { props.onSelection(s); if (!onBranch()) props.sync?.updatePresence({ selection: s }); }} onAsk={props.onAsk}
+              onWrite={(t, note, ids) => { const current = idOf(key); if (!readOnly() && current) writeCanvas(current, t, note, ids); }} onSelection={(s) => {
+                const selection = privateCanvas || previewing() ? null : s;
+                props.onSelection(selection);
+                if (!onBranch()) props.sync?.updatePresence({ selection });
+              }} onAsk={props.onAsk}
               onClose={() => { setCanvas(null); const current = idOf(key); if (current) focusCell(current); }} />;
           }}
         </Show>

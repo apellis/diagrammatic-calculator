@@ -117,6 +117,7 @@ export function Cell(props: CellProps) {
   // parse is never written to the document; the editor stays open with the reason under it
   const [problem, setProblem] = createSignal('');
   let checks = 0;
+  let revision = 0;
   let pause: ReturnType<typeof setTimeout> | undefined;
   const check = async (t: string) => {
     const n = ++checks;
@@ -124,8 +125,10 @@ export function Cell(props: CellProps) {
     if (n === checks) setProblem(why ?? '');
     return why;
   };
-  onCleanup(() => clearTimeout(pause));
+  onCleanup(() => { clearTimeout(pause); revision++; checks++; });
   const changed = (t: string) => {
+    revision++;
+    checks++;
     setDraft(t);
     props.onDraft?.(t === props.text ? null : t);
     clearTimeout(pause);
@@ -136,17 +139,24 @@ export function Cell(props: CellProps) {
     if (props.readOnly || (conflict() && !resolve)) return;
     clearTimeout(pause);
     const observed = props.text;
-    if (await check(t)) return editor?.focus();
-    // Validation is asynchronous. A remote commit while it runs is a new conflict.
+    const attempt = ++revision;
+    const why = await check(t);
+    // A cancelled or superseded edit must not commit (or steal focus) after validation.
+    if (attempt !== revision) return;
+    if (why) return editor?.focus();
+    // A remote commit while validation runs is a new conflict.
     if (props.readOnly || observed !== props.text || (conflict() && !resolve)) return;
     base = t;
     setDraft(t);
     setConflict(false);
-    props.onDraft?.(null);
     if (!props.isNew) setEditing(false);
     props.onCommit(t);
+    props.onDraft?.(null);
   };
   const takeTheirs = () => {
+    revision++;
+    checks++;
+    clearTimeout(pause);
     base = props.text;
     setDraft(base);
     setConflict(false);
@@ -241,14 +251,16 @@ export function Cell(props: CellProps) {
           <Show when={props.state && !props.isNew && ((kind() !== 'note' && kind() !== 'comment') || editing())}>
             <ResultView s={props.state!} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} trace={props.trace} />
           </Show>
-          {/* a new cell has nothing to recompute, pin or move until it is committed */}
+          {/* New cells have no saved result or position yet. */}
           <Show when={!props.isNew} fallback={
             <div class="tools"><div class="grow" /><button class="ghost" onClick={props.onRemove}>Discard (Esc)</button></div>
           }>
             <div class="tools">
               <button class="ghost" title="Move up" aria-label="Move the cell up" disabled={props.readOnly} onClick={() => props.onMove(-1)}>↑</button>
               <button class="ghost" title="Move down" aria-label="Move the cell down" disabled={props.readOnly} onClick={() => props.onMove(1)}>↓</button>
-              <button class="ghost" onClick={props.onRerun} disabled={!props.state?.key}>Recompute</button>
+              <Show when={props.state?.status === 'failed' && props.state.value?.status === 'error' && 'message' in props.state.value && props.state.value.message === 'cancelled'}>
+                <button class="ghost" onClick={props.onRerun}>Retry</button>
+              </Show>
               <button class="ghost" onClick={props.onPin} disabled={props.readOnly || props.pinDisabled || !canPin()}>Pin result</button>
               <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
               <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>

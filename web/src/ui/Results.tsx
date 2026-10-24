@@ -17,6 +17,7 @@ export function summary(s: CellState): string {
   if (s.parseError) return 'error';
   const v = s.value;
   if (s.status === 'running') return 'computing…';
+  if (s.status === 'stale' && (v?.kind === 'check' || v?.kind === 'solve')) return 'recomputing…';
   if (!v) return '';
   if (v.status === 'exploded') return 'stopped';
   if (v.status === 'error') return v.message === 'cancelled' ? 'cancelled' : 'error';
@@ -71,7 +72,7 @@ function Elapsed(props: { since?: number }) {
  * how long it has been computing, and a mark when the value rests on an open hypothesis.
  */
 export function Summary(props: { state?: CellState; small?: boolean }) {
-  const c = () => (props.state && ok(props.state.value) ? certainty(props.state.value) : null);
+  const c = () => (props.state?.status === 'fresh' && ok(props.state.value) ? certainty(props.state.value) : null);
   const running = () => props.state?.status === 'running' || props.state?.status === 'stale';
   return (
     <span class="summary-wrap" classList={{ small: props.small }}>
@@ -555,8 +556,8 @@ export function ResultView(props: {
     <Switch>
       <Match when={props.s.parseError}><div class="error">{props.s.parseError}</div></Match>
       <Match when={props.s.parsed?.kind === 'note'}><NoteView text={props.s.parsed!.note ?? ''} /></Match>
-      <Match when={props.s.status === 'running'}><Running s={props.s} onStop={props.onStop} /></Match>
-      <Match when={v()?.status === 'error'}><div class="error">{(v() as { message: string }).message === 'cancelled' ? 'Stopped before it finished. Recompute to run it again.' : (v() as { message: string }).message}</div></Match>
+      <Match when={props.s.status === 'running' || props.s.status === 'stale' && (v()?.kind === 'check' || v()?.kind === 'solve' || v()?.status !== 'ok')}><Running s={props.s} onStop={props.onStop} /></Match>
+      <Match when={v()?.status === 'error'}><div class="error">{(v() as { message: string }).message === 'cancelled' ? 'Stopped before it finished. Retry to run it again.' : (v() as { message: string }).message}</div></Match>
       <Match when={v()?.status === 'exploded'}><Exploded message={(v() as { message: string }).message} diagnostics={(v() as { diagnostics?: Sizes }).diagnostics} onRunLonger={props.onRunLonger} commandLine={props.commandLine} /></Match>
       <Match when={ok(v()) && (v() as Ok)} keyed>
         {(res) => {

@@ -46,6 +46,37 @@ async function edit(page: Page, index: number, text: string, commit = true) {
 }
 const text = (page: Page, index: number, value: string) => expect(cell(page, index).locator('.head .text')).toHaveAttribute('data-text', value);
 
+test('private previews update dependents locally, and committed edits update a viewer', async ({ browser }) => {
+  const { mock, ada, viewer } = fixture();
+  const a = await device(browser, mock, ada), b = await device(browser, mock, viewer);
+  try {
+    await connected(mock, 2);
+    await edit(a.page, 0, 'def e := psi_1 psi_2 psi_1 e(iji)');
+    await edit(a.page, 1, 'check idempotent(e)');
+    await expect(cell(a.page, 1).getByTestId('summary')).toHaveText('holds');
+    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('holds');
+    const before = Buffer.from(Y.encodeStateAsUpdate(mock.room(ID).doc));
+    await cell(a.page, 0).getByTestId('cell-display').click();
+    const editor = cell(a.page, 0).locator('.cm-content');
+    await editor.fill('def e := x_1 e(iji)');
+    await expect(cell(a.page, 1).getByTestId('summary')).toHaveText('fails');
+    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('holds');
+    expect(Buffer.from(Y.encodeStateAsUpdate(mock.room(ID).doc))).toEqual(before);
+    await cell(a.page, 0).getByTestId('open-canvas').click();
+    await expect(a.page.locator('.canvas .hit-piece[data-draw="dot"]')).toBeVisible();
+    // Presence and AI selection are outbound channels too, not just the Yjs document.
+    await expect.poll(() => [...mock.room(ID).presence.getStates().values()].filter(s => s.user?.id === ada.id)).toEqual([
+      expect.objectContaining({ selection: null }),
+    ]);
+    await a.page.getByTestId('back-to-doc').click();
+    expect(Buffer.from(Y.encodeStateAsUpdate(mock.room(ID).doc))).toEqual(before);
+    await editor.press('Enter');
+    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('fails');
+    await a.page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('holds');
+  } finally { await a.context.close(); await b.context.close(); mock.dispose(); }
+});
+
 test('public-ID repair keeps the private draft and editor on the original UUID', async ({ browser }) => {
   const { mock, ada, bob } = fixture();
   const a = await device(browser, mock, ada), b = await device(browser, mock, bob);

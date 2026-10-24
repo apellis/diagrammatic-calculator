@@ -191,6 +191,16 @@ The core is exact, deterministic and incremental: the same inputs give the same 
 
 **Caching and incremental evaluation.** Every result is keyed by a hash of its inputs (presentation version, context, operation, terms). The workspace is a dependency graph of cells; an edit recomputes only cells downstream of it, in topological order, and a cache hit returns instantly (so undo is instant). The cache lives in memory and in IndexedDB, with a size cap and least-recently-used eviction.
 
+Evaluation is automatic, including local previews while editing an existing cell: definitions,
+watches, checks and solves use the private draft until it is committed or discarded. A banner
+distinguishes preview results from saved inputs; drafts are not shared, exported, given to the AI,
+or pinnable as saved snapshots. Enter or leaving the cell commits a valid draft; Esc discards it.
+Live cells have no Recompute button. Stopped jobs can be retried, and frozen snapshots can still
+be independently recomputed against their frozen inputs. Before asynchronous dependency
+discovery finishes, old results cease to be current; obsolete check verdicts and solve outcomes
+are hidden. An unparseable cell blocks subsequent calculations rather than being silently omitted
+from their inputs (which could select an older definition of the same name).
+
 **Long jobs.** Any operation can report progress and be cancelled. Jobs run in the worker pool. A cell whose inputs changed shows "stale" until its new value arrives, and never shows an old value as current. A job that exceeds its memory or time budget stops in an "exploded" state with size diagnostics (term count, largest dot degree, estimated basis size) and suggests the command-line tool.
 
 **Results are snapshots.** Definitions are live: editing one recomputes everything downstream. Naming a result freezes it as a snapshot holding the workspace version, hashes of its inputs, the value, the equality strategy, the faithfulness certificate and any caps. Exports and AI milestone summaries cite snapshots, so a later edit never silently changes a reported result.
