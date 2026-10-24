@@ -87,6 +87,13 @@ test('a conditional certificate is named, and says which verdict rests on it', a
   await expect(cell(page, 1).locator('.cond-mark')).toHaveText('Assuming nondegeneracy');
   await expect(cell(page, 2).locator('.cond-mark')).toHaveText('Assuming nondegeneracy');
   await expect(page.locator('.outline .cond-mark')).toHaveCount(2);
+  // collapsed, each check's verdict is also a pill beside its kind, marked as the summary is
+  await expect(cell(page, 0).locator('.head > .kind + .outcome')).toHaveText('holds');
+  await expect(cell(page, 0).getByTestId('outcome-mark')).toHaveCount(0);
+  await expect(cell(page, 1).locator('.head > .kind + .outcome')).toHaveText(/^fails/);
+  await expect(cell(page, 1).getByTestId('outcome')).toHaveClass(/fails/);
+  await expect(cell(page, 1).getByTestId('outcome-mark')).toHaveText('Assuming nondegeneracy');
+  await expect(cell(page, 2).getByTestId('outcome')).toHaveCount(0);
   await cell(page, 0).locator('.head').click();
   await expect(cell(page, 0).getByTestId('verdict-note')).toHaveText('unconditional');
   await cell(page, 1).locator('.head').click();

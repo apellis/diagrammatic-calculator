@@ -70,10 +70,15 @@ test('private previews update dependents locally, and committed edits update a v
     ]);
     await a.page.getByTestId('back-to-doc').click();
     expect(Buffer.from(Y.encodeStateAsUpdate(mock.room(ID).doc))).toEqual(before);
+    await expect(cell(b.page, 1).locator('.head > .kind + .outcome')).toHaveText('holds');
     await editor.press('Enter');
     await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('fails');
+    // the viewer's collapsed check: computed (the dot), and fails (the pill)
+    await expect(cell(b.page, 1).locator('.head > .kind + .outcome')).toHaveText('fails');
+    await expect(cell(b.page, 1).getByTestId('cell-dot')).toHaveAttribute('title', 'Computed');
     await a.page.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect(cell(b.page, 1).getByTestId('summary')).toHaveText('holds');
+    await expect(cell(b.page, 1).locator('.head > .kind + .outcome')).toHaveText('holds');
   } finally { await a.context.close(); await b.context.close(); mock.dispose(); }
 });
 

@@ -451,6 +451,14 @@ separate local evaluator for previews. The committed evaluator remains authorita
 reads and frozen snapshots; exports still read the document. Discarding a draft restores committed
 results without writing the document. Preview results cannot be pinned or used for canvas writes.
 
+**Cell status.** A cell's coloured dot says whether its computation is current: green when
+computed, amber while it is computing or recomputing, red when it failed or stopped at a limit; its
+tooltip says which (`dotTitle` in `src/ui/Results.tsx`). It says nothing about a check's verdict. A
+collapsed cell with a yes/no result (a check) shows the verdict as a pill, "holds" or "fails", right
+after its kind, in the outline's colours and with the same mark when the verdict is conditional
+(`Outcome`); like the summary, the pill is shown only while the value is current, in edit and view
+mode alike.
+
 **Showing results.** `workspace.run` draws the summands of definitions and watches
 (`summands`, each with its word, degree, and SVG). A watch outlines summands that are new since
 its previous value, shows the vanished ones faded for two seconds, and lists the changes under

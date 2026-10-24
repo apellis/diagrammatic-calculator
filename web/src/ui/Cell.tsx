@@ -4,7 +4,7 @@ import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import type { CellState } from '../eval/evaluator';
 import { kindOf } from '../doc/model';
 import { Editor, type RemoteCursor } from './Editor';
-import { NoteView, ResultView, Summary, summary, type Tracer } from './Results';
+import { dotTitle, NoteView, Outcome, ResultView, Summary, summary, type Tracer } from './Results';
 import { Typeset } from './Typeset';
 import { toTex } from './tex';
 import type { CellComment } from './AIPanel';
@@ -198,8 +198,10 @@ export function Cell(props: CellProps) {
           }
         }}>
         <span aria-hidden="true" data-testid="cell-disclosure" style={{ width: '1em', "flex-shrink": 0 }}>{props.expanded ? '▾' : '▸'}</span>
-        <span class={`dot ${props.state?.status ?? ''}`} />
+        <span class={`dot ${props.state?.status ?? ''}`} title={dotTitle(props.state)} data-testid="cell-dot" />
         <span class="kind">{kind()}</span>
+        {/* the dot says whether the computation is current; the verdict of a yes/no result is its own pill */}
+        <Show when={!props.expanded}><Outcome state={props.state} /></Show>
         {/* expanded, the text is shown once, below, where it is edited */}
         <span class="text grow" data-text={head()}>
           <Show when={!props.expanded}>

@@ -2,7 +2,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import { kindOf, type CellData, type Snapshot, type Version } from '../doc/model';
 import type { CellState } from '../eval/evaluator';
-import { NoteView, Summary, summary } from './Results';
+import { dotTitle, NoteView, Summary, summary } from './Results';
 import { Typeset } from './Typeset';
 import { ContextText } from './ContextChip';
 import { ago } from '../app';
@@ -74,7 +74,7 @@ export function Outline(props: {
                   <Show when={c()}>
                     <button class="oitem" onClick={() => props.onSelect(p.id)} title={`${c()!.text}\nterm counts: ${p.trend.join(', ')}`}
                       aria-label={`${label(c()!, props.state(p.id))}${props.state(p.id) ? `, ${summary(props.state(p.id)!)}` : ''}`}>
-                      <span class={`dot ${props.state(p.id)?.status ?? ''}`} />
+                      <span class={`dot ${props.state(p.id)?.status ?? ''}`} title={dotTitle(props.state(p.id))} />
                       <span class="t grow" data-text={label(c()!, props.state(p.id))}><Label c={c()!} s={props.state(p.id)} /></span>
                       <Trend values={p.trend} />
                       <Summary state={props.state(p.id)} small />
@@ -91,7 +91,7 @@ export function Outline(props: {
             <button class="oitem" classList={{ on: props.active === c.id }} aria-current={props.active === c.id ? 'true' : undefined}
               onClick={() => props.onSelect(c.id)} title={c.text}
               aria-label={`${label(c, props.state(c.id))}${props.state(c.id) ? `, ${summary(props.state(c.id)!)}` : ''}`}>
-              <span class={`dot ${props.state(c.id)?.status ?? ''}`} />
+              <span class={`dot ${props.state(c.id)?.status ?? ''}`} title={dotTitle(props.state(c.id))} />
               <span class="t grow" data-text={label(c, props.state(c.id))}><Label c={c} s={props.state(c.id)} /></span>
               <Summary state={props.state(c.id)} small />
             </button>

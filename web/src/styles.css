@@ -176,8 +176,10 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .summary-wrap.small { font-size: 11.5px; gap: 4px; }
 .summary.fails { color: var(--bad); }
 .elapsed { font-variant-numeric: tabular-nums; }
-.cond-mark { color: var(--warn); }
-.cond-mark::before { content: '· '; color: var(--muted); }
+.cond-mark, .outcome-mark { color: var(--warn); }
+.cond-mark::before, .outcome-mark::before { content: '· '; color: var(--muted); }
+.outcome { display: inline-flex; align-items: baseline; gap: 4px; flex: none; margin-left: -8px; padding: 0 7px; border: 1px solid var(--border); border-radius: 999px; font-size: 11.5px; line-height: 17px; color: var(--muted); white-space: nowrap; }
+.outcome.fails { color: var(--bad); border-color: currentColor; }
 .cell .body { border-top: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .cell .tools { display: flex; gap: 4px; flex-wrap: wrap; }
 .cell .tools button { font-size: 12px; padding: 2px 8px; }
@@ -380,6 +382,8 @@ a.button.icon:hover { color: var(--text); }
 .canvas-help .gestures { width: 100%; }
 @media (max-width: 600px) {
   .cell > .head[aria-expanded="false"] { display: grid; grid-template-columns: 14px 7px auto minmax(0, 1fr); gap: 6px; }
+  .cell > .head[aria-expanded="false"]:has(> .outcome) { grid-template-columns: 14px 7px auto auto minmax(0, 1fr); }
+  .cell > .head[aria-expanded="false"] > .outcome { margin-left: 0; }
   .cell > .head[aria-expanded="false"] > .summary-wrap { grid-column: 3 / -1; justify-self: end; max-width: 100%; white-space: normal; text-align: right; }
   .canvas-help .gestures thead { display: none; }
   .canvas-help .gestures tr { display: grid; gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--border); }

@@ -92,6 +92,46 @@ export function Summary(props: { state?: CellState; small?: boolean }) {
   );
 }
 
+/**
+ * What a cell's coloured dot says: whether its computation succeeded and is current. It says
+ * nothing about a check's verdict, which `Outcome` shows.
+ */
+export function dotTitle(s?: CellState): string {
+  switch (s?.status) {
+    case 'fresh': return 'Computed';
+    case 'stale': return 'Recomputing';
+    case 'running': return 'Computing';
+    case 'failed': return 'Computation failed';
+    case 'exploded': return 'Computation stopped at a limit';
+    case 'static': return 'Nothing to compute';
+    default: return 'Not computed yet';
+  }
+}
+
+/**
+ * The verdict of a current yes/no result (a check) as a small pill, "holds" or "fails", with the
+ * same mark as the summary when the verdict rests on an open hypothesis. Nothing while the value
+ * is not current: a stale verdict is never shown.
+ */
+export function Outcome(props: { state?: CellState }) {
+  const r = () => {
+    const s = props.state;
+    return s && s.status === 'fresh' && !s.parseError && ok(s.value) && typeof s.value.holds === 'boolean' ? s.value : null;
+  };
+  const c = () => (r() ? certainty(r()!) : null);
+  return (
+    <Show when={r()}>
+      {(v) => (
+        <span class="outcome" classList={{ holds: v().holds, fails: !v().holds }} data-testid="outcome" data-holds={String(v().holds)}
+          title={`The check ${v().holds ? 'holds' : 'fails'}${c() ? `; ${c()!.text}` : ''}`}>
+          {v().holds ? 'holds' : 'fails'}
+          <Show when={c()?.mark}>{(m) => <span class="outcome-mark" data-testid="outcome-mark">{m()}</span>}</Show>
+        </span>
+      )}
+    </Show>
+  );
+}
+
 /** Text with $…$ formulas, as plain text for a tooltip. */
 const plain = (t: string) => t.replace(/\$([^$]*)\$/g, '$1').replace(/\\nu\b/g, 'ν').replace(/\\Lambda\b/g, 'Λ');
 

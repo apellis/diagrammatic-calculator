@@ -118,3 +118,77 @@ for (const cancel of [true, false]) {
     await expect(row.locator('.head .text')).toHaveAttribute('data-text', 'a := x_1');
   });
 }
+
+/** Holds every `workspace.run` call until `release`, so a recomputation can be seen while it runs. */
+async function holdRuns(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { held: (() => void)[]; hold: boolean };
+    w.held = [];
+    w.hold = true;
+    const post = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (m: ToWorker) {
+      if (!w.hold || m.type !== 'call' || m.op !== 'workspace.run') return post.call(this, m);
+      w.held.push(() => post.call(this, m));
+    };
+  });
+  return () => page.evaluate(() => {
+    const w = window as unknown as { held: (() => void)[]; hold: boolean };
+    w.hold = false;
+    for (const f of w.held.splice(0)) f();
+  });
+}
+
+async function collapse(page: Page, index: number) {
+  const head = cell(page, index).locator('.head');
+  if (await head.getAttribute('aria-expanded') === 'true') await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'false');
+}
+
+test('a collapsed check shows its verdict beside its kind, and its dot only says whether the computation is current', async ({ page }) => {
+  await example(page);
+  await collapse(page, 3);
+  const check = cell(page, 3);
+  const pill = check.locator('.head > .kind + .outcome');
+  const dot = check.getByTestId('cell-dot');
+  await expect(pill).toHaveText('holds');
+  await expect(dot).toHaveAttribute('title', 'Computed');
+  await expect(check.locator('.head > .kind')).toHaveText('check');
+
+  // an edit to a definition it uses: while it recomputes the dot says so and no verdict is shown
+  const release = await holdRuns(page);
+  await editDefinition(page, 'def e := x_1', true);
+  await expect(dot).toHaveAttribute('title', 'Recomputing');
+  await expect(dot).toHaveClass(/stale|running/);
+  await expect(check.getByTestId('outcome')).toHaveCount(0);
+  await release();
+  // computed fine, and the check fails: the dot is green, the pill says fails
+  await expect(pill).toHaveText('fails');
+  await expect(pill).toHaveClass(/fails/);
+  await expect(dot).toHaveAttribute('title', 'Computed');
+  await expect(dot).toHaveClass(/fresh/);
+
+  // undo restores the old verdict from the cache
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(pill).toHaveText('holds');
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(pill).toHaveText('fails');
+
+  // an edit to the check itself
+  await check.locator('.head').click();
+  await expect(check.getByTestId('outcome')).toHaveCount(0);
+  await check.locator('.cm-content').fill('check idempotent(1)');
+  await check.locator('.cm-content').press('Enter');
+  await expect(check.getByTestId('verdict')).toHaveText('holds');
+  await collapse(page, 3);
+  await expect(pill).toHaveText('holds');
+
+  // view mode shows the same pill
+  await page.getByTestId('view-mode').click();
+  await expect(page.getByTestId('view-mode')).toHaveAttribute('aria-pressed', 'true');
+  await collapse(page, 3);
+  await expect(pill).toHaveText('holds');
+  await expect(dot).toHaveAttribute('title', 'Computed');
+  // the other cells have no yes/no outcome, so no pill
+  await expect(cell(page, 0).getByTestId('outcome')).toHaveCount(0);
+  await expect(cell(page, 2).getByTestId('outcome')).toHaveCount(0);
+});
