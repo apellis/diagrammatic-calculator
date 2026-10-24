@@ -12,12 +12,12 @@ Rust as the default unless FLINT wins clearly.
 ## Method
 
 1. **Workloads.** `diagcalc-bench --quick` runs B1 (nilHecke, n = 3 to 5), B2 (odd nilHecke,
-   n = 3 to 5) and B3 (KLR A₂, A₃, B₂, G₂). Each benchmark first checks its answers: normal forms
+   n = 3 to 5), and B3 (KLR A₂, A₃, B₂, G₂). Each benchmark first checks its answers: normal forms
    act like the terms they come from, idempotents are idempotent, Koszul signs hold. All passed.
-2. **Trace.** Built with the `trace` feature, the bench logs every polynomial product, sum and
+2. **Trace.** Built with the `trace` feature, the bench logs every polynomial product, sum, and
    division by `x_i − x_j` made by the timed work, with its operands
    (`diagcalc_core::poly::trace`). The quick suite logs 2,972,106 operations: 436,533 products,
-   96,671 sums and 2,438,902 divisions.
+   96,671 sums, and 2,438,902 divisions.
 3. **Replay.** The same trace is replayed on three backends, timing each kind of operation:
    - **current**: the engine's `PolyRing<Integers>` (`Monomial(Vec<i32>)`, `BigInt`
      coefficients), as it stands;
@@ -50,7 +50,7 @@ step is in `bench/spike/run-spike.sh`.
 - 98% of the divisions (2,387,432 of 2,438,902) are not exact. `Alg::canon` tries to cancel
   every factor of the denominator after every product and sum, and most attempts fail.
 - The operands are tiny: the median polynomial has 1 term for products and divisions and 2 for
-  sums. The largest has 144 terms, the largest exponent is 14 and every coefficient is at most 11
+  sums. The largest has 144 terms, the largest exponent is 14, and every coefficient is at most 11
   in absolute value.
 
 So the cost lies in per-operation overhead (allocation, sorting, failed divisions), not in large

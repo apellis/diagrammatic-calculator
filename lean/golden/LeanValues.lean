@@ -5,7 +5,7 @@ reproduce every value (`crates/core/tests/lean_values.rs`).
 
 Like `Golden.lean`, this file uses Lean core only and never links against the libraries: it
 evaluates the right-hand sides of the cited theorems, which are finite combinatorial sums, at
-concrete data. Every row names the theorem it instantiates. The libraries' algebras, `gdim` and
+concrete data. Every row names the theorem it instantiates. The libraries' algebras, `gdim`, and
 `finrank` are noncomputable, so the left-hand sides cannot be evaluated directly.
 
 Sources (commits as surveyed):

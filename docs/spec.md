@@ -8,11 +8,11 @@ diagrammatic-calculator is a fast, exact calculator for diagrammatic algebra, KL
 
 **Goals**
 
-- Compute graded dimensions, bases, Gram matrices, idempotents and simplified expressions in seconds; edits and cached watches update in under 150 ms.
+- Compute graded dimensions, bases, Gram matrices, idempotents, and simplified expressions in seconds; edits and cached watches update in under 150 ms.
 - One source of truth: every object is a term in a presentation; the diagram is a view of that term, and editing either edits both.
 - Built equally for people and AI agents: everything the UI does goes through one operation API, which is also the MCP tool list and the in-app AI's tool list.
 - Odd and super signs from the first version (odd nilHecke, BE2), with oriented and unoriented strands.
-- General beyond KLR (Alex, 21 October). The engine, formats and API work for any diagrammatic algebra given by a presentation of a strict monoidal supercategory (later a 2-supercategory): webs, Temperley–Lieb and Brauer-type diagrams, Soergel diagrammatics, Heisenberg categories and the like. KLR, nilHecke and odd nilHecke are only the first presentation files. No KLR-specific assumption enters the core types; what a family needs beyond its presentation file (a representation, a basis normal form, a known dimension formula) plugs in through one interface per strategy.
+- General beyond KLR (Alex, 21 October). The engine, formats, and API work for any diagrammatic algebra given by a presentation of a strict monoidal supercategory (later a 2-supercategory): webs, Temperley–Lieb and Brauer-type diagrams, Soergel diagrammatics, Heisenberg categories, and the like. KLR, nilHecke, and odd nilHecke are only the first presentation files. No KLR-specific assumption enters the core types; what a family needs beyond its presentation file (a representation, a basis normal form, a known dimension formula) plugs in through one interface per strategy.
 - Trust through cross-checks: engine values are tested against values proved in Lean, and found rewrite chains export to Lean.
 - Runs in the browser at no cost: computation happens on the user's machine; hosting costs Alex under $100 a year.
 
@@ -22,18 +22,18 @@ diagrammatic-calculator is a fast, exact calculator for diagrammatic algebra, KL
 - Research results. The repository holds the tool; research using it lives in other repositories.
 - Server-side computation, a paid tier, TikZ import, and diagram categories beyond those named in the phases. Each can be added later without changing the core.
 
-**Fixed decisions (Alex, 18 to 23 October):** repository diagrammatic-calculator, private during early development, with the code to be made public later; Rust core with Python bindings and a WebAssembly build; TypeScript front end; static site at `https://diagcalc.pages.dev`, accessible without Cloudflare Access; anonymous use with documents in the browser; optional Google sign-in, sharing and multiplayer on Cloudflare Workers; users bring their own AI API key; optional share email through Resend once a separate sender is configured; budget under $100 a year.
+**Fixed decisions (Alex, 18 to 23 October):** repository diagrammatic-calculator, private during early development, with the code to be made public later; Rust core with Python bindings and a WebAssembly build; TypeScript front end; static site at `https://diagcalc.pages.dev`, accessible without Cloudflare Access; anonymous use with documents in the browser; optional Google sign-in, sharing, and multiplayer on Cloudflare Workers; users bring their own AI API key; optional share email through Resend once a separate sender is configured; budget under $100 a year.
 
 ## Architecture
 
 One Rust core does all mathematics; every client reaches it through the same operation API, so anything the UI can do, an agent can do.
 
-- **`core` (Rust library).** Presentations, terms, rewriting, representations, linear algebra, the workspace evaluator and the operation API. No I/O, no threads of its own, deterministic. Compiles to native code and to `wasm32-unknown-unknown`.
+- **`core` (Rust library).** Presentations, terms, rewriting, representations, linear algebra, the workspace evaluator, and the operation API. No I/O, no threads of its own, deterministic. Compiles to native code and to `wasm32-unknown-unknown`.
 - **`wasm` (browser build).** The core behind a thin `wasm-bindgen` layer, run inside Web Workers: one worker for interactive operations, a pool for long jobs (watches, solves, Gram matrices) that can be cancelled. Multi-core needs the page served with cross-origin isolation headers (`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`), set in Pages' `_headers` file. Without them the pool falls back to separate single-threaded workers.
-- **`cli` (native binary).** `diagcalc` runs workspaces headless, answers operations as JSON on stdin and stdout, and serves the MCP server over stdio (`diagcalc mcp`). Released as downloadable binaries for Linux, macOS and Windows; nothing is hosted.
+- **`cli` (native binary).** `diagcalc` runs workspaces headless, answers operations as JSON on stdin and stdout, and serves the MCP server over stdio (`diagcalc mcp`). Released as downloadable binaries for Linux, macOS, and Windows; nothing is hosted.
 - **`py` (Python bindings, PyO3).** The same operations for notebooks and scripts. Published as a wheel built in CI.
 - **`web` (front end, TypeScript).** The app: document list, workspace, diagram canvas, AI chat. Talks to the worker through a typed message channel generated from the operation schema. Rendering is SVG.
-- **`sync` (later, Cloudflare Worker).** Google sign-in, sharing, document storage and live sync. Stores and relays; never computes.
+- **`sync` (later, Cloudflare Worker).** Google sign-in, sharing, document storage, and live sync. Stores and relays; never computes.
 
 **Repository layout**
 
@@ -55,15 +55,15 @@ diagrammatic-calculator/
 
 ## Mathematical model
 
-Everything is a linear combination of layered words in a presentation of a strict monoidal supercategory (later, a 2-supercategory). This is the same layered idea as categorification-lean and string-diagrams-lean, but not the same encoding: categorification-lean's `LayerData`, for instance, is specific to KL III. The Lean bridge is therefore a translation with its own conformance tests (see "Testing, CI, release and the Lean bridge").
+Everything is a linear combination of layered words in a presentation of a strict monoidal supercategory (later, a 2-supercategory). This is the same layered idea as categorification-lean and string-diagrams-lean, but not the same encoding: categorification-lean's `LayerData`, for instance, is specific to KL III. The Lean bridge is therefore a translation with its own conformance tests (see "Testing, CI, release, and the Lean bridge").
 
 **Presentation.** A presentation fixes:
 
 - **Colours** `I` with a Cartan datum (matrix `a_ij`, symmetrizer `d_i`), each colour with a parity (even or odd) and an orientation mode (oriented, or unoriented and drawn without arrows).
 - **Objects** as words in signed colours (`i` up, `i*` down). In phase 5, regions also carry weights `λ` from a weight lattice.
-- **Generators**, each with a name, a source word, a target word, a degree and a parity. Degree and parity may depend on the colours involved (for a KLR crossing of colours i, j the degree is −(α_i, α_j)). A generator may be a schema over colours, for example `cross(i,j)` for all i, j.
-- Relations as schemas: metavariables over colours, side conditions (i = j, i ≠ j, a_ij = 0, −1, −2, −3), and parameter polynomials such as Q_ij(u, v), instantiated at a Cartan datum, a weight ν and, for cyclotomic quotients, a dominant weight Λ. Each relation has a name, a rewrite direction and a provenance map (see Terms). A conformance checker runs on every presentation file: both sides of each relation have the same source, target, degree and parity; side conditions are satisfiable; and the parameters meet the presentation's stated hypotheses (for KLR, Q_ii = 0 and Q_ij(u, v) = Q_ji(v, u)).
-- Ground rings, in Alex's order of priority: ℤ, ℚ, ℤ/p and ℤ[√−1] from phase 1; ℚ(q), ℚ[t] and ℚ[t, t⁻¹] in phase 2, which should be cheap since they reuse the same polynomial code. Parameters (t_ij, the coefficients of Q_ij, and π with π² = 1 for the covering setting) live in a polynomial ring over the base, reduced modulo stated relations. Over ℤ and ℤ[√−1], linear algebra uses Hermite and Smith normal forms, so ranks and torsion are exact. Over fields it uses elimination, working modulo several primes with rational reconstruction for ℚ.
+- **Generators**, each with a name, a source word, a target word, a degree, and a parity. Degree and parity may depend on the colours involved (for a KLR crossing of colours i, j the degree is −(α_i, α_j)). A generator may be a schema over colours, for example `cross(i,j)` for all i, j.
+- Relations as schemas: metavariables over colours, side conditions (i = j, i ≠ j, a_ij = 0, −1, −2, −3), and parameter polynomials such as Q_ij(u, v), instantiated at a Cartan datum, a weight ν, and, for cyclotomic quotients, a dominant weight Λ. Each relation has a name, a rewrite direction, and a provenance map (see Terms). A conformance checker runs on every presentation file: both sides of each relation have the same source, target, degree, and parity; side conditions are satisfiable; and the parameters meet the presentation's stated hypotheses (for KLR, Q_ii = 0 and Q_ij(u, v) = Q_ji(v, u)).
+- Ground rings, in Alex's order of priority: ℤ, ℚ, ℤ/p, and ℤ[√−1] from phase 1; ℚ(q), ℚ[t], and ℚ[t, t⁻¹] in phase 2, which should be cheap since they reuse the same polynomial code. Parameters (t_ij, the coefficients of Q_ij, and π with π² = 1 for the covering setting) live in a polynomial ring over the base, reduced modulo stated relations. Over ℤ and ℤ[√−1], linear algebra uses Hermite and Smith normal forms, so ranks and torsion are exact. Over fields it uses elimination, working modulo several primes with rational reconstruction for ℚ.
 
 **Terms.** A word is a source object and a list of layers from bottom to top; a layer places one generator at a strand position, with identities elsewhere. A term is a finite sum of coefficient × word. The summand is the unit that edits act on, and most gestures and rewrites turn one summand into a sum. Generator occurrences have IDs, but IDs do not simply carry through rewrites. Each rewrite returns a provenance map saying, for every occurrence, whether it survived (and where), was created, was deleted, or was split across several summands. A reference from a person or the AI is resolved as (version, cell, summand, occurrence) at the moment it is made.
 
@@ -85,13 +85,13 @@ Words equal up to interchange are identified by a canonical layering (each gener
 - **Finite-dimensional linear algebra** in a cyclotomic quotient or an explicit truncation.
 - **Bounded search only**: equality is unknown. The engine can say "equal" (with a chain) but never "not equal".
 
-The strategy is available in a compact "How computed" disclosure beside every value, and tests cross-check two strategies wherever both apply. Ordinary use does not require choosing or managing a representation. Full strategy, certificate, reference and hypotheses remain in the operation response and exports. Odd BE2 nondegeneracy is an accepted working assumption: dependent results say "Assuming nondegeneracy", and their certificates remain conditional, not proved.
+The strategy is available in a compact "How computed" disclosure beside every value, and tests cross-check two strategies wherever both apply. Ordinary use does not require choosing or managing a representation. Full strategy, certificate, reference, and hypotheses remain in the operation response and exports. Odd BE2 nondegeneracy is an accepted working assumption: dependent results say "Assuming nondegeneracy", and their certificates remain conditional, not proved.
 
-**Faithfulness is a certificate, not an axiom.** A presentation file records, for each representation, one of: proved in Lean (with the declaration), literature (with the reference and its hypotheses on the Cartan datum, the Q_ij and the characteristic), conditional (proven under a named open hypothesis, such as BE2's Nondegeneracy Conjecture for odd colours, which results that rely on it state), assumed, or unknown. Results that relied on a representation show its certificate, and one that is assumed or unknown never refutes an equality without a witness checked another way. Cyclotomic quotients R^Λ(ν) are not computed in the polynomial representation; they use a basis or quotient modules.
+**Faithfulness is a certificate, not an axiom.** A presentation file records, for each representation, one of: proved in Lean (with the declaration), literature (with the reference and its hypotheses on the Cartan datum, the Q_ij, and the characteristic), conditional (proven under a named open hypothesis, such as BE2's Nondegeneracy Conjecture for odd colours, which results that rely on it state), assumed, or unknown. Results that relied on a representation show its certificate, and one that is assumed or unknown never refutes an equality without a witness checked another way. Cyclotomic quotients R^Λ(ν) are not computed in the polynomial representation; they use a basis or quotient modules.
 
 **Finiteness.** R(ν) is infinite-dimensional. The finite-dimensional toolkit (radical, blocks, idempotent lifting, primitivity, Gram ranks) requires a cyclotomic quotient or an explicit truncation (a degree cap or a dot cap) set in the context, and each operation states this precondition. Caps are printed on every result they affect, and nothing is truncated silently. Graded dimensions of R(ν) are reported as series up to a stated degree.
 
-**Degree is not an implicit cutoff.** Supported exact evaluation strategies accept arbitrary finite input degrees, subject to runtime, memory and machine representation limits; there is no default degree-6, degree-16 or degree-20 ceiling. A proven upper bound for a graded quotient means that higher homogeneous components are exactly zero, not uncomputed. An explicit `degcap` still rejects components outside its scope unless they are independently proved zero. When a quotient has no known global bound, requested graded pieces can be computed on demand without a cap; enumerating its whole basis needs a finite bound or explicit scope, and operations requiring the complete algebra still refuse incomplete input. Solver budgets and operational cancellation remain explicit failures, never mathematical zeroes.
+**Degree is not an implicit cutoff.** Supported exact evaluation strategies accept arbitrary finite input degrees, subject to runtime, memory, and machine representation limits; there is no default degree-6, degree-16, or degree-20 ceiling. A proven upper bound for a graded quotient means that higher homogeneous components are exactly zero, not uncomputed. An explicit `degcap` still rejects components outside its scope unless they are independently proved zero. When a quotient has no known global bound, requested graded pieces can be computed on demand without a cap; enumerating its whole basis needs a finite bound or explicit scope, and operations requiring the complete algebra still refuse incomplete input. Solver budgets and operational cancellation remain explicit failures, never mathematical zeroes.
 
 ## File and data formats
 
@@ -131,7 +131,7 @@ rhs = "psi_1 x_2 + 1"
 ids = { "x_1" = "x_2" }
 ```
 
-The KLR file is one schema for any Cartan datum and choice of Q_ij, parameterized by the context. Each presentation file ships with tests: known dimensions, known identities and values proved in Lean.
+The KLR file is one schema for any Cartan datum and choice of Q_ij, parameterized by the context. Each presentation file ships with tests: known dimensions, known identities, and values proved in Lean.
 
 **2. Text term format.** What people type, agents produce, and logs and the API carry. Juxtaposition is vertical composition, read like operators: `a b` draws b first and a above it. Subscripts give strand positions, `e(iji)` is the idempotent for a colour sequence, `⊗` (ASCII `(x)`) places side by side, `+` and `-` combine with coefficients in front. Unknown coefficients are names declared in the cell (`c1`). ASCII aliases exist for every symbol (`psi`, `pi`, `q^-1`).
 
@@ -156,7 +156,7 @@ note """Candidate from the A2 search, step 3."""          # id=nt5
 
 The live document is a Yjs CRDT; the `.dcw` file is its export and import format. A companion `.dch` file (optional) holds the full version history and the AI activity timeline, for headless runs that are replayed later.
 
-**4. Operation messages (JSON).** Every operation in the API is a JSON request and response with a JSON Schema in `spec/ops/`. The same schemas generate the TypeScript types, the MCP tool definitions and the AI tool definitions.
+**4. Operation messages (JSON).** Every operation in the API is a JSON request and response with a JSON Schema in `spec/ops/`. The same schemas generate the TypeScript types, the MCP tool definitions, and the AI tool definitions.
 
 **IDs.** Generator occurrences get short IDs by kind (d dot, c crossing, u cup, n cap, b bubble, s strand), numbered in creation order within a document (d3, c12); cells have IDs too, two letters for the kind and a number (df1 def, wt2 watch, sv3 solve, ck4 check, nt5 note; the numbers are shared by all kinds), so a cell ID never reads as an occurrence ID. Files written before the two-letter prefixes have one-letter cell IDs (d1, w2), which are read as they are. A rewrite's provenance map says what became of each ID. IDs are shown only on hover or with a labels toggle: people point at things, and the selection carries the references.
 
@@ -171,11 +171,11 @@ Each convention below changes answers silently if read differently, so each is s
 - **KLR relations.** The sign of the dot-slide relations and the convention for Q_ij(u, v) (u on the left strand) are read from categorification-lean's KLR presentation in the first week of phase 1 and recorded here before any other code is written.
 - **Drawing.** TikZ export matches the drawing style of Brundan–Ellis, *Super Kac–Moody 2-categories* (arXiv:1701.04133v2), using core TikZ and no nonstandard packages. SVG uses the same proportions.
 
-**The golden corpus** (`tests/golden/`) has at least a dozen small terms in nilHecke, odd nilHecke and KLR of types A₂ and B₂. Each comes with its normal form and its polynomial action, computed independently in Lean and pinned as tests from phase 1. When this spec says a value is cross-checked, it means the engine reproduces the golden corpus.
+**The golden corpus** (`tests/golden/`) has at least a dozen small terms in nilHecke, odd nilHecke, and KLR of types A₂ and B₂. Each comes with its normal form and its polynomial action, computed independently in Lean and pinned as tests from phase 1. When this spec says a value is cross-checked, it means the engine reproduces the golden corpus.
 
 ## Engine
 
-The core is exact, deterministic and incremental: the same inputs give the same output on every platform, and only what an edit touches is recomputed.
+The core is exact, deterministic, and incremental: the same inputs give the same output on every platform, and only what an edit touches is recomputed.
 
 **Arithmetic.** Integers and rationals of arbitrary size, ℤ/p for word-size primes, ℤ[√−1], and sparse multivariate polynomials over these in the parameters and the x variables, with ℚ(q) as quotients of polynomials. Heavy linear algebra over ℚ works modulo several primes and reconstructs rational answers, verified by one exact check. Sparse polynomial arithmetic is the hot path, so the backend is chosen by a phase 1 spike rather than here: native Rust sparse polynomials against a FLINT binding, on workloads B1 to B5, natively and in WebAssembly. Pure Rust is the default unless FLINT wins clearly, because FLINT complicates the WebAssembly build.
 
@@ -183,7 +183,7 @@ The core is exact, deterministic and incremental: the same inputs give the same 
 
 **Representations.** Builds the polynomial representation from the presentation file's `representation` section: KLR acting on ⊕ k[x]e(**i**) with Q_ij, and odd nilHecke on skew polynomials. Elements are evaluated to their normal form Σ_w f_w T_w, and products and sums act on these directly. This is the fast path for watches and equality checks. Each representation carries its faithfulness certificate, and results inherit it.
 
-**Graded linear algebra** (finite-dimensional objects only: a cyclotomic quotient, or a truncation set in the context). For a graded piece: a basis, the matrix of an element acting by left or right multiplication, ranks, kernels and images, a bilinear form's Gram matrix and its rank, the Jacobson radical, the semisimple quotient and its blocks, lifting idempotents from the quotient, and testing that an idempotent is primitive (its corner algebra is local). Cyclotomic quotients are computed degree by degree up to the top degree given by the graded dimension.
+**Graded linear algebra** (finite-dimensional objects only: a cyclotomic quotient, or a truncation set in the context). For a graded piece: a basis, the matrix of an element acting by left or right multiplication, ranks, kernels, and images, a bilinear form's Gram matrix and its rank, the Jacobson radical, the semisimple quotient and its blocks, lifting idempotents from the quotient, and testing that an idempotent is primitive (its corner algebra is local). Cyclotomic quotients are computed degree by degree up to the top degree given by the graded dimension.
 
 **Solving, in three tiers.** (1) Linear systems in unknown coefficients, solved exactly over every ground ring: this is the core feature. (2) Polynomial systems such as e·e = e, over ℚ or ℤ/p, only in a finite-dimensional quotient or truncation, by Gröbner bases with explicit limits on size and time. The answer is a finite list, a parametrized family (a positive-dimensional component given by generators of its ideal), "none", or "limit reached"; the solver never runs unbounded. (3) With parameters or over Laurent polynomial rings: solving after specializing them, with the specialization printed on the result.
 
@@ -192,7 +192,7 @@ The core is exact, deterministic and incremental: the same inputs give the same 
 **Caching and incremental evaluation.** Every result is keyed by a hash of its inputs (presentation version, context, operation, terms). The workspace is a dependency graph of cells; an edit recomputes only cells downstream of it, in topological order, and a cache hit returns instantly (so undo is instant). The cache lives in memory and in IndexedDB, with a size cap and least-recently-used eviction.
 
 Evaluation is automatic, including local previews while editing an existing cell: definitions,
-watches, checks and solves use the private draft until it is committed or discarded. A banner
+watches, checks, and solves use the private draft until it is committed or discarded. A banner
 distinguishes preview results from saved inputs; drafts are not shared, exported, given to the AI,
 or pinnable as saved snapshots. Enter or leaving the cell commits a valid draft; Esc discards it.
 Live cells have no Recompute button. Stopped jobs can be retried, and frozen snapshots can still
@@ -203,9 +203,9 @@ from their inputs (which could select an older definition of the same name).
 
 **Long jobs.** Any operation can report progress and be cancelled. Jobs run in the worker pool. A cell whose inputs changed shows "stale" until its new value arrives, and never shows an old value as current. A job that exceeds its memory or time budget stops in an "exploded" state with size diagnostics (term count, largest dot degree, estimated basis size) and suggests the command-line tool.
 
-**Results are snapshots.** Definitions are live: editing one recomputes everything downstream. Naming a result freezes it as a snapshot holding the workspace version, hashes of its inputs, the value, the equality strategy, the faithfulness certificate and any caps. Exports and AI milestone summaries cite snapshots, so a later edit never silently changes a reported result.
+**Results are snapshots.** Definitions are live: editing one recomputes everything downstream. Naming a result freezes it as a snapshot holding the workspace version, hashes of its inputs, the value, the equality strategy, the faithfulness certificate, and any caps. Exports and AI milestone summaries cite snapshots, so a later edit never silently changes a reported result.
 
-**Two structures, kept apart.** The workspace document holds the cells; it is the CRDT that multiplayer later syncs. The calculation graph is an append-only tree of steps and their results, which history, branches and the Lean exporter read. They have different merge, version and export rules, so neither is stored inside the other.
+**Two structures, kept apart.** The workspace document holds the cells; it is the CRDT that multiplayer later syncs. The calculation graph is an append-only tree of steps and their results, which history, branches, and the Lean exporter read. They have different merge, version, and export rules, so neither is stored inside the other.
 
 ## Operation API
 
@@ -228,10 +228,10 @@ One list of typed operations is the whole interface. The web UI calls them in th
 | Compute | `basis`, `graded_dim`, `gram`, `radical`, `blocks`, `lift_idempotent` | Graded linear algebra |
 | History | `branch.create`, `branch.compare`, `branch.accept`, `branch.discard` | Scratch branches for "what if" |
 | History | `undo`, `redo`, `version.goto` | Move along the version history |
-| Export | `export.tikz`, `export.text`, `export.lean`, `export.dcw` | Outputs for papers, Lean and files |
+| Export | `export.tikz`, `export.text`, `export.lean`, `export.dcw` | Outputs for papers, Lean, and files |
 | AI | `timeline.note`, `watch.pin`, `milestone.write` | How the AI shows what it is doing |
 
-Each response includes the status (ok, stale, cancelled, exploded with size diagnostics, or error with a message), the time taken, and the result's equality strategy, faithfulness certificate and caps. Long operations return a job ID that `job.progress` and `job.cancel` take. Every operation declares its preconditions in its schema (for example finite-dimensional or homogeneous) and refuses with a plain message when they fail. Two operations not in the table above: `presentation.check` runs the conformance checker, and `result.pin` freezes a snapshot.
+Each response includes the status (ok, stale, cancelled, exploded with size diagnostics, or error with a message), the time taken, and the result's equality strategy, faithfulness certificate, and caps. Long operations return a job ID that `job.progress` and `job.cancel` take. Every operation declares its preconditions in its schema (for example finite-dimensional or homogeneous) and refuses with a plain message when they fail. Two operations not in the table above: `presentation.check` runs the conformance checker, and `result.pin` freezes a snapshot.
 
 The MCP server is `diagcalc mcp`, a stdio server built from these schemas. A client such as Claude Code adds it with one line of configuration and then works on a `.dcw` file on disk, which the user can open in the web app with File › Open.
 
@@ -242,12 +242,12 @@ The app is one page with three columns: an outline of everything in the document
 **Layout.**
 
 - **Top bar:** document name, the context chip (presentation, type, ν, ring; click to change), the branch name, undo and redo, a status light for running jobs, and the AI toggle.
-- **Outline (left, collapsible):** every definition, watch, solve, check and note by name, with its status (fresh, stale, running, failed) and a search box. Clicking an item scrolls to it and expands it. Pinned progress watches sit at the top with their small trend line.
-- **Workspace (middle):** cells in order. A collapsed cell has a disclosure arrow, its kind, name, text form and summary ("0", "4 terms, degree 0", "2 solutions"). On phones the summary sits below the expression rather than squeezing it out. An expanded cell shows its editor, its diagrams and its full result. One cell is active at a time; others expand on request.
+- **Outline (left, collapsible):** every definition, watch, solve, check, and note by name, with its status (fresh, stale, running, failed) and a search box. Clicking an item scrolls to it and expands it. Pinned progress watches sit at the top with their small trend line.
+- **Workspace (middle):** cells in order. A collapsed cell has a disclosure arrow, its kind, name, text form, and summary ("0", "4 terms, degree 0", "2 solutions"). On phones the summary sits below the expression rather than squeezing it out. An expanded cell shows its editor, its diagrams, and its full result. One cell is active at a time; others expand on request.
 - **AI panel (right, toggle with ⌘J):** the chat, and under it the activity timeline of AI steps with their notes. Hidden by default until a key is entered.
-- **Focus canvas:** any diagram opens full-size (press F or double-click its frame) for detailed manipulation, with the palette of generators down the left edge. Relations, Remove, Fit and zoom have visible buttons as well as keyboard paths. Read-only canvases offer framing and inspection, never editing actions. Canvas help opens a keyboard-contained dialog and stacks its instructions on phones.
+- **Focus canvas:** any diagram opens full-size (press F or double-click its frame) for detailed manipulation, with the palette of generators down the left edge. Relations, Remove, Fit, and zoom have visible buttons as well as keyboard paths. Read-only canvases offer framing and inspection, never editing actions. Canvas help opens a keyboard-contained dialog and stacks its instructions on phones.
 
-**Cells.** Definition, watch, solve, check and note, as in the roadmap's table. A new cell shows the five types as visible buttons: Element, Watch, Check, Solve and Note. Element offers Type and Draw, with a fresh editable name. Typing a bare term defines that name; complete cell commands and `/` shortcuts still work. Changing types preserves each unfinished draft locally. Enter or Add cell commits text (Ctrl/Command-Enter for notes); Escape discards the new cell. A watch shows its value as a sum of diagrams beside its text form, with a summary line; terms that appeared since the last value are outlined in green and terms that vanished are shown faded for two seconds, then listed under "changed". Clicking a term shows which terms of the definitions produced it.
+**Cells.** Definition, watch, solve, check, and note, as in the roadmap's table. A new cell shows the five types as visible buttons: Element, Watch, Check, Solve, and Note. Element offers Type and Draw, with a fresh editable name. Typing a bare term defines that name; complete cell commands and `/` shortcuts still work. Changing types preserves each unfinished draft locally. Enter or Add cell commits text (Ctrl/Command-Enter for notes); Escape discards the new cell. A watch shows its value as a sum of diagrams beside its text form, with a summary line; terms that appeared since the last value are outlined in green and terms that vanished are shown faded for two seconds, then listed under "changed". Clicking a term shows which terms of the definitions produced it.
 
 **New documents.** Presentation, weight, Cartan type where applicable, and ring have editable defaults. Optional cyclotomic and parity settings live under a disclosure, opened when either is set; the complete context line remains available. Switching between coloured weights and numeric strand counts replaces incompatible defaults rather than carrying an invalid weight into the new presentation.
 
@@ -283,7 +283,7 @@ The app is one page with three columns: an outline of everything in the document
 
 **Undo and redo.** A committed change (a gesture, a typed edit, a context change, an AI action) is one step; a multi-step AI action undoes as one. Undo reverts this session's steps, not another person's edits, and reuses cached results when available. Undo stacks are session-local. Private recovery keeps the latest 50 automatic steps plus explicitly retained checkpoints; a retained version opens read-only or as a personal branch. This is ordinary editor recovery, not an archive of every intermediate edit. Uncommitted typing stays private, with explicit Keep mine / Take theirs choices when the committed cell changes elsewhere.
 
-**Accessibility and devices.** Desktop browsers first (current Chrome, Safari and Firefox). Every gesture has a keyboard path, diagrams carry text alternatives (the term's text form), and colours are distinguishable without hue (strand colours also get patterns on request). Phones and tablets can read and run documents; editing diagrams there comes later.
+**Accessibility and devices.** Desktop browsers first (current Chrome, Safari, and Firefox). Every gesture has a keyboard path, diagrams carry text alternatives (the term's text form), and colours are distinguishable without hue (strand colours also get patterns on request). Phones and tablets can read and run documents; editing diagrams there comes later.
 
 ## AI integration
 
@@ -291,7 +291,7 @@ The AI never does algebra itself: it calls the engine's operations, so every ans
 
 **The loop.** When you send a message, the page builds a request with three parts: the skill text as the system prompt, the operation list as tools, and your message with the current selection attached. The model replies with text or tool calls. The page runs each tool call locally in the WebAssembly engine, sends back the results, and repeats until the model answers. Each tool call is a normal workspace step, recorded in the history and the activity timeline.
 
-**Providers and keys.** Anthropic first: its API accepts calls made directly from a browser when the request opts in, which the official TypeScript SDK supports, so no server is needed. Other providers come only after a check, because not every provider accepts browser calls made with an API key. Phase 4b starts by testing OpenAI and an OpenAI-compatible local endpoint. If a provider refuses, the app says so and points to the command-line tool and MCP instead. The key is kept for the session only by default; "Remember on this device" stores it in that browser's storage. It is sent only to the chosen provider. The default model is Claude Opus 5.5 with adaptive thinking and streaming. The settings page (not the AI panel, which links to it while nothing is set up) offers the provider, other models and an effort level, since the user pays. The stable prefix (skill text and tool list) is marked for prompt caching, which cuts the user's cost on every turn after the first. Refusals and rate limits are shown as plain messages, never as silent failures.
+**Providers and keys.** Anthropic first: its API accepts calls made directly from a browser when the request opts in, which the official TypeScript SDK supports, so no server is needed. Other providers come only after a check, because not every provider accepts browser calls made with an API key. Phase 4b starts by testing OpenAI and an OpenAI-compatible local endpoint. If a provider refuses, the app says so and points to the command-line tool and MCP instead. The key is kept for the session only by default; "Remember on this device" stores it in that browser's storage. It is sent only to the chosen provider. The default model is Claude Opus 5.5 with adaptive thinking and streaming. The settings page (not the AI panel, which links to it while nothing is set up) offers the provider, other models, and an effort level, since the user pays. The stable prefix (skill text and tool list) is marked for prompt caching, which cuts the user's cost on every turn after the first. Refusals and rate limits are shown as plain messages, never as silent failures.
 
 **What leaves the browser.** Every AI message sends the selection and the terms involved to the provider. The AI panel says so the first time it opens; nothing is sent unless the person writes to the AI.
 
@@ -307,37 +307,37 @@ The AI never does algebra itself: it calls the engine's operations, so every ans
 
 ## Documents and storage
 
-Until accounts exist, every document lives in the user's browser, and files on disk are the way to keep, move and share it.
+Until accounts exist, every document lives in the user's browser, and files on disk are the way to keep, move, and share it.
 
 - **Document list.** Create, open, rename, duplicate, delete, with search and last-edited times. Each document is a Yjs CRDT stored in IndexedDB with its version history, and autosaves on every step.
 - **Persistent storage.** On first save the app calls `navigator.storage.persist()`, which asks the browser not to delete the app's data when the disk fills. Safari may still clear site data after about seven days without a visit unless the app is installed to the Dock or home screen, so the app shows a one-line notice to anonymous users, suggests installing it, and reminds them to export a document that has changed and not been exported for a week.
 - **Files.** Export writes a `.dcw` file (and optionally its `.dch` history); import reads either. Where the browser supports it (Chrome, Edge), a document can be linked to a file on disk and saved straight to it, so a research repository can hold workspaces that the web app edits in place; the link survives a reload (the browser asks again for permission to write on a new visit).
 - **Versions.** Every step is a version, and versions are cheap because the CRDT stores changes, not copies. History can be trimmed per document to keep storage small.
 - **The result cache** is separate from documents, capped (default 500 MB), and can be cleared without losing anything.
-- **Settings** (API keys, model, theme: light, dark or the system's, shortcuts) are per browser and never leave it. They have their own page, reached from the document list.
+- **Settings** (API keys, model, theme: light, dark, or the system's, shortcuts) are per browser and never leave it. They have their own page, reached from the document list.
 - **After sign-in** (later phase): on first sign-in, documents in the browser are uploaded to the account, which is the same operation as syncing them. Fallback if that proves harder: saving requires signing in, and anonymous use is temporary with export and import.
 
-## Hosting, access and accounts
+## Hosting, access, and accounts
 
-The app is a static site on Cloudflare Pages at `https://diagcalc.pages.dev`; a server appears only for accounts, sharing and multiplayer, and it never computes.
+The app is a static site on Cloudflare Pages at `https://diagcalc.pages.dev`; a server appears only for accounts, sharing, and multiplayer, and it never computes.
 
 **Private stage (until the public release).**
 
 - Pages deploys automatically from the main branch; every pull request gets a preview URL.
 - No Cloudflare Access in front of the site (Alex, 23 October; it guarded the site with an allowlist until then): anonymous use for everyone, Google sign-in for accounts.
-- Response headers in `_headers`: cross-origin isolation (for multi-core WebAssembly) and a strict Content Security Policy: scripts, workers, styles, fonts and images from the site only (no inline script; WebAssembly compilation allowed), network requests to the site and the AI providers (Anthropic, OpenAI, and the https or local address of an OpenAI-compatible server the person names), no plugins, no `<base>`, and no framing. `Referrer-Policy: no-referrer` and `nosniff` on every file. Trusted Types are not enforced: Solid builds its templates through `innerHTML`, so a policy would have to allow everything.
+- Response headers in `_headers`: cross-origin isolation (for multi-core WebAssembly) and a strict Content Security Policy: scripts, workers, styles, fonts, and images from the site only (no inline script; WebAssembly compilation allowed), network requests to the site and the AI providers (Anthropic, OpenAI, and the https or local address of an OpenAI-compatible server the person names), no plugins, no `<base>`, and no framing. `Referrer-Policy: no-referrer` and `nosniff` on every file. Trusted Types are not enforced: Solid builds its templates through `innerHTML`, so a policy would have to allow everything.
 
 **Accounts phase (phase 6).**
 
 - A Cloudflare Worker adds Google sign-in (OpenID Connect), replacing Access. Switching is about a day of work, and people simply sign in again.
 - D1 (SQLite) holds users, documents' metadata, and sharing: owner, editors, viewers, and link sharing with view or edit rights.
 - R2 holds document snapshots and exported files.
-- Optional email through Resend from a separately verified sending domain with SPF, DKIM and DMARC: share notifications only. Email is disabled until a sender is configured; copying share links works without it. The site's `pages.dev` hostname is not a sending domain we control.
+- Optional email through Resend from a separately verified sending domain with SPF, DKIM, and DMARC: share notifications only. Email is disabled until a sender is configured; copying share links works without it. The site's `pages.dev` hostname is not a sending domain we control.
 - Anonymous use stays free and unchanged.
 
 **Security of the accounts phase.** These rules hold whatever the client sends.
 
-- *Sessions* end after 30 days, or after 7 days without a request; the session ID is replaced once a day (the old one stays valid for a minute, for requests already under way). "Sign out everywhere" in Settings ends every session of the account, and so does Google revoking the app's access, ending the person's Google sessions or disabling their account (Google's Cross-Account Protection events, once registered).
+- *Sessions* end after 30 days, or after 7 days without a request; the session ID is replaced once a day (the old one stays valid for a minute, for requests already under way). "Sign out everywhere" in Settings ends every session of the account, and so does Google revoking the app's access, ending the person's Google sessions, or disabling their account (Google's Cross-Account Protection events, once registered).
 - *Origin.* The API answers only at the site's own address (`APP_ORIGIN`); sign-in redirects and links in e-mails use that address, never the host a request names. Previews get no database or storage.
 - *Storage.* A request body is refused past its limit before it is read in full. A document holds at most 50 exported files, and an owner's documents and files together at most 2 GiB, whoever writes them (an editor by link included). Deleting a document or an account removes its stored objects in bounded rounds that later requests finish if one runs out of time.
 - *Sharing.* A share sent to an address belongs to the first account that opens it with that address. People who hold only a link see neither the owner's address nor the list of shares; only the owner and direct editors see who a document is shared with.
@@ -354,21 +354,21 @@ The app is a static site on Cloudflare Pages at `https://diagcalc.pages.dev`; a 
 
 ## Performance and the evaluation suite
 
-Performance is managed against a suite of varied workloads, not one test, so a hot path in an unexpected place shows up. CI runs the suite deterministically: each workload's output is pinned by a hash of its value, so a speed-up that changes an answer fails, and a slowdown of more than 10% blocks a merge unless the pull request explains it. The history is stored as data. Claude reads it, profiles and tunes without being asked.
+Performance is managed against a suite of varied workloads, not one test, so a hot path in an unexpected place shows up. CI runs the suite deterministically: each workload's output is pinned by a hash of its value, so a speed-up that changes an answer fails, and a slowdown of more than 10% blocks a merge unless the pull request explains it. The history is stored as data. Claude reads it, profiles, and tunes without being asked.
 
 Targets by operation class (95th percentile in Chrome on a recent laptop; phase 2 calibrates them and records the machine):
 
 - **Interactive** (an edit, interchange canonicalization, one local rewrite, a cached watch refresh): under 150 ms, aiming for 50 ms. Dragging runs at 60 frames a second, and relation firing may lag a frame.
 - **Rendering** a 100-term sum of diagrams: under 100 ms.
 - **Evaluation** (a watch recomputed in a representation at small ν): under 1 s, with the cell shown as stale meanwhile.
-- **Heavy** (normal forms, Gröbner solves, large Gram matrices): no latency promise. They run as jobs with progress, cancel and the exploded state, and their benchmarks track time and memory.
+- **Heavy** (normal forms, Gröbner solves, large Gram matrices): no latency promise. They run as jobs with progress, cancel, and the exploded state, and their benchmarks track time and memory.
 - **Platforms:** WebAssembly within 2× of the native build on every engine benchmark. Memory ceilings are set per device class, since desktop Chrome allows up to 4 GB per worker while Safari and phones allow far less in practice.
 
 | ID | Workload | Sizes | Checks against |
 |---|---|---|---|
 | B1 | nilHecke NH_n: products, simplification, the watch e² − e | n = 3 to 6 | graded dimension [n]! and known idempotents |
 | B2 | odd nilHecke ONH_n with Koszul signs | n = 3 to 6 | EKL graded dimension and sign tests |
-| B3 | Multi-colour KLR R(ν): graded dimensions of e(**i**)R(ν)e(**j**), random products | A₂ (ν = 2α₁+α₂), A₃ (α₁+2α₂+α₃), B₂ and G₂ (α₁+α₂, 2α₁+α₂) | KL graded dimension formula |
+| B3 | Multi-colour KLR R(ν): graded dimensions of e(**i**)R(ν)e(**j**), random products | A₂ (ν = 2α₁+α₂), A₃ (α₁+2α₂+α₃), B₂, and G₂ (α₁+α₂, 2α₁+α₂) | KL graded dimension formula |
 | B4 | Cyclotomic quotients R^Λ(ν): basis and graded dimension | A₂ and A₃ at small Λ, B₂ at Λ₁ | q-Shapovalov form |
 | B5 | Idempotent search: solve e·e = e with unknowns | 2, 4, 8 unknowns in A₂, ν = 2α₁+α₂ | known idempotents |
 | B6 | Gram matrices and ranks of a graded piece | 50 × 50 and 200 × 200 over ℚ and 𝔽_p | rank over both |
@@ -380,15 +380,15 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 
 **How it runs.** `bench/` holds the workloads as workspace files plus timing scripts. CI runs the native suite on every pull request and the browser suite in headless Chromium (Playwright). Results are appended to `bench/history/` as JSON and drawn as trend charts in a static page. Profiling uses `cargo flamegraph` natively and the Chrome performance profiler in the browser; findings and fixes go in the pull request description.
 
-## Testing, CI, release and the Lean bridge
+## Testing, CI, release, and the Lean bridge
 
 ### Tests
 
 - **Unit and property tests (Rust, `proptest`).** Interchange signs and super signs are checked against the conventions of string-diagrams-lean: for random layered words, every interchange path between two normal forms must give the same sign. Rewriting must preserve the value of a term under every polynomial representation the engine knows.
-- **Round-trip tests.** Each format (`.pres.toml`, the text term format, `.dcw`, `.dch`, TikZ) is parsed, printed and parsed again; the two parses must be equal. Random terms come from the same generators as the property tests.
+- **Round-trip tests.** Each format (`.pres.toml`, the text term format, `.dcw`, `.dch`, TikZ) is parsed, printed, and parsed again; the two parses must be equal. Random terms come from the same generators as the property tests.
 - **Presentation tests.** Every shipped presentation (nilHecke, odd nilHecke, KLR for A1–A3, B2, G2, cyclotomic quotients, later the KL and BE2 2-categories) has a test file of known identities with their expected normal forms.
 - **Lean regression values.** A table of values computed in the Lean libraries (Gram matrices, dimensions of graded pieces, specific relation instances) is checked in under `tests/lean-values/` with the Lean declaration each value comes from. The engine must reproduce every value exactly.
-- **Operation API tests.** Every operation in `spec/ops/` has a JSON fixture with input, expected output and expected error cases. The same fixtures run against the Rust API, the WebAssembly build, the CLI and the MCP server, so the four surfaces cannot drift apart.
+- **Operation API tests.** Every operation in `spec/ops/` has a JSON fixture with input, expected output, and expected error cases. The same fixtures run against the Rust API, the WebAssembly build, the CLI, and the MCP server, so the four surfaces cannot drift apart.
 - **Browser tests (Playwright).** Scripted gestures for each interaction in the mockups: drag a dot through a crossing, box-select and apply a relation, undo, type a definition and watch the diff, run an AI what-if with a recorded model response. Screenshots are compared at a tolerance, and latency is recorded.
 - **AI tests.** Recorded model transcripts replay against the tool layer without network access. A small live suite, run by hand with Alex's key, checks that the skill text still leads the default model to correct tool calls on ten fixed tasks.
 
@@ -402,7 +402,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 ### Releases
 
 - **Web app:** every merge to `master` deploys to Cloudflare Pages. Preview deployments get no database or storage bindings; old deployments are deleted with the "Prune old deployments" workflow.
-- **CLI and MCP server:** tagged releases build `diagcalc` for macOS (arm64, x86_64), Linux (x86_64, arm64) and Windows (x86_64), attached to a GitHub release of the private repository.
+- **CLI and MCP server:** tagged releases build `diagcalc` for macOS (arm64, x86_64), Linux (x86_64, arm64), and Windows (x86_64), attached to a GitHub release of the private repository.
 - **Python package:** wheels built with maturin for the same platforms, attached to the same release. Publishing to PyPI waits for the public release.
 - Versioning: semantic versions. The file formats carry their own version number, and the app can read every earlier format version.
 
@@ -414,23 +414,23 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 - **Phase 5:** the same for the KL and BE2 2-categories, targeting categorification-lean and odd-lean.
 - The calculator never depends on Lean at run time, and the Lean repositories never depend on the calculator.
 
-## Phases, deliverables and acceptance gates
+## Phases, deliverables, and acceptance gates
 
-Each implementation phase ends with a gate checked and reported to Alex with evidence (a CI run, benchmark JSON, a screen recording or a Lean build). Dependent work starts after the preceding gate; independent release preparation may run alongside phase 7. The order follows risk: the engine's correctness risks (equality strategies, conventions, arithmetic speed) are retired before any UI is built. `docs/roadmap.md` keeps the open work and external blockers current under these phase numbers. Phase 9 is a non-blocking backlog, not a requirement to finish every listed project.
+Each implementation phase ends with a gate checked and reported to Alex with evidence (a CI run, benchmark JSON, a screen recording, or a Lean build). Dependent work starts after the preceding gate; independent release preparation may run alongside phase 7. The order follows risk: the engine's correctness risks (equality strategies, conventions, arithmetic speed) are retired before any UI is built. `docs/roadmap.md` keeps the open work and external blockers current under these phase numbers. Phase 9 is a non-blocking backlog, not a requirement to finish every listed project.
 
 | Phase | Deliverables | Gate |
 |---|---|---|
 | 0. Spec | This document; the UI mockups; JSON schemas in `spec/ops/` for every operation; the nilHecke and KLR A₂ presentation files written out as examples | Alex approves the spec (passed 21 October) |
-| 1. Formats, conventions and the headless core | All four formats with schemas and round-trip tests; the Conventions section completed from categorification-lean; the golden corpus computed in Lean; presentation schemas and the conformance checker; the equality-strategy interface; the engine core for nilHecke, odd nilHecke and KLR of types A₂ and A₃, using the representation strategy; ground rings ℤ, ℚ, ℤ/p and ℤ[√−1]; the arithmetic backend spike; the benchmark harness in CI; SVG and TikZ drawing from the command line | Every format round-trips; the golden corpus is reproduced; every shipped presentation passes the checker; the spike report names the backend |
-| 2. Finite quotients and linear algebra | Cyclotomic quotients and truncations with printed caps; the graded linear-algebra toolkit with its preconditions; solving tiers 1 and 2; KLR of types B₂ and G₂; ℚ(q), ℚ[t] and ℚ[t, t⁻¹]; the worker pool for multi-core; the full evaluation suite B1–B10 | B1–B10 meet their targets and reproduce the golden corpus and the Lean values; cyclotomic graded dimensions match the q-Shapovalov form |
-| 3. Rewriting, CLI and the Lean bridge | Rectangle matching; rewriting with provenance maps; basis normal forms; chain search; the `diagcalc` command-line tool and MCP server; the Lean translation layer and chain export; a trial of generating presentations from Lean | A chain found by the calculator for a relation in categorification-lean is exported and builds in Lean |
+| 1. Formats, conventions, and the headless core | All four formats with schemas and round-trip tests; the Conventions section completed from categorification-lean; the golden corpus computed in Lean; presentation schemas and the conformance checker; the equality-strategy interface; the engine core for nilHecke, odd nilHecke, and KLR of types A₂ and A₃, using the representation strategy; ground rings ℤ, ℚ, ℤ/p, and ℤ[√−1]; the arithmetic backend spike; the benchmark harness in CI; SVG and TikZ drawing from the command line | Every format round-trips; the golden corpus is reproduced; every shipped presentation passes the checker; the spike report names the backend |
+| 2. Finite quotients and linear algebra | Cyclotomic quotients and truncations with printed caps; the graded linear-algebra toolkit with its preconditions; solving tiers 1 and 2; KLR of types B₂ and G₂; ℚ(q), ℚ[t], and ℚ[t, t⁻¹]; the worker pool for multi-core; the full evaluation suite B1–B10 | B1–B10 meet their targets and reproduce the golden corpus and the Lean values; cyclotomic graded dimensions match the q-Shapovalov form |
+| 3. Rewriting, CLI, and the Lean bridge | Rectangle matching; rewriting with provenance maps; basis normal forms; chain search; the `diagcalc` command-line tool and MCP server; the Lean translation layer and chain export; a trial of generating presentations from Lean | A chain found by the calculator for a relation in categorification-lean is exported and builds in Lean |
 | 4a. Live workspace | The web app with diagrams rendered but not yet editable by gesture: outline, text cells, watches with diffs, solve and check cells, snapshots, undo and history, storage, export and import; deployed behind Access | The Playwright suite passes, and edits and cached watches meet the interactive target |
 | 4b. Gestures and the in-app AI | The focus canvas and gestures with their keyboard paths; the AI panel with a bring-your-own key (Anthropic first, then providers that pass the browser check); what-if branches; the activity timeline | (passed 22 October) Live in the browser, by hand and with the AI, Alex checks a nontrivial computation: for example, that given elements form a complete set of orthogonal idempotents in NH₃ or in R(2α₁+α₂) of type A₂, or that a KLR relation such as the braid relation with its correction term holds. Alex also tries the gestures. |
-| 5. Full 2-categories | Cups, caps, bubbles, weights and the biadjunction layer; KL 2-category and BE2 super 2-category presentations; Lean export for both | (passed 23 October) A set of KL and BE2 relations computed by the calculator agree with the Lean libraries, and one exported chain builds in odd-lean. Evidence: CI builds 43 KL chains against categorification-lean and 26 BE2 chains against odd-lean, one instance of every relation in both presentations |
+| 5. Full 2-categories | Cups, caps, bubbles, weights, and the biadjunction layer; KL 2-category and BE2 super 2-category presentations; Lean export for both | (passed 23 October) A set of KL and BE2 relations computed by the calculator agree with the Lean libraries, and one exported chain builds in odd-lean. Evidence: CI builds 43 KL chains against categorification-lean and 26 BE2 chains against odd-lean, one instance of every relation in both presentations |
 | 6. Accounts and sharing | Our own Google sign-in replacing Access; D1 and R2 storage; upload of local documents on first sign-in; share links with view and edit permissions | (passed 23 October) A document made anonymously survives sign-in, opens on a second device, and is shared read-only with a second account. Evidence: `tests/accounts.spec.ts` runs this end to end in CI, against the API's rules, and the API is live on diagcalc.pages.dev with D1 and R2 since 23 October; the free plans sufficed, so Workers Paid was not needed |
-| 7. Multiplayer | Committed-edit Yjs rooms with hibernation; authenticated presence; personal branches and recovery; shared AI decisions and recomputable pins. Specification and accepted decisions: `docs/phase7.md` | (passed) Concurrent, offline and late-joining browsers converge without losing private drafts; viewers and revocation are enforced; closed rooms cease maintenance. Implementation `7cfe45d` passed [CI](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129703) and [deployment](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129712); the authenticated production revocation check remains in phase 8 |
+| 7. Multiplayer | Committed-edit Yjs rooms with hibernation; authenticated presence; personal branches and recovery; shared AI decisions and recomputable pins. Specification and accepted decisions: `docs/phase7.md` | (passed) Concurrent, offline, and late-joining browsers converge without losing private drafts; viewers and revocation are enforced; closed rooms cease maintenance. Implementation `7cfe45d` passed [CI](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129703) and [deployment](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129712); the authenticated production revocation check remains in phase 8 |
 | 8. Pre-release and public release | View mode and remaining viewer-facing polish; accurate certificate presentation; deployed revocation/pruning checks and Google publication; tested Python distribution on PyPI and public repository with licence in place | Phase 7 passed; pre-release work and external publication dependencies in `docs/roadmap.md` resolved; Alex's go-ahead for publication |
-| 9. Post-release | Stronger mathematical certificates, measured performance improvements and optional share notifications, as listed in `docs/roadmap.md` | Each selected item is verified on its own merits; none blocks public release |
+| 9. Post-release | Stronger mathematical certificates, measured performance improvements, and optional share notifications, as listed in `docs/roadmap.md` | Each selected item is verified on its own merits; none blocks public release |
 
 Phases 1 to 5 run with no server and no running cost. Phase 6 runs on the free plans; Workers Paid ($5 a month) may come with phase 7 (`docs/phase7.md`, Cost).
 
@@ -456,7 +456,7 @@ Phases 1 to 5 run with no server and no running cost. Phase 6 runs on the free p
 ### Decisions (Alex, 21 October)
 
 - **Phase 4 gate.** Not an open research question: a nontrivial computation that shows the UI works, such as checking idempotents or relations.
-- **Ground rings.** ℤ, ℚ, ℤ/p and ℤ[√−1] early on; ℚ(q) (rational functions in q), ℚ[t] and ℚ[t, t⁻¹] too if they are not much work.
+- **Ground rings.** ℤ, ℚ, ℤ/p, and ℤ[√−1] early on; ℚ(q) (rational functions in q), ℚ[t], and ℚ[t, t⁻¹] too if they are not much work.
 - **TikZ.** Match the drawing style of BE2, avoiding nonstandard packages.
 - **Release.** The web app will be public and the code open-sourced; the repository is private only during early development.
 - **Gestures** are reviewed at phase 4, so phase 1 has no gesture prototype.

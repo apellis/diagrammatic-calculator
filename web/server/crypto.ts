@@ -1,4 +1,4 @@
-// Encoding, random tokens, HMAC signing and PKCE, on Web Crypto (the same in Workers and Node).
+// Encoding, random tokens, HMAC signing, and PKCE, on Web Crypto (the same in Workers and Node).
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();

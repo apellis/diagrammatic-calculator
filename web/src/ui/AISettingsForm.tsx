@@ -1,4 +1,4 @@
-// The AI provider, model and key: set on the settings page, read by the AI panel when it sends.
+// The AI provider, model, and key: set on the settings page, read by the AI panel when it sends.
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import {
   ANTHROPIC_MODELS,

@@ -1,6 +1,6 @@
 // Registers the accounts API as the receiver of Google's security events (Cross-Account
 // Protection, RISC), so that a person's sessions end when Google revokes this app's access, ends
-// their sessions or disables their account. Run once by the owner, and again when the site's
+// their sessions, or disables their account. Run once by the owner, and again when the site's
 // address changes; see docs/deploy.md ("Revoked Google access").
 //
 //   node scripts/risc-register.mjs <service-account-key.json> <site origin>

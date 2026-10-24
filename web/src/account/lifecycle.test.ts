@@ -32,7 +32,7 @@ async function stored(id: string, generation: number, fn: (y: Y.Doc) => unknown 
   finally { await p.destroy(); y.destroy(); }
 }
 
-it('keeps recovery local through initial upload, list sync and reopening', async () => {
+it('keeps recovery local through initial upload, list sync, and reopening', async () => {
   const id = await createDoc('Recovery', d => d.addCell('private'), { localOnly: true });
   const create = vi.spyOn(api, 'create');
   vi.spyOn(api, 'list').mockResolvedValue({ owned: [], shared: [] });

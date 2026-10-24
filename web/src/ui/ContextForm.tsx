@@ -17,7 +17,7 @@ export interface PresentationInfo {
 
 const files = import.meta.glob('../../../presentations/*.pres.toml', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>;
 
-/** The presentation file's header: name, title, colours and objects. */
+/** The presentation file's header: name, title, colours, and objects. */
 export function presentationInfo(text: string): PresentationInfo | undefined {
   const head = text.split(/^\[/m)[0];
   const str = (k: string) => new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 'm').exec(head)?.[1];

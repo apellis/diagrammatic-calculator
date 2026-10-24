@@ -4,7 +4,7 @@ Each convention below changes answers silently if it is read differently, so eac
 used by both the parser and the printer, and pinned by the golden corpus (`tests/golden/`).
 References of the form `Library: Declaration` point to the Lean libraries
 [categorification-lean](https://github.com/apellis/categorification-lean),
-[string-diagrams-lean](https://github.com/apellis/string-diagrams-lean) and
+[string-diagrams-lean](https://github.com/apellis/string-diagrams-lean), and
 [odd-lean](https://github.com/apellis/odd-lean), which the calculator matches.
 
 ## Reading terms
@@ -28,7 +28,7 @@ References of the form `Library: Declaration` point to the Lean libraries
 - **Tensor product.** `f ⊗ g` (ASCII `f (x) g`) places `f` to the left of `g` and means
   `(f ⊗ 1)(1 ⊗ g)`: `g` at the bottom, `f` above it. With this convention the super interchange law
   reads `(f ⊗ g)(h ⊗ k) = (-1)^{|g||h|} (fh) ⊗ (gk)`.
-- **Scalars.** Numbers, `I` (a square root of −1 in ℤ[√−1]), parameters (`q`, `t_ij`, `pi` or `π`)
+- **Scalars.** Numbers, `I` (a square root of −1 in ℤ[√−1]), parameters (`q`, `t_ij`, `pi` or `π`),
   and declared unknowns (`c1`) are scalars; a scalar written alone is that multiple of the
   identity. `^` takes integer exponents, negative only for invertible scalars.
 
@@ -147,14 +147,14 @@ every weight of the rightmost region; the calculator instantiates them per regio
 describes). The first representation, `basis`, computes them with the BE2 evaluation
 (`skm-basis`, for even colours and the default `Q`); the second, `kl-evaluation`, with KL's own
 evaluation. Both write exactly the same normal forms; the tests check this for every relation in
-types A1, A2, B2 and G2 at the conformance checker's weights.
+types A1, A2, B2, and G2 at the conformance checker's weights.
 
 ## The super Kac–Moody 2-category
 
 `presentations/be2.pres.toml` is the super Kac–Moody 2-category `U(g)` of Brundan–Ellis (Super
 Kac–Moody 2-categories, arXiv:1701.04133v2), in the form formalized in odd-lean (`SKM`): colours
 carry a parity `p(a)`, and `t_ij = 1`, `s_ij^pq = 0`, `c_{λ,i} = 1`. The dot, the upward crossing,
-the rightward cup and cap and the leftward crossing are odd-lean's generators; the others are
+the rightward cup and cap, and the leftward crossing are odd-lean's generators; the others are
 defined from them as in the paper and odd-lean, and the calculator has them as generators with
 relations that define them.
 
@@ -243,7 +243,7 @@ diagrams.
   (`x_1^2 x_3`). Every other piece keeps its place, so the coefficient keeps its sign, and the
   text parses back to the same element: `psi_1 x_1 psi_2 x_1 x_3` in `NH_3` reads
   `psi_1 psi_2 x_1^2 x_3`. Odd dots stay where they are. It is a view only: the text form, the
-  canonical layering and the drawings do not change.
+  canonical layering, and the drawings do not change.
 - **Printing.** A word is printed from its canonical layering, top to bottom. Generators at the same
   height are written left to right; when some of them are odd, the coefficient carries the Koszul
   sign of that order, so that every printed term parses back to exactly the same element.
@@ -319,7 +319,7 @@ theorem using them takes a family `cs : CScalars Sc` as a hypothesis. The hand-w
 relations from the inversion relations (`cl_invP₅`, `cl_invM₅`), and the layers of `xd`, `psid`
 equal to odd-lean's `ddotL`, `dcrossL` by `rfl`. Interchange next to a derived generator is not
 exported yet, and `lcross-rotation`, `cyclic-dot-even`, `cyclic-crossing` have no exported proof
-yet; their signs agree with odd-lean's `rot_tau_left`, `eq_1_26` and `eq_1_28` (the last with the
+yet; their signs agree with odd-lean's `rot_tau_left`, `eq_1_26`, and `eq_1_28` (the last with the
 sign of ERRATA [BE2] 3) by comparison of the statements.
 
 ## Display
@@ -330,7 +330,7 @@ wherever it is entered (a click on typeset text opens it). Typesetting changes o
 | Text | Shown as |
 |---|---|
 | `x_1^2`, `q^-1`, `x_{12}` | x₁², q⁻¹, x₁₂ (subscripts and superscripts) |
-| `psi_1`, `pi`, `Lambda` and other Greek names | ψ₁, π, Λ |
+| `psi_1`, `pi`, `Lambda`, and other Greek names | ψ₁, π, Λ |
 | `c1`, `t2` (a name ending in digits) | c₁, t₂ |
 | `e(iij)`, `Q_ij(x_1, x_2)`, `Qbar_ij` | e(iij), Q_ij(x₁, x₂), Q̄_ij, with colour names in italics |
 | a name of several letters | in italics; upright when it is applied, as in idempotent(a) |
@@ -356,17 +356,17 @@ to the right of the diagram, in the context's `mu=` notation.
 
 Dot powers. Four or more even dots of one generator one after another on a strand, with no other
 piece on the strand between them, are drawn as one dot at the height of the first, with the
-exponent written to its right (SVG, TikZ and the canvas); the drawing is that much shorter. Three
+exponent written to its right (SVG, TikZ, and the canvas); the drawing is that much shorter. Three
 or fewer are drawn one by one, and so are odd dots, whose heights against the other odd pieces
 carry the sign. On the canvas every dot of a power is still a piece, all in one place; a dot slid
 off a power is the last one of the power in that direction (they are the same element), so the
 power splits.
 
-Colour. In SVG, every line, dot, arrowhead and colour label of a strand carries the class `k<n>`,
+Colour. In SVG, every line, dot, arrowhead, and colour label of a strand carries the class `k<n>`,
 where `n` is the place of the strand's colour in the context's colour list, from 0 (`klr type=A2`:
 `k0` for `i`, `k1` for `j`). A standalone SVG has no style sheet and stays black. The web app
 colours `k<n>` from one palette shared with the canvas: eight colours, cycling after the eighth,
-each with a contrast of at least 3:1 against the page, the panels and the highlight of new
+each with a contrast of at least 3:1 against the page, the panels, and the highlight of new
 summands, in both themes. With strand patterns (Settings › Appearance) the strands of the second
 to sixth colours are also dashed, in cells and on the canvas (the first stays solid, and the six
 patterns repeat from the seventh colour). TikZ is unchanged: black, with the colour written under

@@ -1,4 +1,4 @@
-// The context chip: the presentation, type, weight and ring; click to change them.
+// The context chip: the presentation, type, weight, and ring; click to change them.
 import { createEffect, createResource, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { engine } from '../app';
 import { contextTex, ringTex, toTex } from './tex';

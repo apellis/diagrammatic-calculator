@@ -1,4 +1,4 @@
-//! Permutations of strand positions, reduced words and the inversion order of a word.
+//! Permutations of strand positions, reduced words, and the inversion order of a word.
 
 /// A permutation of `0..n`, as the map `a ↦ w(a)` (the strand at position `a` ends at `w(a)`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

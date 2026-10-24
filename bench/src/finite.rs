@@ -1,5 +1,5 @@
 //! Phase 2 workloads: graded dimensions (B1, B3), cyclotomic quotients (B4), idempotent search
-//! (B5) and Gram matrices (B6).
+//! (B5), and Gram matrices (B6).
 
 use super::{Bench, REPS, Timing, time_batch};
 use diagcalc_core::builtin;

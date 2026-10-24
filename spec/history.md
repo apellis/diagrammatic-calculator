@@ -1,8 +1,8 @@
 # History file (`.dch`)
 
-An optional companion of a `.dcw` file: the version history, pinned snapshots and AI activity
+An optional companion of a `.dcw` file: the version history, pinned snapshots, and AI activity
 timeline of a document, as JSON. The web app exports it (Export history) and imports it as a new document, rebuilding each
-version with its author, note and time, the snapshots and the timeline; entries it cannot read are
+version with its author, note, and time, the snapshots, and the timeline; entries it cannot read are
 left out, and the import says how many.
 
 ```json
@@ -27,11 +27,11 @@ left out, and the import says how many.
 
 Each version is a step: one change by one author with a one-line note, and the workspace as it was
 after the step, as a `.dcw` file with cells as entered (not canonicalized). A snapshot freezes a
-result: the cell and context it came from, the version, the hash of its inputs (`key`) and the
+result: the cell and context it came from, the version, the hash of its inputs (`key`), and the
 value as `workspace.run` returned it, provenance included.
 
 The timeline records the AI's activity: each request (`kind` `request`), tool call (`tool`), note
-(`note`), milestone summary (`milestone`), proposal for the person (`proposal`) and failure
+(`note`), milestone summary (`milestone`), proposal for the person (`proposal`), and failure
 (`error`). `detail` holds more (a tool's input, a milestone's text), `version` the step a workspace
 change made, and `branch` the what-if branch it happened on, when not the document itself. A
 milestone's `snapshots` lists the `key`s of the snapshots that froze its key diagrams. Older

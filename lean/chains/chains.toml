@@ -7,7 +7,7 @@
 name = "cross_dots_cross_A2"
 context = "klr type=A2 nu=i+j"
 lhs = "psi_1 x_2^2 psi_1 e(ij)"
-doc = "A crossing, two dots and the crossing back, for adjacent colours of type A2: the library's `dg_cross_dots_cross` at m = 2 (see Checks.lean)."
+doc = "A crossing, two dots, and the crossing back, for adjacent colours of type A2: the library's `dg_cross_dots_cross` at m = 2 (see Checks.lean)."
 
 [[chain]]
 name = "cross_dots_cross_B2"
@@ -19,7 +19,7 @@ doc = "The same diagram for the two colours of type B2, where the double crossin
 name = "cross_dots_cross_G2"
 context = "klr type=G2 nu=i+j"
 lhs = "psi_1 x_2 psi_1 e(ji)"
-doc = "A crossing, a dot and the crossing back for the two colours of type G2."
+doc = "A crossing, a dot, and the crossing back for the two colours of type G2."
 
 [[chain]]
 name = "braid_iji_A2"

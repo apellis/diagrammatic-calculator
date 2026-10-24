@@ -21,7 +21,7 @@ const RINGS: [RegExp, string][] = [
 
 type Kind = 'operand' | 'operator' | 'open' | 'none';
 
-/** One script argument after `_` or `^`: a braced group, a parenthesized group, a signed number or a word. */
+/** One script argument after `_` or `^`: a braced group, a parenthesized group, a signed number, or a word. */
 function script(src: string, i: number): [string, number] {
   if (src[i] === '{' || src[i] === '(') {
     const close = src[i] === '{' ? '}' : ')';
@@ -141,7 +141,7 @@ export function ringTex(r: string): string {
 
 /**
  * KaTeX settings for text from documents (which anyone with edit access may write): no commands
- * that make links, classes, styles or HTML attributes (`trust: false`, also KaTeX's default), and
+ * that make links, classes, styles, or HTML attributes (`trust: false`, also KaTeX's default), and
  * bounds on sizes (`\rule{1000em}{1000em}` would cover the page) and on macro expansion.
  */
 export const KATEX_SAFE = { trust: false, maxSize: 20, maxExpand: 200 } as const;

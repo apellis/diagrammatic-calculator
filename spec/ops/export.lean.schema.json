@@ -21,7 +21,7 @@
           "type": "string"
         },
         "name": {
-          "description": "The theorem's name: a letter, then letters, digits and _ (diagcalc_chain if empty).",
+          "description": "The theorem's name: a letter, then letters, digits, and _ (diagcalc_chain if empty).",
           "type": "string",
           "pattern": "^([A-Za-z][A-Za-z0-9_]*)?$"
         },

@@ -1,4 +1,4 @@
-// A document's workspace: top bar, outline and cells, kept in step with the document and the
+// A document's workspace: top bar, outline, and cells, kept in step with the document and the
 // evaluator.
 import { createEffect, createResource, createSignal, For, on, onCleanup, onMount, Show, type Signal } from 'solid-js';
 import { createCleanCopy, loadLink, openDoc, markExported, saveLink, type OpenDoc } from '../doc/store';
@@ -483,7 +483,7 @@ function DocView(props: {
   const visibleEvaluator = () => previewing() ? previewEv : ev;
   function refreshPreview() {
     if (!previewEv) return;
-    // Local overlays must never change the document read by collaborators, AI or exports.
+    // Local overlays must never change the document read by collaborators, AI, or exports.
     if (previewing()) void previewEv.update(doc.context, cells().map(c => ({ id: c.id, text: drafts()[c.key] ?? c.text })));
     else {
       void previewEv.update(doc.context, []);
@@ -1004,7 +1004,7 @@ function DocView(props: {
             </Show>
             <CloudRecovery o={props.o} sync={props.sync} onBranch={(inputs, name) => props.branching.create(name, inputs)} />
             <Show when={readOnly()}><div class="banner" data-testid="read-only">View only. Export or make a personal branch to work on a copy.</div></Show>
-            <Show when={previewing()}><div class="banner" data-testid="draft-preview" role="status">Results preview your uncommitted edits. Enter or leaving the cell saves them; Esc discards them. Shared documents, exports and AI reads still use the saved inputs.</div></Show>
+            <Show when={previewing()}><div class="banner" data-testid="draft-preview" role="status">Results preview your uncommitted edits. Enter or leaving the cell saves them; Esc discards them. Shared documents, exports, and AI reads still use the saved inputs.</div></Show>
             <For each={Object.entries(drafts()).filter(([key]) => !cells().some((c) => c.key === key))}>
               {([id, text]) => <div class="banner" data-testid="deleted-draft">
                 Cell {id} was deleted elsewhere. Your uncommitted draft is still here.
@@ -1297,7 +1297,7 @@ function ValueChanges(props: { before: Inputs; after: Inputs }) {
 }
 
 /**
- * A line diff from `a` to `b` (longest common subsequence): each line kept (' '), removed ('−')
+ * A line diff from `a` to `b` (longest common subsequence): each line kept (' '), removed ('−'),
  * or added ('+').
  */
 export function lineDiff(a: string[], b: string[]): [' ' | '−' | '+', string][] {

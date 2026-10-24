@@ -1,4 +1,4 @@
-// One cell: a one-line summary when collapsed; its text, result and tools when expanded. The text
+// One cell: a one-line summary when collapsed; its text, result, and tools when expanded. The text
 // is shown typeset; clicking it (or Enter) opens it for editing in the fixed-width font.
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import type { CellState } from '../eval/evaluator';

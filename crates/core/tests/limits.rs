@@ -1,4 +1,4 @@
-//! Input limits: a context, term or Lean export taken from a shared document, an imported file or
+//! Input limits: a context, term, or Lean export taken from a shared document, an imported file, or
 //! an MCP client cannot make the engine run away, overflow its stack, or write outside the
 //! export directory or into the generated Lean code.
 

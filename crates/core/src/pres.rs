@@ -101,7 +101,7 @@ pub struct Relation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Certificate {
     /// `lean`, `literature`, `conditional` (proved under a named open conjecture: equalities it
-    /// finds are proven, differences rest on the conjecture), `assumed` or `unknown`.
+    /// finds are proven, differences rest on the conjecture), `assumed`, or `unknown`.
     pub status: String,
     pub reference: String,
     pub hypotheses: String,
@@ -223,13 +223,13 @@ pub struct LeanRelation {
     pub facts: Vec<String>,
     /// How the lemma lays out the words of its right-hand side: `canonical` (as the calculator
     /// does), `left-first` (generators on the left strands lower), `right-first` (on the right
-    /// strands lower) or `bubbles-first` (closed components, such as bubbles, lower).
+    /// strands lower), or `bubbles-first` (closed components, such as bubbles, lower).
     pub layering: String,
     /// How the lemma lays out the words of its left-hand side, with the same values as
     /// `layering`; the exported proof reaches it from the calculator's layout by interchange.
     pub pattern_layering: String,
     /// How the lemma proves the relation as the calculator states it: `rw` (rewrite with it,
-    /// then normalize the sums), `exact` (it is the statement, up to unfolding) or `tactic`
+    /// then normalize the sums), `exact` (it is the statement, up to unfolding), or `tactic`
     /// (`lemma` is a tactic script, its steps separated by `; `).
     pub proof: String,
 }
@@ -255,7 +255,7 @@ impl Presentation {
         }
     }
     /// Whether a relation's instances depend on the weight of the region right of them: its
-    /// side condition, integer ranges or terms mention `h(...)`, or its terms use bubbles
+    /// side condition, integer ranges, or terms mention `h(...)`, or its terms use bubbles
     /// (whose fake values depend on the region).
     pub fn relation_uses_region(&self, r: &Relation) -> bool {
         let text = format!("{} {}", r.lhs, r.rhs);
@@ -690,7 +690,7 @@ impl Presentation {
                             if !(3..=4).contains(&l.len()) {
                                 return Err(Error::invalid(format!(
                                     "lean: a layer of {g} needs left letters, shape, right \
-                                     letters and optionally a repeat count"
+                                     letters, and optionally a repeat count"
                                 )));
                             }
                             for part in &l {

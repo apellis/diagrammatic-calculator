@@ -210,7 +210,7 @@ describe('malformed shared content', () => {
     return Y.encodeStateAsUpdate(evil);
   }
 
-  it('cannot stop a document from opening, reading or changing', async () => {
+  it('cannot stop a document from opening, reading, or changing', async () => {
     const d = new Doc();
     Y.applyUpdate(d.ydoc, hostile(), { author: 'cloud' });
     expect(d.name).toBe('Untitled');

@@ -19,7 +19,7 @@ open CategoryTheory StringDiagrams QuantumGroup UDot Presentation
 
 universe w u v
 
-/-- A crossing, two dots and the crossing back, for adjacent colours of type A2: the library's `dg_cross_dots_cross` at m = 2 (see Checks.lean). Found by the calculator: a rewrite chain of 3 steps. -/
+/-- A crossing, two dots, and the crossing back, for adjacent colours of type A2: the library's `dg_cross_dots_cross` at m = 2 (see Checks.lean). Found by the calculator: a rewrite chain of 3 steps. -/
 theorem cross_dots_cross_A2 {I : Type u} {C : CartanDatum I} {X Y : Type v} [AddCommGroup X]
     [AddCommGroup Y] (RD : WeightDatum C X Y) (k : Type w) [CommRing k] (μ : X)
     (ci cj : I)

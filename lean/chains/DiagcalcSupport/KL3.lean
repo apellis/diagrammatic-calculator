@@ -2,8 +2,8 @@
 Support for the exported KL chains (hand-written): lemmas that evaluate the labelled bubbles
 `cwU`/`ccwU` of categorification-lean at a concrete label, and the tactic `dc_bub h`, which
 finishes a curl or decomposition relation at a weight `h : ip RD i ν = n` once the library's
-lemma has been rewritten: it expands the sums, evaluates the bubbles (real, degree zero or
-zero) and brings the result to the calculator's diagrams.
+lemma has been rewritten: it expands the sums, evaluates the bubbles (real, degree zero, or
+zero), and brings the result to the calculator's diagrams.
 -/
 import Categorification.Diagrams.KL3.Rewriting
 import Categorification.Diagrams.KL3.BubbleSlidesGen

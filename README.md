@@ -1,6 +1,6 @@
 # diagrammatic-calculator
 
-A fast, exact calculator for diagrammatic algebra (KLR algebras, nilHecke and odd nilHecke algebras
+A fast, exact calculator for diagrammatic algebra (KLR algebras, nilHecke, and odd nilHecke algebras
 first; any presentation of a monoidal supercategory by generators and relations) whose terms can be
 read and edited as string diagrams.
 

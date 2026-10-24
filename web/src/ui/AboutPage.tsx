@@ -1,4 +1,4 @@
-// About the calculator: what it is, the build, the license, the privacy policy and a tip link.
+// About the calculator: what it is, the build, the license, the privacy policy, and a tip link.
 
 import { Show } from 'solid-js';
 

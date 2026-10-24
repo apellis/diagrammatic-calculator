@@ -1,7 +1,7 @@
 // Tests of the limits and protections added after the security review of 2026-10-23: storage
 // quotas and early rejection of large bodies, share notifications that cannot be used for phishing
 // or spam, what link holders see, shares bound to accounts, the configured origin, session idle
-// timeout, rotation and sign-out everywhere, save races and resumable deletion.
+// timeout, rotation and sign-out everywhere, save races, and resumable deletion.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from './auth';
 import { access, getSnapshot, LIMITS, sweep } from './docs';
@@ -128,7 +128,7 @@ describe('share notifications', () => {
     expect(m.subject).toBe('A document was shared with you on diagrammatic-calculator');
     expect(m.subject + m.text + m.html).not.toContain('evil.example.com');
     expect(m.text).toMatch(/^Google Security Team \(h\d+@example\.org\) shared a document with you/);
-    expect(defang('see https://x.example/a, www.y.org or z.example.co.uk/p, not A2.x or Lemma 3.4')).toBe(
+    expect(defang('see https://x.example/a, www.y.org, or z.example.co.uk/p, not A2.x or Lemma 3.4')).toBe(
       'see [link removed] [link removed] or [link removed] not A2.x or Lemma 3.4',
     );
   });

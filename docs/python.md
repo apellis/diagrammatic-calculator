@@ -43,7 +43,7 @@ assert result["normal_form"] == "1 + psi_1 x_2"
   not Python exceptions. Incorrect Python argument types can raise `TypeError`.
 
 The [operation schemas](https://github.com/apellis/diagrammatic-calculator/tree/master/spec/ops)
-define each request and response, including strategy, certification and truncation
+define each request and response, including strategy, certification, and truncation
 information where applicable. Keep these fields when reporting mathematical results;
 the calculator explores, it does not replace a proof assistant.
 
@@ -73,7 +73,7 @@ its top-level directory, and run the same `package.py build` command
 there, with a different wheel output directory. Install **that rebuilt wheel** in a
 second empty venv and run the included `crates/py/tests/test_installed.py` against it.
 This checks that the sdist contains its Rust path dependencies, workspace metadata,
-license and readme rather than relying on the original checkout. The sdist is not
+license, and readme rather than relying on the original checkout. The sdist is not
 an offline dependency vendor bundle: Cargo still needs its registry cache or network.
 A shared Cargo target cache may be reused; do not copy the whole build tree. Before
 building the unpacked sdist with a shared cache, force recompilation of its local Rust
@@ -87,11 +87,11 @@ Confirm the build log actually compiles `diagcalc-core` and `diagcalc-py` from t
 unpacked tree. The sdist explicitly includes `presentations/*.pres.toml` and
 `spec/ops/*.schema.json`, which the core embeds at compile time.
 
-Retain the sdist, both wheels, command logs and checksums as release evidence, then
+Retain the sdist, both wheels, command logs, and checksums as release evidence, then
 remove only the isolated venvs and unpacked staging tree. Local Linux wheels may
 carry a `linux_*` tag: do not present those as portable manylinux wheels. Public
 release still requires package-name availability, platform wheel builds/validation,
-metadata review and an explicitly authorized publishing step. No command here uploads
+metadata review, and an explicitly authorized publishing step. No command here uploads
 anything, and there is deliberately no automatic publication workflow.
 
 ### Publication-path safeguards
@@ -99,7 +99,7 @@ anything, and there is deliberately no automatic publication workflow.
 Use `crates/py/package.py build` rather than bare `maturin build` for candidate
 wheels. The helper sets Cargo's `CARGO_ENCODED_RUSTFLAGS` with Rust's documented
 [`--remap-path-prefix`](https://doc.rust-lang.org/rustc/command-line-arguments.html#--remap-path-prefix-remap-source-names-in-output)
-for the checkout/staging root, home, Cargo cache, temporary root and build/output
+for the checkout/staging root, home, Cargo cache, temporary root, and build/output
 roots. This applies to all Rust dependencies, unlike final-crate-only rustc arguments.
 It refuses pre-existing Rust flags instead of silently overriding compiler settings.
 Stripping symbols alone does not remove panic-location strings.
@@ -112,7 +112,7 @@ or falsely sanitized report. Cargo.lock remains in the sdist. If a future releas
 requires an SBOM, prepare and audit a public-safe one separately. No wheel members
 or RECORD hashes are patched after packaging.
 
-The audit scans decompressed wheel/sdist names, headers and payloads (including
+The audit scans decompressed wheel/sdist names, headers, and payloads (including
 native bytes and any SBOM), with URL/JSON-encoded path coverage. It discovers local
 roots dynamically; give it every other build checkout/staging root explicitly:
 
@@ -127,5 +127,5 @@ Leaks produce a nonzero exit and offending member names. The unit tests construc
 contaminated binary/SBOM and sdist fixtures at runtime, without private host paths
 in source. This is a targeted build-path regression gate, not a general secret or
 arbitrary-host-path detector. Retain logs and checksums outside the checkout,
-then remove only your inactive disposable target, staging and venv directories.
+then remove only your inactive disposable target, staging, and venv directories.
 A read-only PyPI name lookup is a point-in-time observation, not a reservation.

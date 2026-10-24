@@ -22,7 +22,7 @@ describe('markdown', () => {
     expect(html).not.toContain('\\(');
   });
 
-  it('escapes markup, reads fenced code literally and leaves dollar amounts alone', () => {
+  it('escapes markup, reads fenced code literally, and leaves dollar amounts alone', () => {
     const html = markdown('<b>hi</b> costs $5 and $6\n\n```\nwatch a * b <x>\n```');
     expect(html).toContain('&lt;b&gt;hi&lt;/b&gt;');
     expect(html).toContain('<pre><code>watch a * b &lt;x&gt;</code></pre>');

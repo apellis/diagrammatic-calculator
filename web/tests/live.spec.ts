@@ -317,7 +317,7 @@ test('revoking an editor disconnects them and prevents subsequent document write
   } finally { await a.context.close(); await b.context.close(); mock.dispose(); }
 });
 
-test('personal branch text, canvas and AI presence never reach a peer', async ({ browser }) => {
+test('personal branch text, canvas, and AI presence never reach a peer', async ({ browser }) => {
   const { mock, ada, bob } = fixture();
   const a = await device(browser, mock, ada), b = await device(browser, mock, bob);
   const received: Record<string, unknown>[] = [];
@@ -523,7 +523,7 @@ test('room fixture: awareness identity is server-owned and viewer updates are re
 });
 
 // Exercise the fixture independently of UI readiness with an actual browser WebSocket.
-test('room fixture: authenticated ticket, real sync, persisted ack and ticket replay rejection', async ({ browser }) => {
+test('room fixture: authenticated ticket, real sync, persisted ack, and ticket replay rejection', async ({ browser }) => {
   const { mock, ada } = fixture();
   const context = await browser.newContext();
   await mock.attach(context, { user: ada, next: null });

@@ -6,7 +6,7 @@
 //! rule in a word is a set of layers that interchange moves bring together into a rectangle
 //! (consecutive layers × consecutive strands) holding exactly the pattern. Applying it replaces
 //! the rectangle by each word of the replacement and brings the results back to canonical
-//! layering. Every step records the moves, the rectangle and, for each resulting word, where its
+//! layering. Every step records the moves, the rectangle, and, for each resulting word, where its
 //! layers came from: enough to replay the step elsewhere (the Lean export does).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};

@@ -25,7 +25,7 @@ atom    := int ["/" int]
 sub     := "_" char | "_" alnum+ | "_{" text "}"
 colours := colour names run together (iji) or separated by spaces or commas; "*" after a
            colour marks a downward strand
-intexpr := integers, integer variables (a sum index, a relation's ints) and h(colour), with
+intexpr := integers, integer variables (a sum index, a relation's ints), and h(colour), with
            + - * and parentheses
 comment := "#" to the end of the line
 ```

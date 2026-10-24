@@ -18,7 +18,7 @@ export interface AISettings {
   effort: Effort;
   /** For an OpenAI-compatible server, its base URL (ending in /v1). */
   baseUrl: string;
-  /** The most tokens (in, cached and out) one request may use before it stops; 0 for no limit. */
+  /** The most tokens (in, cached, and out) one request may use before it stops; 0 for no limit. */
   budget: number;
 }
 
@@ -169,7 +169,7 @@ export interface ModelOption {
   name: string;
 }
 
-/** Model ids that are not chat models, in OpenAI's list (embeddings, speech, images, moderation and the like). */
+/** Model ids that are not chat models, in OpenAI's list (embeddings, speech, images, moderation, and the like). */
 const NOT_CHAT = /embed|tts|whisper|dall-e|image|audio|realtime|moderation|transcribe|search|babbage|davinci|computer-use|sora/i;
 
 /**

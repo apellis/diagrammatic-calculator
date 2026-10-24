@@ -30,13 +30,13 @@ pub trait RingVisitor {
 
 /// Runs a visitor over the ring named `ZZ`, `QQ`, `GF(p)`, `ZZ[I]`, a polynomial ring `ZZ[q]` or
 /// `QQ[q]`, a Laurent polynomial ring `ZZ[q,q^-1]` or `QQ[q,q^-1]`, or a rational function field
-/// `QQ(q)`, for a variable name `q` of lowercase letters other than `u`, `v`, `w`, `x` and `e`.
+/// `QQ(q)`, for a variable name `q` of lowercase letters other than `u`, `v`, `w`, `x`, and `e`.
 pub fn with_ring<V: RingVisitor>(name: &str, v: V) -> Result<V::Out> {
     let name: String = name.chars().filter(|c| !c.is_whitespace()).collect();
     let unknown = || {
         Error::invalid(format!(
             "unknown ring '{name}': use ZZ, QQ, GF(p), ZZ[I], ZZ[q], QQ[q], ZZ[q,q^-1], \
-             QQ[q,q^-1] or QQ(q)"
+             QQ[q,q^-1], or QQ(q)"
         ))
     };
     let var_ok = |s: &str| {
@@ -317,14 +317,14 @@ impl<'a, R: Ring> Session<'a, R> {
     }
 }
 
-/// A term as text, TikZ or SVG.
+/// A term as text, TikZ, or SVG.
 pub fn render_term<R: Ring>(ctx: &Context<R>, t: &CTerm<R>, format: &str) -> Result<String> {
     match format {
         "text" => Ok(ctx.fmt_term(t)),
         "tikz" => Ok(render::tikz(ctx, t)),
         "svg" => Ok(render::svg(ctx, t)),
         f => Err(Error::invalid(format!(
-            "unknown format '{f}': use text, tikz or svg"
+            "unknown format '{f}': use text, tikz, or svg"
         ))),
     }
 }
@@ -466,7 +466,7 @@ pub fn check(req: &Request, name: &str, terms: &[String]) -> Value {
     }))
 }
 
-/// `term.render`: a term as text, TikZ or SVG.
+/// `term.render`: a term as text, TikZ, or SVG.
 pub fn render(req: &Request, term: &str, format: &str) -> Value {
     with_status(ring_of(&req.context).and_then(|r| {
         with_ring(

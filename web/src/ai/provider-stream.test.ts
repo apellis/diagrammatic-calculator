@@ -12,7 +12,7 @@ async function collect(text: string) {
   return out;
 }
 describe('provider SSE framing', () => {
-  it.each(['\n', '\r', '\r\n'])('handles %j delimiters, multiline data, comments, BOM and fragmented UTF-8', async (nl) => {
+  it.each(['\n', '\r', '\r\n'])('handles %j delimiters, multiline data, comments, BOM, and fragmented UTF-8', async (nl) => {
     expect(await collect(`\uFEFF: comment${nl}event: ignored${nl}id: ignored${nl}data: hé🙂${nl}data: two${nl}${nl}data: next${nl}${nl}`)).toEqual(['hé🙂\ntwo', 'next']);
   });
   it('does not dispatch a partial event at EOF', async () => {

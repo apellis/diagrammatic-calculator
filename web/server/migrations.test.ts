@@ -58,7 +58,7 @@ describe('D1 migrations', () => {
     await expect(applyMigrations(db)).rejects.toThrow();
   });
 
-  it('enforce roles, link consistency and cascading deletes', async () => {
+  it('enforce roles, link consistency, and cascading deletes', async () => {
     const db = await fresh();
     await applyMigrations(db);
     const run = (sql: string, ...v: unknown[]) => db.prepare(sql).bind(...v).run();

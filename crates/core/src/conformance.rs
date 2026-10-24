@@ -1,7 +1,7 @@
 //! The conformance checker: does a presentation, in a context, mean what it says?
 //!
 //! For every instance of every relation schema it checks that both sides elaborate, that all
-//! words on both sides share one source, target, degree and parity, and that the relation holds
+//! words on both sides share one source, target, degree, and parity, and that the relation holds
 //! in every representation the file declares. It checks the parameter hypotheses it recognizes
 //! and reports the others as stated but unchecked, and flags relation schemas whose side
 //! condition no colour binding satisfies.
@@ -214,7 +214,7 @@ pub fn check<R: Ring>(ctx: &Context<R>) -> Report {
                 findings.push(finding(name, false, "both sides elaborate to zero"));
                 continue;
             }
-            // typing: one source, target, degree and parity across both sides
+            // typing: one source, target, degree, and parity across both sides
             let words: Vec<_> = lhs.terms.iter().chain(&rhs.terms).map(|(w, _)| w).collect();
             let w0 = words[0];
             let key = |w: &crate::term::Word| {
@@ -231,7 +231,7 @@ pub fn check<R: Ring>(ctx: &Context<R>) -> Report {
                     format!("{name}: typing"),
                     false,
                     format!(
-                        "{} and {} differ in source, target, degree or parity",
+                        "{} and {} differ in source, target, degree, or parity",
                         ctx.fmt_word(w0),
                         ctx.fmt_word(w)
                     ),

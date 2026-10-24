@@ -13,7 +13,7 @@
 //!   that no negative powers remain (the rank does not change, and exact division then works).
 //! - **ℤ**: the row Hermite normal form ([`hermite`], [`hermite_with_transform`]), the Smith
 //!   invariant factors ([`smith_invariants`]), the abelian group ℤⁿ / (row span)
-//!   ([`quotient_group`]) and a ℤ-basis of the integer kernel ([`kernel_z`]), so that ranks and
+//!   ([`quotient_group`]), and a ℤ-basis of the integer kernel ([`kernel_z`]), so that ranks and
 //!   torsion over ℤ are exact.
 //! - **ℚ**: multimodular elimination with rational reconstruction, verified exactly over ℚ
 //!   ([`rref_q`], [`rank_q`], [`kernel_q`]). **𝔽_p**: word-size elimination in Montgomery form
@@ -29,7 +29,7 @@
 //! computation runs multimodularly over ℚ or on machine words over 𝔽_p, and the answer is mapped
 //! back with `Ring::rational` or `Ring::int`. Membership is checked exactly, entry by entry: the
 //! entry is printed, read back as `n/d` (or `k`), and its image `Ring::rational(n, d)` (or
-//! `Ring::int(k)`) must equal the entry. Ranks, reduced echelon forms and kernels do not change
+//! `Ring::int(k)`) must equal the entry. Ranks, reduced echelon forms, and kernels do not change
 //! under a field extension, so the fast path is exact; it covers ℚ itself, ℤ (rank over ℚ), 𝔽_p,
 //! and matrices with constant entries over ℚ(q) or ℚ[q]. Otherwise the generic algorithm runs in
 //! the ring. Callers holding a `Mat<Rat>` can call [`rank_q`], [`rref_q`], [`kernel_q`] directly
@@ -346,7 +346,7 @@ impl<E: Clone> Echelon<E> {
     }
 
     /// The standard basis of the right kernel `{x : A x = 0}`: one vector per free column `f`,
-    /// with 1 in column `f`, 0 in the other free columns and `-rref[i][f]` in the pivot column of
+    /// with 1 in column `f`, 0 in the other free columns, and `-rref[i][f]` in the pivot column of
     /// row `i`.
     pub fn kernel<R: Ring<Elem = E>>(&self, ring: &R) -> Vec<Vec<E>> {
         kernel_from_rref(ring, &self.rref, &self.pivots, self.rref.cols)

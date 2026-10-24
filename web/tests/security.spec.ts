@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { addCell, cell, newDoc, typeCell } from './helpers';
 
 // The app runs under the Content-Security-Policy of public/_headers (served by `vite preview` as
-// by Cloudflare Pages): the engine's WebAssembly and worker, KaTeX's fonts and the AI panel all
+// by Cloudflare Pages): the engine's WebAssembly and worker, KaTeX's fonts, and the AI panel all
 // work, and the browser reports no violation on the way.
 
 /** Collects every Content-Security-Policy violation the page reports, from the event and the console. */
@@ -68,7 +68,7 @@ test('the web-app manifest and its icons load under the policy, and Chromium can
   expect(await violations()).toEqual([]);
 });
 
-test('the engine, the typeset results, the theme and the AI panel work under the policy', async ({ page }) => {
+test('the engine, the typeset results, the theme, and the AI panel work under the policy', async ({ page }) => {
   const violations = await watchViolations(page);
   await page.addInitScript(() => localStorage.setItem('diagcalc.theme', 'dark'));
   await newDoc(page);

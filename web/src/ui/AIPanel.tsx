@@ -66,7 +66,7 @@ export interface AIPanelProps {
 }
 
 export function AIPanel(props: AIPanelProps) {
-  // the provider, model and key are set on the settings page; read afresh when used
+  // the provider, model, and key are set on the settings page; read afresh when used
   const settings = () => loadSettings();
   const key = () => loadKey(settings().provider).key;
   const ready = () => isSetUp(settings(), key());
@@ -232,13 +232,13 @@ export function AIPanel(props: AIPanelProps) {
           <button classList={{ on: tab() === 'chat' }} onClick={() => setTab('chat')}>Chat</button>
           <button classList={{ on: tab() === 'activity' }} onClick={() => setTab('activity')} data-testid="activity-tab">Activity</button>
         </div>
-        <a class="ghost model-link" href="#/settings" title="Provider, model and key: in Settings" data-testid="ai-model">{ready() ? modelName() || 'choose a model' : 'not set up'}</a>
+        <a class="ghost model-link" href="#/settings" title="Provider, model, and key: in Settings" data-testid="ai-model">{ready() ? modelName() || 'choose a model' : 'not set up'}</a>
         <button class="ghost" title={`Hide (${keysOf('ai')})`} onClick={props.onClose} aria-label="Hide the AI panel">×</button>
       </div>
 
       <Show when={!noticeSeen()}>
         <div class="banner ai-notice" data-testid="ai-notice">
-          Every message sends your text, the selection and the terms involved to the provider you choose, with your key, straight from this browser.
+          Every message sends your text, the selection, and the terms involved to the provider you choose, with your key, straight from this browser.
           Nothing goes anywhere else.
           <div><button onClick={() => { markSeen(); setNoticeSeen(true); }}>I understand</button></div>
         </div>

@@ -238,7 +238,7 @@ theorem dc_bubR_one (i : I) (ν : X) (hh : D.h i ν < 0) :
     cl_invM₅ Sc i ν _ _ (by omega) (by omega), ite_eq_left rfl]
 
 /-- Fits a lemma `h` above, at the weights and parities of the goal's context, to the goal: the
-weights and parities rewritten by the hypotheses, the integers evaluated, the layers normalized
+weights and parities rewritten by the hypotheses, the integers evaluated, the layers normalized,
 and the signs computed. -/
 macro "dc_fit " h:ident : tactic => `(tactic| (
   try simp only [*, Int.reduceNeg, Int.reduceAdd, Int.reduceSub, Int.reduceMul, Int.reduceToNat,

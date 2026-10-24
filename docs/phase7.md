@@ -30,7 +30,7 @@ The following decisions from Alex supersede conflicting requirements below:
 
 The original implementation brief is retained below, subject to the accepted decisions above.
 Read `AGENTS.md` first (it binds you), then this file, then the parts of `docs/spec.md`,
-`docs/design.md` ("Web app", "Accounts and sharing (phase 6)") and `docs/deploy.md` it points to.
+`docs/design.md` ("Web app", "Accounts and sharing (phase 6)"), and `docs/deploy.md` it points to.
 `docs/roadmap.md` is the list of everything open; phase 7 items move from there to here and leave
 both when they land.
 
@@ -40,13 +40,13 @@ both when they land.
 | --- | --- | --- |
 | Committed edits, UUID-owned editors, private conflicting/deleted drafts | `src/doc/model.ts`, `src/ui/WorkspacePage.tsx`, `Cell.tsx`, `Editor.tsx` | `src/doc/collaboration.test.ts`, `tests/live.spec.ts` (including actual server ID repair while a draft is open) |
 | Session undo, private checkpoints and branches, safe migration/reopen | `src/doc/store.ts`, `src/account/recovery.ts`, `docsync.ts`, `account.ts`, `src/ui/CloudRecovery.tsx` | Account/doc recovery and lifecycle unit tests; `tests/recovery.spec.ts`, `tests/branches.spec.ts` |
-| Durable rooms, authentication, limits, revocation and generation fences | `live/room.ts`, `validation.ts`, `server/live.ts`, `room-auth.ts`, `versions.ts` | `live/acceptance.test.ts`, `limits.test.ts`, `room.test.ts`, `server/live.test.ts`, `versions.test.ts` |
+| Durable rooms, authentication, limits, revocation, and generation fences | `live/room.ts`, `validation.ts`, `server/live.ts`, `room-auth.ts`, `versions.ts` | `live/acceptance.test.ts`, `limits.test.ts`, `room.test.ts`, `server/live.test.ts`, `versions.test.ts` |
 | Actual Pages-to-room integration | `server/router.ts`, external `LIVE` binding | `live/pages-seam.test.ts`: real workerd, migrations, signed sessions, tickets, durable readback, viewer/origin/session rejection, target-free AI presence |
 | Authenticated presence without private branch content | `src/account/live.ts`, `live/presence.ts`, workspace UI | Live-provider/presence units and peer-received browser awareness regression |
 | Atomic shared AI decisions and attributable recomputable pins | `src/ai/proposals.ts`, `src/eval/pinned.ts`, `src/ui/PinnedRecompute.tsx` | Proposal/pin unit tests; two-editor proposal race and pinned-recompute browser tests |
 | Immediate local evaluation, coalesced remote work, cached undo | `src/eval/evaluator.ts`, `src/engine/engine.ts` | Local-first/cancellation units and real browser/WASM timing tests, including a 50-cell chain |
 
-Paths in the table are relative to `web/`. Run `npm test`, `npm run typecheck`, `npm run build`
+Paths in the table are relative to `web/`. Run `npm test`, `npm run typecheck`, `npm run build`,
 and Playwright's Chromium and timing projects there; run the repository's Rust checks in
 `AGENTS.md`. `docs/deploy.md` describes the separate Worker/Pages bundles and deployment order.
 Browser fixtures prove UI behavior, not production authorization: real-runtime room and Pages
@@ -56,16 +56,16 @@ review; an anonymous health check is not that review. No billing measurement is 
 ## 1. Goal and gate
 
 Several people edit one document at the same time, each in their own browser, and see each other's
-changes, cursors and selections as they happen.
+changes, cursors, and selections as they happen.
 
 **Gate:** two browsers commit edits to one workspace without losing edits or private drafts.
-Tests also cover a third browser joining late, a browser going offline and returning, a viewer
+Tests also cover a third browser joining late, a browser going offline and returning, a viewer,
 and a revoked collaborator. Rooms use hibernation and stop maintenance after their final
 connection closes; zero-cost billing is not a gate (see the accepted decisions above).
 
 **In scope.** The live room (a Durable Object per document), the WebSocket protocol, its
 authentication and limits, the document-model changes live editing needs, presence, AI activity
-visible to collaborators, evaluation under remote edits, the deploy pipeline, tests and docs.
+visible to collaborators, evaluation under remote edits, the deploy pipeline, tests, and docs.
 
 **Out of scope.** Sharing computed results between collaborators (decided, section 2); phones;
 a server that computes anything; following another person's view; comments threads; the view mode
@@ -79,7 +79,7 @@ for reviewing (a later roadmap item, section 12).
 - **Edit history and undo live outside the shared document** (Alex, 23 October): undo and redo are
   session context, as in other document editors, not part of the file. Undo reverts only your own
   steps (spec, "Undo and redo").
-- **Roles** are owner, editor and viewer, as the server already enforces (design.md, "Access").
+- **Roles** are owner, editor, and viewer, as the server already enforces (design.md, "Access").
   Editing through a link needs an account. Anonymous use stays local and unchanged.
 - **Mobile is a non-goal**; cheap improvements only.
 - **Results relying on the BE2 Nondegeneracy Conjecture say so**; nothing in phase 7 changes how
@@ -94,7 +94,7 @@ for reviewing (a later roadmap item, section 12).
   and `text` as a plain string), `history` (one entry per step with a full `Y.encodeSnapshot`),
   `snapshots` (pinned results: computed values), `hints`, `occurrences`, `drawn` (per cell, the
   summand words its canvas last drew, which occurrence IDs are carried from), `timeline`,
-  `branches` (each a whole Yjs update, with the `occ-*` counters it started from) and `counters`
+  `branches` (each a whole Yjs update, with the `occ-*` counters it started from), and `counters`
   (`nextId`, `occ-<letter>`, `nextBranch`). Every change
   goes through `Doc.step`, which records a version. Origins are the constants `LOCAL`
   (`author: 'you'`) and `AI`; the undo manager tracks those two origins. Reads are defensive
@@ -102,7 +102,7 @@ for reviewing (a later roadmap item, section 12).
 - **Local copy**: IndexedDB through `y-indexeddb` (`src/doc/store.ts`), the working copy and the
   offline cache.
 - **Saving to the account** (`src/account/sync.ts`, `docsync.ts`): a whole-state REST save
-  (`PUT /api/docs/:id/snapshot` with `If-Match` on a version), 1.5 s after a change, on hide and
+  (`PUT /api/docs/:id/snapshot` with `If-Match` on a version), 1.5 s after a change, on hide, and
   every minute; a 409 means fetch, merge, save again. Viewers only fetch.
 - **Server** (`web/server/`, Pages Functions at `/api/*`): Google sign-in, sessions (cookie
   `__Host-dc_session`, only the SHA-256 of the ID stored), CSRF token on unsafe methods, Origin
@@ -117,7 +117,7 @@ for reviewing (a later roadmap item, section 12).
 - **Evaluation** (`src/eval/evaluator.ts`, `src/engine/engine.ts`): a job whose key no cell needs
   is cancelled by terminating its worker; cache lookups go one cell at a time.
 
-The security, speed and UX reviews of 23 October list what phase 7 must change; they are in the
+The security, speed, and UX reviews of 23 October list what phase 7 must change; they are in the
 project's shared files (`diagcalc/reviews-2026-10-23/`); the parts that matter are restated here,
 so you do not need them.
 
@@ -169,7 +169,7 @@ a whole snapshot, in phase 7 every change to a cloud document's content goes thr
 `webSocketMessage`, `webSocketClose`, `webSocketError`), never `ws.accept()`, so an idle room is
 not billed for duration. In-memory state is lost when it hibernates: each socket carries an
 attachment (`serializeAttachment`, keep it small) with the role, user ID, display name, colour,
-session hash or link marker, the awareness client IDs it has announced and when its role was last
+session hash or link marker, the awareness client IDs it has announced, and when its role was last
 checked. On waking, the room rebuilds its `Y.Doc` from the SQLite log (compacting the log into one
 update when it exceeds 200 entries or 1 MB). No timers or intervals keep it awake; periodic work
 uses alarms, which end.
@@ -179,7 +179,7 @@ varint message type, `0` sync (sync step 1, sync step 2, update) and `1` awarene
 `y-protocols` package on both sides (add it to `web/package.json`; it is the standard companion of
 `yjs`). The client side is a small provider of our own in `src/account/live.ts` (about 200 lines:
 connect with a ticket, sync, awareness, reconnect with backoff, status), not `y-websocket`'s
-`WebsocketProvider`, so tickets, roles, close codes and the status line are ours. Close codes:
+`WebsocketProvider`, so tickets, roles, close codes, and the status line are ours. Close codes:
 `4001` not signed in or ticket expired, `4003` not allowed (viewer wrote, role revoked),
 `4008` rate or size limit, `4009` document too large, `4010` document deleted, `1012` room
 restarting (reconnect).
@@ -194,7 +194,7 @@ appear in a URL that may be logged. So:
    link marker), the session hash, and an expiry 60 seconds ahead.
 2. The page opens `wss://<APP_ORIGIN>/api/docs/:id/live?ticket=…`. The Pages Function checks the
    ticket, the `Origin` header (must equal `APP_ORIGIN`: WebSockets have no CORS, so this is the
-   CSRF defence) and the session cookie when the ticket names a session (same session hash), then
+   CSRF defence), and the session cookie when the ticket names a session (same session hash), then
    forwards the upgrade to the room with headers it sets itself (`X-DC-Role`, `X-DC-User`,
    `X-DC-Name`, `X-DC-Session`) after deleting any of those the client sent. The room trusts only
    these headers, which only the Pages Function can send.
@@ -240,7 +240,7 @@ the document grow quadratically: 13.7 MB after 3,000 steps). Replace it with:
   read through the REST path (no live editing) until then. Export `.dch` keeps working: it writes
   the checkpoints as versions.
 
-**5.3 Authors.** Replace the string authors with a stable identity: user ID, name and a colour
+**5.3 Authors.** Replace the string authors with a stable identity: user ID, name, and a colour
 (from a fixed palette by a hash of the user ID). The origin objects become per-session
 (`{author: userId, kind: 'person' | 'ai'}`); the timeline and checkpoints store user IDs, and the
 UI shows "you" for your own, the person's name for others, and "Ada's AI" for steps the AI made for
@@ -254,7 +254,7 @@ other's "what if" copies. Accepting a branch is a normal step on the shared docu
 three-way merge). Existing branches in documents are moved to the migrating owner's storage.
 
 **5.5 AI proposals in the document.** Proposals (`WorkspacePage.tsx` `proposals`) move into a
-shared `proposals` map, so everyone sees a pending proposal, who asked for it and what it would
+shared `proposals` map, so everyone sees a pending proposal, who asked for it, and what it would
 change. Any editor may accept or reject one; the timeline records who did. The AI of a person who
 is not an editor makes no proposals (viewers cannot change the document).
 
@@ -307,7 +307,7 @@ These come from the security review's phase 7 requirements and are all tested (s
    addresses never appear in awareness.
 7. **Single writer** (4.3): the REST save is forwarded to the room; nothing else writes the
    document's R2 snapshot.
-8. **Logging**: as the REST API, no content, names or addresses; route patterns and error kinds
+8. **Logging**: as the REST API, no content, names, or addresses; route patterns and error kinds
    only.
 
 ## 7. Presence
@@ -361,8 +361,8 @@ From the speed review:
   roots, spoofed presence, expired tickets, revoked roles, deleted documents, ended sessions),
   ID de-duplication, migration.
 - **Convergence fuzz test** (Node, no browser): N simulated clients (3 to 5) make random edits
-  (add, remove, move and edit cells; type in the same cell; context changes; hints; occurrences)
-  through a room in Miniflare with random delays, disconnects and reconnects; at the end every
+  (add, remove, move, and edit cells; type in the same cell; context changes; hints; occurrences)
+  through a room in Miniflare with random delays, disconnects, and reconnects; at the end every
   client and the persisted state are identical, no client's acknowledged edit is missing, and every
   ID is unique. Seeded, so a failure reproduces.
 - **Browser tests** (Playwright, several contexts against `wrangler pages dev` with the room bound
@@ -377,7 +377,7 @@ From the speed review:
 ## 11. Plan
 
 Each milestone is pushed to `master` when green (standing permission; AGENTS.md "Checks" first,
-plus `npm run typecheck`, `npm test`, `npm run test:server` and Playwright for web changes), keeps
+plus `npm run typecheck`, `npm test`, `npm run test:server`, and Playwright for web changes), keeps
 the app working for everyone at every step, and updates `docs/design.md` and this file.
 
 | | Milestone | Done when |
@@ -412,14 +412,14 @@ M1 and M0 can proceed in parallel; M2 needs M0; M3 needs M2; M4 needs M1 and M3.
 - AGENTS.md binds: general (nothing KLR-specific in core types), exact and deterministic, every
   result says how it was obtained, publication-ready (no secrets, machine names, local paths),
   commit straight to `master` with green CI, commit messages with a summary line and a body and no
-  co-author trailers, no "generated with" footers and no model names.
+  co-author trailers, no "generated with" footers, and no model names.
 - **CI must stay quiet**: Alex is e-mailed for every red run. Run the checks locally before every
   push; fix a red run before anything else.
 - **Never change the "Accounts storage" step** of `.github/workflows/deploy-web.yml`, nor
   `.github/scripts/provision-accounts.sh`, without Alex's explicit agreement in his own words.
   Deploying the Worker is a new, separate step or job. Its token needs Workers Scripts: Edit,
   which Alex adds (M0).
-- **Privacy policy**: never add, edit or remove any privacy-policy wording (`PRIVACY.md` and the
+- **Privacy policy**: never add, edit, or remove any privacy-policy wording (`PRIVACY.md` and the
   `/privacy` page built from it) on any branch: Alex approves every word first, in his own words.
   Phase 7 shows collaborators each other's names and presence, which the approved policy covers
   ("used only for your account and for sharing"); if anything you build stores or shows a new kind

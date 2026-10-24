@@ -1,6 +1,6 @@
 //! The rewriting operations: `relations.match`, `relation.apply`, `interchange`, `slide`,
-//! `straighten`, `chain.find` and `export.lean`, and the canvas operations `term.layout`,
-//! `term.edit` and `term.diff`. Schemas in `spec/ops/`.
+//! `straighten`, `chain.find`, and `export.lean`, and the canvas operations `term.layout`,
+//! `term.edit`, and `term.diff`. Schemas in `spec/ops/`.
 //!
 //! Locations: a term's summands are numbered from 1 in printed order; a summand's layers are
 //! numbered from 1 at the bottom of its canonical layering, strands from 1 at the left.
@@ -450,7 +450,7 @@ fn reorder<R: Ring>(
     ))
 }
 
-/// One summand drawn for an interactive canvas: its pieces, strands and lines, and the
+/// One summand drawn for an interactive canvas: its pieces, strands, and lines, and the
 /// objects between rows, with the coefficient that goes with the drawing.
 fn layout_json<R: Ring>(
     ctx: &Context<R>,

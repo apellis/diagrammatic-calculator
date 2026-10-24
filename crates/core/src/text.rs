@@ -13,7 +13,7 @@
 //!          | sum_{f=lo..hi} comp            a sum over an integer range; empty if hi < lo
 //! ```
 //!
-//! Unicode forms are accepted for `ψ`, `π`, `⊗`, `−`, `·` and `∘`; the printer writes ASCII
+//! Unicode forms are accepted for `ψ`, `π`, `⊗`, `−`, `·`, and `∘`; the printer writes ASCII
 //! except for names that were typed in Unicode.
 
 use crate::error::{Error, Result};
@@ -27,7 +27,7 @@ pub enum Ast {
     Frac(BigInt, BigInt),
     /// The square root of −1 in ℤ[√−1].
     Imag,
-    /// A generator, parameter, unknown or definition: `x_1`, `t_ij`, `c1`, `Q_ab(x_1, x_2)`.
+    /// A generator, parameter, unknown, or definition: `x_1`, `t_ij`, `c1`, `Q_ab(x_1, x_2)`.
     Name {
         name: String,
         sub: Option<String>,
@@ -218,7 +218,7 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>> {
     Ok(out)
 }
 
-/// The deepest nesting of parentheses, function arguments and sum bodies a term may have: far
+/// The deepest nesting of parentheses, function arguments, and sum bodies a term may have: far
 /// beyond any real term, and shallow enough that parsing and everything after it (which recurse
 /// along the nesting) stay well inside the stack, also in WebAssembly.
 pub const MAX_NESTING: usize = 100;

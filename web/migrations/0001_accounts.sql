@@ -1,4 +1,4 @@
--- Accounts, documents and sharing (phase 6). Applied by `wrangler d1 migrations apply`, which
+-- Accounts, documents, and sharing (phase 6). Applied by `wrangler d1 migrations apply`, which
 -- records applied files in its own table; never edit a migration once it is on master, add the
 -- next numbered file instead.
 

@@ -143,7 +143,7 @@ impl<'a, R: Ring> Quotient<'a, R> {
         let spec = &ctx.spec;
         if spec.lambda.is_none() && spec.dot_cap.is_none() && spec.degree_cap.is_none() {
             return Err(Error::precondition(
-                "the algebra is infinite-dimensional: give Lambda, dotcap or degcap",
+                "the algebra is infinite-dimensional: give Lambda, dotcap, or degcap",
             ));
         }
         // The ideal's vectors have coefficients in the ground ring, so scalars may appear in the

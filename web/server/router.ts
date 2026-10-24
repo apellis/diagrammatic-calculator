@@ -1,4 +1,4 @@
-// The accounts API under /api/: sign-in, the session, documents and sharing. Every route checks
+// The accounts API under /api/: sign-in, the session, documents, and sharing. Every route checks
 // the session and the caller's role on the document; every state-changing request needs the
 // session's CSRF token.
 import { appOrigin, defaultDeps, ready, type Deps, type Env, type ReadyEnv } from './env';
@@ -31,7 +31,7 @@ export async function handle(req: Request, env: Env, deps: Deps = defaultDeps): 
     }
   });
   const method = req.method.toUpperCase();
-  // for the log: the route with IDs, names and addresses left out
+  // for the log: the route with IDs, names, and addresses left out
   const route = `${method} ${seg.map((p, i) => (seg[0] === 'docs' && i === 1 ? ':id' : i === 3 ? ':name' : p)).join('/')}`;
   try {
     if (!ready(env)) {

@@ -70,7 +70,7 @@ pub(super) struct Up<'a, R: Ring> {
 
 pub(super) type P<R> = Poly<<R as Ring>::Elem>;
 type BasisCache<E> = FxHashMap<(Vec<u16>, Vec<usize>), Value<E>>;
-/// A term of [`Up::peel`]: the permutation, its reduced word and the polynomial.
+/// A term of [`Up::peel`]: the permutation, its reduced word, and the polynomial.
 pub(super) type Peeled<R> = (Perm, Vec<usize>, P<R>);
 
 /// The colours of an object of upward strands.
@@ -365,7 +365,7 @@ impl<'a, R: Ring> Up<'a, R> {
         }
     }
 
-    /// Splits a monomial into its dot exponents (`nx` of them), its bubble exponents and its
+    /// Splits a monomial into its dot exponents (`nx` of them), its bubble exponents, and its
     /// scalar monomial.
     pub fn split(&self, m: &Monomial) -> (Vec<i32>, Vec<i32>, Monomial) {
         let (z, s) = (self.zoff(), self.soff());

@@ -27,7 +27,7 @@ describe('result certainty', () => {
     expect(v.provenance?.certificate.status).toBe('conditional');
   });
 
-  it('does not treat other conjectures, assumptions or unknown certificates as accepted BE2', () => {
+  it('does not treat other conjectures, assumptions, or unknown certificates as accepted BE2', () => {
     expect(certainty(result('conditional', 'Another Nondegeneracy Conjecture'))).toMatchObject({ level: 'conditional', mark: 'conditional' });
     expect(certainty(result('assumed'))).toMatchObject({ level: 'assumed', mark: 'assumed' });
     expect(certainty(result('unknown'))).toMatchObject({ level: 'unknown', mark: 'unproven' });

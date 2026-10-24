@@ -1,7 +1,7 @@
 //! Sparse multivariate polynomials over a coefficient ring.
 //!
 //! One type covers commutative polynomials, Laurent polynomials (negative exponents allowed in
-//! chosen variables) and skew polynomials, in which distinct odd variables anticommute
+//! chosen variables), and skew polynomials, in which distinct odd variables anticommute
 //! (`x_i x_j = -x_j x_i` for `i ≠ j`, while `x_i²` is nonzero). Skew polynomials are what the
 //! odd nilHecke algebra acts on.
 //!
@@ -16,7 +16,7 @@ use std::cmp::Ordering;
 /// A log of polynomial operations with their operands, for replaying them on other arithmetic
 /// backends (the arithmetic spike, `bench/spike/`). Compiled only with the `trace` feature.
 ///
-/// One line per operation: `mul n A B`, `add n A B` or `div n i j A` (division by
+/// One line per operation: `mul n A B`, `add n A B`, or `div n i j A` (division by
 /// `x_i − x_j`, 0-based), where `n` is the number of variables and a polynomial is its number
 /// of terms followed by, for each term, the coefficient and the `n` exponents.
 #[cfg(feature = "trace")]
