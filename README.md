@@ -4,6 +4,8 @@ A fast, exact calculator for diagrammatic algebra (KLR algebras, nilHecke and od
 first; any presentation of a monoidal supercategory by generators and relations) whose terms can be
 read and edited as string diagrams.
 
+**[Open the live calculator](https://diagcalc.pages.dev/)**
+
 Status: phases 0 to 7 are complete: the exact headless calculator and Lean chain export, the
 browser workspace with diagram gestures and an in-app AI, KL and BE2 2-categories, and accounts
 with document sharing and live co-editing. `docs/roadmap.md` is the current work list:
