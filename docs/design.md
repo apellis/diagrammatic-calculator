@@ -419,6 +419,15 @@ a whole `.dcw` file the same way: each cell's context has only the unknowns that
 definitions it uses, mention, so an unrelated solve cell never turns a cell's coefficients into
 polynomials.
 
+Input changes invalidate displayed results synchronously, before parsing, cache reads or remote
+coalescing. Once keys are known, unaffected cells reuse their values without new engine jobs.
+Stale checks and solves show only computation progress, never the previous verdict or solution.
+An unparseable cell conservatively blocks later computational cells: skipping it could resolve a
+name to an older, shadowed binding. `WorkspacePage` overlays UUID-owned private drafts in a
+separate local evaluator for previews. The committed evaluator remains authoritative for AI
+reads and frozen snapshots; exports still read the document. Discarding a draft restores committed
+results without writing the document. Preview results cannot be pinned or used for canvas writes.
+
 **Showing results.** `workspace.run` draws the summands of definitions and watches
 (`summands`, each with its word, degree and SVG). A watch outlines summands that are new since
 its previous value, shows the vanished ones faded for two seconds, and lists the changes under

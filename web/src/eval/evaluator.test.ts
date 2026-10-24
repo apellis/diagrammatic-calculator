@@ -106,6 +106,18 @@ describe('evaluator', () => {
   });
 });
 
+it('never drops an invalid shadowing definition and checks an older binding instead', async () => {
+  const { ev } = setup();
+  await ev.update('nilhecke nu=2 ring=QQ', [
+    { id: 'd1', text: 'def e := 1' },
+    { id: 'd2', text: 'def e := x_1 +' },
+    { id: 'k3', text: 'check idempotent(e)' },
+  ]);
+  await settle();
+  expect(ev.state('k3')?.status).toBe('failed');
+  expect(ev.state('k3')?.value).toMatchObject({ status: 'error' });
+});
+
 describe('scalars', () => {
   it('gives each cell only the unknowns it mentions', async () => {
     const { ev } = setup();

@@ -93,6 +93,21 @@ it('does not publish an old result during a pending newer remote snapshot', asyn
   expect(ev.state('a')?.status).toBe('running');
 });
 
+it('invalidates existing results synchronously before parsing or remote coalescing', async () => {
+  vi.useFakeTimers();
+  const { ev, runs } = harness();
+  const cells = [{ id: 'a', text: 'def a0 := 1' }, { id: 'b', text: 'watch a0' }];
+  await ev.update('ctx', cells);
+  runs.forEach(r => r.finish()); await flush();
+  expect(ev.state('b')?.status).toBe('fresh');
+  const pending = ev.update('ctx', [{ ...cells[0], text: 'def a0 := 2' }, cells[1]], 'remote');
+  expect(ev.state('b')?.status).toBe('stale');
+  await vi.advanceTimersByTimeAsync(75); await pending;
+  expect(ev.state('b')?.status).toBe('stale');
+  runs.slice(2).forEach(r => r.finish()); await flush();
+  expect(ev.state('b')?.status).toBe('fresh');
+});
+
 it.each([25, 50])('synthetic 50-cell edit: recomputes only the %i-cell dependent chain', async (dependent) => {
   const { ev, runs } = harness();
   const cells = Array.from({ length: 50 }, (_, i) => ({ id: `c${i}`, text: i < dependent ? `def a${i} := ${i ? `a${i - 1}` : '1'}` : `watch ${i}` }));

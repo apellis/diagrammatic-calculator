@@ -5,12 +5,18 @@ vi.mock('solid-js/web', async (original) => ({
   ...await original<typeof import('solid-js/web')>(),
   delegateEvents: () => {},
 }));
-import { certainty } from './Results';
+import { certainty, summary } from './Results';
 import type { WorkspaceRunCell } from '../engine/ops.gen';
 
 const result = (status: 'conditional' | 'assumed' | 'unknown' = 'conditional', reference = 'Brundan-Ellis, arXiv:1701.04133, Nondegeneracy Conjecture'): WorkspaceRunCell => ({
   id: 'certainty-test', status: 'ok', kind: 'watch',
   provenance: { strategy: 'basis normal form', method: 'skm-basis', certificate: { status, reference, hypotheses: 'odd colours' }, notes: [] },
+});
+
+it('never labels a stale check as holds or fails', () => {
+  for (const holds of [true, false]) {
+    expect(summary({ id: 'k', text: 'check idempotent(e)', status: 'stale', value: { id: 'k', kind: 'check', status: 'ok', holds } })).toBe('recomputing…');
+  }
 });
 
 describe('result certainty', () => {
