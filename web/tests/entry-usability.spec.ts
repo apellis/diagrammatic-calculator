@@ -99,6 +99,8 @@ test('dirty AI draft survives browser Back and hash navigation until discarded',
   await expect(guard).toBeVisible();
   await guard.getByRole('button', { name: 'Discard changes' }).click();
   await expect(page).toHaveURL(/#\/about$/);
+  // The hash changes before the router handles it; wait for Settings to actually unmount.
+  await expect(page.getByRole('heading', { name: 'Getting started', exact: true })).toBeVisible();
   await page.goto('/#/settings');
   await expect(page.getByTestId('ai-budget')).toHaveValue('1000000');
 });
