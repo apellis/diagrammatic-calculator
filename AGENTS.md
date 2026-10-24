@@ -49,7 +49,7 @@ must reproduce it.
 
 ```text
 crates/core/     mathematics and the operation API (no I/O, no threads)
-crates/cli/      the diagcalc binary (later also the MCP server)
+crates/cli/      the diagcalc binary
 crates/wasm/     browser bindings
 crates/py/       Python bindings
 presentations/   one .pres.toml file per presentation

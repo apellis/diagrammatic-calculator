@@ -77,9 +77,9 @@ pieces. In the odd nilHecke algebra both generators are odd.
 
 ## Operations
 
-The web app's AI panel offers all of these. The command line (`diagcalc`) and the MCP server
-(`diagcalc mcp`) offer the term operations, which take the context explicitly; there, a
-workspace is a `.dcw` file run with `diagcalc run`.
+The web app's AI panel offers all of these. The command line (`diagcalc`) offers the term
+operations, which take the context explicitly; there, a workspace is a `.dcw` file run with
+`diagcalc run`.
 
 - **Reading:** `workspace_read`, `selection_read` (what the person has selected, as references:
   version, cell, summand, word, layers, and the rectangle of layers × strands).

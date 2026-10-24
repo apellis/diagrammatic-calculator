@@ -225,7 +225,7 @@ export function saveModels(s: AISettings, models: ModelOption[]) {
 
 /** A call the browser could not make at all; the browser does not say why, so the likely causes are listed. */
 const blockedMessage = (name: string, detail?: string) =>
-  `The browser could not reach ${name}${detail ? ` (${detail})` : ''}. The network may be down, a browser extension may block the call, or ${name} refuses calls made from a browser (or is not running). In the last case use the command-line tool or the MCP server (diagcalc mcp) with that provider instead.`;
+  `The browser could not reach ${name}${detail ? ` (${detail})` : ''}. The network may be down, a browser extension may block the call, or ${name} refuses calls made from a browser (or is not running). In the last case choose another provider in Settings.`;
 
 type ChatMessage =
   | { role: 'system' | 'user'; content: string }

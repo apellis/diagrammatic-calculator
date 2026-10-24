@@ -1,7 +1,5 @@
 //! `diagcalc`: the command-line surface of the calculator.
 
-mod mcp;
-
 use diagcalc_core::builtin;
 use diagcalc_core::ops::{self, Request};
 use diagcalc_core::workspace::Workspace;
@@ -27,7 +25,6 @@ commands:
   export-lean -c CONTEXT LHS [RHS] --name NAME
   lean-chains FILE.toml [--check]   write (or check) the Lean files for a list of chains
   call OPERATION                    run an operation on a JSON request read from stdin
-  mcp                               serve the operations over MCP (stdio)
   skill                             print the guide for AI agents (skill/SKILL.md)
   version
 
@@ -502,10 +499,6 @@ fn run(raw: Vec<String>) -> Result<bool, String> {
                 "{}",
                 serde_json::to_string_pretty(&ops::call(&op, &req)).unwrap()
             );
-            return Ok(true);
-        }
-        "mcp" => {
-            mcp::serve().map_err(|e| e.to_string())?;
             return Ok(true);
         }
         "lean-chains" => return lean_chains(&one("chain file")?, a.check),

@@ -2,8 +2,8 @@
 
 Each operation has a JSON Schema here with `$defs/request` and `$defs/response`; shared parts are
 in `common.schema.json`. Every surface (the `diagcalc` command line with `--json` or
-`diagcalc call OP`, the WebAssembly and Python `call(op, request)`, and the MCP server
-`diagcalc mcp`) sends and receives exactly these messages. The fixtures in `fixtures/` are run against the core and validated against
+`diagcalc call OP`, and the WebAssembly and Python `call(op, request)`) sends and receives
+exactly these messages. The fixtures in `fixtures/` are run against the core and validated against
 these schemas in `crates/core/tests/schemas.rs`.
 
 | Operation | Phase | Schema |

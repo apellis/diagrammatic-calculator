@@ -358,7 +358,7 @@ test('the browser check for an OpenAI-compatible server says whether this page c
   expect(calls).toBe(1);
   await page.getByRole('button', { name: 'Check the connection' }).click();
   await expect(page.getByTestId('ai-check')).toContainText('refuses calls made from a browser');
-  await expect(page.getByTestId('ai-check')).toContainText('MCP');
+  await expect(page.getByTestId('ai-check')).toContainText('another provider');
   await page.unroute('http://localhost:11434/**');
   await page.route('http://localhost:11434/**', (route) => route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{"data":[]}' }));
   await page.getByRole('button', { name: 'Check the connection' }).click();

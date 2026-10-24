@@ -360,12 +360,11 @@ side condition allows in types A₂, B₂, G₂, and A₃, is one of the calcula
 vanishes in the representation, and that every relation of the file arises this way; CI checks
 that the printed file is current.
 
-## Command line and MCP
+## Command line
 
 `diagcalc` exposes every operation (`call OP` takes the JSON request on stdin; the rewriting
-operations also have their own commands). `diagcalc mcp` serves the same operations as MCP tools
-over stdio, one tool per operation with its request schema from `spec/ops/`, so an AI client and
-the command line see exactly the operation API.
+operations also have their own commands), so the command line sees exactly the operation API.
+An MCP server over the same operations existed until 24 October; its last commit is `db1eb4d`.
 
 ## Worker pool
 

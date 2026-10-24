@@ -1,4 +1,4 @@
-//! Operations: the typed requests every surface (command line, WebAssembly, Python, later MCP)
+//! Operations: the typed requests every surface (command line, WebAssembly, Python)
 //! sends to the core, and their JSON results. The schemas are in `spec/ops/`.
 
 use crate::builtin;

@@ -10,7 +10,7 @@ diagrammatic-calculator is a fast, exact calculator for diagrammatic algebra, KL
 
 - Compute graded dimensions, bases, Gram matrices, idempotents, and simplified expressions in seconds; edits and cached watches update in under 150 ms.
 - One source of truth: every object is a term in a presentation; the diagram is a view of that term, and editing either edits both.
-- Built equally for people and AI agents: everything the UI does goes through one operation API, which is also the MCP tool list and the in-app AI's tool list.
+- Built equally for people and AI agents: everything the UI does goes through one operation API, which is also the in-app AI's tool list.
 - Odd and super signs from the first version (odd nilHecke, BE2), with oriented and unoriented strands.
 - General beyond KLR (Alex, 21 October). The engine, formats, and API work for any diagrammatic algebra given by a presentation of a strict monoidal supercategory (later a 2-supercategory): webs, Temperley–Lieb and Brauer-type diagrams, Soergel diagrammatics, Heisenberg categories, and the like. KLR, nilHecke, and odd nilHecke are only the first presentation files. No KLR-specific assumption enters the core types; what a family needs beyond its presentation file (a representation, a basis normal form, a known dimension formula) plugs in through one interface per strategy.
 - Trust through cross-checks: engine values are tested against values proved in Lean, and found rewrite chains export to Lean.
@@ -30,7 +30,7 @@ One Rust core does all mathematics; every client reaches it through the same ope
 
 - **`core` (Rust library).** Presentations, terms, rewriting, representations, linear algebra, the workspace evaluator, and the operation API. No I/O, no threads of its own, deterministic. Compiles to native code and to `wasm32-unknown-unknown`.
 - **`wasm` (browser build).** The core behind a thin `wasm-bindgen` layer, run inside Web Workers: one worker for interactive operations, a pool for long jobs (watches, solves, Gram matrices) that can be cancelled. Multi-core needs the page served with cross-origin isolation headers (`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`), set in Pages' `_headers` file. Without them the pool falls back to separate single-threaded workers.
-- **`cli` (native binary).** `diagcalc` runs workspaces headless, answers operations as JSON on stdin and stdout, and serves the MCP server over stdio (`diagcalc mcp`). Released as downloadable binaries for Linux, macOS, and Windows; nothing is hosted.
+- **`cli` (native binary).** `diagcalc` runs workspaces headless, and answers operations as JSON on stdin and stdout. Released as downloadable binaries for Linux, macOS, and Windows; nothing is hosted.
 - **`py` (Python bindings, PyO3).** The same operations for notebooks and scripts. Published as a wheel built in CI.
 - **`web` (front end, TypeScript).** The app: document list, workspace, diagram canvas, AI chat. Talks to the worker through a typed message channel generated from the operation schema. Rendering is SVG.
 - **`sync` (later, Cloudflare Worker).** Google sign-in, sharing, document storage, and live sync. Stores and relays; never computes.
@@ -41,7 +41,7 @@ One Rust core does all mathematics; every client reaches it through the same ope
 diagrammatic-calculator/
   crates/core/        # mathematics and operation API
   crates/wasm/        # browser bindings
-  crates/cli/         # diagcalc binary, MCP server
+  crates/cli/         # diagcalc binary
   crates/py/          # Python bindings
   web/                # TypeScript app (Vite)
   presentations/      # one file per presentation, with tests
@@ -156,7 +156,7 @@ note """Candidate from the A2 search, step 3."""          # id=nt5
 
 The live document is a Yjs CRDT; the `.dcw` file is its export and import format. A companion `.dch` file (optional) holds the full version history and the AI activity timeline, for headless runs that are replayed later.
 
-**4. Operation messages (JSON).** Every operation in the API is a JSON request and response with a JSON Schema in `spec/ops/`. The same schemas generate the TypeScript types, the MCP tool definitions, and the AI tool definitions.
+**4. Operation messages (JSON).** Every operation in the API is a JSON request and response with a JSON Schema in `spec/ops/`. The same schemas generate the TypeScript types and the AI tool definitions.
 
 **IDs.** Generator occurrences get short IDs by kind (d dot, c crossing, u cup, n cap, b bubble, s strand), numbered in creation order within a document (d3, c12); cells have IDs too, two letters for the kind and a number (df1 def, wt2 watch, sv3 solve, ck4 check, nt5 note; the numbers are shared by all kinds), so a cell ID never reads as an occurrence ID. Files written before the two-letter prefixes have one-letter cell IDs (d1, w2), which are read as they are. A rewrite's provenance map says what became of each ID. IDs are shown only on hover or with a labels toggle: people point at things, and the selection carries the references.
 
@@ -209,7 +209,7 @@ from their inputs (which could select an older definition of the same name).
 
 ## Operation API
 
-One list of typed operations is the whole interface. The web UI calls them in the worker, the command line and MCP server expose them unchanged, and the in-app AI receives the same list as its tools. Every operation that changes a document is one undoable step with an author (a person or the AI) and an optional one-line note.
+One list of typed operations is the whole interface. The web UI calls them in the worker, the command line exposes them unchanged, and the in-app AI receives the same list as its tools. Every operation that changes a document is one undoable step with an author (a person or the AI) and an optional one-line note.
 
 | Group | Operation | What it does |
 |---|---|---|
@@ -232,8 +232,6 @@ One list of typed operations is the whole interface. The web UI calls them in th
 | AI | `timeline.note`, `watch.pin`, `milestone.write` | How the AI shows what it is doing |
 
 Each response includes the status (ok, stale, cancelled, exploded with size diagnostics, or error with a message), the time taken, and the result's equality strategy, faithfulness certificate, and caps. Long operations return a job ID that `job.progress` and `job.cancel` take. Every operation declares its preconditions in its schema (for example finite-dimensional or homogeneous) and refuses with a plain message when they fail. Two operations not in the table above: `presentation.check` runs the conformance checker, and `result.pin` freezes a snapshot.
-
-The MCP server is `diagcalc mcp`, a stdio server built from these schemas. A client such as Claude Code adds it with one line of configuration and then works on a `.dcw` file on disk, which the user can open in the web app with File › Open.
 
 ## Web app
 
@@ -292,7 +290,7 @@ The AI never does algebra itself: it calls the engine's operations, so every ans
 
 **The loop.** When you send a message, the page builds a request with three parts: the skill text as the system prompt, the operation list as tools, and your message with the current selection attached. The model replies with text or tool calls. The page runs each tool call locally in the WebAssembly engine, sends back the results, and repeats until the model answers. Each tool call is a normal workspace step, recorded in the history and the activity timeline.
 
-**Providers and keys.** Anthropic first: its API accepts calls made directly from a browser when the request opts in, which the official TypeScript SDK supports, so no server is needed. Other providers come only after a check, because not every provider accepts browser calls made with an API key. Phase 4b starts by testing OpenAI and an OpenAI-compatible local endpoint. If a provider refuses, the app says so and points to the command-line tool and MCP instead. The key is kept for the session only by default; "Remember on this device" stores it in that browser's storage. It is sent only to the chosen provider. The default model is Claude Opus 5.5 with adaptive thinking and streaming. The settings page (not the AI panel, which links to it while nothing is set up) offers the provider, other models, and an effort level, since the user pays. The stable prefix (skill text and tool list) is marked for prompt caching, which cuts the user's cost on every turn after the first. Refusals and rate limits are shown as plain messages, never as silent failures.
+**Providers and keys.** Anthropic first: its API accepts calls made directly from a browser when the request opts in, which the official TypeScript SDK supports, so no server is needed. Other providers come only after a check, because not every provider accepts browser calls made with an API key. Phase 4b starts by testing OpenAI and an OpenAI-compatible local endpoint. If a provider refuses, the app says so and suggests choosing another provider. The key is kept for the session only by default; "Remember on this device" stores it in that browser's storage. It is sent only to the chosen provider. The default model is Claude Opus 5.5 with adaptive thinking and streaming. The settings page (not the AI panel, which links to it while nothing is set up) offers the provider, other models, and an effort level, since the user pays. The stable prefix (skill text and tool list) is marked for prompt caching, which cuts the user's cost on every turn after the first. Refusals and rate limits are shown as plain messages, never as silent failures.
 
 **What leaves the browser.** Every AI message sends the selection and the terms involved to the provider. The AI panel says so the first time it opens; nothing is sent unless the person writes to the AI.
 
@@ -304,7 +302,7 @@ The AI never does algebra itself: it calls the engine's operations, so every ans
 
 **Following the AI.** The activity timeline lists every AI step with its one-line note. The AI pins the few watches that measure its progress, whose history shows as a small trend. At milestones it writes a short summary with key diagrams. You can pause it, rewind to any version, or branch; a comment on a cell reaches the AI as an instruction tied to that cell. It can propose a change for you to accept instead of making it, and it always does so for anything that deletes cells.
 
-**Outside agents.** Claude Code and other MCP clients use `diagcalc mcp` with the same skill. A later paid tier could hold a shared key in a small proxy that caps each user's spending; that is out of scope here.
+**Outside agents.** An agent with a terminal can use the `diagcalc` command line with the same skill (`diagcalc skill`); an MCP server was built and then removed on 24 October as unlikely to be used (last commit `db1eb4d`). A later paid tier could hold a shared key in a small proxy that caps each user's spending; that is out of scope here.
 
 ## Documents and storage
 
@@ -345,7 +343,7 @@ The app is a static site on Cloudflare Pages at `https://diagcalc.pages.dev`; a 
 - *Share e-mails* name the sender by their verified Google address, keep the document title (which anyone can choose) out of the subject and strip anything in it that looks like a web address, and carry a one-click unsubscribe link. Accounts less than a day old send none. Limits per day: 20 per sender, 3 per recipient, 100 in all. The app says why when it sent none.
 - *Shared history.* A shared document carries its whole history, including text later deleted; the Share dialog says so and offers to share a clean copy (the current state with no history) instead. History is cooperative: anyone who can edit a document can rewrite its history. The app reads shared content defensively, so a malformed or hostile document still opens, and offers a repaired copy when it finds problems.
 - *AI on shared documents.* Document content reaches the model marked as data, never as instructions. On a document owned by someone else, the AI panel says so, every change the AI would make is shown for the person to allow first, and the AI writes no notes into the document. The prompts people type and the providers' error messages never go into the document. A request stops at a token limit the person sets (1 million by default).
-- *Engine limits.* Input that could make the engine run away is refused with a "limit" error: weights of more than 64 strands, Cartan data of rank above 32, more than 100,000 colour sequences, terms nested more than 100 deep, exponent expressions over 1,000 characters, responses over 32 MiB. An interactive request in the browser stops after 10 seconds (its worker is replaced); the WebAssembly memory is capped at 2 GiB; an MCP call stops after 120 seconds. Lean export accepts only plain identifiers as names and writes only inside its output directory.
+- *Engine limits.* Input that could make the engine run away is refused with a "limit" error: weights of more than 64 strands, Cartan data of rank above 32, more than 100,000 colour sequences, terms nested more than 100 deep, exponent expressions over 1,000 characters, responses over 32 MiB. An interactive request in the browser stops after 10 seconds (its worker is replaced); the WebAssembly memory is capped at 2 GiB. Lean export accepts only plain identifiers as names and writes only inside its output directory.
 
 **Multiplayer (phase 7; specified in `docs/phase7.md`).** One SQLite-backed Durable Object per document runs the Yjs sync session over WebSockets. Committed edits are validated and durably stored before broadcast and acknowledgement; R2 provides REST snapshots and checkpoints. The room uses hibernation and stops maintenance after its last connection closes. Presence shows authenticated collaborators and committed-text/canvas selections, never private drafts or personal-branch content. Stable UUIDs keep editors attached to their cells when public IDs are repaired. Viewers cannot edit. Each browser computes its own results; shared attributed pins capture their inputs and can be recomputed locally. Any editor can decide a shared AI proposal, but the room accepts each decision only once.
 
@@ -389,7 +387,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 - **Round-trip tests.** Each format (`.pres.toml`, the text term format, `.dcw`, `.dch`, TikZ) is parsed, printed, and parsed again; the two parses must be equal. Random terms come from the same generators as the property tests.
 - **Presentation tests.** Every shipped presentation (nilHecke, odd nilHecke, KLR for A1–A3, B2, G2, cyclotomic quotients, later the KL and BE2 2-categories) has a test file of known identities with their expected normal forms.
 - **Lean regression values.** A table of values computed in the Lean libraries (Gram matrices, dimensions of graded pieces, specific relation instances) is checked in under `tests/lean-values/` with the Lean declaration each value comes from. The engine must reproduce every value exactly.
-- **Operation API tests.** Every operation in `spec/ops/` has a JSON fixture with input, expected output, and expected error cases. The same fixtures run against the Rust API, the WebAssembly build, the CLI, and the MCP server, so the four surfaces cannot drift apart.
+- **Operation API tests.** Every operation in `spec/ops/` has a JSON fixture with input, expected output, and expected error cases. The same fixtures run against the Rust API, the WebAssembly build, and the CLI, so the three surfaces cannot drift apart.
 - **Browser tests (Playwright).** Scripted gestures for each interaction in the mockups: drag a dot through a crossing, box-select and apply a relation, undo, type a definition and watch the diff, run an AI what-if with a recorded model response. Screenshots are compared at a tolerance, and latency is recorded.
 - **AI tests.** Recorded model transcripts replay against the tool layer without network access. A small live suite, run by hand with Alex's key, checks that the skill text still leads the default model to correct tool calls on ten fixed tasks.
 
@@ -403,7 +401,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 ### Releases
 
 - **Web app:** every merge to `master` deploys to Cloudflare Pages. Preview deployments get no database or storage bindings; old deployments are deleted with the "Prune old deployments" workflow.
-- **CLI and MCP server:** tagged releases build `diagcalc` for macOS (arm64, x86_64), Linux (x86_64, arm64), and Windows (x86_64), attached to a GitHub release of the private repository.
+- **CLI:** tagged releases build `diagcalc` for macOS (arm64, x86_64), Linux (x86_64, arm64), and Windows (x86_64), attached to a GitHub release of the private repository.
 - **Python package:** wheels built with maturin for the same platforms, attached to the same release. Publishing to PyPI waits for the public release.
 - Versioning: semantic versions. The file formats carry their own version number, and the app can read every earlier format version.
 
@@ -424,7 +422,7 @@ Each implementation phase ends with a gate checked and reported to Alex with evi
 | 0. Spec | This document; the UI mockups; JSON schemas in `spec/ops/` for every operation; the nilHecke and KLR A₂ presentation files written out as examples | Alex approves the spec (passed 21 October) |
 | 1. Formats, conventions, and the headless core | All four formats with schemas and round-trip tests; the Conventions section completed from categorification-lean; the golden corpus computed in Lean; presentation schemas and the conformance checker; the equality-strategy interface; the engine core for nilHecke, odd nilHecke, and KLR of types A₂ and A₃, using the representation strategy; ground rings ℤ, ℚ, ℤ/p, and ℤ[√−1]; the arithmetic backend spike; the benchmark harness in CI; SVG and TikZ drawing from the command line | Every format round-trips; the golden corpus is reproduced; every shipped presentation passes the checker; the spike report names the backend |
 | 2. Finite quotients and linear algebra | Cyclotomic quotients and truncations with printed caps; the graded linear-algebra toolkit with its preconditions; solving tiers 1 and 2; KLR of types B₂ and G₂; ℚ(q), ℚ[t], and ℚ[t, t⁻¹]; the worker pool for multi-core; the full evaluation suite B1–B10 | B1–B10 meet their targets and reproduce the golden corpus and the Lean values; cyclotomic graded dimensions match the q-Shapovalov form |
-| 3. Rewriting, CLI, and the Lean bridge | Rectangle matching; rewriting with provenance maps; basis normal forms; chain search; the `diagcalc` command-line tool and MCP server; the Lean translation layer and chain export; a trial of generating presentations from Lean | A chain found by the calculator for a relation in categorification-lean is exported and builds in Lean |
+| 3. Rewriting, CLI, and the Lean bridge | Rectangle matching; rewriting with provenance maps; basis normal forms; chain search; the `diagcalc` command-line tool and MCP server (the MCP server was removed on 24 October; its last commit is `db1eb4d`); the Lean translation layer and chain export; a trial of generating presentations from Lean | A chain found by the calculator for a relation in categorification-lean is exported and builds in Lean |
 | 4a. Live workspace | The web app with diagrams rendered but not yet editable by gesture: outline, text cells, watches with diffs, solve and check cells, snapshots, undo and history, storage, export and import; deployed behind Access | The Playwright suite passes, and edits and cached watches meet the interactive target |
 | 4b. Gestures and the in-app AI | The focus canvas and gestures with their keyboard paths; the AI panel with a bring-your-own key (Anthropic first, then providers that pass the browser check); what-if branches; the activity timeline | (passed 22 October) Live in the browser, by hand and with the AI, Alex checks a nontrivial computation: for example, that given elements form a complete set of orthogonal idempotents in NH₃ or in R(2α₁+α₂) of type A₂, or that a KLR relation such as the braid relation with its correction term holds. Alex also tries the gestures. |
 | 5. Full 2-categories | Cups, caps, bubbles, weights, and the biadjunction layer; KL 2-category and BE2 super 2-category presentations; Lean export for both | (passed 23 October) A set of KL and BE2 relations computed by the calculator agree with the Lean libraries, and one exported chain builds in odd-lean. Evidence: CI builds 43 KL chains against categorification-lean and 26 BE2 chains against odd-lean, one instance of every relation in both presentations |
@@ -449,7 +447,7 @@ Phases 1 to 5 run with no server and no running cost. Phase 6 runs on the free p
 | Translating to the Lean encoding is harder than expected | Chain export slips | A translation layer with its own conformance tests in phase 3; the golden corpus already pins values from phase 1 |
 | Safari clears local storage after about 7 days without a visit | Anonymous users lose documents | Ask for persistent storage, show the notice, suggest installing the app, remind to export; signing in (phase 6) removes the risk |
 | Gestures prove awkward in practice | The diagram canvas goes unused | Gestures come after the text workspace (4b), so they cannot hold back the rest; every gesture has a keyboard and text path; Alex tries them at the phase 4 gate |
-| Some AI providers refuse calls from a browser | The in-app AI works only with some providers | Anthropic first; other providers only after a check; the command-line tool and MCP as the alternative |
+| Some AI providers refuse calls from a browser | The in-app AI works only with some providers | Anthropic first; other providers only after a check; another provider as the alternative |
 | Unpublished research is sent to an AI provider | Data leaves the user's browser | A notice on first use; nothing is sent unless the person writes to the AI |
 | AI models change behaviour or prices | The in-app AI gets worse or costs users more | Model picker; skill text versioned in the repository; the replayed transcript suite catches tool-call regressions |
 | Cloudflare free-tier terms change | Running costs rise | The static site and the Rust core move to any static host unchanged; only phases 6 and 7 depend on Workers |
