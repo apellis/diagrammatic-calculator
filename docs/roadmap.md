@@ -67,6 +67,8 @@ retain changes only with measured benefits.
 
 - **Pythonic Python API**, designed so it could be upstreamed into SageMath; publish to PyPI only
   after that. The current `call(op, json)` bindings stay a local-build convenience until then.
+  Before publishing, also fix the metadata: a PyPI readme written for mathematicians (not the
+  build guide), the SPDX form `license = "Apache-2.0"`, and a Homepage URL for the web app.
 
 ### Live revocation check
 
