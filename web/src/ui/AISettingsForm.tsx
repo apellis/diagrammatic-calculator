@@ -1,5 +1,5 @@
 // The AI provider, model and key: set on the settings page, read by the AI panel when it sends.
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import {
   ANTHROPIC_MODELS,
   BUDGETS,
@@ -20,11 +20,15 @@ import {
 /** The model menu's last entry, which switches to typing a model name. */
 const OTHER = '__other__';
 
-export function AISettingsForm() {
+export function AISettingsForm(props: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const [settings, setSettings] = createSignal<AISettings>(loadSettings());
   const stored = loadKey(settings().provider);
   const [key, setKey] = createSignal(stored.key);
   const [remember, setRemember] = createSignal(stored.remembered);
+  const snapshot = () => JSON.stringify([settings(), key(), remember()]);
+  const [baseline, setBaseline] = createSignal(snapshot());
+  const dirty = () => snapshot() !== baseline();
+  createEffect(() => props.onDirtyChange?.(dirty()));
   const [saved, setSaved] = createSignal(false);
   const [check, setCheck] = createSignal<{ ok: boolean; message: string } | null>(null);
   const [checking, setChecking] = createSignal(false);
@@ -55,6 +59,7 @@ export function AISettingsForm() {
   const saveAll = () => {
     saveSettings(settings());
     saveKey(settings().provider, key(), remember());
+    setBaseline(snapshot());
     setSaved(true);
   };
   const setProvider = (p: ProviderId) => {
@@ -122,6 +127,7 @@ export function AISettingsForm() {
 
   return (
     <div class="ai-settings" onInput={() => setSaved(false)} onChange={() => setSaved(false)}>
+      <p class="hint">Changes here apply only after Save AI settings. Keys are never saved automatically.</p>
       <label>Provider
         <select value={settings().provider} onChange={(e) => setProvider(e.currentTarget.value as ProviderId)} aria-label="Provider">
           <option value="anthropic">Anthropic</option>
@@ -188,8 +194,9 @@ export function AISettingsForm() {
       <label>Key <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} onChange={() => key() && void refreshModels()} placeholder={settings().provider === 'compatible' ? 'only if the server needs one' : 'your API key'} aria-label="API key" autocomplete="off" /></label>
       <label class="row hint"><input type="checkbox" checked={remember()} onChange={(e) => setRemember(e.currentTarget.checked)} /> Remember on this device (otherwise for this session only)</label>
       <div class="row">
-        <button class="primary" onClick={saveAll} data-testid="ai-save">Save</button>
-        <Show when={saved()}><span class="hint" data-testid="ai-saved">Saved.</span></Show>
+        <button class="primary" onClick={saveAll} data-testid="ai-save">Save AI settings</button>
+        <Show when={dirty()}><span class="hint" role="status" data-testid="ai-dirty">Unsaved AI settings</span></Show>
+        <Show when={saved() && !dirty()}><span class="hint" data-testid="ai-saved">Saved.</span></Show>
         <button onClick={() => void runCheck()} disabled={checking()} data-testid="ai-check-run">
           <Show when={checking()} fallback="Check the connection"><span class="spinner" aria-hidden="true" /> Checking…</Show>
         </button>

@@ -46,6 +46,9 @@ export interface EditorProps {
   onChange?: (text: string) => void;
   /** The text does not parse: drawn with a warning border. */
   invalid?: boolean;
+  errorId?: string;
+  /** Existing cells save on leave; new drafts require explicit submission. */
+  commitOnBlur?: boolean;
   /** Focus left the cell (after committing any change). */
   onLeave?: () => void;
   /** Gives the parent a way to replace the text, e.g. from the cell-kind menu. */
@@ -89,7 +92,7 @@ export function Editor(props: EditorProps) {
               // leaving for another part of the same cell (its tools) does not commit
               const to = (e as FocusEvent).relatedTarget as Node | null;
               if (to && host.closest('.cell')?.contains(to)) return false;
-              if (text() !== committed) commit();
+              if (props.commitOnBlur !== false && text() !== committed) commit();
               props.onLeave?.();
               return false;
             },
@@ -112,6 +115,14 @@ export function Editor(props: EditorProps) {
       view.focus();
       view.dispatch({ selection: { anchor: view.state.doc.length } });
     }
+  });
+  createEffect(() => {
+    const invalid = !!props.invalid;
+    const errorId = props.errorId;
+    if (!view) return;
+    view.contentDOM.setAttribute('aria-invalid', String(invalid));
+    if (invalid && errorId) view.contentDOM.setAttribute('aria-describedby', errorId);
+    else view.contentDOM.removeAttribute('aria-describedby');
   });
   createEffect(() => {
     const cursors = props.remoteCursors ?? [];

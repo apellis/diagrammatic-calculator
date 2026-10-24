@@ -1,7 +1,7 @@
 import { createEffect, createResource, createSignal, For, on, onCleanup, Show } from 'solid-js';
-import { createDoc, deleteDoc, duplicateDoc, isPersisted, listDocs, openDoc, type DocInfo } from '../doc/store';
-import { fillFromHistory, isDch, parseDch, parseDcw } from '../doc/dcw';
-import { ago, engine, pickFile } from '../app';
+import { createDoc, deleteDoc, duplicateDoc, isPersisted, listDocs, markExported, openDoc, type DocInfo } from '../doc/store';
+import { exportDcw, fileName, fillFromHistory, isDch, parseDch, parseDcw } from '../doc/dcw';
+import { ago, download, engine, pickFile } from '../app';
 import { account, api, ours, syncAll, takeSignInOutcome, user } from '../account/account';
 import { ApiError, type CloudDoc } from '../account/api';
 import { AccountBar, SharedWithMe, signInMessage } from './Account';
@@ -9,6 +9,7 @@ import { NoteView } from './Results';
 import { Dialog } from './Dialog';
 import { ContextText } from './ContextChip';
 import { ContextForm } from './ContextForm';
+import './entry-ux.css';
 
 const examples = import.meta.glob('../../../examples/*.dcw', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -166,6 +167,26 @@ export function DocList() {
       setError(`${f.name}: ${(e as Error).message}`);
     }
   };
+  const [exporting, setExporting] = createSignal<string | null>(null);
+  const exportWorkspace = async (info: DocInfo) => {
+    if (exporting()) return;
+    setExporting(info.id);
+    try {
+      const opened = await openDoc(info.id);
+      try {
+        const { text, canonical } = await exportDcw(opened.doc);
+        download(fileName(opened.doc.name, 'dcw'), text);
+        await markExported(info.id);
+        setNotice(canonical ? 'Workspace exported.' : 'Exported as entered: some cells do not parse.');
+      } finally {
+        opened.close();
+      }
+    } catch (e) {
+      setError(`Could not export ${info.name}: ${(e as Error).message}`);
+    } finally {
+      setExporting(null);
+    }
+  };
   const rename = async (id: string, old: string, name: string) => {
     setRenaming(null);
     if (!name.trim() || name === old) return;
@@ -253,7 +274,7 @@ export function DocList() {
         <input placeholder="Search" value={query()} onInput={(e) => setQuery(e.currentTarget.value)} aria-label="Search documents" />
       </div>
       <Show when={error()}><div class="error" style={{ 'margin-top': '8px' }}>{error()}</div></Show>
-      <table>
+      <table class="documents">
         <thead><tr><th>Name<Show when={syncing()}> <span class="spinner" title="Syncing with your account" /></Show></th><th>Edited</th><th /></tr></thead>
         <tbody>
           <For each={shown()} fallback={
@@ -286,6 +307,7 @@ export function DocList() {
                 <td class="actions">
                   <button class="ghost" onClick={() => setRenaming(d.id)}>Rename</button>
                   <button class="ghost" onClick={async () => { await duplicateDoc(d.id); refetch(); }}>Duplicate</button>
+                  <button class="ghost" disabled={!!exporting()} title="Download workspace (.dcw); for full history, open the document and use Commands" onClick={() => void exportWorkspace(d)}>{exporting() === d.id ? 'Exporting...' : 'Export'}</button>
                   <button class="ghost" onClick={() => setRemoving(d)}>Delete</button>
                 </td>
               </tr>
@@ -331,7 +353,8 @@ export function DocList() {
           </Dialog>
         )}
       </Show>
-      <h3 style={{ 'margin-top': '28px' }}>Clone an example</h3>
+      <h3 style={{ 'margin-top': '28px' }}>Start from an example</h3>
+      <p class="muted">Each example opens as your own editable copy. The original stays unchanged. <a href="#/about">Getting started</a></p>
       <div class="examples">
         <For each={Object.entries(examples)}>
           {([path, text]) => {
