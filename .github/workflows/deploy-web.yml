@@ -17,7 +17,7 @@ name: Deploy web app
 on:
   push:
     branches: [master]
-    paths: ["web/**", "crates/core/**", "crates/wasm/**", "presentations/**", "examples/**", "Cargo.lock", ".github/workflows/deploy-web.yml", ".github/scripts/provision-accounts.sh"]
+    paths: ["web/**", "PRIVACY.md", "crates/core/**", "crates/wasm/**", "presentations/**", "examples/**", "Cargo.lock", ".github/workflows/deploy-web.yml", ".github/scripts/provision-accounts.sh"]
   workflow_dispatch:
 
 concurrency:
