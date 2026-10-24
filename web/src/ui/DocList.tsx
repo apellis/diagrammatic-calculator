@@ -210,6 +210,13 @@ export function DocList() {
             setNotice(`Removed ${n(r.removed)} of the account from this browser.${r.kept ? ` Kept ${n(r.kept)} with changes the account does not have; export or delete ${r.kept === 1 ? 'it' : 'them'} if this computer is shared.` : ''}`);
           }}
         />
+        <a class="button icon" href="#/help" data-testid="open-help" title="Help" aria-label="Help">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9.5" />
+            <path d="M9.5 9.2a2.6 2.6 0 0 1 5 1c0 1.8-2.5 2.4-2.5 4" />
+            <circle cx="12" cy="17.2" r="0.6" fill="currentColor" />
+          </svg>
+        </a>
         <a class="button icon" href="#/about" data-testid="open-about" title="About" aria-label="About">
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9.5" />
@@ -354,7 +361,7 @@ export function DocList() {
         )}
       </Show>
       <h3 style={{ 'margin-top': '28px' }}>Start from an example</h3>
-      <p class="muted">Each example opens as your own editable copy. The original stays unchanged. <a href="#/about">Getting started</a></p>
+      <p class="muted">Each example opens as your own editable copy. The original stays unchanged. <a href="#/help">Getting started</a></p>
       <div class="examples">
         <For each={Object.entries(examples)}>
           {([path, text]) => {

@@ -683,6 +683,11 @@ Appearance and shortcut changes save immediately. Provider settings and keys req
 Save AI settings action and show an unsaved state when changed. Leaving Settings offers to keep
 editing or discard the AI draft; native unload warnings remain subject to browser restrictions.
 
+The document list's title bar has three icons side by side: Help (`#/help`, first steps with
+documents, cells, typing and drawing, and export), About (`#/about`, the build, the licence, the
+tip link, and the privacy policy), and Settings. The Back button of each of these pages returns to
+the route it was opened from.
+
 The settings page also holds the appearance: a three-position switch (Light, System, Dark).
 System, the default, follows the operating system's `prefers-color-scheme`; Light and Dark set
 `data-theme` on the root element, which `styles.css` reads to choose the colour variables. The

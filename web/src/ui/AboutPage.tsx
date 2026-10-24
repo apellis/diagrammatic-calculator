@@ -14,16 +14,6 @@ export function AboutPage(props: { from?: string }) {
       </div>
       <h1>diagrammatic-calculator</h1>
       <p>A fast, exact calculator for diagrammatic algebra, whose terms are read and edited as string diagrams.</p>
-      <section class="getting-started">
-        <h2>Getting started</h2>
-        <ol>
-          <li>Open an example from the document list to make your own editable copy, or choose New document and set its context.</li>
-          <li>Add an Element cell to name an expression, a Watch cell to evaluate one, or a Check cell to test an equality or property.</li>
-          <li>Use Type to enter an expression or Draw to edit its string diagram. Open Commands (⋯) for document actions and keyboard shortcuts.</li>
-          <li>Document edits save automatically in this browser. Use Export beside a document for a <code>.dcw</code> workspace backup, then Import to open it as a new document. For versions and snapshots, use Export history (<code>.dch</code>) in the document's Commands.</li>
-        </ol>
-        <a href="#/">Open the document list</a>
-      </section>
       <dl class="about-facts">
         <dt>Version</dt>
         <dd><code data-testid="about-commit">{__COMMIT__}</code></dd>

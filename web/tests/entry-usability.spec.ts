@@ -74,15 +74,16 @@ test('AI settings explain saving and guard Back without autosaving', async ({ pa
   await expect(page.getByTestId('ai-dirty')).toHaveCount(0);
 });
 
-test('landing explains copies and About gives practical first steps', async ({ page }, testInfo) => {
+test('landing explains copies and Help gives practical first steps', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Start from an example' })).toBeVisible();
   await expect(page.getByText('Each example opens as your own editable copy. The original stays unchanged.')).toBeVisible();
   await page.getByRole('link', { name: 'Getting started' }).click();
+  await expect(page).toHaveURL(/#\/help$/);
   await expect(page.getByRole('heading', { name: 'Getting started' })).toBeVisible();
   await expect(page.locator('.getting-started')).toContainText('Watch');
   await expect(page.locator('.getting-started')).toContainText('.dcw');
-  await page.screenshot({ path: testInfo.outputPath('about-help.png'), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('help.png'), fullPage: true });
 });
 
 test('dirty AI draft survives browser Back and hash navigation until discarded', async ({ page }) => {
@@ -100,7 +101,7 @@ test('dirty AI draft survives browser Back and hash navigation until discarded',
   await guard.getByRole('button', { name: 'Discard changes' }).click();
   await expect(page).toHaveURL(/#\/about$/);
   // The hash changes before the router handles it; wait for Settings to actually unmount.
-  await expect(page.getByRole('heading', { name: 'Getting started', exact: true })).toBeVisible();
+  await expect(page.getByTestId('about-commit')).toBeVisible();
   await page.goto('/#/settings');
   await expect(page.getByTestId('ai-budget')).toHaveValue('1000000');
 });
