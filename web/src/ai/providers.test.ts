@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SETTINGS, openaiResponses, chatCompletions, toResponses, toChat, type TurnRequest } from './providers';
+import { BUDGETS, budgetLabel, DEFAULT_SETTINGS, openaiResponses, chatCompletions, toResponses, toChat, type TurnRequest } from './providers';
 
 const settings = { ...DEFAULT_SETTINGS, provider: 'openai' as const, model: 'test-model' };
 const request = (overrides: Partial<TurnRequest> = {}): TurnRequest => ({
@@ -165,5 +165,15 @@ describe('OpenAI Responses transport', () => {
     expect(r.onText).toHaveBeenCalledExactlyOnceWith('hé🙂');
     expect(turn.content[1]).toMatchObject({ type: 'tool_use', id: 'call_1', input: { x: 1 } });
     expect(toResponses([{ role: 'assistant', content: turn.content }])).toEqual([message('hé🙂'), call]);
+  });
+});
+
+describe('token limit labels', () => {
+  it('abbreviate with K and M, leaving the stored values alone', () => {
+    expect(BUDGETS).toEqual([250_000, 1_000_000, 4_000_000, 0]);
+    expect(BUDGETS.map(budgetLabel)).toEqual(['250K tokens', '1M tokens', '4M tokens', 'no limit']);
+    expect(budgetLabel(100_000)).toBe('100K tokens');
+    expect(budgetLabel(1_500_000)).toBe('1.5M tokens');
+    expect(budgetLabel(500)).toBe('500 tokens');
   });
 });

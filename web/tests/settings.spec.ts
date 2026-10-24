@@ -33,6 +33,46 @@ test('the theme follows the system unless Settings chooses light or dark, and th
   await expect(page.getByRole('button', { name: 'New document' })).toBeVisible();
 });
 
+test('AI settings abbreviate the token limits, and the key can be shown and hidden from inside its box', async ({ page }) => {
+  await page.goto('/#/settings');
+  const budget = page.getByTestId('ai-budget');
+  await expect(budget.locator('option')).toHaveText(['250K tokens', '1M tokens', '4M tokens', 'no limit']);
+  // display only: the stored values are the numbers
+  expect(await budget.locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).toEqual(['250000', '1000000', '4000000', '0']);
+
+  const key = page.getByLabel('API key');
+  await key.fill('sk-ant-not-a-real-key');
+  await expect(key).toHaveAttribute('type', 'password');
+  const show = page.getByRole('button', { name: 'Show key' });
+  await expect(show).toHaveAttribute('aria-pressed', 'false');
+  // inside the box, at its right end
+  const box = (await key.boundingBox())!, b = (await show.boundingBox())!;
+  expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width);
+  expect(b.x).toBeGreaterThan(box.x + box.width / 2);
+  expect(b.y).toBeGreaterThanOrEqual(box.y);
+  expect(b.y + b.height).toBeLessThanOrEqual(box.y + box.height);
+
+  await show.click();
+  await expect(key).toHaveAttribute('type', 'text');
+  await expect(key).toHaveValue('sk-ant-not-a-real-key');
+  const hide = page.getByRole('button', { name: 'Hide key' });
+  await expect(hide).toHaveAttribute('aria-pressed', 'true');
+  await hide.click();
+  await expect(key).toHaveAttribute('type', 'password');
+
+  // from the keyboard: Tab from the key reaches the toggle, Space and Enter work it
+  await key.focus();
+  await page.keyboard.press('Tab');
+  await expect(show).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(key).toHaveAttribute('type', 'text');
+  await page.keyboard.press('Enter');
+  await expect(key).toHaveAttribute('type', 'password');
+  // showing the key stores it nowhere: nothing is kept until Save AI settings
+  const stored = await page.evaluate(() => JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }));
+  expect(stored).not.toContain('sk-ant-not-a-real-key');
+});
+
 test('with no AI set up, the panel links to Settings, whose Back returns to the document', async ({ page }) => {
   await newDoc(page);
   await typeCell(page, 'def a := x_1 e(iij)');

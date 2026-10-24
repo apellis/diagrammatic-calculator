@@ -3,6 +3,7 @@ import { createEffect, createSignal, For, Show } from 'solid-js';
 import {
   ANTHROPIC_MODELS,
   BUDGETS,
+  budgetLabel,
   checkProvider,
   listModels,
   loadKey,
@@ -25,6 +26,8 @@ export function AISettingsForm(props: { onDirtyChange?: (dirty: boolean) => void
   const stored = loadKey(settings().provider);
   const [key, setKey] = createSignal(stored.key);
   const [remember, setRemember] = createSignal(stored.remembered);
+  /** Whether the key is shown as text in its box. */
+  const [showKey, setShowKey] = createSignal(false);
   const snapshot = () => JSON.stringify([settings(), key(), remember()]);
   const [baseline, setBaseline] = createSignal(snapshot());
   const dirty = () => snapshot() !== baseline();
@@ -188,10 +191,23 @@ export function AISettingsForm(props: { onDirtyChange?: (dirty: boolean) => void
       </Show>
       <label title="A request stops when it has used this many tokens, so a long loop cannot use up your credit">Limit per request
         <select value={settings().budget} onChange={(e) => setSettings({ ...settings(), budget: Number(e.currentTarget.value) })} aria-label="Token limit per request" data-testid="ai-budget">
-          <For each={BUDGETS}>{(b) => <option value={b}>{b ? `${b.toLocaleString('en')} tokens` : 'no limit'}</option>}</For>
+          <For each={BUDGETS}>{(b) => <option value={b}>{budgetLabel(b)}</option>}</For>
         </select>
       </label>
-      <label>Key <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} onChange={() => key() && void refreshModels()} placeholder={settings().provider === 'compatible' ? 'only if the server needs one' : 'your API key'} aria-label="API key" autocomplete="off" /></label>
+      <label>Key
+        <span class="key-field">
+          <input type={showKey() ? 'text' : 'password'} value={key()} onInput={(e) => setKey(e.currentTarget.value)} onChange={() => key() && void refreshModels()} placeholder={settings().provider === 'compatible' ? 'only if the server needs one' : 'your API key'} aria-label="API key" autocomplete="off" spellcheck={false} data-testid="ai-key" />
+          {/* shows the key as text in this box only; it goes nowhere else */}
+          <button type="button" class="key-reveal" aria-label={showKey() ? 'Hide key' : 'Show key'} title={showKey() ? 'Hide key' : 'Show key'} aria-pressed={showKey()}
+            onClick={(e) => { e.preventDefault(); setShowKey(!showKey()); }} data-testid="ai-key-reveal">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
+              <circle cx="12" cy="12" r="3" />
+              <Show when={showKey()}><path d="M4 20 20 4" /></Show>
+            </svg>
+          </button>
+        </span>
+      </label>
       <label class="row hint"><input type="checkbox" checked={remember()} onChange={(e) => setRemember(e.currentTarget.checked)} /> Remember on this device (otherwise for this session only)</label>
       <div class="row">
         <button class="primary" onClick={saveAll} data-testid="ai-save">Save AI settings</button>

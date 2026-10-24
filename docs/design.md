@@ -672,7 +672,10 @@ a host) and marks the field invalid otherwise; ↻ refuses an unusable URL the s
 that cannot be reached is reported under the menu. The model is chosen from the provider's list (Anthropic's with display names; OpenAI's filtered to chat models, newest first; a compatible
 server's as given), kept per provider in local storage and fetched again with ↻; "Other…" takes a
 typed name. Before a key is entered, Anthropic offers a built-in list. Keys stay in session storage unless "Remember on this
-device" is ticked, and go only to the chosen provider. The first time the panel opens it says what
+device" is ticked, and go only to the chosen provider. The key box is a password field with an eye
+button at its right end ("Show key" / "Hide key", `aria-pressed`) that shows the key as text in that
+box only. The token limit per request is offered as 250K, 1M, or 4M tokens, or no limit (the stored
+value is the number). The first time the panel opens it says what
 leaves the browser (there is no per-document switch: nothing is sent unless one writes to the AI).
 Replies are shown as formatted text by `src/ui/markdown.ts`: a small, escaped Markdown subset
 (paragraphs, headings, lists, emphasis, code spans, and fenced code in the fixed-width font) with
