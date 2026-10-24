@@ -460,6 +460,17 @@ repeated long warnings; their certificate stays conditional. Other uncertain cer
 finite-quotient/truncation notes retain warning treatment, and the notes remain visible.
 The disclosure's hypotheses and reference keep the presentation file's text and are shown typeset
 (`src/ui/prose.ts`: short formulas through KaTeX, Lean names in the fixed-width font).
+What a value rests on is read in one place, `src/eval/certainty.ts`, from its certificate and,
+for a watch or check, whether the computation alone proves it (normal form 0, a verdict that holds
+by relations). `literature` (KL's `basis` and `kl-evaluation`, for instance) and `lean` read as
+proven; a `conditional` certificate names its conjecture, and one resting on Brundan-Ellis's
+Nondegeneracy Conjecture (arXiv:1701.04133, cited in the reference or the hypotheses) reads
+"Assuming nondegeneracy". The same reading marks the summary, the outline, the verdict of a check,
+the values in a branch comparison, the first line of a copied TikZ picture of a watch's normal
+form, and the `rests_on` line the AI gets with every cell it reads and every operation result
+with a certificate; `diagcalc run` prints each computed cell's strategy and certificate, and
+"proven by the computation alone" where that holds. A `.dch` file keeps the provenance of its
+snapshots as computed.
 
 **Gathered dots.** Next to a watch's text form, "Gather dots" switches every watch to the reading
 with its commuting dots gathered into monomials (`monomials`), and "Canonical layering" back; the

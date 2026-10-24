@@ -139,10 +139,17 @@ fn s(v: &Value) -> &str {
     v.as_str().unwrap_or("")
 }
 
+/// How a result was obtained: its strategy and certificate, and, when the computation alone proves
+/// it (a normal form 0, a check that holds by relations), that it needs no certificate.
 fn provenance_line(v: &Value) -> String {
     let p = &v["provenance"];
+    let alone = if v["certified_by"] == "computation" {
+        "; proven by the computation alone"
+    } else {
+        ""
+    };
     format!(
-        "  [{}: {}; certificate {}: {}]",
+        "  [{}: {}; certificate {}: {}{alone}]",
         s(&p["strategy"]),
         s(&p["method"]),
         s(&p["certificate"]["status"]),
@@ -256,6 +263,11 @@ fn human(cmd: &str, v: &Value) -> String {
                     }
                 };
                 out.push_str(&format!("{}: {line}\n", c["id"].as_str().unwrap_or("-")));
+                // every computed result says how it was obtained (a definition is its term as written)
+                if c["status"] != "error" && c["provenance"].is_object() {
+                    out.push_str(&provenance_line(c));
+                    out.push('\n');
+                }
             }
             out.trim_end().to_string()
         }

@@ -33,6 +33,45 @@ fn examples_run_and_are_canonical() {
 }
 
 #[test]
+fn every_computed_result_says_how_it_was_obtained() {
+    // an odd BE2 normal form rests on the Nondegeneracy Conjecture, and says so
+    let (ok, out) = diagcalc(&["run", "examples/be2-a1-odd.dcw"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("wt1:")
+            && out.contains("certificate conditional: ")
+            && out.contains("Nondegeneracy Conjecture"),
+        "{out}"
+    );
+    // KL's normal form rests on the literature
+    let (ok, out) = diagcalc(&["run", "examples/kl-a1-bubbles.dcw"]);
+    assert!(
+        ok && out.contains("certificate literature: Khovanov-Lauda"),
+        "{out}"
+    );
+    // a verdict the relations alone prove says it needs no certificate; one that rests on the
+    // conjecture does not claim that
+    let (_, out) = diagcalc(&[
+        "check",
+        "-c",
+        "be2 type=A1 odd=i mu=-1",
+        "zero",
+        "psi_1 psi_1 e(ii)",
+    ]);
+    assert!(
+        out.starts_with("holds") && out.contains("proven by the computation alone"),
+        "{out}"
+    );
+    let (_, out) = diagcalc(&["check", "-c", "be2 type=A1 odd=i mu=-1", "zero", "x_1 e(i)"]);
+    assert!(
+        out.starts_with("fails")
+            && out.contains("certificate conditional")
+            && !out.contains("alone"),
+        "{out}"
+    );
+}
+
+#[test]
 fn one_off_commands() {
     let (ok, out) = diagcalc(&["simplify", "-c", "nilhecke nu=2", "x_1 psi_1"]);
     assert!(ok);

@@ -5,6 +5,7 @@
 // not validated by the API. Every call that changes the workspace is one step with the AI as
 // author and the model's note, and is logged in the activity timeline. Removing cells and
 // accepting a branch are only proposed: the person accepts or rejects them.
+import { certainty, type Certified } from '../eval/certainty';
 import type { Calls } from '../eval/evaluator';
 import type { CellState } from '../eval/evaluator';
 import type { Comparison, Doc, Inputs, TimelineEntry } from '../doc/model';
@@ -270,7 +271,8 @@ export function cellView(id: string, text: string, s: CellState | undefined): Re
   if (v.status !== 'ok') return { ...out, error: v.message };
   const pick = (...ks: string[]) => Object.fromEntries(ks.filter((k) => v[k] !== undefined).map((k) => [k, typeof v[k] === 'string' ? clip(v[k] as string, 4000) : v[k]]));
   const p = v.provenance as { strategy?: string; certificate?: { status?: string }; notes?: string[] } | undefined;
-  const provenance = p && { strategy: p.strategy, certificate: p.certificate?.status, notes: p.notes };
+  // what the value rests on, read as the results show it: a conditional verdict says so
+  const provenance = p && { strategy: p.strategy, certificate: p.certificate?.status, rests_on: certainty(v as Certified)?.text, notes: p.notes };
   switch (v.kind) {
     case 'def':
       return { ...out, ...pick('name', 'terms', 'term'), provenance };
@@ -357,6 +359,9 @@ async function runOp(host: ToolHost, op: OpName, a: Record<string, unknown>): Pr
   }
   const r = o.response as Record<string, unknown>;
   const ok = r.status === 'ok';
+  // a result with a certificate says what it rests on, as the results show it
+  const rests = ok && r.provenance ? certainty(r as Certified)?.text : undefined;
+  if (rests) r.rests_on = rests;
   const what = typeof r.terms === 'number' ? `${r.terms} terms` : typeof r.term === 'string' ? clip(r.term as string, 80) : ok ? 'ok' : String(r.message ?? 'error');
   return { content: clip(JSON.stringify(r)), isError: !ok, summary: `${op}: ${what}` };
 }

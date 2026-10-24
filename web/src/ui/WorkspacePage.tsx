@@ -30,6 +30,7 @@ import { CloudRecovery } from './CloudRecovery';
 import { PersonalBranches } from '../account/recovery';
 import { PinnedRecompute } from './PinnedRecompute';
 import { useAuthors } from './authors';
+import { obtained, type Certified } from '../eval/certainty';
 import { loadViewMode, saveViewMode } from './viewmode';
 
 export function WorkspacePage(props: { id: string }) {
@@ -725,12 +726,14 @@ function DocView(props: {
     setMessage(`Pinned “${label}”.`);
   };
   const copyTikz = async (id: string) => {
-    const v = stateOf(id)?.value as { kind: string; normal_form?: string; term?: string } | undefined;
+    const v = stateOf(id)?.value as Certified & { kind: string; normal_form?: string; term?: string } | undefined;
     const term = v?.kind === 'watch' ? v.normal_form : v?.term;
     if (!term) return;
     const o = await engine.call('term.render', { context: termContext(), term, format: 'tikz' }, { lane: 'interactive' });
     if (o.status === 'done' && o.response.status === 'ok') {
-      await navigator.clipboard?.writeText(o.response.output);
+      // a normal form carries how it was obtained, so a pasted picture does not lose its caveat
+      const how = v?.kind === 'watch' ? obtained(v) : null;
+      await navigator.clipboard?.writeText(how ? `% Normal form by ${how}.\n${o.response.output}` : o.response.output);
       setMessage('TikZ copied.');
     }
   };

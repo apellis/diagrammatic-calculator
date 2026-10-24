@@ -3,7 +3,7 @@ import { Doc } from '../doc/model';
 import { nodeEngine } from '../eval/testing';
 import type { CellState } from '../eval/evaluator';
 import { toChat, type Provider } from './providers';
-import { runTool, TOOLS, validate, type Proposal, type ToolHost } from './tools';
+import { cellView, runTool, TOOLS, validate, type Proposal, type ToolHost } from './tools';
 import { commentMessage, run, withRef, type AgentEvent } from './agent';
 
 function host(doc: Doc, foreign = false, states = new Map<string, CellState>()): ToolHost & { proposals: Proposal[]; applies: (() => void)[] } {
@@ -80,6 +80,41 @@ describe('AI tools', () => {
     const ctx = await runTool(h, 'context_set', { context: 'klr type=Z9', note: 'bad' });
     expect(ctx.isError).toBe(true);
     expect(doc.context).toBe('nilhecke nu=2');
+  });
+
+  it('tells the AI what each result rests on: an odd BE2 conclusion is conditional, a KL one is not', async () => {
+    const doc = new Doc();
+    doc.setContext('be2 type=A1 odd=i mu=-1');
+    const h = host(doc);
+    const fails = JSON.parse((await runTool(h, 'check', { name: 'zero', terms: ['x_1 e(i)'] })).content);
+    expect(fails.holds).toBe(false);
+    expect(fails.rests_on).toBe('conditional on the Nondegeneracy Conjecture: that it fails rests on it');
+    const holds = JSON.parse((await runTool(h, 'check', { name: 'zero', terms: ['psi_1 psi_1 e(ii)'] })).content);
+    expect(holds.rests_on).toMatch(/^proven by the computation alone/);
+    const nf = JSON.parse((await runTool(h, 'simplify', { term: 'x_1 e(i)' })).content);
+    expect(nf.rests_on).toMatch(/^conditional on the Nondegeneracy Conjecture/);
+    doc.setContext('kl type=A1 mu=2');
+    const kl = JSON.parse((await runTool(h, 'simplify', { term: 'x_1 e(i)' })).content);
+    expect(kl.provenance.certificate.status).toBe('literature');
+    expect(kl.rests_on).toBe('proven: the strategy rests on a published theorem');
+    // and a cell read through workspace_read says the same as the result shown in the page
+    const view = cellView('wt1', 'watch x_1 e(i)', { id: 'wt1', text: 'watch x_1 e(i)', status: 'fresh',
+      value: { id: 'wt1', status: 'ok', kind: 'watch', normal_form: 'x_1 e(i)', certified_by: 'certificate', provenance: nf.provenance } } as CellState);
+    expect(view.provenance).toMatchObject({ certificate: 'conditional', rests_on: nf.rests_on });
+  });
+
+  it('refuses writes in view mode with the reason, and in a view-only document with the way out', async () => {
+    const doc = new Doc();
+    doc.setContext('nilhecke nu=2');
+    const viewing = { ...host(doc), readOnly: () => true, viewMode: () => true };
+    const r = await runTool(viewing, 'cell_add', { text: 'def a := x_1', note: 'a dot' });
+    expect(r).toMatchObject({ isError: true, summary: 'view mode' });
+    expect(r.content).toContain('View mode is on');
+    const viewOnly = { ...host(doc), readOnly: () => true };
+    expect((await runTool(viewOnly, 'cell_add', { text: 'def a := x_1', note: 'a dot' })).content).toContain('personal branch');
+    expect(doc.list()).toEqual([]);
+    // reading still works
+    expect((await runTool(viewing, 'simplify', { term: 'x_1 psi_1 - psi_1 x_2' })).isError).toBeFalsy();
   });
 
   it("only proposes changes to someone else's document, and writes no notes into it", async () => {

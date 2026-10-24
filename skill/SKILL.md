@@ -116,5 +116,8 @@ canonical layering: layers from 1 at the bottom, strands from 1 at the left, bot
 - **Selections.** When a message carries a selection, act on exactly that summand and rectangle;
   the references were resolved when the message was sent.
 - **Say when something is assumed.** A result whose provenance relies on an assumed
-  representation or a truncation says so in its `provenance`; repeat that caveat.
+  representation, an open conjecture (certificate `conditional`, such as the Brundan-Ellis
+  Nondegeneracy Conjecture for odd colours), or a truncation says so in its `provenance` (and, in
+  the web app, its `rests_on` line); repeat that caveat, and present a conclusion that depends on
+  it as conditional.
 - **When an operation fails**, report its message plainly; do not guess the answer.

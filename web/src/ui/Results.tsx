@@ -7,6 +7,9 @@ import katex from 'katex';
 import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
 import { proseHtml } from './prose';
+import { certainty } from '../eval/certainty';
+
+export { certainty, conjecture, type Certainty } from '../eval/certainty';
 
 type Ok = WorkspaceRunCell;
 
@@ -99,48 +102,6 @@ export function Warnings(props: { value: Ok }) {
       {(w) => <div class="warning-line" data-testid="warning"><span aria-hidden="true">⚠</span> <NoteView text={w} inline /></div>}
     </For>
   );
-}
-
-/** How far a value can be trusted, read off its provenance (and, for a check, its verdict). */
-export interface Certainty {
-  /** proven, or resting on an open conjecture, an assumption, or nothing known. */
-  level: 'proven' | 'conditional' | 'assumed' | 'unknown';
-  /** A short mark for summaries ('' when proven). */
-  mark: string;
-  /** One line saying what the value rests on. */
-  text: string;
-}
-
-/** The open conjecture a certificate names, such as "Nondegeneracy Conjecture". */
-export function conjecture(p: Provenance): string | null {
-  const m = /([A-Z][A-Za-z'-]*(?:[ -][A-Z][A-Za-z'-]*)* Conjecture)/.exec(`${p.certificate.reference} ${p.certificate.hypotheses}`);
-  return m ? m[1] : null;
-}
-
-export function certainty(v: Ok): Certainty | null {
-  const p = v.provenance;
-  if (!p) return null;
-  if ((v.kind === 'check' || v.kind === 'watch') && v.certified_by === 'computation') {
-    return { level: 'proven', mark: '', text: 'proven by the computation alone: every step is a relation of the presentation' };
-  }
-  switch (p.certificate.status) {
-    case 'lean':
-      return { level: 'proven', mark: '', text: 'proven: the strategy is checked in Lean' };
-    case 'literature':
-      return { level: 'proven', mark: '', text: 'proven: the strategy rests on a published theorem' };
-    case 'conditional': {
-      const c = conjecture(p);
-      const on = c ? `the ${c}` : 'an open conjecture';
-      const what = v.kind === 'check' ? (v.holds ? 'that it holds' : 'that it fails') : 'that the terms of the normal form are independent';
-      // The accepted working assumption is specifically BE2 nondegeneracy, not all conjectures.
-      const be2 = c === 'Nondegeneracy Conjecture' && /\barXiv:1701\.04133(?:v\d+)?\b/.test(p.certificate.reference);
-      return { level: 'conditional', mark: be2 ? 'Assuming nondegeneracy' : 'conditional', text: `conditional on ${on}: ${what} rests on it` };
-    }
-    case 'assumed':
-      return { level: 'assumed', mark: 'assumed', text: 'rests on an assumption: the representation is assumed faithful' };
-    default:
-      return { level: 'unknown', mark: 'unproven', text: 'unproven: whether the representation is faithful is not known' };
-  }
 }
 
 function solveSummary(r: Ok): string {
@@ -468,6 +429,10 @@ export function Brief(props: { s?: CellState }) {
           {(x) => <>{solveSummary(x())}<Show when={x().solution}>{(m) => <>: <Value text={assignments(m())} /></>}</Show></>}
         </Match>
       </Switch>
+      {/* a value resting on a conjecture or an assumption says so here too */}
+      <Show when={props.s?.status === 'fresh' && r() && certainty(r()!)?.mark}>
+        {(m) => <span class="cond-mark" data-testid="brief-mark" title={certainty(r()!)!.text}>{m()}</span>}
+      </Show>
     </span>
   );
 }

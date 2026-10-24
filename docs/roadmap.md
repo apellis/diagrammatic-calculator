@@ -17,12 +17,6 @@ The authenticated production revocation check below remains a separate phase 8 c
 
 ## Phase 8: after phase 7, before public release
 
-### Reading and sharing
-
-- **Certificate presentation:** check the released app's mathematical provenance. KL's `basis`
-  and `kl-evaluation` stay `literature`; conclusions depending on odd BE2 nondegeneracy remain
-  explicitly conditional. Stronger certificates are phase 9, not a release condition.
-
 ### Publication and deployed checks
 
 Account access and external review are dependencies, not unimplemented application features.
