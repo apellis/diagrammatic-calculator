@@ -84,16 +84,20 @@ test('a conditional certificate is named, and says which verdict rests on it', a
   await expect(cell(page, 0).getByTestId('summary')).toHaveText('holds');
   await expect(cell(page, 1).getByTestId('summary')).toHaveText('fails');
   await expect(cell(page, 0).locator('.cond-mark')).toHaveCount(0);
-  await expect(cell(page, 1).locator('.cond-mark')).toHaveText('conditional');
-  await expect(cell(page, 2).locator('.cond-mark')).toHaveText('conditional');
+  await expect(cell(page, 1).locator('.cond-mark')).toHaveText('Assuming nondegeneracy');
+  await expect(cell(page, 2).locator('.cond-mark')).toHaveText('Assuming nondegeneracy');
   await expect(page.locator('.outline .cond-mark')).toHaveCount(2);
   await cell(page, 0).locator('.head').click();
   await expect(cell(page, 0).getByTestId('verdict-note')).toHaveText('unconditional');
   await cell(page, 1).locator('.head').click();
-  await expect(cell(page, 1).getByTestId('verdict-note')).toHaveText('conditional on the Nondegeneracy Conjecture');
-  // the badge opens on the reference and hypotheses
+  await expect(cell(page, 1).getByTestId('verdict-note')).toHaveText('Assuming nondegeneracy');
+  await expect(cell(page, 2).getByTestId('cond-text')).toHaveText('Assuming nondegeneracy');
+  await expect(cell(page, 2).getByTestId('badge')).not.toHaveClass(/warn/);
+  // the badge opens on the reference and hypotheses, not a falsely upgraded certificate
   await cell(page, 1).getByTestId('badge').click();
   await expect(cell(page, 1).getByTestId('provenance')).toContainText('arXiv:1701.04133');
+  await expect(cell(page, 1).getByTestId('provenance').locator('tr').filter({ has: page.locator('td', { hasText: /^certificate$/ }) })).toHaveText('certificateconditional');
+  await expect(cell(page, 1).getByTestId('provenance')).toContainText('Nondegeneracy Conjecture');
   // the presentation file's prose is typeset: its formulas through KaTeX, Lean names as code
   await expect(cell(page, 1).getByTestId('cert-hypotheses').locator('.katex').first()).toBeVisible();
   await expect(cell(page, 1).getByTestId('cert-reference').locator('code').first()).toBeVisible();

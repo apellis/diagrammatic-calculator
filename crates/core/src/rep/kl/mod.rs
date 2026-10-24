@@ -30,9 +30,6 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 use up::{OVERFLOW, Up};
 
-/// The largest number of bubble variables per colour tried before giving up.
-const MAX_KZ: usize = 256;
-
 type Group<E> = Vec<(Word, Poly<E>)>;
 type Echelon<E> = basis_cache::Echelon<Key, Poly<E>>;
 
@@ -153,12 +150,14 @@ impl<'a, R: Ring> KlBasis<'a, R> {
     /// run adds or removes one `E` and one `F`. So no value has more than `max(|w|, |w2|)` strands,
     /// and partial traces only remove strands; [`Up::run`] checks it.
     fn with_up<T>(&self, nx: usize, kz: usize, f: impl Fn(&Up<'_, R>) -> Result<T>) -> Result<T> {
-        let mut kz = kz;
+        let mut kz = kz.max(1);
         loop {
             let up = Up::new(self.ctx, nx, kz)?;
             match f(&up) {
-                Err(e) if e.kind == ErrorKind::Limit && e.message == OVERFLOW && kz < MAX_KZ => {
-                    kz *= 2;
+                Err(e) if e.kind == ErrorKind::Limit && e.message == OVERFLOW => {
+                    kz = kz.checked_mul(2).ok_or_else(|| {
+                        Error::limit("bubble variable count exceeds the supported address space")
+                    })?;
                 }
                 r => return r,
             }
@@ -348,6 +347,19 @@ mod tests {
             certificate: decl.certificate.clone(),
         };
         KlBasis::new(c, decl, prov).unwrap()
+    }
+
+    #[test]
+    fn bubble_variables_grow_past_the_old_retry_ceiling() {
+        let c = ctx("kl type=A1 mu=0");
+        let kl = strategy(&c);
+        let kz = kl
+            .with_up(0, 4, |up| {
+                up.z(0, 300)?;
+                Ok(up.kz)
+            })
+            .unwrap();
+        assert!(kz >= 300);
     }
 
     fn objects(nc: usize, len: usize) -> Vec<Object> {

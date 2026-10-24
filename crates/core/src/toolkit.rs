@@ -79,7 +79,7 @@ impl<R: Ring> Graded<R> for Quotient<'_, R> {
         Quotient::reduce(self, t)
     }
     fn complete(&self) -> bool {
-        !self.truncated
+        Evaluator::complete(self)
     }
 }
 
@@ -160,8 +160,7 @@ fn require_complete<R: Ring>(alg: &dyn Graded<R>, what: &str) -> Result<()> {
         Ok(())
     } else {
         Err(Error::precondition(format!(
-            "{what} needs the whole algebra: give a finite quotient (Lambda or dotcap) without a \
-             truncation"
+            "{what} needs the whole algebra: give a finite quotient with a known degree bound, without a truncation"
         )))
     }
 }
@@ -184,14 +183,11 @@ pub fn piece(
         if d < lo {
             continue;
         }
-        if d > hi {
-            if alg.complete() {
-                continue;
-            }
-            return Err(Error::precondition(format!(
-                "degree {d} is above the degrees computed here (up to {hi})"
-            )));
+        if d > hi && alg.complete() {
+            continue;
         }
+        // An incomplete window may still have a separate proven vanishing bound. The evaluator
+        // distinguishes that zero piece from an uncomputed degree above an explicit truncation.
         for w in alg.piece_words(s, d)? {
             if tgt.is_none_or(|t| ctx.target(&w) == *t) {
                 words.push(w);
@@ -210,7 +206,7 @@ pub fn basis<R: Ring>(alg: &dyn Graded<R>) -> Result<Indexed> {
         let (lo, hi) = alg.window(s)?;
         if hi == i64::MAX {
             return Err(Error::precondition(
-                "the algebra is infinite-dimensional: give Lambda, dotcap or degcap",
+                "listing the whole basis needs a known upper bound or an explicit degcap; individual degrees can be computed without one",
             ));
         }
         for d in lo..=hi {

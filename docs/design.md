@@ -260,6 +260,14 @@ trace degree `D = 2(Λ, ν) − (ν, ν)`, so pieces above `D/2` stop reducing a
 dual piece and vanishing pieces are skipped; a piece larger than that is an internal error, and the
 tests compute every case both ways.
 
+Proven per-object vanishing bounds are stored separately from requested computation caps. A
+homogeneous component above a proven bound is discarded as exactly zero before ambient
+expansion; a component above an explicit `degcap` is rejected unless vanishing is independently
+known. Quotients without a known global bound compute requested pieces on demand and do not
+claim whole-algebra completeness. Whole-basis and graded-dimension enumeration still require a
+finite window. KL and BE2 bubble-variable allocation grows on demand, without the former fixed
+retry ceiling; address-space, runtime and memory limits remain operational constraints.
+
 ## Linear algebra toolkit and solving
 
 `linalg.rs` does exact linear algebra over any field, ranks over domains, Hermite and Smith forms
@@ -414,9 +422,11 @@ polynomials.
 **Showing results.** `workspace.run` draws the summands of definitions and watches
 (`summands`, each with its word, degree and SVG). A watch outlines summands that are new since
 its previous value, shows the vanished ones faded for two seconds, and lists the changes under
-"Changed". Every result carries a badge with its equality strategy and certificate, in the warning
-colour when it rests on an assumption or a finite quotient or truncation, whose notes are shown.
-The badge's hypotheses and reference keep the presentation file's text and are shown typeset
+"Changed". Every result carries a compact "How computed" disclosure containing its equality
+strategy and certificate. Dependent odd BE2 results say "Assuming nondegeneracy" without
+repeated long warnings; their certificate stays conditional. Other uncertain certificates and
+finite-quotient/truncation notes retain warning treatment, and the notes remain visible.
+The disclosure's hypotheses and reference keep the presentation file's text and are shown typeset
 (`src/ui/prose.ts`: short formulas through KaTeX, Lean names in the fixed-width font).
 
 **Gathered dots.** Next to a watch's text form, "Gather dots" switches every watch to the reading

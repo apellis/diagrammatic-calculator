@@ -131,7 +131,9 @@ export function certainty(v: Ok): Certainty | null {
       const c = conjecture(p);
       const on = c ? `the ${c}` : 'an open conjecture';
       const what = v.kind === 'check' ? (v.holds ? 'that it holds' : 'that it fails') : 'that the terms of the normal form are independent';
-      return { level: 'conditional', mark: 'conditional', text: `conditional on ${on}: ${what} rests on it` };
+      // The accepted working assumption is specifically BE2 nondegeneracy, not all conjectures.
+      const be2 = c === 'Nondegeneracy Conjecture' && /\barXiv:1701\.04133(?:v\d+)?\b/.test(p.certificate.reference);
+      return { level: 'conditional', mark: be2 ? 'Assuming nondegeneracy' : 'conditional', text: `conditional on ${on}: ${what} rests on it` };
     }
     case 'assumed':
       return { level: 'assumed', mark: 'assumed', text: 'rests on an assumption: the representation is assumed faithful' };
@@ -160,26 +162,25 @@ const STATUS: Record<string, string> = {
 };
 
 /**
- * The equality strategy and certificate behind a result, as a disclosure: the badge names the
- * strategy and the certificate, in a warning colour when the result rests on an assumption or a
- * truncation; opened, it shows the method, the reference, the hypotheses and the notes.
+ * Quiet disclosure of the strategy, certificate and exact hypotheses. Accepted BE2
+ * assumptions stay explicit without warning styling; other uncertainty and notes still warn.
  */
 export function Badge(props: { p?: Provenance; value?: Ok; compact?: boolean }) {
   const [open, setOpen] = createSignal(false);
   const c = () => (props.value ? certainty(props.value) : null);
-  const warn = () => !!props.p && ((c() ? c()!.level !== 'proven' : ['conditional', 'assumed', 'unknown'].includes(props.p.certificate.status)) || (props.p.notes?.length ?? 0) > 0);
+  const warn = () => !!props.p && ((c() ? c()!.level !== 'proven' && c()!.mark !== 'Assuming nondegeneracy' : ['conditional', 'assumed', 'unknown'].includes(props.p.certificate.status)) || (props.p.notes?.length ?? 0) > 0);
   return (
     <Show when={props.p}>
       {(p) => (
         <span class="badge-wrap" classList={{ compact: props.compact }}>
           <button class={`badge ${warn() ? 'warn' : ''}`} aria-expanded={open()} data-testid="badge" onClick={() => setOpen(!open())}
             title={open() ? 'Hide how this was computed' : 'How this was computed'}>
-            {p().strategy} · {c()?.level === 'proven' && p().certificate.status === 'conditional' ? 'proven by computation' : STATUS[p().certificate.status] ?? p().certificate.status}
+            How computed{' '}
             <span class="caret" aria-hidden="true">{open() ? '▴' : '▾'}</span>
           </button>
           {/* a check says it beside its verdict */}
           <Show when={c() && c()!.level !== 'proven' && props.value?.kind !== 'check'}>
-            <span class="cond-text" data-testid="cond-text">{props.compact ? c()!.text.replace(/:.*$/, '') : c()!.text}</span>
+            <span class="cond-text" data-testid="cond-text">{c()!.mark === 'Assuming nondegeneracy' ? c()!.mark : props.compact ? c()!.text.replace(/:.*$/, '') : c()!.text}</span>
           </Show>
           <Show when={!props.compact}>
             <For each={p().notes ?? []}>{(n) => <span class="hint note-line" data-testid="prov-note"><NoteView text={n} inline /></span>}</For>
@@ -397,7 +398,7 @@ function CheckView(props: { r: Ok }) {
   const qualifier = () => {
     const x = c();
     if (!x || props.r.provenance?.certificate.status === 'lean' || props.r.provenance?.certificate.status === 'literature') return '';
-    return x.level === 'proven' ? 'unconditional' : x.text.replace(/:.*$/, '');
+    return x.level === 'proven' ? 'unconditional' : x.mark === 'Assuming nondegeneracy' ? x.mark : x.text.replace(/:.*$/, '');
   };
   return (
     <div class="result">

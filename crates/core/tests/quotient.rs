@@ -109,10 +109,12 @@ fn nilhecke_truncation_and_dot_cap() {
         let g = q.graded_dimension(&c.objects[0], None).unwrap();
         assert_eq!(g, BTreeMap::from([(-2, 1), (0, 2), (2, 1)]));
     }
-    // without a Cartan datum, a cyclotomic quotient needs a degree cap
+    // Without a Cartan datum, no global bound is established, but individual pieces are exact.
     let c = ctx("nilhecke nu=2 Lambda=2", Rationals);
     let mut evs = rep::evaluators(&c).unwrap();
-    assert!(Quotient::from_context(&c, evs.remove(0)).is_err());
+    let q = Quotient::from_context(&c, evs.remove(0)).unwrap();
+    assert_eq!(q.piece(&c.objects[0], 0).unwrap().quotient_basis().len(), 2);
+    assert!(q.basis().is_err());
     // x_k^2 = 0 on every strand: NH_2 / (x_1^2, x_2^2) has the words with exponents below 2
     let c = ctx("nilhecke nu=2 dotcap=2", Rationals);
     let mut evs = rep::evaluators(&c).unwrap();

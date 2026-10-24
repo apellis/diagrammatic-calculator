@@ -85,11 +85,13 @@ Words equal up to interchange are identified by a canonical layering (each gener
 - **Finite-dimensional linear algebra** in a cyclotomic quotient or an explicit truncation.
 - **Bounded search only**: equality is unknown. The engine can say "equal" (with a chain) but never "not equal".
 
-The strategy is shown beside every value, and tests cross-check two strategies wherever both apply.
+The strategy is available in a compact "How computed" disclosure beside every value, and tests cross-check two strategies wherever both apply. Ordinary use does not require choosing or managing a representation. Full strategy, certificate, reference and hypotheses remain in the operation response and exports. Odd BE2 nondegeneracy is an accepted working assumption: dependent results say "Assuming nondegeneracy", and their certificates remain conditional, not proved.
 
 **Faithfulness is a certificate, not an axiom.** A presentation file records, for each representation, one of: proved in Lean (with the declaration), literature (with the reference and its hypotheses on the Cartan datum, the Q_ij and the characteristic), conditional (proven under a named open hypothesis, such as BE2's Nondegeneracy Conjecture for odd colours, which results that rely on it state), assumed, or unknown. Results that relied on a representation show its certificate, and one that is assumed or unknown never refutes an equality without a witness checked another way. Cyclotomic quotients R^Λ(ν) are not computed in the polynomial representation; they use a basis or quotient modules.
 
 **Finiteness.** R(ν) is infinite-dimensional. The finite-dimensional toolkit (radical, blocks, idempotent lifting, primitivity, Gram ranks) requires a cyclotomic quotient or an explicit truncation (a degree cap or a dot cap) set in the context, and each operation states this precondition. Caps are printed on every result they affect, and nothing is truncated silently. Graded dimensions of R(ν) are reported as series up to a stated degree.
+
+**Degree is not an implicit cutoff.** Supported exact evaluation strategies accept arbitrary finite input degrees, subject to runtime, memory and machine representation limits; there is no default degree-6, degree-16 or degree-20 ceiling. A proven upper bound for a graded quotient means that higher homogeneous components are exactly zero, not uncomputed. An explicit `degcap` still rejects components outside its scope unless they are independently proved zero. When a quotient has no known global bound, requested graded pieces can be computed on demand without a cap; enumerating its whole basis needs a finite bound or explicit scope, and operations requiring the complete algebra still refuse incomplete input. Solver budgets and operational cancellation remain explicit failures, never mathematical zeroes.
 
 ## File and data formats
 
@@ -237,7 +239,7 @@ The app is one page with three columns: an outline of everything in the document
 
 **Cells.** Definition, watch, solve, check and note, as in the roadmap's table. A new cell starts empty; typing `/` offers the cell kinds, typing a term starts a definition. A watch shows its value as a sum of diagrams beside its text form, with a summary line; terms that appeared since the last value are outlined in green and terms that vanished are shown faded for two seconds, then listed under "changed". Clicking a term shows which terms of the definitions produced it.
 
-**Diagram canvas.** Diagrams render as SVG from the term, one diagram per summand. A gesture acts on one summand and may turn it into several, which appear as new summands. Positions you drag only for looks are stored as layout hints and never change the term. A box selection snaps to a rectangle of layers × strands (see Engine). Every result carries a small badge naming its equality strategy, shown in a warning colour when it relies on an assumed representation or a truncation. Gestures:
+**Diagram canvas.** Diagrams render as SVG from the term, one diagram per summand. A gesture acts on one summand and may turn it into several, which appear as new summands. Positions you drag only for looks are stored as layout hints and never change the term. A box selection snaps to a rectangle of layers × strands (see Engine). Every result carries a small "How computed" disclosure; accepted BE2 nondegeneracy is stated compactly, while other uncertain certificates and quotient/truncation notes retain warning treatment. Gestures:
 
 | Gesture | Result |
 |---|---|
@@ -427,7 +429,7 @@ Phases 1 to 5 run with no server and no running cost. Phase 6 runs on the free p
 | Risk | Effect | Mitigation |
 |---|---|---|
 | A convention or faithfulness assumption is wrong | Wrong answers given with full confidence, which is worse than no tool | The Conventions section, the golden corpus computed in Lean, faithfulness certificates shown on results, and the conformance checker, all from phase 1 |
-| Cyclotomic quotients need degree bounds that are not known in advance | Evaluation in a quotient may not terminate, or may truncate wrongly | Use known bases (Hu–Mathas, Brundan–Kleshchev in type A) where they exist; elsewhere compute with an explicit cap the user sets, printed on every result |
+| Cyclotomic quotients need degree bounds that are not known in advance | Whole-algebra enumeration may not terminate, or a cap may be mistaken for vanishing | Compute requested graded pieces on demand; require a known bound or explicit scope for enumeration, distinguish proven vanishing from truncation, and print every user cap |
 | Gröbner bases or rewriting systems grow too large | Normal forms and solves are slow or run out of memory | Solving tiers with explicit limits; representations for evaluation, rewriting only to find chains; the exploded state with size diagnostics instead of a crash |
 | Sparse polynomial arithmetic is too slow | Interactive targets are missed | The phase 1 spike chooses the backend on the real workloads; CI tracks every benchmark |
 | WebAssembly memory is limited, far below 4 GB on Safari and phones | Large computations fail in the browser | Ceilings per device class; sparse matrices over small primes with rational reconstruction; the command-line tool for big runs |
