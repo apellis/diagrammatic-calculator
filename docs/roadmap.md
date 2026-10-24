@@ -1,8 +1,7 @@
 # Roadmap
 
-The single list of open work. Phases 0 to 7 have passed; phase 8 is next, before public release.
-Phase 9 is useful later work and must not block
-release. The phase table and gates are in `docs/spec.md`; detailed phase 7 decisions are in
+The single list of open work. Phases 0 to 8 have passed; the calculator is released to alpha users.
+Phase 9 is useful later work. The phase table and gates are in `docs/spec.md`; detailed phase 7 decisions are in
 `docs/phase7.md`. Remove completed and discarded items rather than keeping a second backlog of
 them; git history retains the decisions. Keep genuine external blockers explicit.
 
@@ -13,21 +12,15 @@ The public site is `https://diagcalc.pages.dev`; no custom-domain migration is p
 Implemented in `7cfe45d`, with [CI](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129703)
 and [deployment](https://github.com/apellis/diagrammatic-calculator/actions/runs/40030129712)
 successful. Accepted decisions and the executable verification map are in `docs/phase7.md`.
-The authenticated production revocation check below remains a separate phase 8 check.
 
-## Phase 8: after phase 7, before public release
+## Phase 8: pre-release — complete
 
-### Publication and deployed checks
+Passed 24 October (gate in `docs/spec.md`): view mode, Help page, certificate presentation, check
+pills and deployment checks are live; the Google audience was published and the repository made
+public on 24 October. If Google later asks for brand verification, complete it in the existing
+project (About is `/#/about`, privacy `/privacy`; see `docs/deploy.md`).
 
-Account access and external review are dependencies, not unimplemented application features.
-See `docs/deploy.md` for instructions.
-
-- **Google sign-in:** the audience was published on 24 October. If Google later asks for brand
-  verification, complete it in the existing project (About is `/#/about`, privacy `/privacy`).
-
-The repository was made public on 24 October with the licence in place.
-
-## Phase 9: post-release, non-blocking
+## Phase 9: post-release
 
 ### Mathematical certificates
 

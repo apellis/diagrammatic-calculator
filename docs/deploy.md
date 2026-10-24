@@ -189,7 +189,7 @@ These settings live in the Cloudflare and GitHub dashboards, not in the reposito
 
 ## Public-release account steps
 
-Publication belongs to phase 8 and needs Alex's go-ahead.
+Done in phase 8 (passed 24 October); kept as the record of what was configured.
 
 - **Google Auth Platform:** use the existing OAuth client's project, not a new client. Confirm
   the external audience and the `openid`, `email`, `profile` scopes. Verify the site's ownership

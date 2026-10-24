@@ -6,10 +6,10 @@ read and edited as string diagrams.
 
 **[Open the live calculator](https://diagcalc.pages.dev/)**
 
-Status: phases 0 to 7 are complete: the exact headless calculator and Lean chain export, the
+Status: phases 0 to 8 are complete, and the calculator is released to alpha users: the exact headless calculator and Lean chain export, the
 browser workspace with diagram gestures and an in-app AI, KL and BE2 2-categories, and accounts
-with document sharing and live co-editing. `docs/roadmap.md` is the current work list:
-phase 8 prepares public release; phase 9 contains non-blocking later work. `AGENTS.md`
+with document sharing and live co-editing. `docs/roadmap.md` is the current work list
+(phase 9, later work). `AGENTS.md`
 says how to work in this repository.
 
 Python bindings and local distribution builds are documented in `docs/python.md`.
