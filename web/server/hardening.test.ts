@@ -295,6 +295,8 @@ describe('save races', () => {
   });
 
   it('delete the snapshot of exactly the version they replace, and sweep leftovers', async () => {
+    // the object store stamps uploads with the real time, so the test clock must not lag behind it
+    w.clock = Math.max(w.clock, Date.now());
     const a = await person();
     const id = await a.newDoc('T', new Uint8Array([1]));
     // a snapshot left behind by an interrupted save
