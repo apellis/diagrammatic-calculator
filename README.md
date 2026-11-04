@@ -12,7 +12,9 @@ with document sharing and live co-editing. `docs/roadmap.md` is the current work
 (phase 9, later work). `AGENTS.md`
 says how to work in this repository.
 
-Python bindings and local distribution builds are documented in `docs/python.md`.
+The language accepted by every text box (terms, cells, and the context line) is documented in
+`docs/language.md`. Python bindings and local distribution builds are documented in
+`docs/python.md`.
 
 ```sh
 cd web && npm ci && npm run wasm && npm run dev    # the web app on http://localhost:5173
