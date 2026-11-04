@@ -1,10 +1,15 @@
 """Tables and comparisons of diagcalc-bench results (format diagcalc-bench/1).
 
     python3 bench/report.py summary NEW.json            # Markdown table
-    python3 bench/report.py compare OLD.json NEW.json   # table with changes; exit 1 on a slowdown
+    python3 bench/report.py compare OLD.json... NEW.json   # table with changes against OLD
 
-A slowdown is a benchmark more than 10% slower than before, counting only benchmarks that take
-at least 5 ms in both runs (shorter ones are within the noise of shared CI machines).
+The baseline of a benchmark is the median of its times in the OLD runs. A slowdown is a benchmark
+more than 10% slower than its baseline, counting only benchmarks that take at least 5 ms in both
+(shorter ones are within the noise of shared CI machines). Slowdowns are reported in the table
+and as a GitHub Actions warning, but do not make the exit status nonzero: the runners of shared
+CI machines differ by 20-100% from one night to the next on unchanged code, so a timing alone
+is not evidence of a regression. The exit status is 1 only when a result check fails (an answer
+changed), which is always a real error.
 """
 
 import json
@@ -40,10 +45,20 @@ def summary(new):
     return all(r["check"] for r in new["results"])
 
 
-def compare(old, new):
-    before = {key(r): r for r in old["results"]}
+def compare(olds, new):
+    times = {}
+    for old in olds:
+        for r in old["results"]:
+            times.setdefault(key(r), []).append(r)
+    before = {}
+    for k, rs in times.items():
+        rs = sorted(rs, key=lambda r: r["seconds"])
+        before[k] = rs[(len(rs) - 1) // 2]  # lower median, an actual run's record
     slower = []
-    print(f"Benchmarks compared with {old.get('label') or 'the previous run'}\n")
+    labels = [old.get("label") or "a previous run" for old in olds]
+    what = (labels[0] if len(labels) == 1
+            else f"the median of {len(labels)} runs ({labels[0]} to {labels[-1]})")
+    print(f"Benchmarks compared with {what}\n")
     print("| | Context | Operation | Before (µs) | Now (µs) | Change | Check |")
     print("|---|---|---|---:|---:|---:|---|")
     for r in new["results"]:
@@ -58,15 +73,18 @@ def compare(old, new):
         print(f"| {r['id']} | `{r['context']}` | {r['op']} | {fmt_us(b) if b else '–'} | "
               f"{fmt_us(r)} | {change} | {'ok' if r['check'] else '**failed**'} |")
     if slower:
-        print(f"\n{len(slower)} benchmark(s) more than 10% slower.")
-    return not slower and all(r["check"] for r in new["results"])
+        print(f"\n{len(slower)} benchmark(s) more than 10% slower than the baseline "
+              "(timing only; see the module docstring).")
+        print(f"::warning title=Benchmarks::{len(slower)} benchmark(s) more than 10% slower "
+              "than the baseline", file=sys.stderr)
+    return all(r["check"] for r in new["results"])
 
 
 def main(argv):
     if len(argv) == 3 and argv[1] == "summary":
         return 0 if summary(load(argv[2])) else 1
-    if len(argv) == 4 and argv[1] == "compare":
-        return 0 if compare(load(argv[2]), load(argv[3])) else 1
+    if len(argv) >= 4 and argv[1] == "compare":
+        return 0 if compare([load(p) for p in argv[2:-1]], load(argv[-1])) else 1
     print(__doc__, file=sys.stderr)
     return 2
 

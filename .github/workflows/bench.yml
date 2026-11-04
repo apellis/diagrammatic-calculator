@@ -1,7 +1,9 @@
 name: Benchmarks
 
-# Nightly and on request: the full native evaluation suite, compared with the last result in
-# bench/history/ (a benchmark more than 10% slower fails the run), then appended to the history.
+# Nightly (when the code changed since the newest result in bench/history/) and on request: the
+# full native evaluation suite, compared with the median of the last seven results there, then
+# appended to the history. A benchmark more than 10% slower is a warning, not a failure: shared
+# runners vary by 20-100% from night to night on unchanged code. A changed answer fails the run.
 
 on:
   schedule:
@@ -23,25 +25,44 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Skip unchanged code
+        id: changed
+        run: |
+          prev="$(ls bench/history/*.json 2>/dev/null | sort | tail -n 1)"
+          sha="$(basename "$prev" .json | sed 's/.*-//')"
+          if [ "$GITHUB_EVENT_NAME" = schedule ] && [ -n "$sha" ] \
+             && git diff --quiet "$sha" HEAD -- . ':(exclude)bench/history' 2>/dev/null; then
+            echo "No change since $sha; nothing to measure." >> "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, 2026-10-08
         with:
           toolchain: stable
+        if: steps.changed.outputs.run == 'true'
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: steps.changed.outputs.run == 'true'
       - name: Run the suite
+        if: steps.changed.outputs.run == 'true'
         run: |
           label="$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}"
           echo "LABEL=$label" >> "$GITHUB_ENV"
           cargo run --release -q -p diagcalc-bench -- --label "$label" --out "/tmp/$label.json"
-      - name: Compare with the previous run
+      - name: Compare with the recent history
+        if: steps.changed.outputs.run == 'true'
         run: |
-          prev="$(ls bench/history/*.json 2>/dev/null | sort | tail -n 1)"
+          prev="$(ls bench/history/*.json 2>/dev/null | sort | tail -n 7)"
           if [ -n "$prev" ]; then
-            python3 bench/report.py compare "$prev" "/tmp/$LABEL.json" >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2086 # one argument per file
+            python3 bench/report.py compare $prev "/tmp/$LABEL.json" >> "$GITHUB_STEP_SUMMARY"
           else
             python3 bench/report.py summary "/tmp/$LABEL.json" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Append to the history
-        if: always() && github.ref == 'refs/heads/master'
+        if: always() && github.ref == 'refs/heads/master' && steps.changed.outputs.run == 'true'
         run: |
           [ -f "/tmp/$LABEL.json" ] || exit 0
           cp "/tmp/$LABEL.json" bench/history/
@@ -52,7 +73,7 @@ jobs:
           git pull --rebase -q origin master
           git push
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+        if: always() && steps.changed.outputs.run == 'true'
         with:
           name: bench-${{ env.LABEL }}
           path: /tmp/${{ env.LABEL }}.json

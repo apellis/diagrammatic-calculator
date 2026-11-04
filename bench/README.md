@@ -35,12 +35,14 @@ word in the representation; each batch is timed three times and the fastest pass
 cargo run --release -p diagcalc-bench -- --quick --out results.json   # n ≤ 5, 10 words
 cargo run --release -p diagcalc-bench -- --out results.json           # n ≤ 6, 20 words
 python3 bench/report.py summary results.json
-python3 bench/report.py compare old.json new.json   # exits 1 on a slowdown over 10%
+python3 bench/report.py compare old.json... new.json   # exits 1 only if a check fails
 ```
 
 CI runs the quick suite on every push and pull request (table in the job summary, JSON as an
-artifact). The Benchmarks workflow runs the full suite nightly, compares it with the newest file in
-`history/`, and appends the result there.
+artifact). The Benchmarks workflow runs the full suite nightly when the code has changed since the newest
+file in `history/` (and on request), compares it with the median of the last seven files there,
+and appends the result. A slowdown of more than 10% is a warning, not a failure: shared runners
+vary by 20-100% between nights on unchanged code. A failed result check fails the run.
 
 To run in WebAssembly: `cargo build --release -p diagcalc-bench --target wasm32-wasip1`, then
 `node bench/run-wasi.mjs target/wasm32-wasip1/release/diagcalc-bench.wasm --quick`.

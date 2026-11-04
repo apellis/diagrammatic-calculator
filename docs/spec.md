@@ -394,7 +394,7 @@ Targets by operation class (95th percentile in Chrome on a recent laptop; phase 
 ### CI (GitHub Actions)
 
 - On every pull request: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, the WebAssembly build with `wasm-pack`, the web build with type checks and unit tests, Playwright in Chromium, and the fixture suite across all four surfaces.
-- Nightly and on request: Playwright in Firefox and WebKit, the full evaluation suite (B1–B11) with results stored as a JSON artifact and compared with the previous run. A slowdown of more than 10% on any benchmark fails the run.
+- Nightly and on request: Playwright in Firefox and WebKit, the full evaluation suite (B1–B11) with results stored as a JSON artifact and compared with the median of the recent history. A slowdown of more than 10% on any benchmark is reported as a warning (shared runners vary too much for a timing to fail a run); a changed answer fails the run.
 - Caches: Cargo registry and target directory, `node_modules`, and the Playwright browsers.
 - The merge gate is green CI, as in the Lean repositories.
 
