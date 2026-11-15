@@ -143,6 +143,14 @@ points; red points never move.
   by the basis normal form of `T̃^λ` followed by the violating ideal, using the standardly
   stratified basis (arXiv:1309.3796v2 §4–5); the tensor-product Shapovalov form gives an
   independent check on `K_0(T^λ) ≅ V(λ_1) ⊗ … ⊗ V(λ_ℓ)`.
+- The check (`crates/core/tests/klrw_shapovalov.rs`) uses loadings whose red and black strands
+  are at weight `0` from each other. For such `B`, `B'`, `dim_q e_{B'} T^λ e_B = ⟨u_B, u_{B'}⟩`
+  exactly, with no overall shift. Here `u_B` is built from the left: the black strands between
+  red strands `j` and `j + 1` act on `V(λ_1) ⊗ … ⊗ V(λ_j)` by `F_i`, leftmost strand first,
+  through `Δ(F_i) = F_i ⊗ K_i + 1 ⊗ F_i`. The form is the product over the factors of
+  `q^{D_m/2}` times the Shapovalov form of `V(λ_m)` (normalized by `⟨v, v⟩ = 1`), with
+  `D_m = 2(λ_m, ν_m) − (ν_m, ν_m)` for the weight `ν_m` lowered in factor `m`. The other three
+  sign choices in the coproduct and the bar-inverted form fail on these examples.
 
 ## Ground ring
 

@@ -407,6 +407,55 @@ impl<R: Ring> Klrw<R> {
         Ok(piece)
     }
 
+    /// The graded dimension of `e_{top} T^λ e_{bottom}`: degree ↦ dimension, nonzero entries
+    /// only. Degrees are computed upward from the least degree of a basis diagram until a run of
+    /// `max_k 2 d_{i_k}` consecutive degrees above every basis diagram's degree is zero; from then
+    /// on every column `b_π x^m` is a dot times a column of lower degree, so every higher degree
+    /// is zero too.
+    pub fn graded_dimension(
+        &self,
+        bottom: &Loading,
+        top: &Loading,
+    ) -> Result<BTreeMap<i64, usize>> {
+        let perms = self.compatible(bottom, top);
+        let mut out = BTreeMap::new();
+        if perms.is_empty() {
+            return Ok(out);
+        }
+        let degs: Vec<i64> = perms
+            .iter()
+            .map(|p| self.perm_degree(bottom, top, p))
+            .collect::<Result<_>>()?;
+        let (dmin, dmax) = (*degs.iter().min().unwrap(), *degs.iter().max().unwrap());
+        let wmax = self
+            .dot_weights(bottom)
+            .into_iter()
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        let mut run = 0;
+        let mut d = dmin;
+        loop {
+            let piece = self.ideal_piece(bottom, top, d)?;
+            let free = piece.cols.len() - piece.span.rank();
+            if free > 0 {
+                out.insert(d, free);
+                run = 0;
+            } else {
+                run += 1;
+            }
+            if d >= dmax && run >= wmax {
+                return Ok(out);
+            }
+            if d - dmin > 100_000 {
+                return Err(Error::invalid(
+                    "internal: the cyclotomic quotient does not vanish in high degree",
+                ));
+            }
+            d += 1;
+        }
+    }
+
     /// Reduces normal-form summands modulo the violating ideal.
     pub fn reduce_cyclotomic(&self, nf: Vec<Summand<C<R>>>) -> Result<Vec<Summand<C<R>>>> {
         let ring = self.klr.coeff.clone();
