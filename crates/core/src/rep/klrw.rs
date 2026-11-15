@@ -208,16 +208,49 @@ impl<R: Ring> Klrw<R> {
                  (the cyclotomic quotient T^λ, Webster, arXiv:1309.3796v2, §4)",
             );
         }
+        // Without red strands or a cyclotomic quotient, the straight-line basis is formalized
+        // (categorification-lean, `Categorification.WeightedKLR`); red strands and T^λ are not.
+        let certificate = if data.reds.is_empty() && !cyclotomic {
+            Certificate {
+                status: "lean".into(),
+                reference: "categorification-lean: WeightedKLR.GalleryAlgebra.weightedKLRBasis \
+                            and chamberBasis (B. Webster, Weighted Khovanov-Lauda-Rouquier \
+                            algebras, arXiv:1209.2463v4, Theorem 2.8, for Webster's algebra as \
+                            the corner of the gallery algebra at the rank-ordered chambers), with \
+                            the straight-line choice of b_pi: straightSegment, \
+                            exists_stablePerturbation, segGallery_straightSegment, straightBasis"
+                    .into(),
+                hypotheses: "coefficients in an integral domain (needed by the computation; the \
+                             theorem holds over any commutative ring); every Q_e nonzero; \
+                             assumption (dagger), enforced by merging edges; no loops. The \
+                             basis is proved independent through its action in the polynomial \
+                             representation, so that representation is faithful and the \
+                             operator decides equality. That the calculator's b_pi (top endpoints \
+                             moved by eps^pi(k)) is the Lean straightSegment with rho(k) = pi(k) \
+                             is read off docs/klrw.md, not proved in Lean"
+                    .into(),
+            }
+        } else {
+            Certificate {
+                status: "literature".into(),
+                reference: if cyclotomic {
+                    "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, arXiv:1209.2463v4, \
+                     Theorem 2.8; B. Webster, Knot invariants and higher representation theory, \
+                     arXiv:1309.3796v2, Section 4"
+                } else {
+                    "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, arXiv:1209.2463v4, \
+                     Theorem 2.8, with Sections 3.1 and 3.4 for red strands"
+                }
+                .into(),
+                hypotheses: "coefficients in an integral domain; every Q_e nonzero. Red strands \
+                             and cyclotomic quotients are not formalized"
+                    .into(),
+            }
+        };
         let prov = Provenance {
             strategy: Strategy::BasisNormalForm,
             method,
-            certificate: Certificate {
-                status: "literature".into(),
-                reference: "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, \
-                            arXiv:1209.2463v4, Theorem 2.8"
-                    .into(),
-                hypotheses: "coefficients in an integral domain; every Q_e nonzero".into(),
-            },
+            certificate,
         };
         Ok(Klrw {
             klr,

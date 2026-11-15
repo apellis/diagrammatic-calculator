@@ -214,3 +214,15 @@ Ghosts are drawn as thin dashed lines in the colour of their strand, offset by `
 are drawn thick and red. Ghosts are a view: Settings › Appearance › "Show ghost strands" hides
 them in every drawing without changing any element. Hidden ghosts leave the positions of
 strands unchanged, so crossings with a ghost appear as bends in the strand.
+
+## Certificate
+
+Without red strands or a cyclotomic quotient, results carry the certificate `lean`:
+categorification-lean proves Theorem 2.8 for Webster's algebra (the corner of its gallery algebra
+at the rank-ordered chambers) for every choice of simple segments
+(`WeightedKLR.GalleryAlgebra.weightedKLRBasis`, `chamberBasis`), and that the straight-line
+segments with top endpoints moved by `ε^{ρ(k)}`, `ρ` injective and nonzero, are such a choice
+(`straightSegment`, `exists_stablePerturbation`, `segGallery_straightSegment`, `straightBasis`).
+The calculator's `b_π` is the case `ρ(k) = π(k)`; that identification is read off this document,
+not proved in Lean. Independence is proved through the polynomial representation, so the
+representation is faithful. With red strands, or in `T^λ`, the certificate stays `literature`.
