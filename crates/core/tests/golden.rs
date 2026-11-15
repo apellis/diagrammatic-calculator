@@ -6,7 +6,10 @@ use diagcalc_core::builtin;
 use diagcalc_core::context::{Context, ContextSpec};
 use diagcalc_core::poly::Monomial;
 use diagcalc_core::rep;
+use diagcalc_core::rep::klrw::Klrw;
+use diagcalc_core::rep::weighted::OrderType;
 use diagcalc_core::ring::{Integers, Ring};
+use diagcalc_core::text;
 use num_bigint::BigInt;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -93,6 +96,10 @@ fn golden_corpus_is_reproduced() {
             "{}: Lean found the normal form wrong",
             case.id
         );
+        if case.context.starts_with("klrw ") {
+            checked += check_klrw(case, l);
+            continue;
+        }
         let spec = ContextSpec::parse(&format!("{} ring=ZZ", case.context)).unwrap();
         let ctx = Context::new(
             builtin::presentation(&spec.presentation).unwrap(),
@@ -145,4 +152,52 @@ fn golden_corpus_is_reproduced() {
         }
     }
     assert!(checked > 500, "{checked}");
+}
+
+/// A `klrw` case: loadings are compared up to isotopy (by their order type), since the Lean
+/// program and the engine may pick different representatives of a top loading.
+fn check_klrw(case: &Case, l: &Value) -> usize {
+    let spec = ContextSpec::parse(&format!("{} ring=ZZ", case.context)).unwrap();
+    let k = Klrw::new(&spec, Integers).unwrap();
+    let defs = BTreeMap::new();
+    let term = k.term(&text::parse(&case.term).unwrap(), &defs).unwrap();
+    let nf = k.term(&text::parse(&case.nf).unwrap(), &defs).unwrap();
+    assert_eq!(
+        k.fmt_summands(&k.normal_form(&term).unwrap()),
+        case.nf,
+        "{}: normal form",
+        case.id
+    );
+    let key = |s: &str| -> OrderType { k.data.order_type(&k.parse_loading(s).unwrap()) };
+    let mut checked = 0;
+    for act in l["actions"].as_array().unwrap() {
+        let src = k.parse_loading(act["source"].as_str().unwrap()).unwrap();
+        let ring = k.strand_ring(src.0.len());
+        let mut m = vec![0i32; ring.nvars()];
+        for (i, e) in act["input"].as_array().unwrap().iter().enumerate() {
+            m[i] = e.as_i64().unwrap() as i32;
+        }
+        let f = ring.monomial(Monomial::from(m), ring.base.one());
+        let mut want: BTreeMap<OrderType, BTreeMap<Vec<i64>, BigInt>> = BTreeMap::new();
+        for (t, p) in lean_output(&act["output"]) {
+            want.insert(key(&t), p);
+        }
+        for (what, e) in [("term", &term), ("normal form", &nf)] {
+            let mut got: BTreeMap<OrderType, BTreeMap<Vec<i64>, BigInt>> = BTreeMap::new();
+            for (top, p) in k.act(e, &src, &f).unwrap() {
+                let poly = got.entry(k.data.order_type(&top)).or_default();
+                for (mono, c) in &p.terms {
+                    let c = ring.base.constant_term(c).to_bigint();
+                    poly.insert(mono.0[..src.0.len()].iter().map(|&e| e as i64).collect(), c);
+                }
+            }
+            assert_eq!(
+                got, want,
+                "{}: action of the {what} at e({}) on {:?}",
+                case.id, act["source"], act["input"]
+            );
+            checked += 1;
+        }
+    }
+    checked
 }

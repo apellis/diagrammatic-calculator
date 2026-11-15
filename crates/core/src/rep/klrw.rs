@@ -235,6 +235,43 @@ impl<R: Ring> Klrw<R> {
         PolyRep::new(&self.data, self.klr.coeff.clone(), n)
     }
 
+    /// The ring `k[x_1, …, x_n]` (over the context's scalars) acted on at loadings with `n`
+    /// black strands.
+    pub fn strand_ring(&self, n: usize) -> PolyRing<PolyRing<R>> {
+        self.rep(n).alg.ring.clone()
+    }
+
+    /// The action of `e` on `f · e(src)`: one polynomial for each top loading (up to isotopy)
+    /// where it is nonzero, read at the representative top loading of its piece.
+    pub fn act(
+        &self,
+        e: &Elem<C<R>>,
+        src: &Loading,
+        f: &Poly<C<R>>,
+    ) -> Result<Vec<(Loading, Poly<C<R>>)>> {
+        let ot = self.data.order_type(src);
+        let rep = self.rep(src.0.len());
+        let one = rep.alg.poly(rep.alg.ring.one());
+        let mut out = Vec::new();
+        for ((bot, _), p) in &e.pieces {
+            if *bot != ot {
+                continue;
+            }
+            let mut acc = rep.alg.poly(rep.alg.ring.zero());
+            for r in rep.then_poly(&p.op, f).values() {
+                rep.alg.add_assign(&mut acc, r);
+            }
+            let g = rep
+                .alg
+                .div_to_poly(&acc, &one)
+                .ok_or_else(|| Error::invalid("the action is not polynomial"))?;
+            if !rep.alg.ring.is_zero(&g) {
+                out.push((p.top.clone(), g));
+            }
+        }
+        Ok(out)
+    }
+
     /// Reads `i@0 j@1/2`.
     pub fn parse_loading(&self, s: &str) -> Result<Loading> {
         let mut pts = Vec::new();

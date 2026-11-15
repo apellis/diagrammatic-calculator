@@ -251,7 +251,8 @@ diagrams.
   `lean/golden/Golden.lean` implements the representations above in Lean independently of the
   engine, checks that each term and its stated normal form act identically on every monomial of
   bounded degree at every source, and records the action tables in `tests/golden/actions.json`.
-  The engine's test suite must reproduce both the normal forms and the tables.
+  The engine's test suite must reproduce both the normal forms and the tables. Weighted KLR cases
+  (`docs/klrw.md`) compare top loadings up to isotopy.
 
 ## Rewriting
 

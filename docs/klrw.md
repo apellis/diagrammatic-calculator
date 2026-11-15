@@ -93,6 +93,11 @@ Strand indices `j, k` refer to the positions at the height of the event. The Dem
 Webster's `(s_j − 1)/(x_{j+1} − x_j)` and the calculator's existing `∂_k`. Over an integral domain
 in which every `Q_e` is nonzero this representation is faithful (proof of Theorem 2.8).
 
+The golden corpus (`tests/golden/`, `docs/conventions.md`) includes `klrw` cases: the Lean
+program `lean/golden/Golden.lean` applies the events of this table, one straight-line diagram at
+a time, and the engine must reproduce its action tables. It covers `T̃^λ` only, since the
+representation is not faithful on the cyclotomic quotient.
+
 ## Basis
 
 (Theorem 2.8.) For loadings `B` (bottom) and `B'` (top) with `n` strands, `e_{B'} W e_B` is a free
