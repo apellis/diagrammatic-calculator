@@ -66,6 +66,8 @@ pub struct Klrw<R: Ring> {
     pub klr: Context<R>,
     pub data: Data<C<R>>,
     pub prov: Provenance,
+    /// Set for `quotient=cyclotomic`: the quotient `T^λ` by the violating ideal.
+    pub cyclo: Option<super::klrw_cyclo::Cyclotomic<R>>,
 }
 
 fn parse_q(s: &str) -> Result<Q> {
@@ -92,6 +94,18 @@ impl<R: Ring> Klrw<R> {
         for (k, _) in &thetas {
             kspec.params.remove(k);
         }
+        let cyclotomic = match kspec.params.remove("quotient").as_deref() {
+            None => false,
+            Some("cyclotomic") => {
+                super::klrw_cyclo::check_field(&base, &spec.scalars)?;
+                true
+            }
+            Some(q) => {
+                return Err(Error::invalid(format!(
+                    "quotient={q}: the only quotient is quotient=cyclotomic"
+                )));
+            }
+        };
         let pres = crate::builtin::presentation("klr")?;
         let klr = Context::new(pres, kspec, base)?;
         let cartan = klr
@@ -184,11 +198,19 @@ impl<R: Ring> Klrw<R> {
             edges,
             reds,
         };
+        let mut method: String = "the polynomial representation and the straight-line basis of a \
+                                  weighted KLR algebra (Webster, arXiv:1209.2463v4, Proposition \
+                                  2.7 and Theorem 2.8)"
+            .into();
+        if cyclotomic {
+            method.push_str(
+                ", then reduction modulo the ideal of violating idempotents, degree by degree \
+                 (the cyclotomic quotient T^λ, Webster, arXiv:1309.3796v2, §4)",
+            );
+        }
         let prov = Provenance {
             strategy: Strategy::BasisNormalForm,
-            method: "the polynomial representation and the straight-line basis of a weighted \
-                     KLR algebra (Webster, arXiv:1209.2463v4, Proposition 2.7 and Theorem 2.8)"
-                .into(),
+            method,
             certificate: Certificate {
                 status: "literature".into(),
                 reference: "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, \
@@ -197,14 +219,19 @@ impl<R: Ring> Klrw<R> {
                 hypotheses: "coefficients in an integral domain; every Q_e nonzero".into(),
             },
         };
-        Ok(Klrw { klr, data, prov })
+        Ok(Klrw {
+            klr,
+            data,
+            prov,
+            cyclo: cyclotomic.then(Default::default),
+        })
     }
 
     fn coeff(&self) -> &PolyRing<R> {
         &self.klr.coeff
     }
 
-    fn rep(&self, n: usize) -> PolyRep<'_, PolyRing<R>> {
+    pub(crate) fn rep(&self, n: usize) -> PolyRep<'_, PolyRing<R>> {
         PolyRep::new(&self.data, self.klr.coeff.clone(), n)
     }
 
@@ -656,6 +683,7 @@ impl<R: Ring> Klrw<R> {
         for p in e.pieces.values() {
             let rep = self.rep(p.bottom.n());
             let nf = rep.normal_form(&p.bottom, &p.top, &p.op)?;
+            let mut piece = Vec::new();
             let mut perms: Vec<(&Perm, &Poly<C<R>>)> = nf.iter().collect();
             perms.sort_by(|a, b| b.0.length().cmp(&a.0.length()).then(a.0.cmp(b.0)));
             for (w, f) in perms {
@@ -667,7 +695,7 @@ impl<R: Ring> Klrw<R> {
                     db.cmp(&da).then(b.0.0.cmp(&a.0.0))
                 });
                 for (m, c) in terms {
-                    out.push(Summand {
+                    piece.push(Summand {
                         bottom: p.bottom.clone(),
                         top: p.top.clone(),
                         perm: w.clone(),
@@ -676,6 +704,21 @@ impl<R: Ring> Klrw<R> {
                     });
                 }
             }
+            if self.cyclo.is_some() {
+                piece = self.reduce_cyclotomic(piece)?;
+                // the order of the normal form: longer permutations first, then higher degree
+                piece.sort_by(|a, b| {
+                    let da: u32 = a.dots.iter().sum();
+                    let db: u32 = b.dots.iter().sum();
+                    b.perm
+                        .length()
+                        .cmp(&a.perm.length())
+                        .then(a.perm.cmp(&b.perm))
+                        .then(db.cmp(&da))
+                        .then(b.dots.cmp(&a.dots))
+                });
+            }
+            out.extend(piece);
         }
         Ok(out)
     }
@@ -1154,5 +1197,53 @@ mod tests {
         // psi x_1 - x_2 psi = e on two strands of one colour
         let s = nf(&k, "psi_1 x_1 e(i@0 i@1) - x_2 psi_1 e(i@0 i@1)");
         assert_eq!(s, "e(i@0 i@1)");
+    }
+
+    #[test]
+    fn cyclotomic_one_red_strand() {
+        let k = ctx("klrw type=A1 red=\"2i@0\" quotient=cyclotomic");
+        // a black strand left of every red strand is killed
+        assert_eq!(nf(&k, "e(i@-1)"), "0");
+        assert_eq!(nf(&k, "x_1 to(i@-1) e(i@1)"), "0");
+        // one strand right of the red strand: k[x]/(x^2)
+        assert_eq!(nf(&k, "x_1 e(i@1)"), "x_1 e(i@1)");
+        assert_eq!(nf(&k, "x_1^2 e(i@1)"), "0");
+        // two strands: the cyclotomic nilHecke algebra, where x_1 + x_2 = 0 and x_1 x_2 = 0
+        assert_eq!(nf(&k, "x_1 e(i@1 i@2) + x_2 e(i@1 i@2)"), "0");
+        assert_eq!(nf(&k, "x_1 x_2 e(i@1 i@2)"), "0");
+        assert_ne!(nf(&k, "psi_1 e(i@1 i@2)"), "0");
+        // without the quotient, nothing is killed
+        let t = ctx("klrw type=A1 red=\"2i@0\"");
+        assert_eq!(nf(&t, "x_1^2 e(i@1)"), "x_1^2 e(i@1)");
+    }
+
+    #[test]
+    fn cyclotomic_needs_a_field() {
+        let spec = ContextSpec::parse("klrw type=A1 scalars=t quotient=cyclotomic").unwrap();
+        assert!(Klrw::new(&spec, Rationals).is_err());
+        let spec = ContextSpec::parse("klrw type=A1 quotient=other").unwrap();
+        assert!(Klrw::new(&spec, Rationals).is_err());
+    }
+
+    #[test]
+    fn cyclotomic_two_red_strands() {
+        // V(1) ⊗ V(1) for sl_2: one black strand
+        let k = ctx("klrw type=A1 red=\"i@0, i@2\" quotient=cyclotomic");
+        assert_eq!(nf(&k, "x_1 e(i@1)"), "0");
+        assert_eq!(nf(&k, "x_1 e(i@3)"), "x_1 e(i@3)");
+        assert_eq!(nf(&k, "x_1^2 e(i@3)"), "0");
+        // through the second red strand and back is x, which survives
+        assert_eq!(nf(&k, "to(i@3) to(i@1) e(i@3)"), "x_1 e(i@3)");
+        // A2 with the ghost of j at x_j − 1/2 and λ = Λ_i: only i before the ghost of j
+        // survives, and its endomorphisms are the scalars (weight Λ_i − α_i − α_j of V(Λ_i))
+        let w = ctx("klrw type=A2 theta_ij=-1/2 red=\"i@0\" quotient=cyclotomic");
+        assert_eq!(nf(&w, "e(i@1 j@3)"), "e(i@1 j@3)");
+        assert_eq!(nf(&w, "x_1 e(i@1 j@3)"), "0");
+        assert_eq!(nf(&w, "x_2 e(i@1 j@3)"), "0");
+        assert_eq!(nf(&w, "e(j@1 i@2)"), "0");
+        // with the ghost to the right instead, j can pass the red strand without crossing
+        // its ghost through i, so every idempotent of this weight is violating
+        let w = ctx("klrw type=A2 theta_ij=1/2 red=\"i@0\" quotient=cyclotomic");
+        assert_eq!(nf(&w, "e(i@1 j@2)"), "0");
     }
 }

@@ -151,6 +151,9 @@ impl ContextSpec {
                 "Lambda" | "lambda" => spec.lambda = Some(v.into()),
                 "mu" => spec.region = Some(v.into()),
                 "red" => spec.red = Some(v.into()),
+                "quotient" => {
+                    spec.params.insert(k.into(), v.into());
+                }
                 "dotcap" => {
                     spec.dot_cap = Some(v.parse().map_err(|_| {
                         Error::invalid(format!("dotcap={v} should be a positive integer"))

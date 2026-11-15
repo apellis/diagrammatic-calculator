@@ -160,6 +160,24 @@ the polynomials `Q` of the corresponding `klr` context, builds the default graph
   `b` (reorienting the default edge if needed);
 - `red="λ@ϖ, …"` adds red strands, each a dominant weight written as for `klr` (`2i`, `i+j`) at a
   rational position; two red strands may not share a position.
+- `quotient=cyclotomic` computes in `T^λ` instead of `T̃^λ`: normal forms are reduced modulo the
+  ideal of violating idempotents. It needs a field of coefficients and no free scalars.
+
+**Computing in `T^λ`.** In each degree `e_{B'} T̃^λ e_B` is a finite-dimensional space with basis
+`b_π x^m`. Its intersection with the violating ideal is spanned by the elements `v x_k`, with `v`
+in the ideal in lower degree, and by the products `b_σ x^c b_τ` through one violating loading of
+each order type with the colours of `B`. The order types are enumerated exactly (a feasibility test
+of strict difference constraints on the positions). The normal form in `T^λ` is the reduced
+representative modulo this span, with the columns ordered as the normal form is printed (longer
+`π` first, then lexicographically larger `m` first), so it is unique.
+
+Violating means only that the leftmost strand is black. Whether a loading can be moved to a
+violating one depends on the weights: with `type=A2 red="i@0"`, the idempotent of `i` followed by
+`j` survives when the ghost of `j` lies to its left (`theta_ij=-1/2`), and every idempotent of that
+weight is violating when it lies to its right (`theta_ij=1/2`), because `j` then crosses the red
+strand without its ghost passing `i`. Webster's tensor product algebras correspond to the first
+choice (red strands far apart compared with the weights, ghosts on the side of the charge); the
+calculator does not check this.
 
 Terms are typed, not drawn generator by generator. A term is a linear combination of
 compositions, written top factor first, of:
