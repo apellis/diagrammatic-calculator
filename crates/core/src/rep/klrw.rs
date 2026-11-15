@@ -213,15 +213,16 @@ impl<R: Ring> Klrw<R> {
         let certificate = if data.reds.is_empty() && !cyclotomic {
             Certificate {
                 status: "lean".into(),
-                reference: "categorification-lean: WeightedKLR.GalleryAlgebra.weightedKLRBasis \
-                            and chamberBasis (B. Webster, Weighted Khovanov-Lauda-Rouquier \
-                            algebras, arXiv:1209.2463v4, Theorem 2.8, for Webster's algebra as \
-                            the corner of the gallery algebra at the rank-ordered chambers), with \
-                            the straight-line choice of b_pi: straightSegment, \
-                            exists_stablePerturbation, segGallery_straightSegment, straightBasis"
-                    .into(),
-                hypotheses: "coefficients in an integral domain (needed by the computation; the \
-                             theorem holds over any commutative ring); every Q_e nonzero; \
+                reference:
+                    "categorification-lean: WeightedKLR.GalleryAlgebra.straightWeightedKLRBasis \
+                            and straightWeightedKLRChamberBasis (B. Webster, Weighted \
+                            Khovanov-Lauda-Rouquier algebras, arXiv:1209.2463v4, Theorem 2.8, for \
+                            Webster's algebra as the corner of the gallery algebra at the \
+                            rank-ordered chambers, with the straight-line choice of b_pi); also \
+                            weightedKLRBasisOfStanding, straightSegment and straightBasis"
+                        .into(),
+                hypotheses: "Webster's standing hypothesis on the Q_e, over any commutative ring \
+                             (the computation itself needs coefficients in an integral domain); \
                              assumption (dagger), enforced by merging edges; no loops. The \
                              basis is proved independent through its action in the polynomial \
                              representation, so that representation is faithful and the \

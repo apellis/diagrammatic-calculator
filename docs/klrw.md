@@ -219,10 +219,11 @@ strands unchanged, so crossings with a ghost appear as bends in the strand.
 
 Without red strands or a cyclotomic quotient, results carry the certificate `lean`:
 categorification-lean proves Theorem 2.8 for Webster's algebra (the corner of its gallery algebra
-at the rank-ordered chambers) for every choice of simple segments
-(`WeightedKLR.GalleryAlgebra.weightedKLRBasis`, `chamberBasis`), and that the straight-line
-segments with top endpoints moved by `ε^{ρ(k)}`, `ρ` injective and nonzero, are such a choice
-(`straightSegment`, `exists_stablePerturbation`, `segGallery_straightSegment`, `straightBasis`).
+at the rank-ordered chambers) under Webster's standing hypothesis on the `Q_e`, over any
+commutative ring, with the straight-line segments whose top endpoints are moved by `ε^{ρ(k)}`,
+`ρ` injective and nonzero (`WeightedKLR.GalleryAlgebra.straightWeightedKLRBasis`,
+`straightWeightedKLRChamberBasis`; the general form for any simple segments is
+`weightedKLRBasisOfStanding`, and the segments are `straightSegment`, `straightBasis`).
 The calculator's `b_π` is the case `ρ(k) = π(k)`; that identification is read off this document,
 not proved in Lean. Independence is proved through the polynomial representation, so the
 representation is faithful. With red strands, or in `T^λ`, the certificate stays `literature`.
