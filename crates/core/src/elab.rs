@@ -298,6 +298,9 @@ impl<R: Ring> Context<R> {
             Ast::Name { name, sub, args } => {
                 self.elab_name(name, sub.as_deref(), args.as_deref(), src, scope)
             }
+            Ast::Raw { name, .. } => Err(Error::invalid(format!(
+                "'{name}(...)' is a weighted KLR diagram: it needs a klrw context"
+            ))),
             Ast::Pow(b, e) => {
                 if *e < 0 {
                     let c = crate::context::poly_of_ast(ast, &self.coeff)

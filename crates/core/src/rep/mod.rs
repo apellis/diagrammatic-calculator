@@ -6,6 +6,7 @@
 
 pub mod basis_cache;
 pub mod kl;
+pub mod klrw;
 pub mod nilcoxeter;
 pub mod skm;
 pub mod smash;

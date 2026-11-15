@@ -391,6 +391,9 @@ impl RingVisitor for TermOp<'_> {
     type Out = Value;
     fn visit<R: Ring>(self, base: R) -> Result<Value> {
         let spec = ContextSpec::parse(&self.req.context)?;
+        if spec.presentation == "klrw" {
+            return klrw_term_op(&spec, base, self.op, self.terms, self.format);
+        }
         let pres = load_presentation(&spec, self.req.presentation.as_deref())?;
         let ctx = Context::new(pres, spec, base)?;
         if self.op == "render" {
@@ -418,6 +421,48 @@ impl RingVisitor for TermOp<'_> {
             }
             name => s.check(name, &terms),
         }
+    }
+}
+
+/// A term operation in a weighted KLR context, which has its own evaluator (see `docs/klrw.md`).
+fn klrw_term_op<R: Ring>(
+    spec: &ContextSpec,
+    base: R,
+    op: &str,
+    terms: &[String],
+    format: Option<&str>,
+) -> Result<Value> {
+    use std::collections::BTreeMap;
+    let k = crate::rep::klrw::Klrw::new(spec, base)?;
+    let elems = terms
+        .iter()
+        .map(|t| k.term(&text::parse(t)?, &BTreeMap::new()))
+        .collect::<Result<Vec<_>>>()?;
+    match op {
+        "render" => {
+            let [e] = elems.as_slice() else {
+                return Err(Error::invalid("render takes one term"));
+            };
+            let format = format.unwrap_or("text");
+            let nf = k.normal_form(e)?;
+            let output = match format {
+                "text" => k.fmt_summands(&nf),
+                "svg" => k.svg(&nf, true),
+                f => {
+                    return Err(Error::precondition(format!(
+                        "weighted KLR terms render as text or svg, not {f}"
+                    )));
+                }
+            };
+            Ok(json!({ "format": format, "output": output }))
+        }
+        "simplify" => {
+            let [e] = elems.as_slice() else {
+                return Err(Error::invalid("simplify takes one term"));
+            };
+            k.simplify(e, None)
+        }
+        name => k.check(name, &elems),
     }
 }
 
@@ -645,6 +690,9 @@ impl RingVisitor for RunWorkspace<'_> {
         // mention: an unknown of some solve cell never turns the coefficients of an unrelated
         // cell into polynomials.
         let ws = self.ws;
+        if ws.context.presentation == "klrw" {
+            return crate::rep::klrw::run_workspace(ws, base, self.shown);
+        }
         let deps = Dependencies::of(ws);
         let mut sets: Vec<Vec<String>> = vec![vec![]];
         let which: Vec<usize> = deps
@@ -844,6 +892,12 @@ impl RingVisitor for TraceWorkspace<'_> {
     type Out = Value;
     fn visit<R: Ring>(self, base: R) -> Result<Value> {
         let ws = self.ws;
+        if ws.context.presentation == "klrw" {
+            let _ = base;
+            return Err(Error::precondition(
+                "tracing is not available in a klrw context yet",
+            ));
+        }
         let deps = Dependencies::of(ws);
         let i = ws
             .cells
@@ -1069,6 +1123,9 @@ struct Describe<'a> {
 impl RingVisitor for Describe<'_> {
     type Out = Value;
     fn visit<R: Ring>(self, base: R) -> Result<Value> {
+        if self.spec.presentation == "klrw" {
+            return crate::rep::klrw::Klrw::new(&self.spec, base)?.describe(&self.spec);
+        }
         let pres = load_presentation(&self.spec, self.presentation)?;
         let ctx = Context::new(pres, self.spec, base)?;
         let s = Session::new(&ctx, None)?;

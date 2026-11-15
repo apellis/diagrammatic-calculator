@@ -427,7 +427,12 @@ impl Cell {
                 Ast::Range { body, .. } => walk(body, out),
                 Ast::Comp(xs) | Ast::Tensor(xs) => xs.iter().for_each(|x| walk(x, out)),
                 Ast::Sum(xs) => xs.iter().for_each(|(_, x)| walk(x, out)),
-                Ast::Int(_) | Ast::Frac(..) | Ast::Imag | Ast::Idem(_) | Ast::Id(_) => {}
+                Ast::Int(_)
+                | Ast::Frac(..)
+                | Ast::Imag
+                | Ast::Idem(_)
+                | Ast::Raw { .. }
+                | Ast::Id(_) => {}
             }
         }
         let mut out = std::collections::BTreeSet::new();

@@ -35,6 +35,12 @@ pub enum Ast {
     },
     /// An idempotent `e(...)`, with the colours as written.
     Idem(String),
+    /// A weighted KLR diagram written with a loading: `to(i@0 j@1)` (straight lines to a new
+    /// loading) or `b(2 1; j@0 i@1)` (the basis diagram of a permutation), contents as written.
+    Raw {
+        name: String,
+        raw: String,
+    },
     /// An identity `1_obj`, with the object as written.
     Id(String),
     Pow(Box<Ast>, i64),
@@ -184,8 +190,21 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>> {
                     break;
                 }
             }
-            // `e(...)`: the idempotent; keep its contents raw.
-            if s == "e" && at(i) == Some('(') {
+            // `e(...)`: the idempotent; keep its contents raw. So are `to(...)` and `b(...)`
+            // when they hold a loading (a position written with `@`, never a term).
+            let loading_call = (s == "to" || s == "b") && at(i) == Some('(') && {
+                let mut j = i + 1;
+                let mut at_sign = false;
+                while let Some(ch) = at(j) {
+                    if ch == ')' {
+                        break;
+                    }
+                    at_sign |= ch == '@';
+                    j += 1;
+                }
+                at_sign
+            };
+            if (s == "e" || loading_call) && at(i) == Some('(') {
                 i += 1;
                 let mut raw = String::new();
                 loop {
@@ -199,7 +218,7 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>> {
                     }
                     i += 1;
                 }
-                out.push((Tok::Name("e".into()), off));
+                out.push((Tok::Name(s), off));
                 out.push((Tok::Raw(raw.trim().to_string()), off));
                 continue;
             }
@@ -406,6 +425,10 @@ impl Parser {
                     self.pos += 1;
                     return Ok(Ast::Idem(r));
                 }
+                if let Some(Tok::Raw(r)) = self.peek().cloned() {
+                    self.pos += 1;
+                    return Ok(Ast::Raw { name, raw: r });
+                }
                 if name == "I" {
                     return Ok(Ast::Imag);
                 }
@@ -543,6 +566,7 @@ fn print_prec(a: &Ast, prec: u8) -> String {
             (s, 3)
         }
         Ast::Idem(r) => (format!("e({r})"), 3),
+        Ast::Raw { name, raw } => (format!("{name}({raw})"), 3),
         Ast::Id(r) => (format!("1{}", print_sub(r)), 3),
         Ast::Pow(b, e) => {
             let bs = print_prec(b, 4);
@@ -592,7 +616,12 @@ fn print_prec(a: &Ast, prec: u8) -> String {
         (_, 4) => {
             !matches!(
                 a,
-                Ast::Int(_) | Ast::Imag | Ast::Name { .. } | Ast::Idem(_) | Ast::Id(_)
+                Ast::Int(_)
+                    | Ast::Imag
+                    | Ast::Name { .. }
+                    | Ast::Idem(_)
+                    | Ast::Raw { .. }
+                    | Ast::Id(_)
             ) || matches!(a, Ast::Int(n) if n.is_negative())
         }
         (Ast::Comp(_) | Ast::Range { .. }, 3) => true,

@@ -84,6 +84,9 @@ pub struct ContextSpec {
     /// coordinates (`2i-j` is ⟨h_i, μ⟩ = 2, ⟨h_j, μ⟩ = −1; a bare integer for one colour). Every
     /// other region's weight follows from it and the strands to its right.
     pub region: Option<String>,
+    /// In a weighted KLR (klrw) context, the red strands: `i@0, 2j@5/2` places a red strand
+    /// labelled `Λ_i` at 0 and one labelled `2Λ_j` at 5/2 (weights written like `Λ`).
+    pub red: Option<String>,
 }
 
 fn split_words(line: &str) -> Result<Vec<String>> {
@@ -147,6 +150,7 @@ impl ContextSpec {
                 "scalars" => spec.scalars = list(v),
                 "Lambda" | "lambda" => spec.lambda = Some(v.into()),
                 "mu" => spec.region = Some(v.into()),
+                "red" => spec.red = Some(v.into()),
                 "dotcap" => {
                     spec.dot_cap = Some(v.parse().map_err(|_| {
                         Error::invalid(format!("dotcap={v} should be a positive integer"))
@@ -198,6 +202,9 @@ impl ContextSpec {
         }
         if let Some(m) = &self.region {
             s.push_str(&format!(" mu={m}"));
+        }
+        if let Some(r) = &self.red {
+            s.push_str(&format!(" red={}", q(r)));
         }
         if let Some(n) = self.dot_cap {
             s.push_str(&format!(" dotcap={n}"));

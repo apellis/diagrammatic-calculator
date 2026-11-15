@@ -151,6 +151,32 @@ needs an integral domain with every `Q_e ≠ 0`, as for KLR. The characteristic-
 §4 of arXiv:1209.2463v4 concerns the geometric realization (perverse sheaves on quiver
 representations), not the algebra.
 
+## Contexts and terms
+
+A context line `context klrw type=A2 theta_ij=1/2 red="2i@0, j@5/2"` takes the Cartan datum and
+the polynomials `Q` of the corresponding `klr` context, builds the default graph above, and then:
+
+- `theta_ab=x` gives the edge between `a` and `b` the weight `x`, oriented with tail `a` and head
+  `b` (reorienting the default edge if needed);
+- `red="λ@ϖ, …"` adds red strands, each a dominant weight written as for `klr` (`2i`, `i+j`) at a
+  rational position; two red strands may not share a position.
+
+Terms are typed, not drawn generator by generator. A term is a linear combination of
+compositions, written top factor first, of:
+
+| Syntax | Meaning |
+|---|---|
+| `e(i@0 j@1/2)` | the idempotent of a loading; on top of a diagram, it keeps only the part ending there |
+| `x_k` | a dot on the `k`-th strand from the left |
+| `psi_k` | strands `k` and `k+1` cross: their colours swap, the positions stay |
+| `to(i@0 j@3)` | the straight-line diagram to a loading with the same colours in the same order |
+| `b(π; B')` | the basis element `b_π` to the loading `B'`, with `π` in one-line notation counted from 1 |
+
+Every generator needs a loading below it, so a term ends in `e(…)`. Normal forms are printed as
+`c b(π; B') x^a e(B)`, written `to(B')` when `π` is the identity and `B'` is not isotopic to `B`,
+and with no diagram when it is. Workspaces accept `def`, `watch`, and `check` cells; `solve` and
+`workspace.trace` are not available in `klrw` contexts yet.
+
 ## Display
 
 Ghosts are drawn as thin dashed lines in the colour of their strand, offset by `ϑ_e`; red strands
