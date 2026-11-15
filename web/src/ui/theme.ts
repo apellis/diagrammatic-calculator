@@ -58,3 +58,33 @@ export function savePatterns(on: boolean) {
   setPatternsSignal(on);
   applyPatterns(on);
 }
+
+// Ghost strands of weighted KLR diagrams: shown unless turned off. Kept on this device; styles.css
+// reads `data-hide-ghosts` on the root element. Hiding them moves nothing in the drawing.
+const GHOSTS_KEY = 'diagcalc.ghosts';
+const [ghosts, setGhostsSignal] = createSignal(loadGhosts());
+export { ghosts };
+
+function loadGhosts(): boolean {
+  try {
+    return localStorage.getItem(GHOSTS_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function applyGhosts(on = ghosts()) {
+  if (on) delete document.documentElement.dataset.hideGhosts;
+  else document.documentElement.dataset.hideGhosts = '';
+}
+
+export function saveGhosts(on: boolean) {
+  try {
+    if (on) localStorage.removeItem(GHOSTS_KEY);
+    else localStorage.setItem(GHOSTS_KEY, '0');
+  } catch {
+    // storage blocked: the choice lasts for this visit
+  }
+  setGhostsSignal(on);
+  applyGhosts(on);
+}

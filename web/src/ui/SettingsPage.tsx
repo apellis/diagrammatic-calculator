@@ -6,7 +6,7 @@ import './entry-ux.css';
 import { askBeforeContext, setAskBeforeContext } from '../ai/tools';
 import { ACTIONS, FIXED, changed, comboOf, keysOf, label, rebind, resetAll, type ActionId } from './shortcuts';
 import { SignOutEverywhere } from './Account';
-import { loadTheme, patterns, savePatterns, saveTheme, type Theme } from './theme';
+import { ghosts, loadTheme, patterns, saveGhosts, savePatterns, saveTheme, type Theme } from './theme';
 
 const THEMES: { id: Theme; name: string }[] = [
   { id: 'light', name: 'Light' },
@@ -59,6 +59,10 @@ export function SettingsPage(props: { from?: string }) {
         <label class="row" style={{ 'margin-top': '12px' }}>
           <input type="checkbox" checked={patterns()} onChange={(e) => savePatterns(e.currentTarget.checked)} data-testid="patterns" />
           Strand patterns: dashes on strands of different colours, in cells and on the canvas, so colour is not the only cue
+        </label>
+        <label class="row" style={{ 'margin-top': '12px' }}>
+          <input type="checkbox" checked={ghosts()} onChange={(e) => saveGhosts(e.currentTarget.checked)} data-testid="ghosts" />
+          Show ghost strands: the dashed copies of strands in weighted KLR diagrams (hiding them moves nothing)
         </label>
       </section>
       <section>

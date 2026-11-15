@@ -961,7 +961,7 @@ impl<R: Ring> Klrw<R> {
             for r in &self.data.reds {
                 let x = f(&r.pos);
                 body.push_str(&format!(
-                    "<line class=\"red\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#c0392b\" stroke-width=\"3\"/>\n",
+                    "<path class=\"red\" d=\"M {} {} L {} {}\" stroke=\"#c0392b\" stroke-width=\"3\"/>\n",
                     px(x),
                     py(0.0),
                     px(x),
@@ -975,7 +975,7 @@ impl<R: Ring> Klrw<R> {
                     if e.head == *c {
                         let w = f(&e.weight);
                         body.push_str(&format!(
-                            "<line class=\"ghost k{c}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke-dasharray=\"4 3\" stroke-width=\"1\"/>\n",
+                            "<path class=\"ghost k{c}\" d=\"M {} {} L {} {}\" stroke-dasharray=\"4 3\" stroke-width=\"1\"/>\n",
                             px(a + w),
                             py(0.0),
                             px(b + w),
@@ -984,7 +984,7 @@ impl<R: Ring> Klrw<R> {
                     }
                 }
                 body.push_str(&format!(
-                    "<line class=\"k{c}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"/>\n",
+                    "<path class=\"k{c}\" d=\"M {} {} L {} {}\"/>\n",
                     px(a),
                     py(0.0),
                     px(b),
