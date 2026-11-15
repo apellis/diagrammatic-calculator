@@ -290,12 +290,12 @@ impl<E: Clone> Data<E> {
             }
         }
         for (ei, e) in self.edges.iter().enumerate() {
-            for j in 0..n {
-                if bottom.0[j].0 != e.tail {
+            for (j, bj) in bottom.0.iter().enumerate() {
+                if bj.0 != e.tail {
                     continue;
                 }
-                for k in 0..n {
-                    if k == j || bottom.0[k].0 != e.head {
+                for (k, bk) in bottom.0.iter().enumerate() {
+                    if k == j || bk.0 != e.head {
                         continue;
                     }
                     let a = x(j) - x(k) - &e.weight;

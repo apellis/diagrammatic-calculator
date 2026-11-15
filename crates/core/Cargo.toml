@@ -19,7 +19,6 @@ num-traits.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
-thiserror.workspace = true
 smallvec = { version = "1.13", features = ["union", "const_generics"] }
 
 [dev-dependencies]

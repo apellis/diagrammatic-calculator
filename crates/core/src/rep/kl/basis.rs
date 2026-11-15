@@ -363,8 +363,8 @@ pub(super) fn basis_between<R: Ring>(
             .map(|e| cartan.form(e.2.colour as usize, e.2.colour as usize))
             .collect();
         let mut bubs = Vec::new();
-        for c in 0..nc {
-            let d = 2 * cartan.d[c];
+        for (c, &dc) in cartan.d.iter().enumerate().take(nc) {
+            let d = 2 * dc;
             for k in 1..=rest / d {
                 bubs.push((c as u16, k));
                 deg.push(d * k);

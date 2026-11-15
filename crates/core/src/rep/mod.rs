@@ -436,8 +436,8 @@ pub fn strand_ring<R: Ring>(ctx: &Context<R>, n: usize, odd: bool) -> PolyRing<R
     names.extend(ctx.spec.scalars.iter().cloned());
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let mut r = PolyRing::new(ctx.base.clone(), &refs);
-    for k in 0..n {
-        r.odd[k] = odd;
+    for o in r.odd.iter_mut().take(n) {
+        *o = odd;
     }
     r
 }

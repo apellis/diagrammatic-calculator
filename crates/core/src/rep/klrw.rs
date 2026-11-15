@@ -127,9 +127,9 @@ impl<R: Ring> Klrw<R> {
         };
         // The default graph: for a > b with (α_a, α_b) ≠ 0, an edge a → b of weight 0.
         let mut orient: BTreeMap<(usize, usize), (usize, usize, Q)> = BTreeMap::new();
-        for a in 0..n {
-            for b in 0..a {
-                if cartan.a[a][b] != 0 {
+        for (a, row) in cartan.a.iter().enumerate().take(n) {
+            for (b, &ab) in row.iter().enumerate().take(a) {
+                if ab != 0 {
                     orient.insert((b, a), (a, b, Q::zero()));
                 }
             }
