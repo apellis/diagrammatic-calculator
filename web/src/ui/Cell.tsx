@@ -6,7 +6,7 @@ import { kindOf } from '../doc/model';
 import { Editor, type RemoteCursor } from './Editor';
 import { dotTitle, NoteView, Outcome, ResultView, Summary, summary, type Tracer } from './Results';
 import { Typeset } from './Typeset';
-import { toTex } from './tex';
+import { cellTex, optionTex, splitOptions } from './tex';
 import type { CellComment } from './AIPanel';
 
 export const TEMPLATES: [string, string, number?][] = [
@@ -206,7 +206,7 @@ export function Cell(props: CellProps) {
         <span class="text grow" data-text={head()}>
           <Show when={!props.expanded}>
           <Show when={head()} fallback={<span class="muted">empty cell</span>}>
-            <Show when={kind() === 'note' || kind() === 'comment'} fallback={<Typeset text={head()} />}>
+            <Show when={kind() === 'note' || kind() === 'comment'} fallback={<Typeset text={head()} tex={cellTex(head().replace(/\s+/g, ' '))} />}>
               <NoteView text={head()} inline />
             </Show>
           </Show>
@@ -336,8 +336,9 @@ export function Cell(props: CellProps) {
  */
 function CellText(props: { text: string; kind: string; onEdit?: () => void }) {
   const lines = () => props.text.split('\n');
-  const first = () => lines()[0].replace(/^(def|watch|solve|check)\s+/, '');
-  const options = () => lines().slice(1).map((l) => l.trim()).filter(Boolean);
+  const split = () => splitOptions(lines()[0].replace(/^(def|watch|solve|check)\s+/, ''));
+  const first = () => split()[0];
+  const options = () => [...split()[1], ...lines().slice(1).map((l) => l.trim()).filter(Boolean)];
   const note = () => /^note\s*"""([\s\S]*?)("""\s*)?$/.exec(props.text.trim())?.[1] ?? '';
   return (
     <div class="celltext" classList={{ readonly: !props.onEdit }} data-testid="cell-display" data-text={props.text}
@@ -347,7 +348,7 @@ function CellText(props: { text: string; kind: string; onEdit?: () => void }) {
       <Show when={props.kind === 'note' || props.kind === 'comment'} fallback={
         <Show when={props.text.trim()} fallback={<span class="muted">empty cell</span>}>
           <Typeset text={first()} display />
-          <For each={options()}>{(o) => <div class="opt"><Typeset text={o} tex={toTex(o.replace(/=/, ' = '))} /></div>}</For>
+          <For each={options()}>{(o) => <div class="opt"><Typeset text={o} tex={optionTex(o)} /></div>}</For>
         </Show>
       }>
         <NoteView text={props.kind === 'comment' ? props.text.replace(/^\s*#\s?/, '') : note()} />

@@ -273,6 +273,7 @@ ring's variable (`q` in `ring=QQ(q)`). If none matches, it reports `unknown name
 | --- | --- |
 | `nilhecke`, `odd-nilhecke` | `x_k` (dot), `psi_k` (crossing) |
 | `klr` | `x_k`, `psi_k`; parameter `Q_ab(u, v)` |
+| `klrw` (weighted KLR) | `x_k`, `psi_k`, `to(loading)`, `b(π; loading)`, on loadings `e(i@0 j@1/2)`; see [klrw.md](klrw.md) |
 | `kl` (2-category) | `x_k`, `psi_k`, `cup_k`, `cap_k` on upward and downward strands; bubbles `cw_{a,m}`, `ccw_{a,m}` |
 | `be2` (super 2-category) | `x_k`, `psi_k`, `cup_k`, `cap_k`, `lcross_k` |
 
@@ -303,7 +304,9 @@ that contains spaces. A key that is not listed here and does not contain `_` is 
 | `mu` | A weight, for example `mu=2i-j` | The weight of the region at the far right, in the 2-categories `kl` and `be2`. |
 | `dotcap` | A positive whole number | Computes with at most this many dots; the result says so. |
 | `degcap` | A whole number | Computes up to this degree; the result says so. |
-| any key containing `_` | A parameter of the presentation, for example `Q_ij="u - v"` | Replaces the presentation's default, here the KLR polynomial for colours `i` and `j`. |
+| `red` | Red strands of `klrw`, for example `red="2i@0, j@5/2"` | Each a dominant weight at a rational position. |
+| `quotient` | `cyclotomic` (`klrw` with red strands) | Computes in the cyclotomic quotient `T^λ`; needs a field. |
+| any key containing `_` | A parameter of the presentation, for example `Q_ij="u - v"`, or the `klrw` edge weight `theta_ij=1/2` | Replaces the presentation's default, here the KLR polynomial for colours `i` and `j`. |
 
 | Context | You type | Normal form |
 | --- | --- | --- |

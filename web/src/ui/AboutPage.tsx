@@ -5,6 +5,8 @@ import { Show } from 'solid-js';
 /** Where a tip to the creator goes; no tip link until it is set. */
 const TIP_URL: string = 'https://buy.stripe.com/bJe28reyVa2081W86gaEE01';
 
+const REPO = 'https://github.com/apellis/diagrammatic-calculator';
+
 /** `from`: the route the page was opened from, returned to by Back (the document list if none). */
 export function AboutPage(props: { from?: string }) {
   return (
@@ -19,6 +21,14 @@ export function AboutPage(props: { from?: string }) {
         <dd><code data-testid="about-commit">{__COMMIT__}</code></dd>
         <dt>License</dt>
         <dd>Apache License 2.0</dd>
+        <dt>Source</dt>
+        <dd><a href={REPO} target="_blank" rel="noopener" data-testid="about-source">github.com/apellis/diagrammatic-calculator</a></dd>
+        <dt>Documentation</dt>
+        <dd>
+          <a href="#/help">Help</a>{' · '}
+          <a href={`${REPO}/blob/master/docs/language.md`} target="_blank" rel="noopener">The input language</a>{' · '}
+          <a href={`${REPO}/blob/master/docs/conventions.md`} target="_blank" rel="noopener">Conventions</a>
+        </dd>
       </dl>
       <p>
         <Show when={TIP_URL}>

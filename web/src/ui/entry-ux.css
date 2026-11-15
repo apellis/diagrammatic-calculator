@@ -24,3 +24,17 @@
   .doclist .documents td.actions button { min-height: 40px; }
   .doclist .documents input { max-width: 100%; box-sizing: border-box; }
 }
+
+/* Help: contents, sections, and reference tables */
+.help section { margin-top: 26px; scroll-margin-top: 12px; }
+.help h2 { font-size: 18px; margin: 0 0 8px; }
+.help-contents { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 0; font-size: 14px; }
+.help-contents .link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+.help-contents .link:hover { text-decoration: underline; }
+.help-table { border-collapse: collapse; margin: 8px 0 12px; width: 100%; font-size: 14px; }
+.help-table th { text-align: left; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--border); padding: 4px 8px 4px 0; }
+.help-table td { vertical-align: top; padding: 5px 12px 5px 0; border-bottom: 1px solid var(--border); }
+.help-table td:first-child { white-space: nowrap; width: 1%; }
+.help-table code, .help kbd { font-size: 13px; }
+.help kbd { font-family: var(--mono, monospace); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+@media (max-width: 600px) { .help-table td:first-child { white-space: normal; } }

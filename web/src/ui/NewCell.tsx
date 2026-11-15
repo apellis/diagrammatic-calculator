@@ -6,6 +6,27 @@ import { TEMPLATES } from './Cell';
 import { Typeset } from './Typeset';
 import './new-cell.css';
 
+/** A term of the context's presentation to show as an example in an empty editor. */
+function exampleTerm(context: string): string {
+  const name = context.trim().split(/\s+/)[0] ?? '';
+  if (name === 'klrw') return 'x_1 e(i@0 j@1)';
+  if (name === 'kl' || name === 'be2') return 'x_1 1_i';
+  if (name === 'klr') return 'psi_1 x_1 e(ij)';
+  return 'psi_1 x_1';
+}
+
+/** What an empty editor suggests for each kind of cell. */
+function placeholderFor(kind: string, context: string): string {
+  const t = exampleTerm(context);
+  switch (kind) {
+    case 'watch': return `An expression to simplify, such as ${t}`;
+    case 'check': return 'A test, such as equal(a, b), zero(a), or idempotent(a)';
+    case 'solve': return 'An equation and its unknowns, such as c a = b for c';
+    case 'note': return 'Text, with mathematics between $…$';
+    default: return `An expression, such as ${t}, or / for a cell kind`;
+  }
+}
+
 const TYPES = [
   ['def', 'Element', 'Name an element to use in other cells.'],
   ['watch', 'Watch', 'Simplify an expression; it updates when its definitions change.'],
@@ -119,7 +140,7 @@ export function NewCell(props: {
           </div>
         </Show>
         <Show when={mode() === 'text'}>
-          <Editor text={draft()} autofocus commitOnBlur={false} placeholder="Enter an expression, or paste a cell command"
+          <Editor text={draft()} autofocus commitOnBlur={false} placeholder={placeholderFor(kind(), props.context)}
             ref={(api) => { editor = api; if (props.initial) queueMicrotask(() => api.set(draft(), props.initial?.cursor)); }}
             invalid={!!problem()} errorId="new-cell-problem" onChange={changed} onCommit={(t) => void submit(t)} onCancel={cancel} />
           <Show when={draft().startsWith('/')}>

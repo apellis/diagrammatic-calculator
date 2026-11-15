@@ -81,6 +81,10 @@ export function toTex(src: string): string {
     } else if ((m = /^for\b/.exec(rest)) && spaced && last !== 'none') {
       emit('\\quad\\text{for}\\quad ', 'operator');
       i += 3;
+    } else if ((m = /^([0-9]*)([A-Za-z][A-Za-z0-9]*)\s*@\s*(-?[0-9]+(?:\/[0-9]+)?)/.exec(rest))) {
+      // a loaded strand `i@1/4` (weighted KLR): one factor, kept apart from its neighbours
+      emit(`${m[1]}${word(m[2], false)}@${m[3]}`, 'operand', true);
+      i += m[0].length;
     } else if ((m = /^[A-Za-z][A-Za-z']*[0-9]*/.exec(rest))) {
       const w = m[0].replace(/'/g, '');
       const call = src[i + m[0].length] === '(';
@@ -113,17 +117,24 @@ export function toTex(src: string): string {
 
 /** LaTeX for the options of a context: `type=A2 nu=2i+j ring=QQ(q)`, without the presentation's name. */
 export function contextTex(options: string): string {
-  return options
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
+  return (options.match(/[^\s"]*"[^"]*"|\S+/g) ?? [])
     .map((o) => {
-      const [k, v = ''] = o.split('=');
+      const eq = o.indexOf('=');
+      const k = eq < 0 ? o : o.slice(0, eq);
+      const v = eq < 0 ? '' : o.slice(eq + 1).replace(/^"(.*)"$/, '$1');
       if (k === 'type') return `\\text{type }${v.replace(/^([A-Z])([0-9]+)$/, '$1_{$2}')}`;
       if (k === 'ring') return ringTex(v);
-      return `${GREEK.has(k) ? `\\${k}` : k.length === 1 ? k : `\\mathrm{${k}}`} = ${toTex(v)}`;
+      return `${optionName(k)} = ${toTex(v)}`;
     })
     .join(',\\quad ');
+}
+
+/** An option's name: Greek names as letters, `theta_ij` with its subscript, other names upright. */
+function optionName(k: string): string {
+  const m = /^([A-Za-z]+)(?:_([A-Za-z0-9]+))?$/.exec(k);
+  if (!m) return `\\text{${k.replace(/[\\{}$&#^_%~]/g, '')}}`;
+  const base = GREEK.has(m[1]) ? `\\${m[1]}` : m[1].length === 1 ? m[1] : `\\mathrm{${m[1]}}`;
+  return m[2] ? `${base}_{${m[2]}}` : base;
 }
 
 /** A ring as written in mathematics: ℚ, ℤ[I], 𝔽₅, ℚ(q). */
@@ -162,4 +173,36 @@ export function render(tex: string, display = false): string | null {
     cache.set(key, html);
   }
   return html;
+}
+
+/**
+ * Splits trailing `key=value` options off a line, by the engine's rule (crates/core workspace.rs,
+ * `split_options`): from the end, words `key=value` whose key is a name without `_` and whose value
+ * is not empty. Options are only split off after a body, so `x=1` alone stays an equation.
+ */
+export function splitOptions(line: string): [string, string[]] {
+  const words = line.trim().split(/\s+/).filter(Boolean);
+  const opts: string[] = [];
+  while (words.length > 1) {
+    const m = /^([A-Za-z][A-Za-z0-9]*)=(\S+)$/.exec(words[words.length - 1]);
+    if (!m) break;
+    opts.unshift(words.pop()!);
+  }
+  if (!opts.length) return [line.trim(), []];
+  let rest = line.trim();
+  for (let n = 0; n < opts.length; n++) rest = rest.replace(/\s+\S+$/, '');
+  return [rest, opts];
+}
+
+/** LaTeX for a cell's text with its trailing options set apart as words: `… \quad view = diagrams`. */
+export function cellTex(line: string): string {
+  const [body, opts] = splitOptions(line);
+  return [toTex(body), ...opts.map(optionTex)].join('\\qquad ');
+}
+
+/** LaTeX for one option `key=value` of a cell, in words: view = diagrams. */
+export function optionTex(w: string): string {
+  const [k, v = ''] = w.split(/=(.*)/);
+  const clean = (t: string) => t.replace(/[\\{}$&#^_%~]/g, '');
+  return `\\text{${clean(k)}} = \\text{${clean(v)}}`;
 }

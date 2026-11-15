@@ -1,6 +1,6 @@
 // A text cell's editor: CodeMirror with one line per cell (notes may span lines).
 import { createEffect, onCleanup, onMount } from 'solid-js';
-import { EditorState, StateEffect, StateField } from '@codemirror/state';
+import { Compartment, EditorState, StateEffect, StateField } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, keymap, placeholder as cmPlaceholder } from '@codemirror/view';
 import type { DecorationSet } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -66,6 +66,7 @@ export function Editor(props: EditorProps) {
     return true;
   };
   const multiline = () => text().trimStart().startsWith('note');
+  const hint = new Compartment();
 
   onMount(() => {
     view = new EditorView({
@@ -82,7 +83,7 @@ export function Editor(props: EditorProps) {
             ...defaultKeymap,
           ]),
           EditorView.lineWrapping,
-          cmPlaceholder(props.placeholder ?? ''),
+          hint.of(cmPlaceholder(props.placeholder ?? '')),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) props.onChange?.(text());
             if (u.selectionSet || u.docChanged || u.focusChanged) props.onSelection?.(u.view.hasFocus ? { anchor: u.state.selection.main.anchor, head: u.state.selection.main.head } : null);
@@ -123,6 +124,10 @@ export function Editor(props: EditorProps) {
     view.contentDOM.setAttribute('aria-invalid', String(invalid));
     if (invalid && errorId) view.contentDOM.setAttribute('aria-describedby', errorId);
     else view.contentDOM.removeAttribute('aria-describedby');
+  });
+  createEffect(() => {
+    const p = props.placeholder ?? '';
+    if (view) view.dispatch({ effects: hint.reconfigure(cmPlaceholder(p)) });
   });
   createEffect(() => {
     const cursors = props.remoteCursors ?? [];

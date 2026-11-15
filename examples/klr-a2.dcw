@@ -1,7 +1,7 @@
 diagcalc-workspace/1
 context klr type=A2 nu=2i+j ring=ZZ
 
-# The corrected braid relation and the two idempotents of e(iji)
+# The corrected braid relation and the two idempotents of $e(iji)$
 watch psi_1 psi_2 psi_1 e(iji) - psi_2 psi_1 psi_2 e(iji)  # id=wt1
 def a := psi_1 psi_2 psi_1 e(iji)  # id=df2
 def b := -psi_2 psi_1 psi_2 e(iji)  # id=df3

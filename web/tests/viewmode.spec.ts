@@ -46,7 +46,7 @@ async function expectNoEditingControls(page: Page) {
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   await expect(palette.getByRole('option', { name: /Export workspace/ })).toHaveCount(1);
   const commands = await palette.locator('[role=option] .grow').allTextContents();
-  for (const name of ['New def cell', 'Insert a cell below the active cell', 'Rename document', 'Undo', 'Redo'])
+  for (const name of ['New Element (def) cell', 'Insert a cell below the active cell', 'Rename document', 'Undo', 'Redo'])
     expect(commands).not.toContain(name);
   await page.keyboard.press('Escape');
 

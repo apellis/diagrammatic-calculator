@@ -15,13 +15,32 @@ const examples = import.meta.glob('../../../examples/*.dcw', { query: '?raw', im
 
 const open = (id: string) => (location.hash = `#/doc/${id}`);
 
+/** The examples in teaching order, with the titles shown on their cards. */
+const EXAMPLES: [string, string][] = [
+  ['nilhecke-idempotents', 'nilHecke algebra'],
+  ['klr-a2', 'KLR algebra of type A₂'],
+  ['klr-a2-idempotents', 'Cyclotomic KLR algebra'],
+  ['klrw-a2-ghosts', 'Weighted KLR algebra'],
+  ['kl-a1-bubbles', 'Khovanov–Lauda 2-category'],
+  ['be2-a1-odd', 'Super Kac–Moody 2-category'],
+];
+const rank = (name: string) => {
+  const i = EXAMPLES.findIndex(([n]) => n === name);
+  return i < 0 ? EXAMPLES.length : i;
+};
+const orderedExamples = () =>
+  Object.entries(examples)
+    .map(([path, text]) => ({ ...describeExample(path, text), text }))
+    .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+
 /** An example's name, context, and first line of description (its first comment or note). */
 function describeExample(path: string, text: string) {
   const name = path.split('/').pop()!.replace(/\.dcw$/, '');
   const context = /^context (.*)$/m.exec(text)?.[1] ?? '';
   const first = /^(?:# (.*)|note """([^\n]*?)(?:"""|$))/m.exec(text);
   const about = (first?.[1] ?? first?.[2] ?? '').replace(/\.$/, '');
-  return { name, context, about };
+  const title = EXAMPLES.find(([n]) => n === name)?.[1] ?? name;
+  return { name, title, context, about };
 }
 
 /** The storage warning can be put away for a week. */
@@ -363,12 +382,11 @@ export function DocList() {
       <h3 style={{ 'margin-top': '28px' }}>Start from an example</h3>
       <p class="muted">Each example opens as your own editable copy. The original stays unchanged. <a href="#/help">Getting started</a></p>
       <div class="examples">
-        <For each={Object.entries(examples)}>
-          {([path, text]) => {
-            const ex = describeExample(path, text);
+        <For each={orderedExamples()}>
+          {(ex) => {
             return (
-              <button class="example" onClick={() => openExample(ex.name, text)} data-example={ex.name}>
-                <span class="example-name">{ex.name}</span>
+              <button class="example" onClick={() => openExample(ex.name, ex.text)} data-example={ex.name} title={`Open a copy of ${ex.name}.dcw`}>
+                <span class="example-name">{ex.title}</span>
                 <span class="example-ctx"><ContextText context={ex.context} /></span>
                 <Show when={ex.about}><span class="example-about"><NoteView text={ex.about} inline /></span></Show>
               </button>

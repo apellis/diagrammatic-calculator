@@ -1,7 +1,7 @@
 diagcalc-workspace/1
 context kl type=A1 ring=QQ mu=2
 
-# Real and fake bubbles in the Khovanov-Lauda 2-category U(sl_2) at weight 2
+# Real and fake bubbles in the Khovanov–Lauda 2-category $\mathcal{U}(\mathfrak{sl}_2)$ at weight $2$
 # cw_{i,m} and ccw_{i,m} carry m dots; those of degree 0 are 1, those of negative degree vanish
 check equal(cw_{i,1} e(), e())  # id=ck1
 check zero(cw_{i,0} e())  # id=ck2

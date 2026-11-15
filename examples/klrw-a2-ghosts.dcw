@@ -1,7 +1,7 @@
 diagcalc-workspace/1
 context klrw type=A2 ring=QQ theta_ij=1/2
 
-# The ghost of j sits 1/2 to the right of j; i interacts with it.
+# Weighted KLR algebra: the ghost of $j$ sits $\tfrac12$ to the right of $j$, and $i$ interacts with it.
 def bigon := to(j@0 i@1/4) to(j@0 i@1) e(j@0 i@1/4)  # id=d1
 watch bigon - x_1 e(j@0 i@1/4) - x_2 e(j@0 i@1/4)  # id=w2
 check zero(bigon - x_1 e(j@0 i@1/4) - x_2 e(j@0 i@1/4))  # id=k3

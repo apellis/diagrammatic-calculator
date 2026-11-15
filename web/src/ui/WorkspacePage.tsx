@@ -852,7 +852,7 @@ function DocView(props: {
   const commands = (): Command[] => [
     ...(locked() ? [] : [{ name: viewing() ? 'Switch view mode off (edit)' : 'Switch view mode on (read without editing)', keys: keysOf('view'), run: toggleView }]),
     ...(readOnly() ? [] : [
-      ...['def', 'watch', 'solve', 'check', 'note'].map((k) => ({ name: `New ${k} cell`, run: () => addAt(cells().length, k) })),
+      ...([['def', 'Element (def)'], ['watch', 'Watch'], ['check', 'Check'], ['solve', 'Solve'], ['note', 'Note']] as const).map(([k, l]) => ({ name: `New ${l} cell`, run: () => addAt(cells().length, k) })),
       { name: 'Insert a cell below the active cell', keys: keysOf('insert'), run: () => insertBelow(active()) },
       { name: 'Rename document', run: () => setRenaming(true) },
       { name: 'Undo', keys: `${K}Z`, run: () => doc.undo() },
@@ -883,6 +883,9 @@ function DocView(props: {
     { name: 'Ask the AI about the selection', keys: keysOf('ask'), run: props.onAsk },
     { name: 'Keyboard shortcuts', keys: keysOf('keys'), run: () => setModal('keys') },
     { name: 'Change the keyboard shortcuts (Settings)', run: () => (location.hash = '#/settings') },
+    { name: 'Help: the language, cells, and keys', run: () => (location.hash = '#/help') },
+    { name: 'Settings', run: () => (location.hash = '#/settings') },
+    { name: 'About the calculator', run: () => (location.hash = '#/about') },
     { name: 'All documents', run: () => (location.hash = '#/') },
   ];
 
@@ -1042,10 +1045,10 @@ function DocView(props: {
         </Show>
         <Show when={!readOnly()}>
           <button class="ghost" title={`Undo (${K}Z)`} disabled={!canUndo()} onClick={() => doc.undo()} aria-label="Undo"><TurnArrow /></button>
-          <button class="ghost" title="Redo" disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
+          <button class="ghost" title={`Redo (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`} disabled={!canRedo()} onClick={() => doc.redo()} aria-label="Redo"><TurnArrow redo /></button>
         </Show>
         <button class={`light ${jobs() ? 'busy' : ''}`} disabled={!jobs()} data-testid="light"
-          title={jobs() ? `${jobs()} computing; click to cancel` : 'Idle'}
+          title={jobs() ? `${jobs()} ${jobs() === 1 ? 'cell' : 'cells'} computing; click to cancel` : 'Engine idle: every result is up to date'}
           aria-label={jobs() ? `Cancel ${jobs()} ${jobs() === 1 ? 'computation' : 'computations'}` : 'No computations running'}
           onClick={() => { if (jobs()) { ev?.cancelAll(); previewEv?.cancelAll(); } }} />
         <button class="ghost" classList={{ on: props.aiOpen }} onClick={props.onToggleAI} title={`AI panel (${keysOf('ai')})`} data-testid="ai-toggle">AI</button>

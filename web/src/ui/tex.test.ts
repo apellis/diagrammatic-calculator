@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextTex, render, ringTex, toTex } from './tex';
+import { cellTex, contextTex, render, ringTex, splitOptions, toTex } from './tex';
 
 describe('typesetting text', () => {
   it('writes generators, scripts, and idempotents as mathematics', () => {
@@ -25,6 +25,18 @@ describe('typesetting text', () => {
     expect(ringTex('GF(5)')).toBe('\\mathbb{F}_{5}');
     expect(contextTex('type=A2 nu=2i+j ring=QQ')).toBe('\\text{type }A_{2},\\quad \\nu = 2i+j,\\quad \\mathbb{Q}');
     expect(contextTex('type=A1 odd=i mu=-1')).toBe('\\text{type }A_{1},\\quad \\mathrm{odd} = i,\\quad \\mu = -1');
+  });
+
+  it('writes loadings, subscripted options, and trailing cell options legibly', () => {
+    expect(toTex('e(j@0 i@1/4)')).toBe('e(j@0\\,i@1/4)');
+    expect(contextTex('type=A2 ring=QQ theta_ij=1/2')).toBe('\\text{type }A_{2},\\quad \\mathbb{Q},\\quad \\theta_{ij} = 1/2');
+    expect(contextTex('type=A2 red="2i@0, j@5/2"')).toBe('\\text{type }A_{2},\\quad \\mathrm{red} = 2i@0,\\,j@5/2');
+    expect(splitOptions('x_1 psi_1 e(i@0 j@2)  view=diagrams')).toEqual(['x_1 psi_1 e(i@0 j@2)', ['view=diagrams']]);
+    expect(splitOptions('a = b')).toEqual(['a = b', []]);
+    expect(splitOptions('x=1')).toEqual(['x=1', []]);
+    expect(splitOptions('f theta_ij=1')).toEqual(['f theta_ij=1', []]);
+    expect(cellTex('a view=diagrams')).toBe('a\\qquad \\text{view} = \\text{diagrams}');
+    for (const t of ['e(j@0 i@1/4) - x_1 e(j@0 i@1/4)', 'to(2i@0 j@-1/2)']) expect(render(toTex(t)), t).not.toBeNull();
   });
 
   it('gives KaTeX something it can typeset for every printed form', () => {

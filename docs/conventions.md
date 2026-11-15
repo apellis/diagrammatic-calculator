@@ -340,6 +340,9 @@ wherever it is entered (a click on typeset text opens it). Typesetting changes o
 | `solve … for c1, c2` | … for c₁, c₂ |
 | `ring=QQ`, `ZZ[I]`, `GF(5)`, `QQ(q)` | ℚ, ℤ[I], 𝔽₅, ℚ(q) |
 | `type=A2 nu=2i+j`, `mu=-1`, `Lambda=2i` | type A₂, ν = 2i+j, μ = −1, Λ = 2i (Greek option names as letters) |
+| `theta_ij=1/2`, `red="2i@0, j@5/2"` | θ_ij = 1/2, red = 2i@0, j@5/2 (a subscript after `_` in an option name; quotes dropped) |
+| `e(j@0 i@1/4)` (a loading) | e(j@0 i@1/4): each loaded strand one factor, with a thin space between strands |
+| trailing cell options, `view=diagrams` | set apart in upright words after the term: view = diagrams |
 | a weight written beside a drawing (in a cell's SVG or on the canvas), `-1` | −1 (a minus sign, U+2212, not a hyphen; TikZ sets it in math mode) |
 | a certificate's reference and hypotheses, prose from the presentation file (`Q_ab != 0 for a != b`, `t_ij = 1, s_ij^pq = 0`, `KL3.Diagram.canonicalBasis`, `Brundan-Ellis`) | short formulas typeset (Q_ab ≠ 0 for a ≠ b, t_ij = 1, s_ij^pq = 0: a name of one or two letters with a subscript or superscript, or an equation or inequation of such names and numbers), Lean names in the fixed-width font, an en dash between two capitalised names (Brundan–Ellis); the file keeps its text |
 

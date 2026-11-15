@@ -1,7 +1,7 @@
 diagcalc-workspace/1
 context be2 type=A1 odd=i ring=QQ mu=-1
 
-# An odd colour in the super Kac-Moody 2-category of Brundan-Ellis (arXiv:1701.04133): odd dots anticommute, and the odd bubble squares to zero
+# An odd colour in the super Kac-Moody 2-category of Brundan–Ellis (arXiv:1701.04133): odd dots anticommute, and the odd bubble squares to zero
 watch x_1 x_2 e(ii) + x_2 x_1 e(ii)  # id=wt1
 check zero(psi_1 psi_1 e(ii))  # id=ck2
 watch x_1 psi_1 e(ii) + psi_1 x_2 e(ii)  # id=wt3
