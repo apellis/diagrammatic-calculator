@@ -48,11 +48,12 @@ nothing else interacts with a ghost.
 A loading is **generic** when no point coloured `t(e)` sits on a ghost for `e`, and no two ghosts
 for edges of different weights coincide. Only generic loadings are objects.
 
-**Isotopy.** Two generic loadings with the same left-to-right order of all points and all ghosts
-are joined by a straight-line diagram with no crossings, so they are the same object. The
-calculator stores each object as a canonical representative of this order type (computed exactly
-by difference constraints), and prints it in the form the user gave when that form is a
-representative.
+**Isotopy.** Two generic loadings with the same colours in the same order, and with every point
+on the same side of every ghost and every red strand it interacts with, are joined by a
+straight-line diagram with no events, so they are the same object. Points and ghosts that do not
+interact may pass through each other: requiring otherwise would make bigons of non-interacting
+strands nontrivial and break the basis theorem. The calculator keys each object by this order
+type and prints it in the form the user gave.
 
 **Equivalence** (Definition 2.11). Two loadings are equivalent when, for every edge `e`, every
 point coloured `h(e)` and every point coloured `t(e)`, the ghost lies on the same side of the
@@ -71,10 +72,9 @@ KLR: words are read from the bottom and multiplied on the left. Dots are written
 of a strand coloured `t(e)` with a ghost for `e` has degree `d_{h(e)} c_e = d_{t(e)} c_ē`, in
 either direction. This is the normalization forced by the bigon relation below (the two crossings
 of a bigon add up to the degree of `Q_e`), and at weight `0` it gives the KLR degree
-`−(α_a, α_b)` for a crossing of different colours. The printed formula, `−½⟨α_i, α_j⟩` per
-ghost crossing, gives half of that if `⟨α_i, α_i⟩ = 2 d_i` is read as the symmetric form; this
-reading is still to be double-checked against the paper's conventions before anything is called
-an erratum.
+`−(α_a, α_b)` for a crossing of different colours. Webster's grading in arXiv:1209.2463v4 §2.1 is
+exactly half of this one (there `Q_e` has degree `d_{h(e)} c_e` with `u` of degree `d_{h(e)}`);
+the two are consistent, and the calculator and the Lean formalization use the doubled grading.
 
 ## Polynomial representation
 

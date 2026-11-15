@@ -35,7 +35,7 @@ pub(super) type Den = SmallVec<[u32; 16]>;
 
 /// `num / Π_{a<b} (x_a − x_b)^{den[a·n+b]}`, with no factor of the denominator dividing `num`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Frac<E> {
+pub struct Frac<E> {
     pub(super) num: Poly<E>,
     pub(super) den: Den,
 }
@@ -43,7 +43,7 @@ pub(super) struct Frac<E> {
 pub(super) type Value<E> = BTreeMap<(Object, Perm), Frac<E>>;
 
 /// Arithmetic on `n` strands.
-pub(super) struct Alg<R: Ring> {
+pub struct Alg<R: Ring> {
     pub(super) n: usize,
     pub(super) ring: PolyRing<R>,
     /// `x_a − x_b`, indexed by `a·n + b`.

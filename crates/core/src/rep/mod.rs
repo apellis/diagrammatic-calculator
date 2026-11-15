@@ -11,6 +11,7 @@ pub mod skm;
 pub mod smash;
 pub mod straighten;
 pub mod translate;
+pub mod weighted;
 
 use crate::context::Context;
 use crate::elab::CTerm;
