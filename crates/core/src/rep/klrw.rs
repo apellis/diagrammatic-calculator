@@ -234,6 +234,29 @@ impl<R: Ring> Klrw<R> {
                              is read off docs/klrw.md, not proved in Lean"
                     .into(),
             }
+        } else if cyclotomic && data.edges.iter().all(|e| e.weight.is_zero()) {
+            Certificate {
+                status: "lean".into(),
+                reference: "categorification-lean: WeightedKLR.GalleryAlgebra.redReducedBasisIn \
+                            and redReducedRepIn_injective (basis of the reduced quotient, acting \
+                            faithfully with the dot on the 0-strand set to zero); \
+                            Stendhal.mem_stViolatingIdeal_iff (spanning set of the violating \
+                            ideal) and WeightedKLR.mkₐ_mem_stViolatingIdeal_iff (killing the \
+                            violating idempotents of all chambers gives the Stendhal-cut \
+                            quotient); Stendhal.stTensorEquiv (B. Webster, Weighted \
+                            Khovanov-Lauda-Rouquier algebras, arXiv:1209.2463v4, Theorem 3.6: \
+                            this quotient is T^lambda of B. Webster, Knot invariants and higher \
+                            representation theory, arXiv:1309.3796v2, Section 4)"
+                    .into(),
+                hypotheses: "coefficients in a field; Webster's standing hypothesis on the Q_e; \
+                             assumption (dagger), enforced by merging edges; no loops; every \
+                             edge weight 0; distinct red positions. Under the isomorphism with \
+                             T^lambda the black/red crossings are rescaled by \
+                             (-1)^{alpha^vee(lambda_r)}. That the calculator's b_pi are the Lean \
+                             basis elements, and its order types the Lean chambers, is read off \
+                             docs/klrw.md, not proved in Lean"
+                    .into(),
+            }
         } else if !cyclotomic {
             Certificate {
                 status: "lean".into(),
@@ -266,12 +289,14 @@ impl<R: Ring> Klrw<R> {
                             (Stendhal.mem_stViolatingIdeal_iff) and the basis of T~^lambda \
                             (Stendhal.stendhalBasis, arXiv:1309.3796v2, Proposition 4.16)"
                     .into(),
-                hypotheses: "coefficients in a field; every Q_e nonzero. In Lean, Theorems 3.5 \
+                hypotheses: "coefficients in a field; every Q_e nonzero; some edge has a \
+                             nonzero weight. In Lean, Theorems 3.5 \
                              and 3.6 assume every edge weight 0 and no loops, and rescale the \
                              black/red crossings by (-1)^{alpha^vee(lambda_r)}, and they cut the \
                              algebra down to the Stendhal chambers. Not formalized: that killing \
                              the violating idempotents of all chambers, as the calculator does, \
-                             gives the same corners at Stendhal chambers"
+                             gives the same corners at Stendhal chambers, which Lean proves \
+                             only when every edge weight is 0"
                     .into(),
             }
         };
@@ -1313,6 +1338,21 @@ mod tests {
         // without the quotient, nothing is killed
         let t = ctx("klrw type=A1 red=\"2i@0\"");
         assert_eq!(nf(&t, "x_1^2 e(i@1)"), "x_1^2 e(i@1)");
+    }
+
+    #[test]
+    fn certificates() {
+        let status = |s: &str| ctx(s).prov.certificate.status;
+        assert_eq!(status("klrw type=A2"), "lean");
+        assert_eq!(status("klrw type=A2 red=\"i@0\""), "lean");
+        assert_eq!(
+            status("klrw type=A2 red=\"i@0\" quotient=cyclotomic"),
+            "lean"
+        );
+        assert_eq!(
+            status("klrw type=A2 theta_ij=1/2 red=\"i@0\" quotient=cyclotomic"),
+            "literature"
+        );
     }
 
     #[test]

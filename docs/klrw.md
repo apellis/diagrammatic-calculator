@@ -235,12 +235,12 @@ new edges `i → 0` (`WeightedKLR.GalleryAlgebra.redReducedBasisIn`, on `crawley
 calculator's orientation, and that the reduced quotient acts faithfully on the polynomial
 representation with the dot on the `0`-strand set to zero (`linearIndependent_redReducedRepIn`,
 `redReducedRepIn_injective`), which is how the calculator decides equality. The hypotheses are
-the standing hypothesis, (†), no loops, and distinct red positions. In `T^λ` the certificate
-stays `literature`. Webster's Theorems 3.5 and 3.6 are formalized (`Stendhal.stTildeEquiv`,
-`stTensorEquiv`: `T^λ` is the reduced algebra on the Stendhal chambers modulo the idempotents
-whose leftmost strand is black), assuming every edge weight `0` and no loops, with the black/red
-crossings rescaled by `(−1)^{α^∨(λ_r)}`. The spanning set of the violating ideal used below is
-formalized for the Stendhal-cut algebra (`mem_stViolatingIdeal_iff`, with the basis
-`stendhalBasis` of `T̃^λ`, arXiv:1309.3796v2 Proposition 4.16). Not formalized is that killing
-the violating idempotents of all chambers, as the calculator does, gives the same corners at
-Stendhal chambers as killing those of the Stendhal chambers only.
+the standing hypothesis, (†), no loops, and distinct red positions. In `T^λ` the certificate is
+`lean` when every edge weight is `0`. Then the violating ideal is spanned by products of two basis
+terms through a violating idempotent (`Stendhal.mem_stViolatingIdeal_iff`), and killing the
+violating idempotents of all chambers, as the calculator does, gives exactly the quotient of the
+algebra cut down to the Stendhal chambers (`WeightedKLR.mkₐ_mem_stViolatingIdeal_iff`; every
+chamber is a relabelling of a Stendhal chamber). That quotient is Webster's `T^λ`
+(`Stendhal.stTensorEquiv`, arXiv:1209.2463v4 Theorem 3.6), with the black/red crossings rescaled
+by `(−1)^{α^∨(λ_r)}`. With some nonzero edge weight the certificate stays `literature`: Lean
+defines Stendhal chambers only when every edge weight is `0`.
