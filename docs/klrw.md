@@ -178,8 +178,11 @@ the polynomials `Q` of the corresponding `klr` context, builds the default graph
 
 **Computing in `T^λ`.** In each degree `e_{B'} T̃^λ e_B` is a finite-dimensional space with basis
 `b_π x^m`. Its intersection with the violating ideal is spanned by the elements `v x_k`, with `v`
-in the ideal in lower degree, and by the products `b_σ x^c b_τ` through one violating loading of
-each order type with the colours of `B`. The order types are enumerated exactly (a feasibility test
+in the ideal in lower degree, and by the products `b_σ x^c b_τ` of two basis diagrams composed
+through one violating loading (the middle idempotent) of each order type with the colours of `B`.
+A single basis diagram need not pass through a violating loading to lie in the ideal: for one red
+strand `λ` and one black strand `i` with `⟨λ, α_i^∨⟩ = 1`, the dot on the black strand to the
+right of the red one is the red bigon, which factors through the violating loading. The order types are enumerated exactly (a feasibility test
 of strict difference constraints on the positions). The normal form in `T^λ` is the reduced
 representative modulo this span, with the columns ordered as the normal form is printed (longer
 `π` first, then lexicographically larger `m` first), so it is unique.
@@ -236,5 +239,8 @@ the standing hypothesis, (†), no loops, and distinct red positions. In `T^λ` 
 stays `literature`. Webster's Theorems 3.5 and 3.6 are formalized (`Stendhal.stTildeEquiv`,
 `stTensorEquiv`: `T^λ` is the reduced algebra on the Stendhal chambers modulo the idempotents
 whose leftmost strand is black), assuming every edge weight `0` and no loops, with the black/red
-crossings rescaled by `(−1)^{α^∨(λ_r)}`. Not formalized is the description of the violating
-ideal in each degree given below, which the reduction relies on.
+crossings rescaled by `(−1)^{α^∨(λ_r)}`. The spanning set of the violating ideal used below is
+formalized for the Stendhal-cut algebra (`mem_stViolatingIdeal_iff`, with the basis
+`stendhalBasis` of `T̃^λ`, arXiv:1309.3796v2 Proposition 4.16). Not formalized is that killing
+the violating idempotents of all chambers, as the calculator does, gives the same corners at
+Stendhal chambers as killing those of the Stendhal chambers only.

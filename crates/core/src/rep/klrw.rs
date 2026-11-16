@@ -261,13 +261,17 @@ impl<R: Ring> Klrw<R> {
                             invariants and higher representation theory, arXiv:1309.3796v2, \
                             Section 4. Formalized in categorification-lean: the faithful reduced \
                             quotient (WeightedKLR.GalleryAlgebra.redReducedRepIn_injective) and \
-                            Theorems 3.5 and 3.6 (Stendhal.stTildeEquiv, stTensorEquiv)"
+                            Theorems 3.5 and 3.6 (Stendhal.stTildeEquiv, stTensorEquiv), with \
+                            the spanning set of the violating ideal \
+                            (Stendhal.mem_stViolatingIdeal_iff) and the basis of T~^lambda \
+                            (Stendhal.stendhalBasis, arXiv:1309.3796v2, Proposition 4.16)"
                     .into(),
                 hypotheses: "coefficients in a field; every Q_e nonzero. In Lean, Theorems 3.5 \
                              and 3.6 assume every edge weight 0 and no loops, and rescale the \
-                             black/red crossings by (-1)^{alpha^vee(lambda_r)}. Not formalized: \
-                             that the violating ideal meets each degree in the span of v x_k and \
-                             b_sigma x^c b_tau (docs/klrw.md), which the reduction uses"
+                             black/red crossings by (-1)^{alpha^vee(lambda_r)}, and they cut the \
+                             algebra down to the Stendhal chambers. Not formalized: that killing \
+                             the violating idempotents of all chambers, as the calculator does, \
+                             gives the same corners at Stendhal chambers"
                     .into(),
             }
         };
