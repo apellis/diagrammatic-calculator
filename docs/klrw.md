@@ -227,3 +227,10 @@ commutative ring, with the straight-line segments whose top endpoints are moved 
 The calculator's `b_π` is the case `ρ(k) = π(k)`; that identification is read off this document,
 not proved in Lean. Independence is proved through the polynomial representation, so the
 representation is faithful. With red strands, or in `T^λ`, the certificate stays `literature`.
+With red strands and no quotient, the basis is formalized: categorification-lean proves the basis
+of the reduced quotient for the Crawley-Boevey graph with new edges `i → 0`
+(`WeightedKLR.GalleryAlgebra.redReducedBasisIn`, on `crawleyBoeveyIn`), the calculator's
+orientation. What is not yet formalized is that the polynomial representation with the dot on the
+`0`-strand set to zero is faithful on the reduced quotient, which is how the calculator decides
+equality; once it is, these results become `lean`. `T^λ` (`TensorProductAlgebra`) is defined in
+Lean, and its basis theorem (Webster's Theorems 3.5 and 3.6) is in progress.

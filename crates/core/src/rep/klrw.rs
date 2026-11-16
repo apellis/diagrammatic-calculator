@@ -209,7 +209,9 @@ impl<R: Ring> Klrw<R> {
             );
         }
         // Without red strands or a cyclotomic quotient, the straight-line basis is formalized
-        // (categorification-lean, `Categorification.WeightedKLR`); red strands and T^λ are not.
+        // (categorification-lean, `Categorification.WeightedKLR`). With red strands the basis of
+        // the reduced quotient is formalized, but not the faithfulness of the representation the
+        // calculator uses there; T^λ is not formalized.
         let certificate = if data.reds.is_empty() && !cyclotomic {
             Certificate {
                 status: "lean".into(),
@@ -240,12 +242,22 @@ impl<R: Ring> Klrw<R> {
                      arXiv:1309.3796v2, Section 4"
                 } else {
                     "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, arXiv:1209.2463v4, \
-                     Theorem 2.8, with Sections 3.1 and 3.4 for red strands"
+                     Theorem 2.8, with Sections 3.1 and 3.4 for red strands; the basis of the \
+                     reduced quotient is formalized in categorification-lean as \
+                     WeightedKLR.GalleryAlgebra.redReducedBasisIn (Crawley-Boevey graph \
+                     crawleyBoeveyIn, new edges i -> 0, red strands at x_0 + varpi_j)"
                 }
                 .into(),
-                hypotheses: "coefficients in an integral domain; every Q_e nonzero. Red strands \
-                             and cyclotomic quotients are not formalized"
-                    .into(),
+                hypotheses: if cyclotomic {
+                    "coefficients in a field; every Q_e nonzero. The cyclotomic quotient T^lambda \
+                     is not formalized"
+                } else {
+                    "coefficients in an integral domain; every Q_e nonzero; distinct red \
+                     positions. The basis is proved in Lean; that the polynomial representation \
+                     with the dot on the 0-strand set to zero is faithful on the reduced \
+                     quotient, which the calculator uses to decide equality, is not"
+                }
+                .into(),
             }
         };
         let prov = Provenance {
