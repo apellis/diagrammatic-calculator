@@ -208,10 +208,11 @@ impl<R: Ring> Klrw<R> {
                  (the cyclotomic quotient T^λ, Webster, arXiv:1309.3796v2, §4)",
             );
         }
-        // Without red strands or a cyclotomic quotient, the straight-line basis is formalized
-        // (categorification-lean, `Categorification.WeightedKLR`). With red strands the basis of
-        // the reduced quotient is formalized, but not the faithfulness of the representation the
-        // calculator uses there; T^λ is not formalized.
+        // Without a cyclotomic quotient the basis and the faithfulness of the representation the
+        // calculator uses are formalized (categorification-lean, `Categorification.WeightedKLR`;
+        // with red strands, for the reduced quotient with the 0-strand dot set to zero). In T^λ
+        // the identification with Webster's algebra is formalized, but not the description of
+        // the violating ideal that the reduction uses.
         let certificate = if data.reds.is_empty() && !cyclotomic {
             Certificate {
                 status: "lean".into(),
@@ -233,31 +234,41 @@ impl<R: Ring> Klrw<R> {
                              is read off docs/klrw.md, not proved in Lean"
                     .into(),
             }
+        } else if !cyclotomic {
+            Certificate {
+                status: "lean".into(),
+                reference: "categorification-lean: WeightedKLR.GalleryAlgebra.redReducedBasisIn \
+                            (basis of the reduced quotient), linearIndependent_redReducedRepIn \
+                            and redReducedRepIn_injective (it acts faithfully on polynomials \
+                            with the dot on the 0-strand set to zero), for the Crawley-Boevey \
+                            graph crawleyBoeveyIn (new edges i -> 0, red strands at x_0 + \
+                            varpi_j); B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, \
+                            arXiv:1209.2463v4, Theorem 2.8 and Section 3.1"
+                    .into(),
+                hypotheses: "Webster's standing hypothesis on the Q_e, over any commutative ring \
+                             (the computation itself needs coefficients in an integral domain); \
+                             assumption (dagger), enforced by merging edges; no loops; distinct \
+                             red positions. The faithful representation decides equality. That \
+                             the calculator's b_pi is the Lean basis element is read off \
+                             docs/klrw.md, not proved in Lean"
+                    .into(),
+            }
         } else {
             Certificate {
                 status: "literature".into(),
-                reference: if cyclotomic {
-                    "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, arXiv:1209.2463v4, \
-                     Theorem 2.8; B. Webster, Knot invariants and higher representation theory, \
-                     arXiv:1309.3796v2, Section 4"
-                } else {
-                    "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, arXiv:1209.2463v4, \
-                     Theorem 2.8, with Sections 3.1 and 3.4 for red strands; the basis of the \
-                     reduced quotient is formalized in categorification-lean as \
-                     WeightedKLR.GalleryAlgebra.redReducedBasisIn (Crawley-Boevey graph \
-                     crawleyBoeveyIn, new edges i -> 0, red strands at x_0 + varpi_j)"
-                }
-                .into(),
-                hypotheses: if cyclotomic {
-                    "coefficients in a field; every Q_e nonzero. The cyclotomic quotient T^lambda \
-                     is not formalized"
-                } else {
-                    "coefficients in an integral domain; every Q_e nonzero; distinct red \
-                     positions. The basis is proved in Lean; that the polynomial representation \
-                     with the dot on the 0-strand set to zero is faithful on the reduced \
-                     quotient, which the calculator uses to decide equality, is not"
-                }
-                .into(),
+                reference: "B. Webster, Weighted Khovanov-Lauda-Rouquier algebras, \
+                            arXiv:1209.2463v4, Theorems 2.8, 3.5 and 3.6; B. Webster, Knot \
+                            invariants and higher representation theory, arXiv:1309.3796v2, \
+                            Section 4. Formalized in categorification-lean: the faithful reduced \
+                            quotient (WeightedKLR.GalleryAlgebra.redReducedRepIn_injective) and \
+                            Theorems 3.5 and 3.6 (Stendhal.stTildeEquiv, stTensorEquiv)"
+                    .into(),
+                hypotheses: "coefficients in a field; every Q_e nonzero. In Lean, Theorems 3.5 \
+                             and 3.6 assume every edge weight 0 and no loops, and rescale the \
+                             black/red crossings by (-1)^{alpha^vee(lambda_r)}. Not formalized: \
+                             that the violating ideal meets each degree in the span of v x_k and \
+                             b_sigma x^c b_tau (docs/klrw.md), which the reduction uses"
+                    .into(),
             }
         };
         let prov = Provenance {

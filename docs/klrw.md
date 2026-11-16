@@ -226,11 +226,15 @@ commutative ring, with the straight-line segments whose top endpoints are moved 
 `weightedKLRBasisOfStanding`, and the segments are `straightSegment`, `straightBasis`).
 The calculator's `b_π` is the case `ρ(k) = π(k)`; that identification is read off this document,
 not proved in Lean. Independence is proved through the polynomial representation, so the
-representation is faithful. With red strands, or in `T^λ`, the certificate stays `literature`.
-With red strands and no quotient, the basis is formalized: categorification-lean proves the basis
-of the reduced quotient for the Crawley-Boevey graph with new edges `i → 0`
-(`WeightedKLR.GalleryAlgebra.redReducedBasisIn`, on `crawleyBoeveyIn`), the calculator's
-orientation. What is not yet formalized is that the polynomial representation with the dot on the
-`0`-strand set to zero is faithful on the reduced quotient, which is how the calculator decides
-equality; once it is, these results become `lean`. `T^λ` (`TensorProductAlgebra`) is defined in
-Lean, and its basis theorem (Webster's Theorems 3.5 and 3.6) is in progress.
+representation is faithful. With red strands and no quotient, results are `lean` as well:
+categorification-lean proves the basis of the reduced quotient for the Crawley-Boevey graph with
+new edges `i → 0` (`WeightedKLR.GalleryAlgebra.redReducedBasisIn`, on `crawleyBoeveyIn`), the
+calculator's orientation, and that the reduced quotient acts faithfully on the polynomial
+representation with the dot on the `0`-strand set to zero (`linearIndependent_redReducedRepIn`,
+`redReducedRepIn_injective`), which is how the calculator decides equality. The hypotheses are
+the standing hypothesis, (†), no loops, and distinct red positions. In `T^λ` the certificate
+stays `literature`. Webster's Theorems 3.5 and 3.6 are formalized (`Stendhal.stTildeEquiv`,
+`stTensorEquiv`: `T^λ` is the reduced algebra on the Stendhal chambers modulo the idempotents
+whose leftmost strand is black), assuming every edge weight `0` and no loops, with the black/red
+crossings rescaled by `(−1)^{α^∨(λ_r)}`. Not formalized is the description of the violating
+ideal in each degree given below, which the reduction relies on.
