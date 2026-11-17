@@ -448,9 +448,10 @@ fn klrw_term_op<R: Ring>(
             let output = match format {
                 "text" => k.fmt_summands(&nf),
                 "svg" => k.svg(&nf, true),
+                "tikz" => k.tikz(&nf),
                 f => {
                     return Err(Error::precondition(format!(
-                        "weighted KLR terms render as text or svg, not {f}"
+                        "weighted KLR terms render as text, svg, or tikz, not {f}"
                     )));
                 }
             };

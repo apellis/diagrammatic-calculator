@@ -1650,6 +1650,91 @@ impl<R: Ring> Klrw<R> {
             h = num(height)
         )
     }
+
+    /// The summands as TikZ pictures, laid out as [`Klrw::svg`] lays them out: straight
+    /// strands from the bottom loading to the top one, dots near the bottom, ghosts dashed
+    /// and red strands thick and red. One unit of position is one unit of `x`.
+    pub fn tikz(&self, nf: &[Summand<C<R>>]) -> String {
+        const H: f64 = 3.0;
+        let f = |x: &Q| -> f64 {
+            let (n, d) = (x.numer().to_string(), x.denom().to_string());
+            n.parse::<f64>().unwrap_or(0.0) / d.parse::<f64>().unwrap_or(1.0)
+        };
+        let num = |x: f64| -> String {
+            let s = format!("{x:.3}");
+            let s = s.trim_end_matches('0').trim_end_matches('.');
+            if s == "-0" { "0".into() } else { s.into() }
+        };
+        if nf.is_empty() {
+            return "0".into();
+        }
+        let mut out = String::new();
+        for (k, s) in nf.iter().enumerate() {
+            let (neg, c) = self.fmt_coeff(&s.coeff);
+            if k == 0 {
+                if neg {
+                    out.push('-');
+                }
+            } else {
+                out.push_str(if neg { "\n-\n" } else { "\n+\n" });
+            }
+            if let Some(c) = c {
+                out.push_str(c.trim_end());
+                out.push_str("\\;");
+            }
+            out.push_str(
+                "\\begin{tikzpicture}[x=0.5cm,y=0.5cm,baseline={([yshift=-.5ex]current bounding box.center)}]\n",
+            );
+            for r in &self.data.reds {
+                let x = num(f(&r.pos));
+                out.push_str(&format!(
+                    "\\draw[red,very thick] ({x},0) -- ({x},{});\n",
+                    num(H)
+                ));
+            }
+            for (j, (c, xb)) in s.bottom.0.iter().enumerate() {
+                let xt = &s.top.0[s.perm.0[j] as usize].1;
+                let (a, b) = (f(xb), f(xt));
+                for e in &self.data.edges {
+                    if e.head == *c {
+                        let w = f(&e.weight);
+                        out.push_str(&format!(
+                            "\\draw[dashed,gray] ({},0) -- ({},{});\n",
+                            num(a + w),
+                            num(b + w),
+                            num(H)
+                        ));
+                    }
+                }
+                out.push_str(&format!(
+                    "\\draw ({},0) -- ({},{});\n",
+                    num(a),
+                    num(b),
+                    num(H)
+                ));
+                let dots = s.dots[j];
+                if dots > 0 {
+                    let t = 0.35;
+                    let (cx, cy) = (num(a + (b - a) * t / H), num(t));
+                    out.push_str(&format!("\\fill ({cx},{cy}) circle (2pt);"));
+                    if dots > 1 {
+                        out.push_str(&format!(
+                            " \\node[right=2.5pt,inner sep=0pt] at ({cx},{cy}) {{$\\scriptstyle {dots}$}};"
+                        ));
+                    }
+                    out.push('\n');
+                }
+                out.push_str(&format!(
+                    "\\node[below] at ({},0) {{$\\scriptstyle {}$}};\n",
+                    num(a),
+                    self.klr.colours[*c as usize].name
+                ));
+            }
+            out.push_str("\\end{tikzpicture}");
+        }
+        out.push('\n');
+        out
+    }
 }
 
 /// `workspace.run` in a `klrw` context: definitions, watches and checks, in order.
@@ -2061,6 +2146,24 @@ mod tests {
             &BTreeMap::new(),
         );
         assert!(e.is_err());
+    }
+
+    #[test]
+    fn tikz_draws_strands_ghosts_and_red_strands() {
+        let k = ctx("klrw type=A2 theta_ij=1/2 red=\"1i@0\"");
+        let e = k
+            .term(
+                &crate::text::parse("2 x_1 e(j@1 i@2)").unwrap(),
+                &BTreeMap::new(),
+            )
+            .unwrap();
+        let t = k.tikz(&k.normal_form(&e).unwrap());
+        assert!(t.starts_with("2\\;\\begin{tikzpicture}"), "{t}");
+        assert!(t.contains("\\draw[red,very thick] (0,0) -- (0,3);"), "{t}");
+        assert!(t.contains("\\draw[dashed,gray] (1.5,0) -- (1.5,3);"), "{t}");
+        assert!(t.contains("\\fill (1,0.35) circle (2pt);"), "{t}");
+        assert!(t.trim_end().ends_with("\\end{tikzpicture}"));
+        assert_eq!(k.tikz(&[]), "0");
     }
 
     #[test]
