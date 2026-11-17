@@ -15,7 +15,8 @@
 //!
 //! Both spans are finite: `e_{B'} T̃ e_B` is finite-dimensional in each degree. Reducing a
 //! homogeneous component modulo that span gives a unique representative, which is the normal form
-//! in `T^λ`. This needs the coefficients to form a field (no free scalars).
+//! in `T^λ`. This needs a field of coefficients; free scalars are allowed
+//! when `Q` does not involve them, so that every pivot of the elimination is a constant.
 //!
 //! The violating order types are enumerated exactly: an order type is a choice of side for every
 //! comparison of a point with a ghost it interacts with, with a red strand, and of two ghosts of
@@ -517,9 +518,10 @@ impl<R: Ring> Klrw<R> {
 
 /// Checks that a context can use the cyclotomic quotient.
 pub fn check_field<R: Ring>(base: &R, scalars: &[String]) -> Result<()> {
-    if !base.is_field() || !scalars.is_empty() {
+    let _ = scalars;
+    if !base.is_field() {
         return Err(Error::invalid(
-            "quotient=cyclotomic needs a field of coefficients and no free scalars",
+            "quotient=cyclotomic needs a field of coefficients",
         ));
     }
     Ok(())

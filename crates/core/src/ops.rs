@@ -595,15 +595,15 @@ struct RunWorkspace<'a> {
 }
 
 /// The definitions and unknowns each cell of a workspace depends on.
-struct Dependencies {
+pub(crate) struct Dependencies {
     /// For each cell, the definitions its terms use: the latest one of each name before it.
-    defs: Vec<Vec<usize>>,
+    pub(crate) defs: Vec<Vec<usize>>,
     /// For each cell, the unknowns of solve cells that it or the definitions it uses mention.
-    unknowns: Vec<Vec<String>>,
+    pub(crate) unknowns: Vec<Vec<String>>,
 }
 
 impl Dependencies {
-    fn of(ws: &Workspace) -> Dependencies {
+    pub(crate) fn of(ws: &Workspace) -> Dependencies {
         // the unknowns of all solve cells, in order of first appearance
         let mut all: Vec<String> = Vec::new();
         for cell in &ws.cells {
@@ -691,7 +691,7 @@ impl RingVisitor for RunWorkspace<'_> {
         // cell into polynomials.
         let ws = self.ws;
         if ws.context.presentation == "klrw" {
-            return crate::rep::klrw::run_workspace(ws, base, self.shown);
+            return crate::rep::klrw::run_workspace(ws, base, self.shown, self.scalars);
         }
         let deps = Dependencies::of(ws);
         let mut sets: Vec<Vec<String>> = vec![vec![]];
@@ -893,10 +893,7 @@ impl RingVisitor for TraceWorkspace<'_> {
     fn visit<R: Ring>(self, base: R) -> Result<Value> {
         let ws = self.ws;
         if ws.context.presentation == "klrw" {
-            let _ = base;
-            return Err(Error::precondition(
-                "tracing is not available in a klrw context yet",
-            ));
+            return crate::rep::klrw::trace_workspace(ws, base, self.scalars, self.cell, self.word);
         }
         let deps = Dependencies::of(ws);
         let i = ws

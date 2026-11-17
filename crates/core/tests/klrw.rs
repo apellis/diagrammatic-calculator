@@ -65,3 +65,36 @@ fn red_bigon_is_a_power_of_the_dot() {
     assert_eq!(v["status"], "ok", "{v}");
     assert_eq!(v["normal_form"], "x_1^2 e(i@-1)", "{v}");
 }
+
+#[test]
+fn solve_and_trace_in_klrw() {
+    // in the cyclotomic quotient by 2i@0, the algebra on one strand right of the red strand is
+    // k[x]/(x^2); its idempotents c1 e + c2 x e are e (and 0)
+    let src = "diagcalc-workspace/1
+context klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic
+def f := c1 e(i@1) + c2 x_1 e(i@1)  # id=d1
+watch f f - f  # id=w2
+solve f f - f = 0 for c1, c2  # id=s3
+def a := x_1 e(i@1 i@2) + psi_1 e(i@1 i@2)  # id=d4
+watch a a  # id=w5
+";
+    let v = ops::run_workspace(src, None);
+    assert_eq!(v["status"], "ok", "{v}");
+    let cells = v["cells"].as_array().unwrap();
+    for c in cells {
+        assert_eq!(c["status"], "ok", "{c}");
+    }
+    assert_eq!(
+        cells[2]["points"],
+        serde_json::json!([["0", "0"], ["1", "0"]]),
+        "{}",
+        cells[2]
+    );
+    let word = ops::run_workspace_with(src, None, Some(8), &[])["cells"][4]["summands"][0]["word"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let t = ops::trace_workspace(src, None, &[], "w5", &word);
+    assert_eq!(t["status"], "ok", "{t}");
+    assert!(!t["sources"].as_array().unwrap().is_empty(), "{t}");
+}

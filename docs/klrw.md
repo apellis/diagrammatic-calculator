@@ -174,7 +174,8 @@ the polynomials `Q` of the corresponding `klr` context, builds the default graph
 - `red="λ@ϖ, …"` adds red strands, each a dominant weight written as for `klr` (`2i`, `i+j`) at a
   rational position; two red strands may not share a position.
 - `quotient=cyclotomic` computes in `T^λ` instead of `T̃^λ`: normal forms are reduced modulo the
-  ideal of violating idempotents. It needs a field of coefficients and no free scalars.
+  ideal of violating idempotents. It needs a field of coefficients; scalars (for instance the
+  unknowns of a solve cell) are allowed as long as `Q` does not involve them.
 
 **Computing in `T^λ`.** In each degree `e_{B'} T̃^λ e_B` is a finite-dimensional space with basis
 `b_π x^m`. Its intersection with the violating ideal is spanned by the elements `v x_k`, with `v`

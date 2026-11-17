@@ -163,6 +163,12 @@ impl<R: Ring> Klrw<R> {
                 }
                 let mut ex = vec![0i32; nscal];
                 ex.copy_from_slice(&m.0[3..3 + nscal]);
+                if cyclotomic && ex.iter().any(|&e| e != 0) {
+                    // the quotient's spans are found by elimination with constant pivots
+                    return Err(Error::invalid(
+                        "quotient=cyclotomic needs Q free of the context's scalars",
+                    ));
+                }
                 let mono = crate::poly::Monomial(ex.into_iter().collect());
                 let cc = coeff.monomial(mono, c.clone());
                 terms.push((m.0[0] as u32, m.0[1] as u32, cc));
@@ -1556,60 +1562,150 @@ impl<R: Ring> Klrw<R> {
 }
 
 /// `workspace.run` in a `klrw` context: definitions, watches and checks, in order.
+/// One set of extra scalars of a workspace: its context and the definitions elaborated in it.
+struct Scoped<R: Ring> {
+    k: Klrw<R>,
+    terms: BTreeMap<usize, Result<Elem<C<R>>>>,
+}
+
+impl<R: Ring> Scoped<R> {
+    fn new(ws: &crate::workspace::Workspace, base: &R, extra: &[&String]) -> Result<Self> {
+        let mut spec = ws.context.clone();
+        for u in extra {
+            if !spec.scalars.contains(u) {
+                spec.scalars.push((*u).clone());
+            }
+        }
+        Ok(Scoped {
+            k: Klrw::new(&spec, base.clone())?,
+            terms: BTreeMap::new(),
+        })
+    }
+
+    /// The definitions cell `i` uses, by name.
+    fn bound(
+        &mut self,
+        ws: &crate::workspace::Workspace,
+        deps: &crate::ops::Dependencies,
+        i: usize,
+    ) -> Result<BTreeMap<String, Elem<C<R>>>> {
+        let mut defs = BTreeMap::new();
+        for &j in &deps.defs[i] {
+            let t = self.def(ws, deps, j)?;
+            defs.insert(ws.cells[j].defines().unwrap_or_default().to_string(), t);
+        }
+        Ok(defs)
+    }
+
+    /// The element of the definition in cell `j`.
+    fn def(
+        &mut self,
+        ws: &crate::workspace::Workspace,
+        deps: &crate::ops::Dependencies,
+        j: usize,
+    ) -> Result<Elem<C<R>>> {
+        if let Some(t) = self.terms.get(&j) {
+            return t.clone();
+        }
+        let crate::workspace::CellBody::Def { name, term } = &ws.cells[j].body else {
+            return Err(Error::invalid("not a definition"));
+        };
+        let t = self
+            .bound(ws, deps, j)
+            .and_then(|defs| self.k.term(term, &defs))
+            .map_err(|e| Error {
+                message: format!("in the definition of {name}: {}", e.message),
+                ..e
+            });
+        self.terms.insert(j, t.clone());
+        t
+    }
+}
+
+/// `workspace.run` in a klrw context. As for the other contexts, each cell runs with the
+/// unknowns of solve cells that it, or the definitions it uses, mention as extra scalars.
 pub fn run_workspace<R: Ring>(
     ws: &crate::workspace::Workspace,
     base: R,
     shown: Option<usize>,
+    scalars: &[String],
 ) -> Result<Vec<crate::ops::CellResult>> {
     use crate::workspace::CellBody;
-    let k = Klrw::new(&ws.context, base)?;
-    let mut defs: BTreeMap<String, Elem<C<R>>> = BTreeMap::new();
+    let deps = crate::ops::Dependencies::of(ws);
+    let mut sets: Vec<Vec<String>> = Vec::new();
+    let mut scoped: Vec<Scoped<R>> = Vec::new();
     let mut out = Vec::new();
-    for cell in &ws.cells {
+    for (i, cell) in ws.cells.iter().enumerate() {
+        if matches!(
+            cell.body,
+            CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank
+        ) {
+            continue;
+        }
+        let set = &deps.unknowns[i];
+        let w = match sets.iter().position(|s| s == set) {
+            Some(w) => w,
+            None => {
+                let extra: Vec<&String> = scalars.iter().chain(set).collect();
+                scoped.push(Scoped::new(ws, &base, &extra)?);
+                sets.push(set.clone());
+                sets.len() - 1
+            }
+        };
+        let sc = &mut scoped[w];
         let (kind, r): (&'static str, Result<Value>) = match &cell.body {
-            CellBody::Def { name, term } => (
+            CellBody::Def { name, .. } => (
                 "def",
-                k.term(term, &defs)
-                    .map_err(|e| Error {
-                        message: format!("in the definition of {name}: {}", e.message),
-                        ..e
-                    })
-                    .and_then(|e| {
-                        let nf = k.normal_form(&e)?;
-                        let mut v = json!({
-                            "name": name,
-                            "term": k.fmt_summands(&nf),
-                            "terms": nf.len(),
-                        });
-                        if let Some(n) = shown {
-                            v["summands"] = k.summands_json(&nf, n)?;
-                        }
-                        defs.insert(name.clone(), e);
-                        Ok(v)
-                    }),
-            ),
-            CellBody::Watch { term } => (
-                "watch",
-                k.term(term, &defs).and_then(|e| {
-                    let mut v = k.simplify(&e, shown)?;
-                    v["term"] = json!(crate::text::print(term));
+                sc.def(ws, &deps, i).and_then(|e| {
+                    let nf = sc.k.normal_form(&e)?;
+                    let mut v = json!({
+                        "name": name,
+                        "term": sc.k.fmt_summands(&nf),
+                        "terms": nf.len(),
+                    });
+                    if let Some(n) = shown {
+                        v["summands"] = sc.k.summands_json(&nf, n)?;
+                    }
                     Ok(v)
                 }),
             ),
+            CellBody::Watch { term } => (
+                "watch",
+                sc.bound(ws, &deps, i)
+                    .and_then(|defs| sc.k.term(term, &defs))
+                    .and_then(|e| {
+                        let mut v = sc.k.simplify(&e, shown)?;
+                        v["term"] = json!(crate::text::print(term));
+                        Ok(v)
+                    }),
+            ),
             CellBody::Check { name, args } => (
                 "check",
-                args.iter()
-                    .map(|a| k.term(a, &defs))
-                    .collect::<Result<Vec<_>>>()
-                    .and_then(|ts| k.check(name, &ts)),
+                sc.bound(ws, &deps, i).and_then(|defs| {
+                    args.iter()
+                        .map(|a| sc.k.term(a, &defs))
+                        .collect::<Result<Vec<_>>>()
+                        .and_then(|ts| sc.k.check(name, &ts))
+                }),
             ),
-            CellBody::Solve { .. } => (
-                "solve",
-                Err(Error::invalid(
-                    "solve is not available in a klrw context yet",
-                )),
-            ),
-            CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => continue,
+            CellBody::Solve { lhs, rhs, unknowns } => ("solve", {
+                let bound = sc.bound(ws, &deps, i);
+                let k = &sc.k;
+                bound.and_then(|defs| {
+                    let d = k.add(&k.term(lhs, &defs)?, &k.neg(&k.term(rhs, &defs)?));
+                    let nf = k.normal_form(&d)?;
+                    let mut v = crate::solve::solve_coefficients(
+                        k.coeff(),
+                        &ws.context.ring,
+                        nf.iter().map(|s| &s.coeff),
+                        unknowns,
+                        &crate::groebner::Limits::default(),
+                    )?;
+                    v["provenance"] = k.provenance_json();
+                    Ok(v)
+                })
+            }),
+            CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => unreachable!(),
         };
         let mut value = crate::ops::with_status(r);
         if let Some(o) = value.as_object_mut()
@@ -1624,6 +1720,127 @@ pub fn run_workspace<R: Ring>(
         });
     }
     Ok(out)
+}
+
+/// `workspace.trace` in a klrw context, as for the other contexts: each summand of each
+/// definition a watch uses gets its own tag scalar, and the coefficient of the traced summand
+/// of the watch is split by its monomials in the tags.
+pub fn trace_workspace<R: Ring>(
+    ws: &crate::workspace::Workspace,
+    base: R,
+    scalars: &[String],
+    cell: &str,
+    word: &str,
+) -> Result<Value> {
+    use crate::workspace::CellBody;
+    let deps = crate::ops::Dependencies::of(ws);
+    let i = ws
+        .cells
+        .iter()
+        .position(|c| c.id.as_deref() == Some(cell))
+        .ok_or_else(|| Error::invalid(format!("there is no cell '{cell}'")))?;
+    let CellBody::Watch { term } = &ws.cells[i].body else {
+        return Err(Error::invalid("only the summands of a watch are traced"));
+    };
+    let mut direct = deps.defs[i].clone();
+    direct.sort_unstable();
+    direct.dedup();
+    let extra: Vec<&String> = scalars.iter().chain(&deps.unknowns[i]).collect();
+    let mut plain = Scoped::new(ws, &base, &extra)?;
+    let mut written: Vec<(usize, Vec<Summand<C<R>>>)> = Vec::new();
+    for &j in &direct {
+        let e = plain.def(ws, &deps, j)?;
+        written.push((j, plain.k.normal_form(&e)?));
+    }
+    let count: usize = written.iter().map(|(_, t)| t.len()).sum();
+    if count > crate::ops::TRACE_TERMS {
+        return Err(Error::limit(format!(
+            "the definitions this watch uses have {count} terms; tracing follows at most {}",
+            crate::ops::TRACE_TERMS
+        )));
+    }
+    let first_tag = plain.k.klr.spec.scalars.len();
+    let tags: Vec<String> = (0..count).map(|k| format!("trace__{k}")).collect();
+    let mut all = extra.clone();
+    all.extend(tags.iter());
+    let mut tagged_sc = Scoped::new(ws, &base, &all)?;
+    let mut tagged = BTreeMap::new();
+    let mut labels: Vec<Value> = Vec::new();
+    let mut n = 0;
+    for (j, nf) in &written {
+        let name = ws.cells[*j].defines().unwrap_or_default().to_string();
+        // the definition, recomputed with the tags present, so its coefficients live here
+        let e = tagged_sc.def(ws, &deps, *j)?;
+        let k = &tagged_sc.k;
+        let mut sum: Option<Elem<C<R>>> = None;
+        for (m, s) in k.normal_form(&e)?.iter().enumerate() {
+            let tag = k.coeff().var(first_tag + n);
+            let mut s = s.clone();
+            s.coeff = k.coeff().mul(&s.coeff, &tag);
+            let el = k.summand_elem(&s)?;
+            sum = Some(match sum {
+                Some(a) => k.add(&a, &el),
+                None => el,
+            });
+            labels.push(json!({
+                "name": name,
+                "cell": ws.cells[*j].id,
+                "term": m + 1,
+                "text": plain.k.fmt_summands(std::slice::from_ref(&nf[m.min(nf.len() - 1)])),
+            }));
+            n += 1;
+        }
+        if let Some(sum) = sum {
+            tagged.insert(name, sum);
+        } else {
+            tagged.insert(name, e);
+        }
+    }
+    let k = &tagged_sc.k;
+    let nf = k.normal_form(&k.term(term, &tagged)?)?;
+    let Some(target) = nf.iter().find(|s| k.fmt_word(s) == word) else {
+        return Err(Error::invalid(format!(
+            "the value of {cell} has no summand {word}"
+        )));
+    };
+    let mut parts: BTreeMap<Vec<i32>, Vec<(crate::poly::Monomial, R::Elem)>> = BTreeMap::new();
+    let mut total = Vec::new();
+    for (m, a) in &target.coeff.terms {
+        let tg: Vec<i32> = m.0[first_tag..].to_vec();
+        let mut rest = m.clone();
+        for e in rest.0[first_tag..].iter_mut() {
+            *e = 0;
+        }
+        total.push((rest.clone(), a.clone()));
+        parts.entry(tg).or_default().push((rest, a.clone()));
+    }
+    let text = |c: C<R>| {
+        let mut s = target.clone();
+        s.coeff = c;
+        k.fmt_summands(std::slice::from_ref(&s))
+    };
+    let sources: Vec<Value> = parts
+        .into_iter()
+        .rev()
+        .map(|(tg, terms)| {
+            let factors: Vec<Value> = tg
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| **e > 0)
+                .map(|(t, e)| {
+                    let mut v = labels[t].clone();
+                    v["power"] = json!(e);
+                    v
+                })
+                .collect();
+            json!({ "factors": factors, "text": text(k.coeff().normalize(terms)) })
+        })
+        .collect();
+    Ok(json!({
+        "word": word,
+        "text": text(k.coeff().normalize(total)),
+        "sources": sources,
+    }))
 }
 
 #[cfg(test)]
@@ -1788,8 +2005,11 @@ mod tests {
 
     #[test]
     fn cyclotomic_needs_a_field() {
+        let spec = ContextSpec::parse("klrw type=A1 quotient=cyclotomic").unwrap();
+        assert!(Klrw::new(&spec, crate::ring::Integers).is_err());
+        // scalars are fine as long as Q does not involve them
         let spec = ContextSpec::parse("klrw type=A1 scalars=t quotient=cyclotomic").unwrap();
-        assert!(Klrw::new(&spec, Rationals).is_err());
+        assert!(Klrw::new(&spec, Rationals).is_ok());
         let spec = ContextSpec::parse("klrw type=A1 quotient=other").unwrap();
         assert!(Klrw::new(&spec, Rationals).is_err());
     }
