@@ -196,7 +196,7 @@ strand without its ghost passing `i`. Webster's tensor product algebras correspo
 choice (red strands far apart compared with the weights, ghosts on the side of the charge); the
 calculator does not check this.
 
-Terms are typed, not drawn generator by generator. A term is a linear combination of
+Terms are typed, or edited on the canvas (see Display). A term is a linear combination of
 compositions, written top factor first, of:
 
 | Syntax | Meaning |
@@ -232,6 +232,19 @@ Ghosts are drawn as thin dashed lines in the colour of their strand, offset by `
 are drawn thick and red. Ghosts are a view: Settings › Appearance › "Show ghost strands" hides
 them in every drawing without changing any element. Hidden ghosts leave the positions of
 strands unchanged, so crossings with a ghost appear as bends in the strand.
+
+**Canvas.** The canvas draws each summand of the normal form bottom to top: one layer per dot
+(dots by strand, left to right), then, unless the summand is an idempotent, one layer, two units
+high, for the straight-line diagram `b_π` (or `to(B')`). Strands sit at their positions in the
+loading, shifted so that the leftmost point, ghost, or red strand is at `x = 0`; every height
+between layers lists the positions of its strands (`xs` in `term.layout`). A dot may be dragged
+along its strand within the dots, but not past the straight-line layer, which is not a word of
+generators. Dropping a dot or a crossing (`psi_k`, colours swapped, positions kept) onto the
+diagram, or deleting a layer, edits the term and reduces it to the normal form again, so one edit
+can give several summands. The diff viewer pairs unchanged summands and keeps the dots a new
+summand shares with an old one. Rewriting with relations (`relations.match`, `relation.apply`,
+`interchange`, `slide`, `straighten`, `chain.find`, `export.lean`) does not apply: terms are always
+in the normal form, so the relations panel is empty and the moves say why.
 
 TikZ output (`term.render` with `format: "tikz"`, the TikZ copy button) draws the same
 picture: straight strands, dots near the bottom, ghosts dashed and gray, red strands thick and red,

@@ -1420,7 +1420,11 @@ pub fn call(op: &str, input: &Value) -> Value {
                     name: str_field("name").unwrap_or_default(),
                     doc: str_field("doc").unwrap_or_default(),
                 };
-                crate::ops_rewrite::run(op, &r)
+                if ContextSpec::parse(&r.req.context).is_ok_and(|s| s.presentation == "klrw") {
+                    crate::rep::klrw_canvas::run(op, &r)
+                } else {
+                    crate::ops_rewrite::run(op, &r)
+                }
             }
             _ => return Err(Error::invalid(format!("unknown operation '{op}'"))),
         })

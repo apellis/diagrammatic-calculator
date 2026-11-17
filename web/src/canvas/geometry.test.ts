@@ -93,4 +93,12 @@ describe('canvas geometry', () => {
     expect(dropTarget(l, -3, 0.1, 1)).toMatchObject({ below: 0, position: 1 });
     expect(insertAbove(l, dot, 1)).toMatchObject({ position: 3 });
   });
+
+  it('drops onto strands at the positions a weighted KLR layout gives', async () => {
+    const [w] = await layout('klrw type=A2 theta_ji=1/2', 'x_1 e(i@0 j@1/4 i@3)', {});
+    expect(w.boundaries[0].xs).toEqual([0, 0.25, 3]);
+    expect(w.lines.some((x) => x.kind === 'ghost')).toBe(true);
+    expect(dropTarget(w, 2.6, 0, 1)).toMatchObject({ below: 0, position: 3, x: 3, x1: 3 });
+    expect(dropTarget(w, 0.3, 0, 2)).toMatchObject({ position: 1, x: 0, x1: 0.25 });
+  });
 });

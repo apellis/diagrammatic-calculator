@@ -127,7 +127,7 @@ export function HelpPage(props: { from?: string }) {
           ['↑ ↓, ← →', 'slide a selected dot; move between summands'],
           ['F, 0, +, -', 'fit, reset the zoom, zoom in, zoom out'],
         ]} />
-        <p>In weighted KLR documents, ghost strands are drawn dashed; Settings › Appearance hides them without changing any element.</p>
+        <p>In weighted KLR documents, ghost strands are drawn dashed; Settings › Appearance hides them without changing any element. The canvas edits them too: drop a dot or a crossing, or delete a layer, and the term is reduced to the normal form again; the relations do not apply there.</p>
       </section>
 
       <section id="help-files">

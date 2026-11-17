@@ -177,13 +177,23 @@ export const sameOrder = (a: number[], b: number[]) => a.length === b.length && 
  * Where a generator of the given width dropped at (x, y) goes: the nearest height between rows
  * and the strand position (from 1) of its leftmost input there.
  */
-export function dropTarget(l: Layout, x: number, y: number, width: number): { below: number; position: number; y: number; x: number } | undefined {
+export function dropTarget(l: Layout, x: number, y: number, width: number): { below: number; position: number; y: number; x: number; x1: number } | undefined {
   if (!l.boundaries.length) return undefined;
   const b = l.boundaries.reduce((best, c) => (Math.abs(c.y - y) < Math.abs(best.y - y) ? c : best));
   const n = b.object.length;
   if (n < width) return undefined;
-  const left = Math.max(0, Math.min(n - width, Math.round(x - (width - 1) / 2)));
-  return { below: b.below, position: left + 1, y: b.y, x: left };
+  const xs = b.xs;
+  if (!xs) {
+    const left = Math.max(0, Math.min(n - width, Math.round(x - (width - 1) / 2)));
+    return { below: b.below, position: left + 1, y: b.y, x: left, x1: left + width - 1 };
+  }
+  // strands at given positions (weighted KLR): the run of `width` strands centred nearest x
+  let left = 0;
+  for (let k = 1; k + width <= n; k++) {
+    const c = (j: number) => (xs[j] + xs[j + width - 1]) / 2;
+    if (Math.abs(c(k) - x) < Math.abs(c(left) - x)) left = k;
+  }
+  return { below: b.below, position: left + 1, y: b.y, x: xs[left], x1: xs[left + width - 1] };
 }
 
 /** Where a generator goes when inserted from the keyboard: just above a piece, on its first output. */

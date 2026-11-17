@@ -188,7 +188,7 @@ export function Canvas(props: CanvasProps) {
   const setView = (v: { x: number; y: number; z: number }) => setViewRaw(keepInView(v));
   const [ghost, setGhost] = createSignal<{ summand: number; layer: number; dx: number; dy: number } | null>(null);
   const [boxDrag, setBoxDrag] = createSignal<{ summand: number; a: [number, number]; b: [number, number] } | null>(null);
-  const [drop, setDrop] = createSignal<{ summand: number; x: number; y: number; width: number } | null>(null);
+  const [drop, setDrop] = createSignal<{ summand: number; x: number; x1: number; y: number } | null>(null);
   /** Where a click on a strand put the insertion point: the next palette click or I-digit inserts there. */
   const [mark, setMark] = createSignal<{ summand: number; x: number; y: number } | null>(null);
   /**
@@ -762,7 +762,7 @@ export function Canvas(props: CanvasProps) {
     const [x, y] = units(e.currentTarget as SVGSVGElement, e);
     const width = Math.max(g.inputs, 1);
     const t = dropTarget(layouts()[k], x, y, width);
-    setDrop(t ? { summand: k, x: t.x, y: t.y, width } : null);
+    setDrop(t ? { summand: k, x: t.x, x1: t.x1, y: t.y } : null);
   };
   const onDrop = (k: number, e: DragEvent) => {
     if (props.readOnly) return;
@@ -1159,6 +1159,11 @@ export function Canvas(props: CanvasProps) {
           return <polygon points={arrowPoints(line)} fill={line.strand === undefined ? 'currentColor' : strandColour(line.strand)} />;
         case 'note':
           return <text x={line.x} y={-line.y! + 0.13} font-size="0.36" font-style="italic" text-anchor="middle" fill={line.strand === undefined ? 'currentColor' : strandColour(line.strand)}>{minus(line.text)}</text>;
+        // weighted KLR: a strand's ghost, dashed and thin, and a red strand (docs/klrw.md)
+        case 'ghost':
+          return <path class="ghost" d={path({ ...line, kind: 'strand' })} stroke={strandColour(line.strand)} stroke-width={0.03} fill="none" />;
+        case 'red':
+          return <line x1={line.x0} y1={-line.y0!} x2={line.x1} y2={-line.y1!} stroke="#c0392b" stroke-width={0.08} />;
       }
     };
     return (
@@ -1222,7 +1227,7 @@ export function Canvas(props: CanvasProps) {
           {(d) => (
             <g pointer-events="none">
               <line x1={-pad / 2} x2={l().width + pad / 2} y1={-d().y} y2={-d().y} stroke="var(--good)" stroke-width={0.03} stroke-dasharray="0.08 0.06" />
-              <rect x={d().x - 0.2} y={-d().y - 0.2} width={d().width - 1 + 0.4} height={0.4} rx={0.1} fill="var(--good-soft)" stroke="var(--good)" stroke-width={0.03} />
+              <rect x={d().x - 0.2} y={-d().y - 0.2} width={d().x1 - d().x + 0.4} height={0.4} rx={0.1} fill="var(--good-soft)" stroke="var(--good)" stroke-width={0.03} />
             </g>
           )}
         </Show>
@@ -1290,6 +1295,8 @@ export function Canvas(props: CanvasProps) {
                   : line.kind === 'dot' ? <><circle cx={line.x} cy={-line.y!} r={0.15} fill="currentColor" /><Show when={line.power}>{(n) => <text x={line.x! + 0.2} y={-line.y! + 0.13} font-size="0.36" fill="currentColor">{n()}</text>}</Show></>
                   : line.kind === 'box' ? <rect x={line.x0} y={-line.y1!} width={line.x1! - line.x0!} height={line.y1! - line.y0!} fill="none" stroke="currentColor" stroke-width={0.06} />
                   : line.kind === 'arrow' ? <polygon points={arrowPoints(line, 1.3)} fill={colourOf(l.strands[line.strand ?? 0]?.colour ?? '')} />
+                  : line.kind === 'ghost' ? <path class="ghost" d={path({ ...line, kind: 'strand' })} stroke={colourOf(l.strands[line.strand ?? 0]?.colour ?? '')} stroke-width={0.04} fill="none" />
+                  : line.kind === 'red' ? <line x1={line.x0} y1={-line.y0!} x2={line.x1} y2={-line.y1!} stroke="#c0392b" stroke-width={0.1} />
                   : null}
               </For>
             </svg>

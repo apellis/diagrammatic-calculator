@@ -65,7 +65,7 @@
       ]
     },
     "layout": {
-      "description": "One summand. Coordinates are in diagram units, y upwards from 0 at the bottom; strands sit at whole x at the heights in 'boundaries'.",
+      "description": "One summand. Coordinates are in diagram units, y upwards from 0 at the bottom; strands sit at whole x at the heights in 'boundaries', or, in a weighted KLR context, at the positions in 'xs'.",
       "type": "object",
       "required": [
         "text",
@@ -225,7 +225,7 @@
           }
         },
         "lines": {
-          "description": "Drawing primitives; 'layer' names the piece a primitive draws and 'strand' the strand it is part of.",
+          "description": "Drawing primitives; 'layer' names the piece a primitive draws and 'strand' the strand it is part of. Weighted KLR adds 'ghost' (a ghost of strand 'strand', drawn dashed) and 'red' (a red strand).",
           "type": "array",
           "items": {
             "type": "object",
@@ -241,7 +241,9 @@
                   "box",
                   "label",
                   "arrow",
-                  "note"
+                  "note",
+                  "ghost",
+                  "red"
                 ]
               },
               "layer": {
@@ -315,6 +317,13 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "xs": {
+                "description": "Weighted KLR: the x position of each strand of 'object' at this height.",
+                "type": "array",
+                "items": {
+                  "type": "number"
                 }
               }
             }

@@ -1,0 +1,11 @@
+{
+  "op": "term.layout",
+  "request": {
+    "context": "klrw type=A2 theta_ji=1/2 red=\"i@-1\"",
+    "term": "x_1 psi_1 e(i@0 j@1)"
+  },
+  "expect": {
+    "status": "ok",
+    "terms": 1
+  }
+}

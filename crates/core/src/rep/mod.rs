@@ -7,6 +7,7 @@
 pub mod basis_cache;
 pub mod kl;
 pub mod klrw;
+pub mod klrw_canvas;
 pub mod klrw_cyclo;
 pub mod nilcoxeter;
 pub mod skm;

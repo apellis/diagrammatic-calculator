@@ -743,7 +743,6 @@ function DocView(props: {
   const canvasable = (id: string) => ['def', 'watch'].includes(stateOf(id)?.parsed?.kind ?? '');
   const openCanvas = (id: string, word?: string) => {
     if (!canvasable(id)) return setMessage('The canvas opens on a definition or a watch.');
-    if (/^\s*klrw\b/.test(context())) return setMessage('The canvas does not edit weighted KLR diagrams yet; the drawing and TikZ copy work.');
     setActive(id);
     setCanvas({ id, word });
   };

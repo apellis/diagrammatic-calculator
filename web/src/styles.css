@@ -613,6 +613,9 @@ svg path.k15 { stroke: var(--strand-7); } svg :is(circle, polygon, text).k15 { f
 /* Weighted KLR: ghosts keep their own dashes; Settings › Appearance › "Show ghost strands" hides them */
 svg path.ghost { stroke-dasharray: 4 3 !important; stroke-width: 1; opacity: 0.75; }
 :root[data-hide-ghosts] svg .ghost { display: none; }
+/* the canvas and its summary draw in diagram units, not pixels */
+svg.diagram path.ghost { stroke-dasharray: 0.1 0.07 !important; stroke-width: 0.03; }
+.summand svg path.ghost { stroke-dasharray: 0.1 0.07 !important; stroke-width: 0.04; }
 svg path.red { stroke: #c0392b; stroke-width: 3; }
 .ctx-fields select, .ctx-presentation select { font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--field-border); border-radius: 6px; padding: 6px 8px; width: 100%; }
 pre.diff > div { white-space: pre-wrap; }

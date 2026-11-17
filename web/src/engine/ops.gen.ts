@@ -877,7 +877,7 @@ export interface TermLayoutRequest1 {
   };
 }
 /**
- * One summand. Coordinates are in diagram units, y upwards from 0 at the bottom; strands sit at whole x at the heights in 'boundaries'.
+ * One summand. Coordinates are in diagram units, y upwards from 0 at the bottom; strands sit at whole x at the heights in 'boundaries', or, in a weighted KLR context, at the positions in 'xs'.
  *
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "TermLayoutLayout".
@@ -946,10 +946,10 @@ export interface TermLayoutLayout {
     up: boolean;
   }[];
   /**
-   * Drawing primitives; 'layer' names the piece a primitive draws and 'strand' the strand it is part of.
+   * Drawing primitives; 'layer' names the piece a primitive draws and 'strand' the strand it is part of. Weighted KLR adds 'ghost' (a ghost of strand 'strand', drawn dashed) and 'red' (a red strand).
    */
   lines: {
-    kind: 'strand' | 'turn' | 'dot' | 'box' | 'label' | 'arrow' | 'note';
+    kind: 'strand' | 'turn' | 'dot' | 'box' | 'label' | 'arrow' | 'note' | 'ghost' | 'red';
     layer?: number;
     strand?: number;
     x0?: number;
@@ -987,6 +987,10 @@ export interface TermLayoutLayout {
     y: number;
     below: number;
     object: string[];
+    /**
+     * Weighted KLR: the x position of each strand of 'object' at this height.
+     */
+    xs?: number[];
   }[];
 }
 export interface TermRenderRequest1 {

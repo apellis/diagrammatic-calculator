@@ -1022,7 +1022,7 @@ impl<R: Ring> Klrw<R> {
     }
 
     /// `(negative, coefficient text unless it is 1)`.
-    fn fmt_coeff(&self, c: &C<R>) -> (bool, Option<String>) {
+    pub(crate) fn fmt_coeff(&self, c: &C<R>) -> (bool, Option<String>) {
         let r = self.coeff();
         let neg = r.is_negative(c);
         let abs = if neg { r.neg(c) } else { c.clone() };
@@ -1097,7 +1097,7 @@ impl<R: Ring> Klrw<R> {
     }
 
     /// What `context.describe` reports: the colours, the edges with their weights, and the red
-    /// strands. Terms are typed, not drawn generator by generator, so no generators are listed.
+    /// strands. The generators are the dot and the crossing, which the canvas inserts.
     pub fn describe(&self, spec: &ContextSpec) -> Result<Value> {
         let name = |c: u16| self.klr.colours[c as usize].name.clone();
         Ok(json!({
@@ -1107,7 +1107,10 @@ impl<R: Ring> Klrw<R> {
             "ring": spec.ring,
             "colours": self.klr.colours.iter().map(|c| json!({ "name": c.name, "odd": false, "oriented": false })).collect::<Vec<_>>(),
             "objects": Vec::<String>::new(),
-            "generators": Vec::<Value>::new(),
+            "generators": [
+                json!({ "name": "x", "written": "x", "draw": "dot", "inputs": 1, "outputs": 1, "source": "a", "target": "a" }),
+                json!({ "name": "psi", "written": "psi", "draw": "crossing", "inputs": 2, "outputs": 2, "source": "a b", "target": "b a" }),
+            ],
             "relations": Vec::<String>::new(),
             "edges": self.data.edges.iter().map(|e| json!({
                 "tail": name(e.tail),
@@ -1281,7 +1284,7 @@ impl<R: Ring> Klrw<R> {
     }
 
     /// The element of a normal-form summand.
-    fn summand_elem(&self, s: &Summand<C<R>>) -> Result<Elem<C<R>>> {
+    pub(crate) fn summand_elem(&self, s: &Summand<C<R>>) -> Result<Elem<C<R>>> {
         let mut cur = self.identity(&s.bottom);
         for (k, &m) in s.dots.iter().enumerate() {
             for _ in 0..m {
