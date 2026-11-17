@@ -96,9 +96,10 @@ describe('canvas geometry', () => {
 
   it('drops onto strands at the positions a weighted KLR layout gives', async () => {
     const [w] = await layout('klrw type=A2 theta_ji=1/2', 'x_1 e(i@0 j@1/4 i@3)', {});
-    expect(w.boundaries[0].xs).toEqual([0, 0.25, 3]);
+    // the gap of 1/4 is under 0.6, so the whole picture is stretched by 2.4
+    expect(w.boundaries[0].xs).toEqual([0, 0.6, 7.2]);
     expect(w.lines.some((x) => x.kind === 'ghost')).toBe(true);
-    expect(dropTarget(w, 2.6, 0, 1)).toMatchObject({ below: 0, position: 3, x: 3, x1: 3 });
-    expect(dropTarget(w, 0.3, 0, 2)).toMatchObject({ position: 1, x: 0, x1: 0.25 });
+    expect(dropTarget(w, 6.2, 0, 1)).toMatchObject({ below: 0, position: 3, x: 7.2, x1: 7.2 });
+    expect(dropTarget(w, 0.7, 0, 2)).toMatchObject({ position: 1, x: 0, x1: 0.6 });
   });
 });

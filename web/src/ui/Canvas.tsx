@@ -216,6 +216,13 @@ export function Canvas(props: CanvasProps) {
   let generation = 0;
   const term = createMemo(() => props.term);
   const context = createMemo(() => props.context);
+  /**
+   * Whether the presentation rewrites terms. A weighted KLR context keeps every term in its basis
+   * normal form and has no relations to apply (docs/klrw.md): its pieces can be inserted and
+   * removed, and nothing slides, interchanges, or rewrites.
+   */
+  const rewrites = createMemo(() => !/^\s*klrw\b/.test(props.context));
+  const NO_REWRITES = 'This context keeps every term in its basis normal form: insert or remove pieces; there are no relations to rewrite with.';
   const hintsVersion = createMemo(() => props.hintsVersion);
   createEffect(on(() => [term(), context(), hintsVersion()] as const, async ([term, context]) => {
     const gen = ++generation;
@@ -318,6 +325,7 @@ export function Canvas(props: CanvasProps) {
 
   const slide = (k: number, dot: Piece, direction: 'up' | 'down', steps: number) =>
     run(async () => {
+      if (!rewrites()) return say(NO_REWRITES);
       const o = await props.engine.call('slide', { context: props.context, term: props.term!, summand: k + 1, layer: dot.layer, direction, steps }, { lane: 'interactive' });
       if (props.readOnly || o.status !== 'done') return;
       const r = o.response;
@@ -329,6 +337,7 @@ export function Canvas(props: CanvasProps) {
 
   const reorder = (k: number, order: number[], note: string) =>
     run(async () => {
+      if (!rewrites()) return say(NO_REWRITES);
       const l = layouts()[k];
       if (!l || sameOrder(order, l.order)) return;
       const o = await props.engine.call('term.layout', { context: props.context, term: props.term!, summands: k + 1, orders: { [k + 1]: order } }, { lane: 'interactive' });
@@ -359,6 +368,7 @@ export function Canvas(props: CanvasProps) {
 
   const openMenu = (k: number) =>
     run(async () => {
+      if (!rewrites()) return say(NO_REWRITES);
       const l = layouts()[k];
       if (!l) return;
       const rect = sel().summand === k ? rectangle(l, sel().layers) : undefined;
@@ -485,10 +495,10 @@ export function Canvas(props: CanvasProps) {
       strand: !t && !!(e.target as Element).closest('[data-strand]') };
     const l = layouts()[k];
     const pc = drag.layer !== undefined && l ? piece(l, drag.layer) : undefined;
-    if (!props.readOnly && pc?.draw === 'dot' && !e.altKey) {
+    if (!props.readOnly && rewrites() && pc?.draw === 'dot' && !e.altKey) {
       drag.run = track(l, pc);
       drag.crossings = crossingsOn(l, pc);
-    } else if (!props.readOnly && pc && !e.altKey) {
+    } else if (!props.readOnly && rewrites() && pc && !e.altKey) {
       const d = drag;
       void props.engine.call('relations.match', { context: props.context, term: props.term!, summand: k + 1 }, { lane: 'interactive' }).then((o) => {
         if (o.status !== 'done' || o.response.status !== 'ok') return;
@@ -517,7 +527,7 @@ export function Canvas(props: CanvasProps) {
     const [dx, dy] = [p[0] - drag.start[0], p[1] - drag.start[1]];
     if (!drag.moved && Math.hypot(dx, dy) < 0.12) return;
     drag.moved = true;
-    if (props.readOnly && drag.layer !== undefined) return;
+    if ((props.readOnly || (!rewrites() && !drag.alt)) && drag.layer !== undefined) return;
     if (drag.layer !== undefined && drag.run?.length) {
       const l = layouts()[drag.k];
       const pc = piece(l, drag.layer)!;
@@ -560,6 +570,7 @@ export function Canvas(props: CanvasProps) {
     setBoxDrag(null);
     if (!d) return;
     if (props.readOnly && d.layer !== undefined && d.moved) return;
+    if (!rewrites() && d.layer !== undefined && d.moved && !d.alt) return say(NO_REWRITES);
     if (!d.moved && live()) setLive(null);
     const pulled = pull();
     setPull(null);
@@ -597,7 +608,7 @@ export function Canvas(props: CanvasProps) {
       const base = d.additive && sel().summand === d.k ? sel().layers : [];
       setSel({ summand: d.k, layers: [...new Set([...base, ...inside])], kept: true });
       const n = sel().layers.length;
-      say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. ${props.readOnly ? '' : `R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; `}${keysOf('ask')}: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
+      say(n ? `Selected ${n} piece${n > 1 ? 's' : ''}. ${props.readOnly ? '' : !rewrites() ? `Delete: remove ${n > 1 ? 'them' : 'it'}; ` : `R: the relations that apply inside the selection; Delete: remove ${n > 1 ? 'them' : 'it'}; `}${keysOf('ask')}: ask the AI about ${n > 1 ? 'them' : 'it'}.` : 'Nothing inside the box.');
       return;
     }
     const pc = piece(l, d.layer);
@@ -1373,7 +1384,9 @@ export function Canvas(props: CanvasProps) {
       </Show>
       <div class="canvas-actions" role="group" aria-label="Diagram actions">
         <Show when={!props.readOnly}>
-          <button onClick={() => void openMenu(sel().summand)} disabled={busy() || !layouts().length} title="Rewrite using a relation without changing the element (R)">Relations</button>
+          <Show when={rewrites()}>
+            <button onClick={() => void openMenu(sel().summand)} disabled={busy() || !layouts().length} title="Rewrite using a relation without changing the element (R)">Relations</button>
+          </Show>
           <button onClick={removeSelected} disabled={busy() || !sel().layers.length} aria-label="Remove selected pieces" title="Remove selected pieces; this changes the element (Delete)">Remove</button>
         </Show>
         <div class="grow" />
@@ -1382,7 +1395,7 @@ export function Canvas(props: CanvasProps) {
         <button class="ghost" onClick={() => zoomBy(1.25)} aria-label="Zoom in" title="Zoom in (+)">+</button>
       </div>
       <Show when={!props.readOnly}>
-        <div class="canvas-insert-help hint">Select a strand to add a piece; select a piece to remove it. Relations rewrite without changing the element.</div>
+        <div class="canvas-insert-help hint">Select a strand to add a piece; select a piece to remove it. {rewrites() ? 'Relations rewrite without changing the element.' : 'Each change is put back into the basis normal form at once.'}</div>
       </Show>
       <div class="canvas-body">
         <Show when={!props.readOnly}><div class="palette-bar" aria-label="Generators">
@@ -1462,7 +1475,7 @@ export function Canvas(props: CanvasProps) {
           <table class="kv keys gestures">
             <thead><tr><th>Action</th><th>Pointer</th><th>Keys</th></tr></thead>
             <tbody>
-              <For each={GESTURES.filter(([, , , edits]) => !props.readOnly || !edits)}>{([a, p, k]) => <tr><td>{a}</td><td>{p || '—'}</td><td>{k}</td></tr>}</For>
+              <For each={GESTURES.filter(([, , , edits, rewrite]) => (!props.readOnly || !edits) && (rewrites() || !rewrite))}>{([a, p, k]) => <tr><td>{a}</td><td>{p || '—'}</td><td>{k}</td></tr>}</For>
             </tbody>
           </table>
         </Dialog>
@@ -1486,11 +1499,11 @@ const rubber = (v: number, max: number) => max * Math.tanh(v / max);
 
 const ALT = isMac ? '⌥' : 'Alt+';
 /** The canvas's actions, each with its pointer gesture and its keys. */
-const GESTURES: [action: string, pointer: string, keys: string, edits?: boolean][] = [
-  ['Slide a dot through the next crossing on its strand (dot-slide relation)', 'drag the dot; a crossing glows as it nears and rings once passed', '↑ ↓ on a selected dot', true],
-  ['Interchange a piece with pieces on other strands; a −1 badge shows when two odd pieces swap', 'drag it up or down', `${ALT}↑ ${ALT}↓`, true],
-  ['Braid relation (middle crossing of a triangle) or square relation (a stacked pair)', 'drag the crossing sideways; the result shows before you let go', 'R, then the relation’s number', true],
-  ['Relations that apply to the selection, or inside a box', 'Relations, or right-click', 'R, then 1–9 applies one', true],
+const GESTURES: [action: string, pointer: string, keys: string, edits?: boolean, rewrite?: boolean][] = [
+  ['Slide a dot through the next crossing on its strand (dot-slide relation)', 'drag the dot; a crossing glows as it nears and rings once passed', '↑ ↓ on a selected dot', true, true],
+  ['Interchange a piece with pieces on other strands; a −1 badge shows when two odd pieces swap', 'drag it up or down', `${ALT}↑ ${ALT}↓`, true, true],
+  ['Braid relation (middle crossing of a triangle) or square relation (a stacked pair)', 'drag the crossing sideways; the result shows before you let go', 'R, then the relation’s number', true, true],
+  ['Relations that apply to the selection, or inside a box', 'Relations, or right-click', 'R, then 1–9 applies one', true, true],
   ['Select a piece; add or remove one', `click; ${K}click`, 'Tab, ⇧Tab'],
   ['Select a whole strand', 'double-click the strand', 'S, ⇧S (next, previous strand)'],
   ['Select several pieces', `drag a box on empty space; ${K}click adds or removes one`, `Tab to a piece, X keeps it; Tab on, X adds (or removes) the piece at the dashed ring; ${K}A selects all`],

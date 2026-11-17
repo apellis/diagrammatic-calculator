@@ -217,7 +217,7 @@ export function Badge(props: { p?: Provenance; value?: Ok; compact?: boolean }) 
 /** The badge of a computed value: a definition's, or the strategy and certificate of any other. */
 export function ValueBadge(props: { value: Ok; compact?: boolean }) {
   return (
-    <Show when={props.value.kind === 'def'} fallback={<Badge p={props.value.provenance} value={props.value} compact={props.compact} />}>
+    <Show when={props.value.kind === 'def' && !props.value.provenance} fallback={<Badge p={props.value.provenance} value={props.value} compact={props.compact} />}>
       <DefBadge />
     </Show>
   );

@@ -1093,7 +1093,7 @@ export interface WorkspaceRunCell {
    */
   monomials?: string;
   /**
-   * def and watch: the number of summands (of the term as written for def, of the normal form for watch).
+   * def and watch: the number of summands (of the term as written for def, of the normal form for watch; in a klrw context a def's term is already its normal form and the def carries a provenance).
    */
   terms?: number;
   /**

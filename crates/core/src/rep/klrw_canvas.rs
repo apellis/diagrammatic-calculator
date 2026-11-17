@@ -214,8 +214,9 @@ impl<R: Ring> Klrw<R> {
         let lo = ext.iter().cloned().fold(f64::INFINITY, f64::min);
         let lo = if lo.is_finite() { lo } else { 0.0 };
         let hi = ext.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        let width = if hi.is_finite() { hi - lo } else { 0.0 };
-        let sx = |x: &Q| round(f64_of(x) - lo);
+        let k = super::klrw::spread(&ext);
+        let width = if hi.is_finite() { (hi - lo) * k } else { 0.0 };
+        let sx = |x: &Q| round((f64_of(x) - lo) * k);
         let xb: Vec<f64> = s.bottom.0.iter().map(|p| sx(&p.1)).collect();
         let xt: Vec<f64> = s.top.0.iter().map(|p| sx(&p.1)).collect();
         let ghosts = |c: u16| -> Vec<f64> {
@@ -223,7 +224,7 @@ impl<R: Ring> Klrw<R> {
                 .edges
                 .iter()
                 .filter(|e| e.head == c)
-                .map(|e| f64_of(&e.weight))
+                .map(|e| f64_of(&e.weight) * k)
                 .collect()
         };
         let dots = canon.iter().filter(|l| matches!(l, Layer::Dot(_))).count();

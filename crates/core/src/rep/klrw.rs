@@ -525,7 +525,8 @@ impl<R: Ring> Klrw<R> {
         to: &Loading,
         perm: Option<&Perm>,
     ) -> Result<Elem<C<R>>> {
-        self.on_top(below, |rep, p| {
+        let mut matched = false;
+        let out = self.on_top(below, |rep, p| {
             let n = p.top.n();
             if to.n() != n {
                 return Ok(None);
@@ -534,29 +535,45 @@ impl<R: Ring> Klrw<R> {
             let perm = perm.unwrap_or(&id);
             if perm.n() != n {
                 return Err(Error::invalid(format!(
-                    "the permutation has {} entries but the loading below has {n} points",
-                    perm.n()
+                    "the permutation has {} entries but the loading below has {}",
+                    perm.n(),
+                    plural(n, "point")
                 )));
             }
             if (0..n).any(|k| p.top.0[k].0 != to.0[perm.0[k] as usize].0) {
                 // the colours do not match: this piece does not continue
                 return Ok(None);
             }
+            matched = true;
             let seg = self.data.segment(&p.top, to, perm)?;
             Ok(Some(Piece {
                 bottom: p.bottom.clone(),
                 top: to.clone(),
                 op: rep.apply_segment(&seg, &p.op)?,
             }))
-        })
+        })?;
+        if !matched {
+            // A typo in the colours would otherwise give 0 silently; a sum whose other parts
+            // end elsewhere keeps only the parts that continue.
+            if let Some(p) = below.pieces.values().next() {
+                let what = if perm.is_some() { "b(...)" } else { "to(...)" };
+                return Err(Error::invalid(format!(
+                    "{what} goes to {}, but the diagram below ends at {}: no part of it has \
+                     the same colours in the same order",
+                    self.fmt_loading(to),
+                    self.fmt_loading(&p.top)
+                )));
+            }
+        }
+        Ok(out)
     }
 
     fn dot(&self, below: &Elem<C<R>>, k: usize) -> Result<Elem<C<R>>> {
         self.on_top(below, |rep, p| {
             if k == 0 || k > p.top.n() {
                 return Err(Error::invalid(format!(
-                    "x_{k}: the loading below has {} points",
-                    p.top.n()
+                    "x_{k}: the loading below has {}",
+                    plural(p.top.n(), "point")
                 )));
             }
             Ok(Some(Piece {
@@ -573,7 +590,8 @@ impl<R: Ring> Klrw<R> {
             let n = p.top.n();
             if k == 0 || k >= n {
                 return Err(Error::invalid(format!(
-                    "psi_{k}: the loading below has {n} points"
+                    "psi_{k}: the loading below has {}",
+                    plural(n, "point")
                 )));
             }
             let mut to = p.top.clone();
@@ -1522,7 +1540,6 @@ impl<R: Ring> Klrw<R> {
     /// Ghosts are dashed lines of class `ghost` (a page may hide them without moving anything),
     /// red strands thick lines of class `red`.
     pub fn svg(&self, nf: &[Summand<C<R>>], signs: bool) -> String {
-        const U: f64 = 24.0;
         const M: f64 = 12.0;
         const H: f64 = 3.0;
         let f = |x: &Q| -> f64 {
@@ -1536,6 +1553,7 @@ impl<R: Ring> Klrw<R> {
         };
         let mut body = String::new();
         let mut x0 = M;
+        const U: f64 = 24.0;
         let base = M + H * U;
         if nf.is_empty() {
             body.push_str(&format!(
@@ -1585,7 +1603,8 @@ impl<R: Ring> Klrw<R> {
             }
             let lo = xs.iter().cloned().fold(f64::INFINITY, f64::min);
             let hi = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            let px = |x: f64| num(x0 + (x - lo) * U);
+            let u = 24.0 * spread(&xs);
+            let px = |x: f64| num(x0 + (x - lo) * u);
             let py = |y: f64| num(base - y * U);
             for r in &self.data.reds {
                 let x = f(&r.pos);
@@ -1631,7 +1650,7 @@ impl<R: Ring> Klrw<R> {
                     if dots > 1 {
                         body.push_str(&format!(
                             "<text class=\"k{c}\" x=\"{}\" y=\"{}\" font-size=\"10\" stroke=\"none\" fill=\"currentColor\">{dots}</text>\n",
-                            num(x0 + (cx - lo) * U + 5.0),
+                            num(x0 + (cx - lo) * u + 5.0),
                             num(base - cy * U + 3.5)
                         ));
                     }
@@ -1643,7 +1662,7 @@ impl<R: Ring> Klrw<R> {
                     self.klr.colours[*c as usize].name
                 ));
             }
-            x0 += (hi - lo).max(0.0) * U + 18.0;
+            x0 += (hi - lo).max(0.0) * u + 18.0;
         }
         let width = x0 - 6.0 + M;
         let height = H * U + 2.0 * M + 14.0;
@@ -1685,9 +1704,21 @@ impl<R: Ring> Klrw<R> {
                 out.push_str(c.trim_end());
                 out.push_str("\\;");
             }
-            out.push_str(
-                "\\begin{tikzpicture}[x=0.5cm,y=0.5cm,baseline={([yshift=-.5ex]current bounding box.center)}]\n",
-            );
+            // the same horizontal stretch as the drawings in the document
+            let mut xs: Vec<f64> = Vec::new();
+            for l in [&s.bottom, &s.top] {
+                for (c, x) in &l.0 {
+                    xs.push(f(x));
+                    for e in self.data.edges.iter().filter(|e| e.head == *c) {
+                        xs.push(f(&(x + &e.weight)));
+                    }
+                }
+            }
+            xs.extend(self.data.reds.iter().map(|r| f(&r.pos)));
+            out.push_str(&format!(
+                "\\begin{{tikzpicture}}[x={}cm,y=0.5cm,baseline={{([yshift=-.5ex]current bounding box.center)}}]\n",
+                num(0.5 * spread(&xs))
+            ));
             for r in &self.data.reds {
                 let x = num(f(&r.pos));
                 out.push_str(&format!(
@@ -1837,10 +1868,13 @@ pub fn run_workspace<R: Ring>(
                 "def",
                 sc.def(ws, &deps, i).and_then(|e| {
                     let nf = sc.k.normal_form(&e)?;
+                    // terms are kept in the basis normal form (and reduced in the quotient), so
+                    // a definition's value rests on the same certificate as a watch
                     let mut v = json!({
                         "name": name,
                         "term": sc.k.fmt_summands(&nf),
                         "terms": nf.len(),
+                        "provenance": sc.k.provenance_json(),
                     });
                     if let Some(n) = shown {
                         v["summands"] = sc.k.summands_json(&nf, n)?;
@@ -2022,6 +2056,28 @@ pub fn trace_workspace<R: Ring>(
     }))
 }
 
+/// How much a drawing stretches positions horizontally so that no two of `xs` (strands, ghosts,
+/// and red strands) are drawn closer than 0.6 of a unit: 1 when they are already that far apart,
+/// at most 4. Only the drawing stretches; positions in text and TikZ are as written.
+fn plural(n: usize, word: &str) -> String {
+    if n == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{n} {word}s")
+    }
+}
+
+pub(crate) fn spread(xs: &[f64]) -> f64 {
+    let mut v: Vec<f64> = xs.iter().copied().filter(|x| x.is_finite()).collect();
+    v.sort_by(f64::total_cmp);
+    let gap = v
+        .windows(2)
+        .map(|w| w[1] - w[0])
+        .filter(|g| *g > 1e-9)
+        .fold(f64::INFINITY, f64::min);
+    if gap < 0.6 { (0.6 / gap).min(4.0) } else { 1.0 }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2046,6 +2102,21 @@ mod tests {
             nf(&k, "psi_1 psi_1 e(i@0 j@1)"),
             "x_1 e(i@0 j@1) + x_2 e(i@0 j@1)"
         );
+    }
+
+    #[test]
+    fn straight_line_to_other_colours_is_an_error() {
+        let k = ctx("klrw type=A2");
+        let err = |t: &str| {
+            k.term(&crate::text::parse(t).unwrap(), &BTreeMap::new())
+                .err()
+                .map(|e| e.message)
+                .unwrap_or_default()
+        };
+        assert!(err("to(j@0) e(i@0)").contains("no part of it has the same colours"));
+        assert!(err("psi_2 e(i@0)").contains("has 1 point"));
+        // a sum keeps the parts that continue
+        assert_eq!(nf(&k, "to(i@0) (e(i@0) + e(j@0))"), "e(i@0)");
     }
 
     #[test]
