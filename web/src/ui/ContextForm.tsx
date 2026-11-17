@@ -13,7 +13,12 @@ export interface PresentationInfo {
   cartan: boolean;
   /** Objects are words of a weight ν (an algebra), or listed with a region weight μ (a 2-category). */
   weight: 'nu' | 'mu';
+  /** A weighted KLR algebra: loadings instead of a weight, edge weights, and red strands. */
+  klrw?: boolean;
 }
+
+/** The weighted KLR (KLRW) algebras have their own evaluator, not a presentation file. */
+const KLRW: PresentationInfo = { name: 'klrw', title: 'Weighted KLR algebra', cartan: true, weight: 'nu', klrw: true };
 
 const files = import.meta.glob('../../../presentations/*.pres.toml', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>;
 
@@ -30,16 +35,13 @@ let cache: Promise<PresentationInfo[]> | undefined;
 /** The shipped presentations, algebras first. */
 export const presentations = () =>
   (cache ??= Promise.all(Object.values(files).map((f) => f())).then((ts) =>
-    ts.map(presentationInfo).filter((p): p is PresentationInfo => !!p)
+    [...ts.map(presentationInfo).filter((p): p is PresentationInfo => !!p), KLRW]
       .sort((a, b) => (a.weight === b.weight ? ORDER.indexOf(a.name) - ORDER.indexOf(b.name) : a.weight === 'nu' ? -1 : 1))));
 /** Display order where known; others follow. */
-const ORDER = ['klr', 'nilhecke', 'odd-nilhecke', 'kl', 'be2'];
+const ORDER = ['klr', 'klrw', 'nilhecke', 'odd-nilhecke', 'kl', 'be2'];
 
-/** A context line's presentation and options, in order. */
-export function parseLine(line: string): { name: string; opts: [string, string][] } {
-  const [name = '', ...rest] = line.trim().split(/\s+/);
-  return { name, opts: rest.map((w) => { const i = w.indexOf('='); return (i < 0 ? [w, ''] : [w.slice(0, i), w.slice(i + 1)]) as [string, string]; }) };
-}
+export { parseLine } from './contextLine';
+import { parseLine } from './contextLine';
 const printLine = (name: string, opts: [string, string][]) => [name, ...opts.filter(([, v]) => v !== '').map(([k, v]) => `${k}=${v}`)].join(' ');
 const ALIASES: Record<string, string[]> = { nu: ['nu', 'n'], Lambda: ['Lambda', 'lambda'], odd: ['odd'], type: ['type'], ring: ['ring'], mu: ['mu'] };
 const get = (opts: [string, string][], k: string) => opts.find(([x]) => (ALIASES[k] ?? [k]).includes(x))?.[1] ?? '';
@@ -54,6 +56,11 @@ const RINGS: [string, string][] = [['QQ', 'ℚ'], ['ZZ', 'ℤ'], ['GF(2)', '𝔽
 /** Starting options when the presentation changes: kept where they still apply, else a small example. */
 function switchTo(p: PresentationInfo, from: [string, string][]): [string, string][] {
   let opts: [string, string][] = [];
+  if (p.klrw) {
+    opts = set(opts, 'type', get(from, 'type') || 'A2');
+    for (const [k, v] of from) if (/^theta_/.test(k) || k === 'red' || k === 'quotient') opts = [...opts, [k, v]];
+    return set(opts, 'ring', get(from, 'ring') || 'QQ');
+  }
   if (p.cartan) opts = set(opts, 'type', get(from, 'type') || (p.weight === 'nu' ? 'A2' : 'A1'));
   if (p.cartan && get(from, 'odd')) opts = set(opts, 'odd', get(from, 'odd'));
   // A coloured weight is not a strand count (nor conversely).
@@ -117,11 +124,22 @@ export function ContextForm(props: { line: string; onLine: (l: string) => void; 
                 <span class="hint">An, Bn, Cn, Dn, G2, F4, or a product such as A1xA1; colours i, j, k, …</span>
               </label>
             </Show>
-            <label>
+            <Show when={!p().klrw}><label>
               <span>Weight <Typeset text={p().weight === 'nu' ? 'nu' : 'mu'} tex={p().weight === 'nu' ? '\\nu' : '\\mu'} /></span>
               <input class="mono" value={field(p().weight)} onInput={(e) => put(p().weight, e.currentTarget.value)} onKeyDown={enter} />
               <span class="hint">{p().weight === 'nu' ? (p().cartan ? 'a sum of colours, such as 2i+j' : 'the number of strands') : 'the weight of the rightmost region, such as 2 or i-j'}</span>
-            </label>
+            </label></Show>
+            <Show when={p().klrw}>
+              <label>
+                <span>Red strands</span>
+                <input class="mono" value={field('red').replace(/^"|"$/g, '')} placeholder="none" onInput={(e) => { const v = e.currentTarget.value.trim(); put('red', v ? `"${v}"` : ''); }} onKeyDown={enter} />
+                <span class="hint">Optional: charges at positions, such as i@0, 2j@5/2. Edge weights are options of the line, such as theta_ij=1/2.</span>
+              </label>
+              <label class="ctx-check">
+                <input type="checkbox" checked={field('quotient') === 'cyclotomic'} onChange={(e) => put('quotient', e.currentTarget.checked ? 'cyclotomic' : '')} />
+                <span>Cyclotomic quotient (needs red strands and a field)</span>
+              </label>
+            </Show>
             <label>
               <span>Ring</span>
               <select value={RINGS.some(([r]) => r === field('ring')) ? field('ring') : ''} onChange={(e) => e.currentTarget.value && put('ring', e.currentTarget.value)}>
@@ -129,7 +147,7 @@ export function ContextForm(props: { line: string; onLine: (l: string) => void; 
                 <Show when={!RINGS.some(([r]) => r === field('ring'))}><option value="">{field('ring') || 'other'} (as written)</option></Show>
               </select>
             </label>
-            <Show when={p().cartan || p().weight === 'nu'}>
+            <Show when={!p().klrw && (p().cartan || p().weight === 'nu')}>
               <details class="ctx-options" open={optionsOpen()} onToggle={(e) => setOptionsOpen(e.currentTarget.open)}>
                 <summary>Quotient and parity</summary>
                 <div class="ctx-fields">

@@ -207,10 +207,24 @@ compositions, written top factor first, of:
 | `to(i@0 j@3)` | the straight-line diagram to a loading with the same colours in the same order |
 | `b(π; B')` | the basis element `b_π` to the loading `B'`, with `π` in one-line notation counted from 1 |
 
-Every generator needs a loading below it, so a term ends in `e(…)`. Normal forms are printed as
+Every generator needs a loading below it, so a term ends in `e(…)`. As in KLR contexts, a term
+may also use names of definitions, `Q_ij(a, b)` with polynomials `a` and `b` in the dots, powers
+`x_1^{n}` with a symbolic exponent, and sums `sum_{f=0..n} …` over a range. `a (x) b` (or `a ⊗ b`)
+is the tensor product: the diagrams side by side, with every point of `b` moved right by the least
+whole number that puts all of `b`, ghosts included, right of all of `a`. Red strands belong to the
+context, so the tensor product of two diagrams with red strands lies in another algebra: it is
+refused in contexts with red strands or the cyclotomic quotient.
+
+Normal forms are printed as
 `c b(π; B') x^a e(B)`, written `to(B')` when `π` is the identity and `B'` is not isotopic to `B`,
-and with no diagram when it is. Workspaces accept `def`, `watch`, and `check` cells; `solve` and
-`workspace.trace` are not available in `klrw` contexts yet.
+and with no diagram when it is. Workspaces accept `def`, `watch`, `check`, and `solve` cells, and
+`workspace.trace` follows a summand back to the definitions it came from. The checks are
+`equal`, `zero`, `idempotent`, `orthogonal` (both products of two terms vanish), `central`
+(commutes with every generator of the algebra), and `primitive` (an idempotent `e` with `eAe`
+local; only in the cyclotomic quotient, where `eAe` is finite-dimensional, decided by the rank of
+the trace form on `eAe`, which is 1 exactly when `eAe/rad` is one-dimensional, over a field of
+characteristic zero). The quotient `quotient=cyclotomic` needs a field, and accepts scalars as
+long as the `Q_e` do not involve them.
 
 ## Display
 
@@ -218,6 +232,10 @@ Ghosts are drawn as thin dashed lines in the colour of their strand, offset by `
 are drawn thick and red. Ghosts are a view: Settings › Appearance › "Show ghost strands" hides
 them in every drawing without changing any element. Hidden ghosts leave the positions of
 strands unchanged, so crossings with a ghost appear as bends in the strand.
+
+TikZ output (`term.render` with `format: "tikz"`, the TikZ copy button) draws the same
+picture: straight strands, dots near the bottom, ghosts dashed and gray, red strands thick and red,
+one unit of position per unit of `x`.
 
 ## Certificate
 
