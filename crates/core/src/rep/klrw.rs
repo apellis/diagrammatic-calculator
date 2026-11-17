@@ -600,6 +600,82 @@ impl<R: Ring> Klrw<R> {
         below: Option<&Elem<C<R>>>,
         defs: &BTreeMap<String, Elem<C<R>>>,
     ) -> Result<Val<C<R>>> {
+        self.eval_in(ast, below, defs, &[])
+    }
+
+    /// An integer expression of a term (an exponent or a summation bound), with the summation
+    /// indices in `ints`.
+    fn eval_int(&self, e: &crate::expr::TermInt, ints: &[(String, i64)]) -> Result<i64> {
+        let scope = crate::elab::Scope::<R> {
+            ints: ints.to_vec(),
+            ..Default::default()
+        };
+        self.klr.eval_int(e, &scope)
+    }
+
+    /// `Q_ij(a, b)`: the KLR polynomial of the context with the arguments substituted, applied
+    /// on top of `below`.
+    fn eval_param(
+        &self,
+        name: &str,
+        sub: &str,
+        args: &[Ast],
+        below: &Elem<C<R>>,
+        defs: &BTreeMap<String, Elem<C<R>>>,
+        ints: &[(String, i64)],
+    ) -> Result<Elem<C<R>>> {
+        let decl = self
+            .klr
+            .pres
+            .parameter(name)
+            .ok_or_else(|| Error::invalid(format!("unknown parameter '{name}'")))?;
+        if args.len() != decl.vars.len() {
+            return Err(Error::invalid(format!(
+                "{name} takes {} arguments",
+                decl.vars.len()
+            )));
+        }
+        let cols = self.klr.read_object(sub, &crate::elab::Scope::default())?;
+        if cols.len() != 2 || cols[0].colour == cols[1].colour {
+            return Err(Error::invalid(format!(
+                "{name}_{sub} needs two distinct colours"
+            )));
+        }
+        let poly = self
+            .klr
+            .params
+            .get(name)
+            .and_then(|t| t.get(&(cols[0].colour, cols[1].colour)))
+            .ok_or_else(|| Error::invalid(format!("no value for {name}_{sub}")))?
+            .clone();
+        let nparam = crate::context::PARAM_VARS.len();
+        let mut acc = Elem::default();
+        for (m, c) in &poly.terms {
+            if m.0[args.len()..nparam].iter().any(|&e| e != 0) {
+                return Err(Error::invalid(format!(
+                    "{name} uses more variables than it has arguments"
+                )));
+            }
+            let scal = crate::poly::Monomial::from(&m.0[nparam..]);
+            let coef = self.coeff().monomial(scal, c.clone());
+            let mut cur = self.scale(&coef, below);
+            for (k, a) in args.iter().enumerate() {
+                for _ in 0..m.0[k] {
+                    cur = self.elem_of(self.eval_in(a, Some(&cur), defs, ints)?, &cur)?;
+                }
+            }
+            acc = self.add(&acc, &cur);
+        }
+        Ok(acc)
+    }
+
+    fn eval_in(
+        &self,
+        ast: &Ast,
+        below: Option<&Elem<C<R>>>,
+        defs: &BTreeMap<String, Elem<C<R>>>,
+        ints: &[(String, i64)],
+    ) -> Result<Val<C<R>>> {
         let attach = |v: Val<C<R>>| -> Result<Val<C<R>>> {
             Ok(match (v, below) {
                 (Val::Scalar(c), Some(b)) => Val::Elem(self.scale(&c, b)),
@@ -701,11 +777,11 @@ impl<R: Ring> Klrw<R> {
                     Some(bl) => {
                         let mut cur = bl.clone();
                         for _ in 0..*e {
-                            cur = self.elem_of(self.eval(b, Some(&cur), defs)?, bl)?;
+                            cur = self.elem_of(self.eval_in(b, Some(&cur), defs, ints)?, bl)?;
                         }
                         Ok(Val::Elem(cur))
                     }
-                    None => match self.eval(b, None, defs)? {
+                    None => match self.eval_in(b, None, defs, ints)? {
                         Val::Scalar(c) => Ok(Val::Scalar(self.coeff().pow(&c, *e as u32))),
                         Val::Elem(x) => {
                             if *e == 0 {
@@ -727,8 +803,8 @@ impl<R: Ring> Klrw<R> {
                 let mut scalar = self.coeff().one();
                 for it in items.iter().rev() {
                     let v = match &cur {
-                        Some(Val::Elem(e)) => self.eval(it, Some(e), defs)?,
-                        _ => self.eval(it, None, defs)?,
+                        Some(Val::Elem(e)) => self.eval_in(it, Some(e), defs, ints)?,
+                        _ => self.eval_in(it, None, defs, ints)?,
                     };
                     match (v, cur.is_some()) {
                         (Val::Scalar(c), _) => scalar = self.coeff().mul(&scalar, &c),
@@ -744,7 +820,7 @@ impl<R: Ring> Klrw<R> {
             Ast::Sum(items) => {
                 let mut acc: Option<Val<C<R>>> = None;
                 for (neg, it) in items {
-                    let mut v = self.eval(it, below, defs)?;
+                    let mut v = self.eval_in(it, below, defs, ints)?;
                     if *neg {
                         v = match v {
                             Val::Scalar(c) => Val::Scalar(self.coeff().neg(&c)),
@@ -773,11 +849,58 @@ impl<R: Ring> Klrw<R> {
             Ast::Tensor(_) => Err(Error::invalid(
                 "a weighted KLR algebra has no tensor product of diagrams",
             )),
-            Ast::Name { .. } | Ast::PowExpr(..) | Ast::Range { .. } => {
-                Err(Error::invalid(format!(
-                    "{} is not available in a klrw context",
-                    crate::text::print(ast)
-                )))
+            Ast::Name {
+                name,
+                sub,
+                args: Some(args),
+            } => {
+                let full = format!("{name}_{}(...)", sub.as_deref().unwrap_or(""));
+                let b = below.ok_or_else(|| Self::needs_below(&full))?;
+                Ok(Val::Elem(self.eval_param(
+                    name,
+                    sub.as_deref().unwrap_or(""),
+                    args,
+                    b,
+                    defs,
+                    ints,
+                )?))
+            }
+            Ast::PowExpr(b, e) => {
+                let n = self.eval_int(e, ints)?;
+                self.eval_in(&Ast::Pow(b.clone(), n), below, defs, ints)
+            }
+            Ast::Range { var, lo, hi, body } => {
+                let (lo, hi) = (self.eval_int(lo, ints)?, self.eval_int(hi, ints)?);
+                let mut inner = ints.to_vec();
+                inner.push((var.clone(), 0));
+                let mut items = Vec::new();
+                for v in lo..=hi {
+                    inner.last_mut().unwrap().1 = v;
+                    items.push((false, self.eval_in(body, below, defs, &inner)?));
+                }
+                let mut acc: Option<Val<C<R>>> = None;
+                for (_, v) in items {
+                    acc = Some(match (acc, v) {
+                        (None, v) => v,
+                        (Some(Val::Scalar(a)), Val::Scalar(b)) => {
+                            Val::Scalar(self.coeff().add(&a, &b))
+                        }
+                        (Some(Val::Elem(a)), Val::Elem(b)) => Val::Elem(self.add(&a, &b)),
+                        (Some(Val::Scalar(a)), Val::Elem(b))
+                        | (Some(Val::Elem(b)), Val::Scalar(a))
+                            if self.coeff().is_zero(&a) =>
+                        {
+                            Val::Elem(b)
+                        }
+                        _ => {
+                            return Err(Error::invalid(
+                                "a sum of a scalar and a diagram: write the scalar times an \
+                                 idempotent, as in 2 e(i@0)",
+                            ));
+                        }
+                    });
+                }
+                Ok(acc.unwrap_or(Val::Elem(Elem::default())))
             }
         }
     }
@@ -1034,16 +1157,256 @@ impl<R: Ring> Klrw<R> {
                 let ok = degs.len() <= 1;
                 return Ok(self.verdict(ok, (!ok).then(|| format!("degrees {degs:?}"))));
             }
-            _ => {
-                return Err(Error::invalid(format!(
-                    "the check '{name}' is not available in a klrw context yet \
-                     (equal, zero, idempotent, and homogeneous are)"
-                )));
+            "orthogonal" => {
+                arity(2)?;
+                let ab = self.normal_form(&self.compose(&args[0], &args[1]))?;
+                if !ab.is_empty() {
+                    return Ok(self.verdict(
+                        false,
+                        Some(format!("first ∘ second = {}", self.fmt_summands(&ab))),
+                    ));
+                }
+                self.compose(&args[1], &args[0])
             }
+            "central" => {
+                arity(1)?;
+                return self.central(&args[0]);
+            }
+            "primitive" => {
+                arity(1)?;
+                return self.primitive(&args[0]);
+            }
+            _ => return Err(Error::invalid(format!("unknown check '{name}'"))),
         };
         let nf = self.normal_form(&should_vanish)?;
         let witness = (!nf.is_empty()).then(|| self.fmt_summands(&nf));
         Ok(self.verdict(nf.is_empty(), witness))
+    }
+
+    /// The element of a normal-form summand.
+    fn summand_elem(&self, s: &Summand<C<R>>) -> Result<Elem<C<R>>> {
+        let mut cur = self.identity(&s.bottom);
+        for (k, &m) in s.dots.iter().enumerate() {
+            for _ in 0..m {
+                cur = self.dot(&cur, k + 1)?;
+            }
+        }
+        cur = self.straight(&cur, &s.top, Some(&s.perm))?;
+        Ok(self.scale(&s.coeff, &cur))
+    }
+
+    /// `central`: `z` commutes with every idempotent, and, at every order type of loadings with
+    /// the colours of `z`, with the dots, the crossings `psi_k`, and the straight-line diagrams
+    /// to every other order type, which generate the algebra.
+    fn central(&self, z: &Elem<C<R>>) -> Result<Value> {
+        let nf = self.normal_form(z)?;
+        if let Some(s) = nf
+            .iter()
+            .find(|s| self.data.order_type(&s.bottom) != self.data.order_type(&s.top))
+        {
+            return Ok(self.verdict(
+                false,
+                Some(format!(
+                    "{} does not commute with the idempotents",
+                    self.fmt_word(s)
+                )),
+            ));
+        }
+        let mut contents: Vec<Vec<u16>> = nf
+            .iter()
+            .map(|s| {
+                let mut c = s.bottom.colours();
+                c.sort();
+                c
+            })
+            .collect();
+        contents.sort();
+        contents.dedup();
+        for colours in contents {
+            let types = self.order_types(&colours);
+            for a in &types {
+                let ea = self.identity(a);
+                let n = a.n();
+                let mut gens: Vec<(String, Elem<C<R>>)> = Vec::new();
+                for k in 1..=n {
+                    gens.push((
+                        format!("x_{k} e({})", self.fmt_loading(a)),
+                        self.dot(&ea, k)?,
+                    ));
+                }
+                for k in 1..n {
+                    if let Ok(g) = self.psi(&ea, k) {
+                        gens.push((format!("psi_{k} e({})", self.fmt_loading(a)), g));
+                    }
+                }
+                for b in &types {
+                    if b != a && b.colours() == a.colours() {
+                        gens.push((
+                            format!("to({}) e({})", self.fmt_loading(b), self.fmt_loading(a)),
+                            self.straight(&ea, b, None)?,
+                        ));
+                    }
+                }
+                for (name, g) in gens {
+                    let comm = self.add(&self.compose(z, &g), &self.neg(&self.compose(&g, z)));
+                    let c = self.normal_form(&comm)?;
+                    if !c.is_empty() {
+                        return Ok(self.verdict(
+                            false,
+                            Some(format!(
+                                "with {name}: z g - g z = {}",
+                                self.fmt_summands(&c)
+                            )),
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(self.verdict(true, None))
+    }
+
+    /// `primitive`, in a cyclotomic quotient (finite-dimensional): the idempotent `e` is
+    /// primitive when `eAe` is local. Over a field of characteristic 0 the radical of a
+    /// finite-dimensional algebra `B` is the radical of its trace form `(a, b) ↦ tr(L_{ab})`
+    /// (Dickson's criterion), so `B / rad B` has the dimension of the rank of that form; `B` is
+    /// local exactly when the rank is 1, the quotient of a split algebra then being the field.
+    fn primitive(&self, e: &Elem<C<R>>) -> Result<Value> {
+        if self.cyclo.is_none() {
+            return Err(Error::precondition(
+                "primitive needs a finite-dimensional algebra: give the context \
+                 quotient=cyclotomic",
+            ));
+        }
+        let ring = self.coeff().clone();
+        let enf = self.normal_form(e)?;
+        if enf.is_empty() {
+            return Ok(self.verdict(false, Some("the element is zero".into())));
+        }
+        let ee = self.add(&self.compose(e, e), &self.neg(e));
+        if !self.normal_form(&ee)?.is_empty() {
+            return Err(Error::precondition("the element is not an idempotent"));
+        }
+        // the loadings of e, one per order type
+        let mut loads: BTreeMap<OrderType, Loading> = BTreeMap::new();
+        for s in &enf {
+            for l in [&s.bottom, &s.top] {
+                loads
+                    .entry(self.data.order_type(l))
+                    .or_insert_with(|| l.clone());
+            }
+        }
+        // a basis of ⊕ e_b T^λ e_a over these loadings, indexed by its normal-form summands
+        type Key = (OrderType, OrderType, Perm, Vec<u32>);
+        let mut index: BTreeMap<Key, usize> = BTreeMap::new();
+        let mut basis: Vec<Elem<C<R>>> = Vec::new();
+        for a in loads.values() {
+            for b in loads.values() {
+                for d in self.graded_dimension(a, b)?.keys() {
+                    let piece = self.ideal_piece(a, b, *d)?;
+                    for j in piece.span.free_columns() {
+                        let (perm, dots) = &piece.cols[j];
+                        let s = Summand {
+                            bottom: a.clone(),
+                            top: b.clone(),
+                            perm: perm.clone(),
+                            dots: dots.clone(),
+                            coeff: ring.one(),
+                        };
+                        index.insert(
+                            (
+                                self.data.order_type(a),
+                                self.data.order_type(b),
+                                perm.clone(),
+                                dots.clone(),
+                            ),
+                            basis.len(),
+                        );
+                        basis.push(self.summand_elem(&s)?);
+                    }
+                }
+            }
+        }
+        let dim = basis.len();
+        let coords = |x: &Elem<C<R>>| -> Result<Vec<C<R>>> {
+            let mut v = vec![ring.zero(); dim];
+            for s in self.normal_form(x)? {
+                let k = (
+                    self.data.order_type(&s.bottom),
+                    self.data.order_type(&s.top),
+                    s.perm.clone(),
+                    s.dots.clone(),
+                );
+                let i = index
+                    .get(&k)
+                    .ok_or_else(|| Error::invalid("internal: a summand outside the basis"))?;
+                v[*i] = ring.add(&v[*i], &s.coeff);
+            }
+            Ok(v)
+        };
+        // eAe: the span of e b e
+        let mut span = crate::linalg::Reducer::new(ring.clone(), dim);
+        for b in &basis {
+            span.insert(coords(&self.compose(e, &self.compose(b, e)))?);
+        }
+        let rows = span.basis();
+        let pivots = span.pivots();
+        let m = rows.len();
+        // the elements of the basis of eAe, and coordinates in it (rows are reduced)
+        let elems: Vec<Elem<C<R>>> = rows
+            .iter()
+            .map(|r| {
+                let mut acc = Elem::default();
+                for (i, c) in r.iter().enumerate() {
+                    if !ring.is_zero(c) {
+                        acc = self.add(&acc, &self.scale(c, &basis[i]));
+                    }
+                }
+                acc
+            })
+            .collect();
+        let local = |x: &Elem<C<R>>| -> Result<Vec<C<R>>> {
+            let v = coords(x)?;
+            (0..m)
+                .map(|k| {
+                    ring.div_exact(&v[pivots[k]], &rows[k][pivots[k]])
+                        .ok_or_else(|| Error::invalid("internal: a pivot does not divide"))
+                })
+                .collect()
+        };
+        // left multiplication matrices: lm[k][j][i] = coordinate i of x_k x_j
+        let mut lm: Vec<Vec<Vec<C<R>>>> = Vec::with_capacity(m);
+        for x in &elems {
+            lm.push(
+                elems
+                    .iter()
+                    .map(|y| local(&self.compose(x, y)))
+                    .collect::<Result<_>>()?,
+            );
+        }
+        // the trace form tr(L_k L_l) = Σ_{i,j} L_k[i][j] L_l[j][i]
+        let mut gram = crate::linalg::Reducer::new(ring.clone(), m);
+        for k in 0..m {
+            let row: Vec<C<R>> = (0..m)
+                .map(|l| {
+                    let mut t = ring.zero();
+                    for i in 0..m {
+                        for j in 0..m {
+                            t = ring.add(&t, &ring.mul(&lm[k][j][i], &lm[l][i][j]));
+                        }
+                    }
+                    t
+                })
+                .collect();
+            gram.insert(row);
+            if gram.rank() > 1 {
+                break;
+            }
+        }
+        let ok = gram.rank() == 1;
+        let witness = (!ok).then(|| {
+            format!("e A e has dimension {m} and e A e / e J e has dimension greater than 1")
+        });
+        Ok(self.verdict(ok, witness))
     }
 
     fn verdict(&self, holds: bool, witness: Option<String>) -> Value {
@@ -1303,6 +1666,74 @@ mod tests {
         assert_eq!(
             nf(&k, "x_1 psi_1 e(i@0 j@2)"),
             "b(2 1; j@0 i@2) x_2 e(i@0 j@2)"
+        );
+    }
+
+    #[test]
+    fn q_calls_symbolic_powers_and_ranges() {
+        let k = ctx("klrw type=A2");
+        assert_eq!(
+            nf(&k, "psi_1 psi_1 e(i@0 j@1) - Q_ij(x_1, x_2) e(i@0 j@1)"),
+            "0"
+        );
+        assert_eq!(
+            nf(&k, "sum_{f=0..2} x_1^{f} x_2^{2-f} e(i@0 j@1)"),
+            nf(
+                &k,
+                "x_2^2 e(i@0 j@1) + x_1 x_2 e(i@0 j@1) + x_1^2 e(i@0 j@1)"
+            )
+        );
+        assert_eq!(nf(&k, "sum_{f=1..0} x_1 e(i@0)"), "0");
+    }
+
+    fn chk(k: &Klrw<Rationals>, name: &str, ts: &[&str]) -> Value {
+        let args: Vec<_> = ts
+            .iter()
+            .map(|t| {
+                k.term(&crate::text::parse(t).unwrap(), &BTreeMap::new())
+                    .unwrap()
+            })
+            .collect();
+        k.check(name, &args).unwrap()
+    }
+
+    #[test]
+    fn orthogonal_central_primitive() {
+        let k = ctx("klrw type=A2");
+        assert_eq!(
+            chk(&k, "orthogonal", &["e(i@0 j@1)", "e(j@0 i@1)"])["holds"],
+            true
+        );
+        assert_eq!(
+            chk(&k, "orthogonal", &["e(i@0 j@1)", "e(i@0 j@1)"])["holds"],
+            false
+        );
+        // one strand: everything commutes; with two strands a dot does not
+        assert_eq!(chk(&k, "central", &["x_1 e(i@0)"])["holds"], true);
+        assert_eq!(chk(&k, "central", &["x_1 e(i@0 i@1)"])["holds"], false);
+        // the symmetric polynomial x_1 + x_2 on two strands of one colour is central
+        assert_eq!(
+            chk(&k, "central", &["x_1 e(i@0 i@1) + x_2 e(i@0 i@1)"])["holds"],
+            true
+        );
+        let c = ctx("klrw type=A1 red=\"2i@0\" quotient=cyclotomic");
+        // one strand right of the red strand: k[x]/(x^2) is local
+        assert_eq!(chk(&c, "primitive", &["e(i@1)"])["holds"], true);
+        // two strands: the cyclotomic nilHecke algebra is a matrix algebra of size 2
+        assert_eq!(chk(&c, "primitive", &["e(i@1 i@2)"])["holds"], false);
+        assert_eq!(
+            chk(&c, "primitive", &["x_1 psi_1 e(i@1 i@2)"])["holds"],
+            true
+        );
+        assert!(
+            c.check(
+                "primitive",
+                &[
+                    k.term(&crate::text::parse("x_1 e(i@0)").unwrap(), &BTreeMap::new())
+                        .unwrap()
+                ]
+            )
+            .is_err()
         );
     }
 

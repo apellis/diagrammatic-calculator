@@ -26,8 +26,12 @@ type System<R> = (PolyRing<R>, Vec<Poly<<R as Ring>::Elem>>);
 
 /// The coefficient equations of a normal form, as polynomials in the unknowns only, with the
 /// ring they live in. Other scalars may not occur.
-fn equations<R: Ring>(ctx: &Context<R>, nf: &CTerm<R>, unknowns: &[String]) -> Result<System<R>> {
-    let names = &ctx.coeff.names;
+fn equations<'a, R: Ring + 'a>(
+    coeff: &PolyRing<R>,
+    coeffs: impl IntoIterator<Item = &'a Poly<R::Elem>>,
+    unknowns: &[String],
+) -> Result<System<R>> {
+    let names = &coeff.names;
     let mut pos = Vec::with_capacity(unknowns.len());
     for u in unknowns {
         let k = names.iter().position(|n| n == u).ok_or_else(|| {
@@ -36,11 +40,11 @@ fn equations<R: Ring>(ctx: &Context<R>, nf: &CTerm<R>, unknowns: &[String]) -> R
         pos.push(k);
     }
     let ring = PolyRing::new(
-        ctx.coeff.base.clone(),
+        coeff.base.clone(),
         &unknowns.iter().map(String::as_str).collect::<Vec<_>>(),
     );
     let mut eqs = Vec::new();
-    for (_, c) in &nf.terms {
+    for c in coeffs {
         let mut terms = Vec::with_capacity(c.terms.len());
         for (m, a) in &c.terms {
             for (k, &e) in m.0.iter().enumerate() {
@@ -80,13 +84,30 @@ pub fn solve<R: Ring>(
     unknowns: &[String],
     limits: &Limits,
 ) -> Result<Value> {
-    if !ctx.coeff.base.is_field() {
+    solve_coefficients(
+        &ctx.coeff,
+        &ctx.spec.ring,
+        nf.terms.iter().map(|(_, c)| c),
+        unknowns,
+        limits,
+    )
+}
+
+/// Solves for the unknowns that every coefficient in `coeffs` (polynomials in the scalars of
+/// `coeff`) vanishes: the core of [`solve`], for any front end with coefficients in `coeff`.
+pub fn solve_coefficients<'a, R: Ring + 'a>(
+    coeff: &PolyRing<R>,
+    ring_name: &str,
+    coeffs: impl IntoIterator<Item = &'a Poly<R::Elem>>,
+    unknowns: &[String],
+    limits: &Limits,
+) -> Result<Value> {
+    if !coeff.base.is_field() {
         return Err(Error::precondition(format!(
-            "solving needs a field as ground ring; here it is {}",
-            ctx.spec.ring
+            "solving needs a field as ground ring; here it is {ring_name}"
         )));
     }
-    let (ring, eqs) = equations(ctx, nf, unknowns)?;
+    let (ring, eqs) = equations(coeff, coeffs, unknowns)?;
     let f = &ring.base;
     let n = unknowns.len();
     let linear = eqs

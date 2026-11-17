@@ -207,7 +207,7 @@ impl<R: Ring> Klrw<R> {
         let mut found: BTreeMap<OrderType, Loading> = BTreeMap::new();
         if !key.is_empty() {
             for seq in arrangements(&key) {
-                self.violating_with(&seq, &mut found);
+                self.loadings_with(&seq, true, &mut found);
             }
         }
         let out = Arc::new(found.into_values().collect::<Vec<_>>());
@@ -215,13 +215,34 @@ impl<R: Ring> Klrw<R> {
         out
     }
 
-    fn violating_with(&self, seq: &[u16], found: &mut BTreeMap<OrderType, Loading>) {
+    /// One representative of every order type of loadings with these colours (in any order):
+    /// the loadings a central element must commute with.
+    pub fn order_types(&self, colours: &[u16]) -> Vec<Loading> {
+        let mut key = colours.to_vec();
+        key.sort();
+        let mut found: BTreeMap<OrderType, Loading> = BTreeMap::new();
+        if !key.is_empty() {
+            for seq in arrangements(&key) {
+                self.loadings_with(&seq, false, &mut found);
+            }
+        }
+        found.into_values().collect()
+    }
+
+    /// The order types of loadings with the colour sequence `seq`: every one, or (`violating`)
+    /// those whose first strand lies left of every red strand.
+    fn loadings_with(
+        &self,
+        seq: &[u16],
+        violating: bool,
+        found: &mut BTreeMap<OrderType, Loading>,
+    ) {
         let n = seq.len();
         let mut base: Vec<Cons> = Vec::new();
         for k in 1..n {
             base.push((k, k + 1, Q::zero()));
         }
-        if let Some(r) = self.data.reds.first() {
+        if violating && let Some(r) = self.data.reds.first() {
             base.push((1, 0, r.pos.clone()));
         }
         // Each choice: two alternative constraints.
