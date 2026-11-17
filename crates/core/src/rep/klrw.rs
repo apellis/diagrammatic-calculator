@@ -852,9 +852,31 @@ impl<R: Ring> Klrw<R> {
             Ast::Id(_) => Err(Error::invalid(
                 "in a klrw context, write the identity of a loading as e(i@0 j@1)",
             )),
-            Ast::Tensor(_) => Err(Error::invalid(
-                "a weighted KLR algebra has no tensor product of diagrams",
-            )),
+            Ast::Tensor(items) => {
+                if below.is_some() {
+                    return Err(Error::invalid(
+                        "in klrw each factor of a tensor product is a whole term with its \
+                         loadings, so nothing can lie below it: compose on top of it instead",
+                    ));
+                }
+                let mut scalar = self.coeff().one();
+                let mut acc: Option<Elem<C<R>>> = None;
+                for it in items {
+                    match self.eval_in(it, None, defs, ints)? {
+                        Val::Scalar(c) => scalar = self.coeff().mul(&scalar, &c),
+                        Val::Elem(e) => {
+                            acc = Some(match acc {
+                                None => e,
+                                Some(a) => self.tensor(&a, &e)?,
+                            })
+                        }
+                    }
+                }
+                match acc {
+                    Some(e) => attach(Val::Elem(self.scale(&scalar, &e))),
+                    None => attach(Val::Scalar(scalar)),
+                }
+            }
             Ast::Name {
                 name,
                 sub,
@@ -1187,6 +1209,75 @@ impl<R: Ring> Klrw<R> {
         let nf = self.normal_form(&should_vanish)?;
         let witness = (!nf.is_empty()).then(|| self.fmt_summands(&nf));
         Ok(self.verdict(nf.is_empty(), witness))
+    }
+
+    /// `a ⊗ b`: `b` placed to the right of `a`, its positions shifted by the least integer that
+    /// puts every point and ghost of `b` strictly right of every point and ghost of `a`. Defined
+    /// without red strands: they belong to the context, so the result would lie in another
+    /// algebra (the one with both lists of red strands), and in the cyclotomic quotient a
+    /// strand killed in `b` for lying left of all its red strands need not be killed in `a ⊗ b`.
+    pub fn tensor(&self, a: &Elem<C<R>>, b: &Elem<C<R>>) -> Result<Elem<C<R>>> {
+        if !self.data.reds.is_empty() || self.cyclo.is_some() {
+            return Err(Error::precondition(
+                "a tensor product of klrw diagrams is defined without red strands: the red \
+                 strands belong to the context, so a ⊗ b would lie in the algebra with both \
+                 lists of red strands (write that context and the juxtaposed term directly)",
+            ));
+        }
+        let (na, nb) = (self.normal_form(a)?, self.normal_form(b)?);
+        // the reach of a point of colour c: itself and the ghosts it casts
+        let reach = |c: u16, p: &Q| -> (Q, Q) {
+            let (mut lo, mut hi) = (p.clone(), p.clone());
+            for e in self.data.edges.iter().filter(|e| e.head == c) {
+                let g = p + &e.weight;
+                if g < lo {
+                    lo = g.clone();
+                }
+                if g > hi {
+                    hi = g;
+                }
+            }
+            (lo, hi)
+        };
+        let points = |nf: &[Summand<C<R>>]| -> Vec<(u16, Q)> {
+            nf.iter()
+                .flat_map(|s| s.bottom.0.iter().chain(&s.top.0).cloned())
+                .collect()
+        };
+        let hi_a = points(&na).iter().map(|(c, p)| reach(*c, p).1).max();
+        let lo_b = points(&nb).iter().map(|(c, p)| reach(*c, p).0).min();
+        let shift = match (hi_a, lo_b) {
+            (Some(h), Some(l)) => (h - l).floor() + Q::from_integer(1.into()),
+            _ => Q::from_integer(0.into()),
+        };
+        let shifted = |l: &Loading| Loading(l.0.iter().map(|(c, p)| (*c, p + &shift)).collect());
+        let mut out: Option<Elem<C<R>>> = None;
+        for x in &na {
+            for y in &nb {
+                let n = x.bottom.n();
+                let mut bottom = x.bottom.clone();
+                bottom.0.extend(shifted(&y.bottom).0);
+                let mut top = x.top.clone();
+                top.0.extend(shifted(&y.top).0);
+                let mut perm = x.perm.clone();
+                perm.0.extend(y.perm.0.iter().map(|&k| k + n as u8));
+                let mut dots = x.dots.clone();
+                dots.extend(y.dots.iter().copied());
+                let s = Summand {
+                    bottom,
+                    top,
+                    perm,
+                    dots,
+                    coeff: self.coeff().mul(&x.coeff, &y.coeff),
+                };
+                let e = self.summand_elem(&s)?;
+                out = Some(match out {
+                    None => e,
+                    Some(o) => self.add(&o, &e),
+                });
+            }
+        }
+        Ok(out.unwrap_or_default())
     }
 
     /// The element of a normal-form summand.
@@ -1952,6 +2043,24 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn tensor_product_shifts_the_right_factor() {
+        let k = ctx("klrw type=A2 theta_ij=1/2");
+        // the left factor reaches 0 and the right one starts at 0, so it moves by 1
+        assert_eq!(nf(&k, "(x_1 e(i@0)) (x) e(j@0)"), nf(&k, "x_1 e(i@0 j@1)"));
+        // j is the head of the edge, so its ghost at 1/2 also counts: the shift is 1
+        assert_eq!(
+            nf(&k, "e(j@0) (x) (psi_1 e(i@0 i@1))"),
+            nf(&k, "psi_2 e(j@0 i@1 i@2)")
+        );
+        let c = ctx("klrw type=A1 red=\"1i@0\"");
+        let e = c.term(
+            &crate::text::parse("e(i@1) (x) e(i@1)").unwrap(),
+            &BTreeMap::new(),
+        );
+        assert!(e.is_err());
     }
 
     #[test]
