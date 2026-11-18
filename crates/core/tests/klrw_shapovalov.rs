@@ -268,3 +268,182 @@ fn cyclotomic_dimensions_match_tensor_shapovalov() {
         assert!(nonzero > 0, "{spec}: every pair vanished");
     }
 }
+
+/// A letter of an ordered loading, read left to right: a black strand of a colour, or red strand
+/// `m` (weight `λ_m`).
+#[derive(Clone, Copy, PartialEq)]
+enum Letter {
+    Black(u16),
+    Red(usize),
+}
+
+/// The ordered loading of a placement: region `0`, red strand `0`, region `1`, red strand `1`, ….
+fn word(regions: &[Vec<u16>]) -> Vec<Letter> {
+    let mut w: Vec<Letter> = regions[0].iter().map(|&c| Letter::Black(c)).collect();
+    for (m, reg) in regions[1..].iter().enumerate() {
+        w.push(Letter::Red(m));
+        w.extend(reg.iter().map(|&c| Letter::Black(c)));
+    }
+    w
+}
+
+/// The quantum integer `[n]` at `q^d`, for any integer `n`.
+fn qint(r: &PolyRing<Integers>, d: i64, n: i64) -> L {
+    let m = n.abs();
+    let mut acc = r.zero();
+    for k in 0..m {
+        acc = r.add(&acc, &qpow(r, d * (m - 1 - 2 * k)));
+    }
+    if n < 0 { r.neg(&acc) } else { acc }
+}
+
+/// `⟨λ − ν, α_i^∨⟩` for the weight at the right end of `w`.
+fn prefix_pair(s: &Setup, i: u16, w: &[Letter]) -> i64 {
+    let cartan = s.k.klr.cartan.as_ref().unwrap();
+    w.iter()
+        .map(|l| match *l {
+            Letter::Black(j) => -cartan.a[i as usize][j as usize],
+            Letter::Red(m) => s.lambdas[m][i as usize],
+        })
+        .sum()
+}
+
+/// The graded dimension of the corner between two ordered loadings, by the deletion recursion
+/// of categorification-lean (`Stendhal.cornerPolynomial`, proved equal to the graded dimension
+/// of `e_s T^λ e_t` in `Stendhal.sequenceCornerPoly_eq_wordCornerPoly`; B. Webster,
+/// arXiv:1309.3796v2, §4.7, Lemma 4.36). A terminal black `i` of one loading is deleted against
+/// every black `i` of the other, at prefix `p`, with the factor
+/// `q_i^{⟨λ−ν, α_i^∨⟩(u) − 1} [⟨λ−ν, α_i^∨⟩(p)]_{q_i}`; common terminal reds are removed; the
+/// empty corner is `1`.
+fn corner(s: &Setup, r: &PolyRing<Integers>, a: &[Letter], b: &[Letter]) -> L {
+    let (a, b) = match (a.last(), b.last()) {
+        (None, None) => return r.one(),
+        (Some(Letter::Red(x)), Some(Letter::Red(y))) => {
+            return if x == y {
+                corner(s, r, &a[..a.len() - 1], &b[..b.len() - 1])
+            } else {
+                r.zero()
+            };
+        }
+        (Some(Letter::Black(_)), _) => (a, b),
+        (_, Some(Letter::Black(_))) => (b, a),
+        _ => return r.zero(),
+    };
+    let Letter::Black(i) = a[a.len() - 1] else {
+        unreachable!()
+    };
+    let u = &a[..a.len() - 1];
+    let d = s.k.klr.cartan.as_ref().unwrap().d[i as usize];
+    let mut acc = r.zero();
+    for (k, l) in b.iter().enumerate() {
+        if *l != Letter::Black(i) {
+            continue;
+        }
+        let p = &b[..k];
+        let coeff = r.mul(
+            &qpow(r, d * (prefix_pair(s, i, u) - 1)),
+            &qint(r, d, prefix_pair(s, i, p)),
+        );
+        let rest: Vec<Letter> = b[..k].iter().chain(&b[k + 1..]).copied().collect();
+        acc = r.add(&acc, &r.mul(&coeff, &corner(s, r, u, &rest)));
+    }
+    acc
+}
+
+/// Compares the graded dimensions with the deletion recursion for every pair of placements;
+/// returns the number of nonzero pairs.
+fn compare_corners(spec: &str, colours: &[&str]) -> Result<usize, String> {
+    let s = setup(spec);
+    let r = laurent_ring();
+    let cols: Vec<u16> = colours
+        .iter()
+        .map(|c| s.k.klr.colour_index(c).unwrap() as u16)
+        .collect();
+    let pl = placements(&cols, s.lambdas.len() + 1);
+    let loads: Vec<_> = pl.iter().map(|p| loading(&s, p)).collect();
+    let words: Vec<_> = pl.iter().map(|p| word(p)).collect();
+    let mut nonzero = 0;
+    for (a, la) in loads.iter().enumerate() {
+        for (b, lb) in loads.iter().enumerate() {
+            let g = s.k.graded_dimension(la, lb).map_err(|e| e.to_string())?;
+            let dim = r.normalize(
+                g.iter()
+                    .map(|(&d, &n)| (Monomial::from(vec![d as i32]), Int::from(n as i64)))
+                    .collect(),
+            );
+            let c = corner(&s, &r, &words[a], &words[b]);
+            if dim != c {
+                return Err(format!(
+                    "{spec}: {pa:?} → {pb:?}: dim {} but recursion {}",
+                    r.fmt_elem(&dim),
+                    r.fmt_elem(&c),
+                    pa = pl[a],
+                    pb = pl[b]
+                ));
+            }
+            if !r.is_zero(&dim) {
+                nonzero += 1;
+            }
+        }
+    }
+    Ok(nonzero)
+}
+
+#[test]
+fn cyclotomic_dimensions_match_lean_corner_recursion() {
+    let specs: &[(&str, &[&str])] = &[
+        (
+            "klrw type=A1 red=\"i@0, i@10\" quotient=cyclotomic",
+            &["i", "i"],
+        ),
+        (
+            "klrw type=A2 red=\"i@0, j@10\" quotient=cyclotomic",
+            &["i", "j"],
+        ),
+        (
+            "klrw type=A1 red=\"i@0, i@10, i@20\" quotient=cyclotomic",
+            &["i", "i"],
+        ),
+        (
+            "klrw type=B2 red=\"i@0, j@10\" quotient=cyclotomic",
+            &["i", "j"],
+        ),
+        (
+            "klrw type=B2 red=\"j@0, j@10\" quotient=cyclotomic",
+            &["i", "j", "j"],
+        ),
+        (
+            "klrw type=G2 red=\"i@0, j@10\" quotient=cyclotomic",
+            &["i", "j"],
+        ),
+    ];
+    for (spec, colours) in specs {
+        let nonzero = compare_corners(spec, colours).unwrap();
+        assert!(nonzero > 0, "{spec}: every pair vanished");
+    }
+}
+
+/// Two fundamental `sl_2` factors with one black strand: the Hom matrix of the two boundary
+/// projectives (black between the reds, black right of both) is `[[1, q], [q, 1 + q²]]`, as in
+/// categorification-lean (`Stendhal.TensorPairing.fundamental_prefix_homGdimPoly_eq_correctedForm`).
+/// Webster's printed pairing (arXiv:1309.3796v2, Theorem 4.38) gives `1 + q⁻²` in the corner
+/// entry (`Stendhal.TensorPairing.terminal_homGdimPoly_ne_printedForm`).
+#[test]
+fn two_fundamental_factors_hom_matrix() {
+    let s = setup("klrw type=A1 red=\"i@0, i@10\" quotient=cyclotomic");
+    let r = laurent_ring();
+    let b1 = loading(&s, &[vec![], vec![0], vec![]]);
+    let b2 = loading(&s, &[vec![], vec![], vec![0]]);
+    let dim = |x: &Loading, y: &Loading| {
+        let g = s.k.graded_dimension(x, y).unwrap();
+        r.normalize(
+            g.iter()
+                .map(|(&d, &n)| (Monomial::from(vec![d as i32]), Int::from(n as i64)))
+                .collect(),
+        )
+    };
+    assert_eq!(dim(&b1, &b1), r.one());
+    assert_eq!(dim(&b1, &b2), qpow(&r, 1));
+    assert_eq!(dim(&b2, &b1), qpow(&r, 1));
+    assert_eq!(dim(&b2, &b2), r.add(&r.one(), &qpow(&r, 2)));
+}

@@ -155,7 +155,24 @@ points; red points never move.
   through `Δ(F_i) = F_i ⊗ K_i + 1 ⊗ F_i`. The form is the product over the factors of
   `q^{D_m/2}` times the Shapovalov form of `V(λ_m)` (normalized by `⟨v, v⟩ = 1`), with
   `D_m = 2(λ_m, ν_m) − (ν_m, ν_m)` for the weight `ν_m` lowered in factor `m`. The other three
-  sign choices in the coproduct and the bar-inverted form fail on these examples.
+  sign choices in the coproduct and the bar-inverted form fail on these examples. This form
+  agrees with the corrected pairing of categorification-lean
+  (`Stendhal.TensorPairing.correctedForm`, `fundamental_prefix_homGdimPoly_eq_correctedForm`):
+  for two fundamental `sl_2` factors and one black strand the Hom matrix of the two boundary
+  loadings is `[[1, q], [q, 1 + q²]]`, while the pairing as printed in arXiv:1309.3796v2,
+  Theorem 4.38, gives `1 + q⁻²` in the last entry (`terminal_homGdimPoly_ne_printedForm`). The
+  test `two_fundamental_factors_hom_matrix` checks the calculator's matrix.
+- A second, independent check (same file, `cyclotomic_dimensions_match_lean_corner_recursion`)
+  compares `dim_q e_{B'} T^λ e_B` with the deletion recursion that categorification-lean proves
+  equal to it (`Stendhal.cornerPolynomial`, `Stendhal.sequenceCornerPoly_eq_wordCornerPoly`;
+  arXiv:1309.3796v2, §4.7, Lemma 4.36), in types `A_1`, `A_2`, `B_2`, and `G_2` and with up to
+  three red strands. Read a loading as a word from left to right and let `p_i(w)` be
+  `⟨λ − ν, α_i^∨⟩` at the right end of `w` (red multiplicities at `i` minus `Σ a_ij` over the
+  black letters). A terminal black `i` of one word, with the rest `u`, is deleted against each
+  black `i` of the other word, with prefix `p`, at the factor
+  `q_i^{p_i(u) − 1} [p_i(p)]_{q_i}`; a common terminal red is removed; the empty corner is `1`.
+  The grading is the canonical one (a dot on `i` has degree `(α_i, α_i)`), which is the
+  calculator's.
 
 ## Ground ring
 
