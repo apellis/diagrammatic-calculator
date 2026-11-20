@@ -125,7 +125,7 @@ impl Conventions {
         }
     }
 
-    fn parse(v: &Value) -> Result<Self> {
+    pub fn parse(v: &Value) -> Result<Self> {
         let s = |k: &str, default: &str| -> Result<String> {
             match v.get(k) {
                 None | Some(Value::Null) => Ok(default.into()),
@@ -1330,7 +1330,7 @@ pub struct Generator<O, M> {
 
 /// Generators of the kernel of `m : ⊕ X_j⟨s_j⟩ → ⊕ Y_i⟨t_i⟩`, found degree by degree at the
 /// test objects: in each degree, the kernel modulo what earlier generators produce. Returns the
-/// generators and whether every degree was computed (no truncation).
+/// generators and the degree window searched.
 pub fn kernel_generators<A: Additive>(
     a: &A,
     src: &[Summand<A::Obj>],
@@ -1340,10 +1340,78 @@ pub fn kernel_generators<A: Additive>(
     max: Option<i64>,
     default_span: i64,
 ) -> Result<KernelGenerators<A>> {
+    relative_kernel_generators(a, src, tgt, m, None, tests, max, default_span)
+}
+
+/// The kernel of `Hom(T⟨d⟩, X) → Hom(T⟨d⟩, Y) / im Hom(T⟨d⟩, φ)`, for `m : X → Y` and
+/// `rel = (R, φ : R → Y)` (or the plain kernel of `m` when `rel` is `None`), as vectors in
+/// [`space`] of `X`.
+#[allow(clippy::too_many_arguments)]
+/// Optional relations `(Q₁, φ: Q₁ → tgt)`: a map into `tgt` counts as zero when it factors
+/// through `φ`.
+pub type Relations<'a, A> = Option<(
+    &'a [Summand<<A as Additive>::Obj>],
+    &'a Matrix<<A as Additive>::Mor>,
+)>;
+
+pub fn relative_kernel_piece<A: Additive>(
+    a: &A,
+    t: &A::Obj,
+    d: i64,
+    sp: &Space<A::Mor>,
+    tgt: &[Summand<A::Obj>],
+    m: &Matrix<A::Mor>,
+    rel: Relations<'_, A>,
+) -> Result<Vec<Vec<<A::Field as Ring>::Elem>>> {
     let k = a.field().clone();
-    let Some(w) = window(range_over_tests(a, tests, src)?, max, default_span) else {
-        return Ok((vec![], None));
+    let n = sp.basis.len();
+    let unit = |n: usize| -> Vec<Vec<_>> {
+        (0..n)
+            .map(|i| {
+                let mut v = vec![k.zero(); n];
+                v[i] = k.one();
+                v
+            })
+            .collect()
     };
+    let sp_t = space(a, t, d, tgt)?;
+    if sp_t.basis.is_empty() {
+        return Ok(unit(n));
+    }
+    let mat = postcompose(a, t, d, tgt, m, sp, &sp_t)?;
+    let Some((r, phi)) = rel else {
+        return crate::linalg::kernel(&k, &mat);
+    };
+    let sp_r = space(a, t, d, r)?;
+    if sp_r.basis.is_empty() {
+        return crate::linalg::kernel(&k, &mat);
+    }
+    // kernel of [m | −φ]: pairs with m x = φ y, so x carries the natural sign
+    let b = postcompose(a, t, d, tgt, phi, &sp_r, &sp_t)?.map(|e| k.neg(e));
+    let ab = mat.hstack(&b)?;
+    let mut red = Reducer::new(k.clone(), n);
+    let mut out = Vec::new();
+    for z in crate::linalg::kernel(&k, &ab)? {
+        let x: Vec<_> = z[..n].to_vec();
+        if red.insert(x.clone()) {
+            out.push(x);
+        }
+    }
+    Ok(out)
+}
+
+/// Generators of a graded subspace of `Hom(−, ⊕ X_j⟨s_j⟩)` given degree by degree at the test
+/// objects by `piece` (a spanning set of vectors in [`space`]): in each degree, the subspace
+/// modulo what earlier generators produce. It is a submodule when the pieces are closed under
+/// precomposition; then the generators generate it in the degrees of the window.
+pub fn subspace_generators<A: Additive>(
+    a: &A,
+    src: &[Summand<A::Obj>],
+    tests: &[A::Obj],
+    w: Window,
+    mut piece: impl FnMut(&A::Obj, i64, &Space<A::Mor>) -> Result<Vec<Vec<<A::Field as Ring>::Elem>>>,
+) -> Result<Vec<Generator<A::Obj, A::Mor>>> {
+    let k = a.field().clone();
     let mut gens: Vec<Generator<A::Obj, A::Mor>> = Vec::new();
     for d in w.lo..=w.hi {
         for t in tests {
@@ -1352,20 +1420,8 @@ pub fn kernel_generators<A: Additive>(
             if n == 0 {
                 continue;
             }
-            let sp_t = space(a, t, d, tgt)?;
-            let mat = postcompose(a, t, d, tgt, m, &sp, &sp_t)?;
-            let ker: Vec<Vec<_>> = if mat.nrows() == 0 {
-                (0..n)
-                    .map(|i| {
-                        let mut v = vec![k.zero(); n];
-                        v[i] = k.one();
-                        v
-                    })
-                    .collect()
-            } else {
-                crate::linalg::kernel(&k, &mat)?
-            };
-            if ker.is_empty() {
+            let sub = piece(t, d, &sp)?;
+            if sub.is_empty() {
                 continue;
             }
             // what the generators found so far produce in Hom(T⟨d⟩, X)
@@ -1383,7 +1439,7 @@ pub fn kernel_generators<A: Additive>(
                     span.insert(column_coords(a, t, d, src, &sp, &col)?);
                 }
             }
-            for z in ker {
+            for z in sub {
                 if span.insert(z.clone()) {
                     gens.push(Generator {
                         obj: t.clone(),
@@ -1394,5 +1450,27 @@ pub fn kernel_generators<A: Additive>(
             }
         }
     }
+    Ok(gens)
+}
+
+/// [`kernel_generators`] relative to `rel = (R, φ : R → Y)`: generators of the maps into `X`
+/// whose composite with `m` factors through `φ` (the kernel of `X → coker φ`).
+#[allow(clippy::too_many_arguments)]
+pub fn relative_kernel_generators<A: Additive>(
+    a: &A,
+    src: &[Summand<A::Obj>],
+    tgt: &[Summand<A::Obj>],
+    m: &Matrix<A::Mor>,
+    rel: Relations<'_, A>,
+    tests: &[A::Obj],
+    max: Option<i64>,
+    default_span: i64,
+) -> Result<KernelGenerators<A>> {
+    let Some(w) = window(range_over_tests(a, tests, src)?, max, default_span) else {
+        return Ok((vec![], None));
+    };
+    let gens = subspace_generators(a, src, tests, w, |t, d, sp| {
+        relative_kernel_piece(a, t, d, sp, tgt, m, rel)
+    })?;
     Ok((gens, Some(w)))
 }

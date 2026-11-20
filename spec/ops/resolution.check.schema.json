@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/resolution.check.schema.json",
+  "title": "resolution.check: is this a projective resolution of the module?",
+  "description": "Checks a resolution: that it is a complex, that the augmentation ε: C₀ → Q₀ has well-formed entries, that ε ∘ d lands in the relations (so C₋₁ → C₀ → M is a complex), that C₀ → M is onto, and exactness everywhere except at the far end, where the homology still to be covered is reported (uncovered, next_at). resolved: nothing is left uncovered and every degree was checked; minimal: no differential entry is invertible.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "resolution"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "resolution": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "holds",
+            "failures",
+            "failure_count",
+            "resolved",
+            "complete",
+            "length",
+            "next_at",
+            "uncovered",
+            "uncovered_dimension",
+            "module",
+            "module_dimension",
+            "minimal",
+            "resolution",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "holds": {
+              "type": "boolean"
+            },
+            "failures": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/complexFailure"
+              }
+            },
+            "failure_count": {
+              "type": "integer"
+            },
+            "resolved": {
+              "type": "boolean"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "next_at": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "uncovered": {
+              "$ref": "common.schema.json#/$defs/moduleDimensions"
+            },
+            "uncovered_dimension": {
+              "type": "integer"
+            },
+            "module": {
+              "$ref": "common.schema.json#/$defs/moduleDimensions"
+            },
+            "module_dimension": {
+              "type": "integer"
+            },
+            "minimal": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "resolution": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

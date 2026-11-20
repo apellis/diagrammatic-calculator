@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/resolution.extend.schema.json",
+  "title": "resolution.extend: cover the kernel at the far end",
+  "description": "Adds the next term of a resolution: generators of the kernel of C₀ → M (when the resolution is C₀ alone) or of the last differential, found degree by degree at the test objects. Returns the extended resolution, what was added, and its check.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "resolution"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "resolution": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "resolution",
+            "added",
+            "window",
+            "complete",
+            "check",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "resolution": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "added": {
+              "type": "object",
+              "required": [
+                "at",
+                "summands",
+                "matrix"
+              ],
+              "properties": {
+                "at": {
+                  "$ref": "common.schema.json#/$defs/complexPosition"
+                },
+                "summands": {
+                  "$ref": "common.schema.json#/$defs/complexSummands"
+                },
+                "matrix": {
+                  "$ref": "common.schema.json#/$defs/complexMatrix"
+                }
+              }
+            },
+            "window": {
+              "$ref": "common.schema.json#/$defs/degreeWindow"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "check": {
+              "type": "object",
+              "required": [
+                "holds",
+                "failures",
+                "failure_count",
+                "resolved",
+                "complete",
+                "length",
+                "next_at",
+                "uncovered",
+                "uncovered_dimension",
+                "module",
+                "module_dimension",
+                "minimal"
+              ],
+              "properties": {
+                "holds": {
+                  "type": "boolean"
+                },
+                "failures": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "common.schema.json#/$defs/complexFailure"
+                  }
+                },
+                "failure_count": {
+                  "type": "integer"
+                },
+                "resolved": {
+                  "type": "boolean"
+                },
+                "complete": {
+                  "type": "boolean"
+                },
+                "length": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "next_at": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "uncovered": {
+                  "$ref": "common.schema.json#/$defs/moduleDimensions"
+                },
+                "uncovered_dimension": {
+                  "type": "integer"
+                },
+                "module": {
+                  "$ref": "common.schema.json#/$defs/moduleDimensions"
+                },
+                "module_dimension": {
+                  "type": "integer"
+                },
+                "minimal": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

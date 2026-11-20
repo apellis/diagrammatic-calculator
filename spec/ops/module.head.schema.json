@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/module.head.schema.json",
+  "title": "module.head: the head P/rad P of a projective",
+  "description": "The module P/rad P for a projective P (one object with an optional shift, or a list of summands), as a presentation whose relations generate rad P degree by degree. rad P is found from the Jacobson radical of End⁰(P) via its trace form (characteristic 0 or larger than dim End⁰(P)). P/rad P is simple when End⁰(P)/J is a division algebra; a note says when it may not be.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "object": {
+          "type": "string"
+        },
+        "shift": {
+          "type": "integer"
+        },
+        "summands": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "module",
+            "dimensions",
+            "dimension",
+            "window",
+            "complete",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "module": {
+              "$ref": "common.schema.json#/$defs/module"
+            },
+            "dimensions": {
+              "$ref": "common.schema.json#/$defs/moduleDimensions"
+            },
+            "dimension": {
+              "type": "integer"
+            },
+            "window": {
+              "$ref": "common.schema.json#/$defs/degreeWindow"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

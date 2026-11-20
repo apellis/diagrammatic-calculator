@@ -53,6 +53,13 @@ pub enum CellBody {
         name: String,
         complex: serde_json::Value,
     },
+    /// `module name := {…}`: a module given by a projective presentation (generators, relations,
+    /// and the matrix between them), in the JSON form of `docs/complexes.md`. A complex can
+    /// resolve it by naming it: `"resolves": {"module": "name"}`.
+    Module {
+        name: String,
+        module: serde_json::Value,
+    },
     /// `note """text"""`
     Note {
         text: String,
@@ -88,6 +95,7 @@ impl CellBody {
             CellBody::Solve { .. } => Some("sv"),
             CellBody::Check { .. } => Some("ck"),
             CellBody::Complex { .. } => Some("cx"),
+            CellBody::Module { .. } => Some("md"),
             CellBody::Note { .. } => Some("nt"),
             CellBody::Comment(_) | CellBody::Blank => None,
         }
@@ -205,8 +213,8 @@ fn parse_cell(
         }
     }
     let (line_body, id) = split_id(after)?;
-    if kw == "complex" {
-        return parse_complex_cell(line_body, id);
+    if kw == "complex" || kw == "module" {
+        return parse_json_cell(kw, line_body, id);
     }
     let (body_text, options) = split_options(line_body);
     let body = match kw {
@@ -280,9 +288,15 @@ fn parse_cell(
     Ok(Cell { id, body, options })
 }
 
-/// `name := {json}  key=value…`: the JSON object ends where its braces close.
-fn parse_complex_cell(body: &str, id: Option<String>) -> Result<Cell> {
-    let usage = "a complex is written complex name := {\"terms\": […], \"differentials\": […]}";
+/// `complex name := {json}` or `module name := {json}`, with options after: the JSON object
+/// ends where its braces close.
+fn parse_json_cell(kw: &str, body: &str, id: Option<String>) -> Result<Cell> {
+    let usage = if kw == "module" {
+        "a module is written module name := {\"generators\": […], \"relations\": […], \
+         \"matrix\": […]}"
+    } else {
+        "a complex is written complex name := {\"terms\": […], \"differentials\": […]}"
+    };
     let (name, rest) = body.split_once(":=").ok_or_else(|| Error::invalid(usage))?;
     let name = name.trim();
     if !is_ident(name) {
@@ -293,29 +307,32 @@ fn parse_complex_cell(body: &str, id: Option<String>) -> Result<Cell> {
         return Err(Error::invalid(usage));
     }
     let mut it = serde_json::Deserializer::from_str(rest).into_iter::<serde_json::Value>();
-    let complex = match it.next() {
+    let value = match it.next() {
         Some(Ok(v)) => v,
         Some(Err(e)) => {
-            return Err(Error::invalid(format!(
-                "the complex is not valid JSON: {e}"
-            )));
+            return Err(Error::invalid(format!("the {kw} is not valid JSON: {e}")));
         }
         None => return Err(Error::invalid(usage)),
     };
     let (junk, options) = split_options(&rest[it.byte_offset()..]);
     if !junk.is_empty() {
         return Err(Error::invalid(format!(
-            "unexpected '{junk}' after the complex"
+            "unexpected '{junk}' after the {kw}"
         )));
     }
-    Ok(Cell {
-        id,
-        body: CellBody::Complex {
-            name: name.to_string(),
-            complex,
-        },
-        options,
-    })
+    let name = name.to_string();
+    let body = if kw == "module" {
+        CellBody::Module {
+            name,
+            module: value,
+        }
+    } else {
+        CellBody::Complex {
+            name,
+            complex: value,
+        }
+    };
+    Ok(Cell { id, body, options })
 }
 
 /// Splits at commas outside parentheses.
@@ -439,6 +456,7 @@ impl Cell {
                 format!("check {name}({})", a.join(", "))
             }
             CellBody::Complex { name, complex } => format!("complex {name} := {complex}"),
+            CellBody::Module { name, module } => format!("module {name} := {module}"),
             CellBody::Note { text } => format!("note \"\"\"{text}\"\"\""),
             CellBody::Comment(t) => format!("# {t}").trim_end().to_string(),
             CellBody::Blank => String::new(),
@@ -494,6 +512,7 @@ impl Cell {
             }
             CellBody::Check { args, .. } => args.iter().for_each(|a| walk(a, &mut out)),
             CellBody::Complex { .. }
+            | CellBody::Module { .. }
             | CellBody::Note { .. }
             | CellBody::Comment(_)
             | CellBody::Blank => {}

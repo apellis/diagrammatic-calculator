@@ -790,6 +790,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -934,6 +1024,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -1055,6 +1235,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -1246,6 +1516,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -1367,6 +1727,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -1639,6 +2089,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -1804,6 +2344,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -2203,6 +2833,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -2324,6 +3044,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -2518,6 +3328,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -2639,6 +3539,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -2869,6 +3859,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -3007,6 +4087,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -3173,6 +4343,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -3294,6 +4554,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -3482,6 +4832,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -3625,6 +5065,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -3746,6 +5276,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "null"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -3898,6 +5518,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -4044,6 +5754,96 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -4186,8 +5986,806 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   }
                 }
               }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           }
+        }
+      }
+    }
+  },
+  {
+    "op": "module.check",
+    "name": "module_check",
+    "description": "a module given by a projective presentation",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "module"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "module": {
+          "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+          "type": "object",
+          "required": [
+            "generators"
+          ],
+          "properties": {
+            "generators": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "object"
+                ],
+                "properties": {
+                  "object": {
+                    "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                    "type": "string"
+                  },
+                  "loading": {
+                    "type": "string"
+                  },
+                  "shift": {
+                    "description": "X⟨s⟩ has its generator in degree s.",
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "object"
+                ],
+                "properties": {
+                  "object": {
+                    "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                    "type": "string"
+                  },
+                  "loading": {
+                    "type": "string"
+                  },
+                  "shift": {
+                    "description": "X⟨s⟩ has its generator in degree s.",
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "matrix": {
+              "description": "Rows index the summands of the target, columns those of the source.",
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "description": "A term, or null (or \"0\") for zero.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "module.head",
+    "name": "module_head",
+    "description": "the head P/rad P of a projective",
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "object": {
+          "type": "string"
+        },
+        "shift": {
+          "type": "integer"
+        },
+        "summands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                "type": "string"
+              },
+              "loading": {
+                "type": "string"
+              },
+              "shift": {
+                "description": "X⟨s⟩ has its generator in degree s.",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "resolution.start",
+    "name": "resolution_start",
+    "description": "begin a projective resolution of a module",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "module"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "module": {
+          "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+          "type": "object",
+          "required": [
+            "generators"
+          ],
+          "properties": {
+            "generators": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "object"
+                ],
+                "properties": {
+                  "object": {
+                    "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                    "type": "string"
+                  },
+                  "loading": {
+                    "type": "string"
+                  },
+                  "shift": {
+                    "description": "X⟨s⟩ has its generator in degree s.",
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "object"
+                ],
+                "properties": {
+                  "object": {
+                    "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                    "type": "string"
+                  },
+                  "loading": {
+                    "type": "string"
+                  },
+                  "shift": {
+                    "description": "X⟨s⟩ has its generator in degree s.",
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "matrix": {
+              "description": "Rows index the summands of the target, columns those of the source.",
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "description": "A term, or null (or \"0\") for zero.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "indexing": {
+          "enum": [
+            "cohomological",
+            "homological"
+          ]
+        },
+        "squares": {
+          "enum": [
+            "commute",
+            "anticommute"
+          ]
+        },
+        "odd_signs": {
+          "enum": [
+            "koszul",
+            "ignore"
+          ]
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "resolution.extend",
+    "name": "resolution_extend",
+    "description": "cover the kernel at the far end",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "resolution"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "resolution": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "resolution.check",
+    "name": "resolution_check",
+    "description": "is this a projective resolution of the module?",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "resolution"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "resolution": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "resolves": {
+              "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+              "type": "object",
+              "required": [
+                "module"
+              ],
+              "properties": {
+                "module": {
+                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "type": "object",
+                  "required": [
+                    "generators"
+                  ],
+                  "properties": {
+                    "generators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "relations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "object"
+                        ],
+                        "properties": {
+                          "object": {
+                            "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                            "type": "string"
+                          },
+                          "loading": {
+                            "type": "string"
+                          },
+                          "shift": {
+                            "description": "X⟨s⟩ has its generator in degree s.",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "matrix": {
+                      "description": "Rows index the summands of the target, columns those of the source.",
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "description": "A term, or null (or \"0\") for zero.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "augmentation": {
+                  "description": "Rows index the summands of the target, columns those of the source.",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "description": "A term, or null (or \"0\") for zero.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "max_degree": {
+          "type": "integer"
         }
       }
     }

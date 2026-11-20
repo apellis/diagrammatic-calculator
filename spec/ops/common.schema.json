@@ -561,6 +561,21 @@
               }
             }
           }
+        },
+        "resolves": {
+          "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
+          "type": "object",
+          "required": [
+            "module"
+          ],
+          "properties": {
+            "module": {
+              "$ref": "common.schema.json#/$defs/module"
+            },
+            "augmentation": {
+              "$ref": "common.schema.json#/$defs/complexMatrix"
+            }
+          }
         }
       }
     },
@@ -662,6 +677,55 @@
         },
         "conventions": {
           "type": "object"
+        }
+      }
+    },
+    "module": {
+      "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+      "type": "object",
+      "required": [
+        "generators"
+      ],
+      "properties": {
+        "generators": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "relations": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "matrix": {
+          "$ref": "common.schema.json#/$defs/complexMatrix"
+        }
+      }
+    },
+    "moduleDimensions": {
+      "description": "Graded dimensions at the test objects T: dim Hom(T⟨d⟩, M) for each degree d, as a Laurent polynomial in q and as [degree, dimension] pairs.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "test",
+          "dimensions",
+          "powers"
+        ],
+        "properties": {
+          "test": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "string"
+          },
+          "powers": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
         }
       }
     }

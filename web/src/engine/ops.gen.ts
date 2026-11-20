@@ -73,6 +73,17 @@ export type DegreeWindow = {
   truncated: boolean;
 } | null;
 /**
+ * Graded dimensions at the test objects T: dim Hom(T⟨d⟩, M) for each degree d, as a Laurent polynomial in q and as [degree, dimension] pairs.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "moduleDimensions".
+ */
+export type ModuleDimensions = {
+  test: string;
+  dimensions: string;
+  powers: [number, number][];
+}[];
+/**
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "ChainFindRequest".
  */
@@ -447,6 +458,41 @@ export type MapLiftResponse =
     }
   | OpError;
 /**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ModuleCheckResponse".
+ */
+export type ModuleCheckResponse =
+  | {
+      status: 'ok';
+      holds: boolean;
+      failures: ComplexFailure[];
+      failure_count: number;
+      module: Module;
+      dimensions?: ModuleDimensions;
+      dimension?: number;
+      window?: DegreeWindow;
+      complete?: boolean;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ModuleHeadResponse".
+ */
+export type ModuleHeadResponse =
+  | {
+      status: 'ok';
+      module: Module;
+      dimensions: ModuleDimensions;
+      dimension: number;
+      window: DegreeWindow;
+      complete: boolean;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
  * A context line without the word 'context', e.g. "klr type=A2 nu=2i+j ring=QQ" (spec/workspace.md).
  */
 export type Context1 = string;
@@ -508,6 +554,89 @@ export type RelationsMatchResponse =
       status: 'ok';
       word: string;
       matches: Match[];
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ResolutionCheckResponse".
+ */
+export type ResolutionCheckResponse =
+  | {
+      status: 'ok';
+      holds: boolean;
+      failures: ComplexFailure[];
+      failure_count: number;
+      resolved: boolean;
+      complete: boolean;
+      length: number;
+      next_at: number | null;
+      uncovered: ModuleDimensions;
+      uncovered_dimension: number;
+      module: ModuleDimensions;
+      module_dimension: number;
+      minimal: boolean | null;
+      resolution: Complex;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ResolutionExtendResponse".
+ */
+export type ResolutionExtendResponse =
+  | {
+      status: 'ok';
+      resolution: Complex;
+      added: {
+        at: ComplexPosition;
+        summands: ComplexSummands;
+        matrix: ComplexMatrix;
+      };
+      window: DegreeWindow;
+      complete: boolean;
+      check: {
+        holds: boolean;
+        failures: ComplexFailure[];
+        failure_count: number;
+        resolved: boolean;
+        complete: boolean;
+        length: number;
+        next_at: number | null;
+        uncovered: ModuleDimensions;
+        uncovered_dimension: number;
+        module: ModuleDimensions;
+        module_dimension: number;
+        minimal: boolean | null;
+      };
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ResolutionStartResponse".
+ */
+export type ResolutionStartResponse =
+  | {
+      status: 'ok';
+      resolution: Complex;
+      check: {
+        holds: boolean;
+        failures: ComplexFailure[];
+        failure_count: number;
+        resolved: boolean;
+        complete: boolean;
+        length: number;
+        next_at: number | null;
+        uncovered: ModuleDimensions;
+        uncovered_dimension: number;
+        module: ModuleDimensions;
+        module_dimension: number;
+        minimal: boolean | null;
+      };
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
     }
   | OpError;
 /**
@@ -780,6 +909,8 @@ export interface Operations {
   complexFailure?: ComplexFailure;
   degreeWindow?: DegreeWindow;
   complexVerdict?: ComplexVerdict;
+  module?: Module;
+  moduleDimensions?: ModuleDimensions;
   ChainFindRequest?: ChainFindRequest;
   ChainFindResponse?: ChainFindResponse;
   ChainmapCheckRequest?: ChainmapCheckRequest;
@@ -826,12 +957,22 @@ export interface Operations {
   MapExtendResponse?: MapExtendResponse;
   MapLiftRequest?: MapLiftRequest;
   MapLiftResponse?: MapLiftResponse;
+  ModuleCheckRequest?: ModuleCheckRequest;
+  ModuleCheckResponse?: ModuleCheckResponse;
+  ModuleHeadRequest?: ModuleHeadRequest;
+  ModuleHeadResponse?: ModuleHeadResponse;
   PresentationCheckRequest?: PresentationCheckRequest;
   PresentationCheckResponse?: PresentationCheckResponse;
   RelationApplyRequest?: RelationApplyRequest;
   RelationApplyResponse?: RelationApplyResponse;
   RelationsMatchRequest?: RelationsMatchRequest;
   RelationsMatchResponse?: RelationsMatchResponse;
+  ResolutionCheckRequest?: ResolutionCheckRequest;
+  ResolutionCheckResponse?: ResolutionCheckResponse;
+  ResolutionExtendRequest?: ResolutionExtendRequest;
+  ResolutionExtendResponse?: ResolutionExtendResponse;
+  ResolutionStartRequest?: ResolutionStartRequest;
+  ResolutionStartResponse?: ResolutionStartResponse;
   SimplifyRequest?: SimplifyRequest;
   SimplifyResponse?: SimplifyResponse;
   SlideRequest?: SlideRequest;
@@ -1087,6 +1228,24 @@ export interface Complex {
     axis?: number;
     matrix: ComplexMatrix;
   }[];
+  /**
+   * Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).
+   */
+  resolves?: {
+    module: Module;
+    augmentation?: ComplexMatrix;
+  };
+}
+/**
+ * A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "module".
+ */
+export interface Module {
+  generators: ComplexSummands;
+  relations?: ComplexSummands;
+  matrix?: ComplexMatrix;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -1362,6 +1521,26 @@ export interface MapLiftRequest {
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ModuleCheckRequest".
+ */
+export interface ModuleCheckRequest {
+  context: Context;
+  module: Module;
+  max_degree?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ModuleHeadRequest".
+ */
+export interface ModuleHeadRequest {
+  context: Context;
+  object?: string;
+  shift?: number;
+  summands?: ComplexSummands;
+  max_degree?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "PresentationCheckRequest".
  */
 export interface PresentationCheckRequest {
@@ -1384,6 +1563,36 @@ export interface RelationApplyRequest1 {
 }
 export interface RelationsMatchRequest1 {
   term: string;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ResolutionCheckRequest".
+ */
+export interface ResolutionCheckRequest {
+  context: Context;
+  resolution: Complex;
+  max_degree?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ResolutionExtendRequest".
+ */
+export interface ResolutionExtendRequest {
+  context: Context;
+  resolution: Complex;
+  max_degree?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ResolutionStartRequest".
+ */
+export interface ResolutionStartRequest {
+  context: Context;
+  module: Module;
+  indexing?: 'cohomological' | 'homological';
+  squares?: 'commute' | 'anticommute';
+  odd_signs?: 'koszul' | 'ignore';
+  max_degree?: number;
 }
 export interface SimplifyRequest1 {
   term: string;
@@ -1798,9 +2007,14 @@ export interface OpTypes {
   'interchange': { request: InterchangeRequest; response: InterchangeResponse };
   'map.extend': { request: MapExtendRequest; response: MapExtendResponse };
   'map.lift': { request: MapLiftRequest; response: MapLiftResponse };
+  'module.check': { request: ModuleCheckRequest; response: ModuleCheckResponse };
+  'module.head': { request: ModuleHeadRequest; response: ModuleHeadResponse };
   'presentation.check': { request: PresentationCheckRequest; response: PresentationCheckResponse };
   'relation.apply': { request: RelationApplyRequest; response: RelationApplyResponse };
   'relations.match': { request: RelationsMatchRequest; response: RelationsMatchResponse };
+  'resolution.check': { request: ResolutionCheckRequest; response: ResolutionCheckResponse };
+  'resolution.extend': { request: ResolutionExtendRequest; response: ResolutionExtendResponse };
+  'resolution.start': { request: ResolutionStartRequest; response: ResolutionStartResponse };
   'simplify': { request: SimplifyRequest; response: SimplifyResponse };
   'slide': { request: SlideRequest; response: SlideResponse };
   'straighten': { request: StraightenRequest; response: StraightenResponse };

@@ -98,3 +98,57 @@ watch a a  # id=w5
     assert_eq!(t["status"], "ok", "{t}");
     assert!(!t["sources"].as_array().unwrap().is_empty(), "{t}");
 }
+
+#[test]
+fn resolution_workspace_runs() {
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/klrw-a1-resolution.dcw"
+    ))
+    .unwrap();
+    let v = ops::run_workspace_with(&src, None, Some(8), &[]);
+    assert_eq!(v["status"], "ok", "{v}");
+    let cells: Vec<_> = v["cells"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["kind"] == "module" || c["kind"] == "complex")
+        .collect();
+    assert_eq!(cells.len(), 2, "{v}");
+    assert_eq!(cells[0]["holds"], true, "{}", cells[0]);
+    assert_eq!(cells[0]["dimension"], 1, "{}", cells[0]);
+    let r = &cells[1]["resolution"];
+    assert_eq!(r["holds"], true, "{}", cells[1]);
+    assert_eq!(r["resolved"], false, "{}", cells[1]);
+    assert_eq!(r["next_at"], -2, "{}", cells[1]);
+    // the module name was replaced by the module
+    assert_eq!(
+        cells[1]["complex"]["resolves"]["module"]["generators"][0]["object"], "i@1",
+        "{}",
+        cells[1]
+    );
+}
+
+#[test]
+fn resolution_cell_needs_its_module() {
+    let src = "diagcalc-workspace/1\ncontext klrw type=A1 ring=QQ\n\ncomplex R := \
+               {\"terms\": [{\"at\": 0, \"summands\": [{\"object\": \"i@0\", \"shift\": 0}]}], \
+               \"differentials\": [], \"resolves\": {\"module\": \"L\"}}\n";
+    let v = ops::run_workspace_with(src, None, Some(8), &[]);
+    let c = v["cells"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["kind"] == "complex")
+        .unwrap()
+        .clone();
+    assert_eq!(c["status"], "error", "{c}");
+    assert!(
+        c["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("no module cell")
+            || c.to_string().contains("no module cell"),
+        "{c}"
+    );
+}

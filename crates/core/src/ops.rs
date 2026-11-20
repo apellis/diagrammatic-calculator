@@ -793,10 +793,15 @@ impl RingVisitor for RunWorkspace<'_> {
                         Ok(v)
                     })(),
                 ),
-                CellBody::Complex { .. } => (
-                    "complex",
+                CellBody::Complex { .. } | CellBody::Module { .. } => (
+                    if matches!(cell.body, CellBody::Module { .. }) {
+                        "module"
+                    } else {
+                        "complex"
+                    },
                     Err(Error::precondition(format!(
-                        "complexes are available in weighted KLR contexts (klrw), not in {}",
+                        "complexes and modules are available in weighted KLR contexts (klrw), \
+                         not in {}",
                         ws.context.presentation
                     ))),
                 ),
@@ -1071,6 +1076,7 @@ fn cell_json(c: &Cell) -> Value {
         CellBody::Solve { .. } => "solve",
         CellBody::Check { .. } => "check",
         CellBody::Complex { .. } => "complex",
+        CellBody::Module { .. } => "module",
         CellBody::Note { .. } => "note",
         CellBody::Comment(_) => "comment",
         CellBody::Blank => "blank",
@@ -1098,6 +1104,10 @@ fn cell_json(c: &Cell) -> Value {
         CellBody::Complex { name, complex } => {
             v["complex_name"] = json!(name);
             v["complex"] = complex.clone();
+        }
+        CellBody::Module { name, module } => {
+            v["module_name"] = json!(name);
+            v["module"] = module.clone();
         }
         CellBody::Note { text } => v["note"] = json!(text),
         _ => {}
@@ -1177,7 +1187,7 @@ pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 36] = [
+pub const OPERATIONS: [&str; 41] = [
     "simplify",
     "check",
     "term.render",
@@ -1214,10 +1224,15 @@ pub const OPERATIONS: [&str; 36] = [
     "complex.gauss",
     "complex.euler",
     "complex.render",
+    "module.check",
+    "module.head",
+    "resolution.start",
+    "resolution.extend",
+    "resolution.check",
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 36] = [
+pub const SCHEMAS: [(&str, &str); 41] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -1355,6 +1370,26 @@ pub const SCHEMAS: [(&str, &str); 36] = [
     (
         "complex.render",
         include_str!("../../../spec/ops/complex.render.schema.json"),
+    ),
+    (
+        "module.check",
+        include_str!("../../../spec/ops/module.check.schema.json"),
+    ),
+    (
+        "module.head",
+        include_str!("../../../spec/ops/module.head.schema.json"),
+    ),
+    (
+        "resolution.start",
+        include_str!("../../../spec/ops/resolution.start.schema.json"),
+    ),
+    (
+        "resolution.extend",
+        include_str!("../../../spec/ops/resolution.extend.schema.json"),
+    ),
+    (
+        "resolution.check",
+        include_str!("../../../spec/ops/resolution.check.schema.json"),
     ),
 ];
 pub const COMMON_SCHEMA: &str = include_str!("../../../spec/ops/common.schema.json");

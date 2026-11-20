@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/module.check.schema.json",
+  "title": "module.check: a module given by a projective presentation",
+  "description": "Checks a module M = coker(φ: Q₁ → Q₀) given by generators, relations, and the matrix of φ (each entry a degree-zero map from a relation to a generator), fills in inferable objects and shifts, and gives the graded dimensions of Hom(T⟨d⟩, M) at the test objects.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "module"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "module": {
+          "$ref": "common.schema.json#/$defs/module"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "holds",
+            "failures",
+            "failure_count",
+            "module",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "holds": {
+              "type": "boolean"
+            },
+            "failures": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/complexFailure"
+              }
+            },
+            "failure_count": {
+              "type": "integer"
+            },
+            "module": {
+              "$ref": "common.schema.json#/$defs/module"
+            },
+            "dimensions": {
+              "$ref": "common.schema.json#/$defs/moduleDimensions"
+            },
+            "dimension": {
+              "type": "integer"
+            },
+            "window": {
+              "$ref": "common.schema.json#/$defs/degreeWindow"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

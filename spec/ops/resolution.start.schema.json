@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/resolution.start.schema.json",
+  "title": "resolution.start: begin a projective resolution of a module",
+  "description": "Starts a projective resolution of a fixed module M = coker φ: C₀ is the sum of its generators, with the identity as augmentation C₀ → Q₀. The module stays fixed while the resolution is built and edited; C₀ and the augmentation may later be changed (for example by complex.gauss) without changing M.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "module"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "module": {
+          "$ref": "common.schema.json#/$defs/module"
+        },
+        "indexing": {
+          "enum": [
+            "cohomological",
+            "homological"
+          ]
+        },
+        "squares": {
+          "enum": [
+            "commute",
+            "anticommute"
+          ]
+        },
+        "odd_signs": {
+          "enum": [
+            "koszul",
+            "ignore"
+          ]
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "resolution",
+            "check",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "resolution": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "check": {
+              "type": "object",
+              "required": [
+                "holds",
+                "failures",
+                "failure_count",
+                "resolved",
+                "complete",
+                "length",
+                "next_at",
+                "uncovered",
+                "uncovered_dimension",
+                "module",
+                "module_dimension",
+                "minimal"
+              ],
+              "properties": {
+                "holds": {
+                  "type": "boolean"
+                },
+                "failures": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "common.schema.json#/$defs/complexFailure"
+                  }
+                },
+                "failure_count": {
+                  "type": "integer"
+                },
+                "resolved": {
+                  "type": "boolean"
+                },
+                "complete": {
+                  "type": "boolean"
+                },
+                "length": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "next_at": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "uncovered": {
+                  "$ref": "common.schema.json#/$defs/moduleDimensions"
+                },
+                "uncovered_dimension": {
+                  "type": "integer"
+                },
+                "module": {
+                  "$ref": "common.schema.json#/$defs/moduleDimensions"
+                },
+                "module_dimension": {
+                  "type": "integer"
+                },
+                "minimal": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

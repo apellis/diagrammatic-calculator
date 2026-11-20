@@ -347,6 +347,11 @@ Constructions use these signs. Write `step` for `+1` (cohomological) or `−1` (
   `C(p) → D(p + n)`, and `δf = d_D f − (−1)^n f d_C` maps `Hom^n` to `Hom^{n + step}`. Its `H^0`
   in degree 0 is the chain maps up to homotopy.
 - Homotopies: `f − g = d h + h d` with `h(p) : C(p) → D(p − step)`.
+- Modules and resolutions: a module is the cokernel of `φ : Q₁ → Q₀` (rows generators, columns
+  relations). A resolution's augmentation `ε : C₀ → Q₀` has rows the generators and columns the
+  summands of `C₀`. The kernel of `C₀ → M` is read off the kernel of `[ε | −φ] : C₀ ⊕ Q₁ → Q₀`,
+  projected to `C₀`, so a relation enters with its own sign: for `M = P/xP` the next differential
+  is `x`, not `−x`.
 - Euler characteristic: `Σ_p (−1)^{p_0 + … + p_{m−1}} Σ_i q^{s_i} [P(ℓ_i)]`, objects identified by
   order type.
 

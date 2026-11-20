@@ -50,6 +50,46 @@ web app all send the same JSON messages. An agent building a resolution step by 
 
 Positions not listed are zero, and differentials not listed are zero.
 
+## Modules and resolutions
+
+A module is given by a presentation `Q₁ --φ--> Q₀ → M → 0`, with `Q₀`, `Q₁` sums of projectives:
+
+```json
+{
+  "generators": [{ "object": "i@1", "shift": 0 }],
+  "relations": [{ "object": "i@1", "shift": 2 }],
+  "matrix": [["x_1 e(i@1)"]]
+}
+```
+
+`M` is the cokernel of `φ`, whose matrix has one row per generator and one column per relation
+(the convention of every matrix here). A projective is a module with no relations, and
+`module.head` writes down the presentation of `P/rad P` for a projective `P`, so simple modules
+and their sums need not be presented by hand. The module stays fixed while a resolution of it is
+built, so `C₀` may change during the search without changing what is resolved.
+
+A **resolution** of `M` is a one-dimensional complex `⋯ → C₋₁ → C₀` ending at position 0 (in
+either indexing) with
+
+```json
+"resolves": { "module": { … }, "augmentation": [[ … ]] }
+```
+
+where the augmentation `ε : C₀ → Q₀` (rows the generators, columns the summands of `C₀`) induces
+`C₀ → M`. It may be left out when `C₀` is the sum of the generators in order; it is then the
+identity. `resolution.check` checks that `ε d` lands in the relations, that `C₀ → M` is onto,
+and that the complex is exact everywhere except at its far end, where it reports the part of the
+kernel still to be covered (`uncovered`, `next_at`). `resolved: true` means there is nothing
+left to cover, and then `minimal` says whether the resolution is minimal. Exactness and
+surjectivity are tested at the test objects, in the degree windows below.
+
+- `resolution.start` makes the one-term resolution `C₀ = Q₀` with `ε` the identity.
+- `resolution.extend` adds the next term: generators of the kernel at the far end (at `C₀`, the
+  kernel of `C₀ → M`, which is computed from `ε` and the relations). It refuses a resolution that
+  does not check. Each call adds one term; nothing is built automatically.
+- `complex.gauss` on a resolution keeps the augmentation in step: the result is again a
+  resolution of the same module.
+
 ## Operations
 
 | Operation | Does |
@@ -72,6 +112,11 @@ Positions not listed are zero, and differentials not listed are zero.
 | `complex.gauss` | Gaussian elimination of isomorphism entries: a smaller homotopy-equivalent complex |
 | `complex.euler` | the Euler characteristic `Σ (−1)^p q^s [P(ℓ)]` in the Grothendieck group |
 | `complex.render` | TikZ (`tikz-cd`) source for a one-dimensional complex |
+| `module.check` | the presentation is well formed, and the graded dimensions of the module |
+| `module.head` | the presentation of `P/rad P` for a projective `P` (a sum of simple modules) |
+| `resolution.start` | the one-term resolution `Q₀ → M` of a module |
+| `resolution.extend` | the next term of a resolution, covering the kernel at its far end |
+| `resolution.check` | whether a complex with `resolves` is a resolution, and what is left to cover |
 
 Every result carries `certified_by` and a provenance with the certificate of the basis used, and
 a note saying which linear system was solved or which construction was applied.
@@ -125,6 +170,11 @@ degree 2, and the simple module `L` is `P/xP`.
 
 The test `a_resolution_step_by_step` in `crates/core/tests/complexes.rs` runs exactly this loop.
 
+With the module itself: `module.head` with `object: "i@1"` gives the presentation of `L` above,
+`resolution.start` gives `P → L`, and each `resolution.extend` adds `P⟨2n⟩` at position `−n` with
+`check.next_at` moving to `−n − 1` (the test `resolving_the_simple_module`; the workspace
+`examples/klrw-a1-resolution.dcw` holds the first step as cells).
+
 Continuing with maps and constructions:
 
 4. `chainmap.solve` from the two-term complex to itself, with the identity fixed at 0, finds the
@@ -148,5 +198,7 @@ The tests `solving_for_chain_maps_and_homotopies`, `the_cone_of_the_identity_is_
   Euler characteristics.
 - **M4** (done): every complex operation is a tool of the AI sidebar, Python helpers
   (`docs/python.md`), and TikZ output (`complex.render`).
-- Later: a web view of complexes, spectral sequences of multicomplexes, Rickard and
+- **M5**: modules by presentations, `P/rad P`, and resolutions of a module built step by step,
+  with module cells in workspaces and a web view of complexes.
+- Later: spectral sequences of multicomplexes, Rickard and
   Chuang–Rouquier complexes (bounded), and modules beyond projectives.

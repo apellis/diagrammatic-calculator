@@ -8,6 +8,7 @@ use crate::complex::{
     complex_json, fmt_pos, homology_piece, kernel_generators, parse_complex, parse_map, pos_json,
     range_over_tests, window,
 };
+use crate::complex_module as cm;
 use crate::context::ContextSpec;
 use crate::error::{Error, Result};
 use crate::ops::{RingVisitor, with_ring};
@@ -16,7 +17,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 /// The operations of this module.
-pub const OPS: [&str; 18] = [
+pub const OPS: [&str; 23] = [
     "complex.check",
     "chainmap.check",
     "homotopy.check",
@@ -35,6 +36,11 @@ pub const OPS: [&str; 18] = [
     "complex.gauss",
     "complex.euler",
     "complex.render",
+    "module.check",
+    "module.head",
+    "resolution.start",
+    "resolution.extend",
+    "resolution.check",
 ];
 
 /// How many elimination steps `complex.gauss` takes at most when no `limit` is given.
@@ -223,6 +229,11 @@ fn dispatch<A: Additive>(a: &A, op: &str, input: &Value) -> Result<Value> {
         "complex.gauss" => gauss(a, input),
         "complex.euler" => euler(a, input),
         "complex.render" => render(a, input),
+        "module.check" => module_check(a, input),
+        "module.head" => module_head(a, input),
+        "resolution.start" => resolution_start(a, input),
+        "resolution.extend" => resolution_extend(a, input),
+        "resolution.check" => resolution_check(a, input),
         _ => Err(Error::invalid(format!("unknown operation '{op}'"))),
     }
 }
@@ -763,9 +774,18 @@ fn hom_complex<A: Additive>(a: &A, input: &Value) -> Result<Value> {
 
 fn gauss<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     a.linear_algebra()?;
-    let c = valid_complex(a, get(input, "complex")?, "complex")?;
+    let cv = get(input, "complex")?;
+    let c = valid_complex(a, cv, "complex")?;
     let limit = opt_uint(input, "limit", DEFAULT_GAUSS_LIMIT)?;
-    let (r, steps, finished) = crate::complex_build::gauss(a, &c, limit)?;
+    let resolves = cv.get("resolves").is_some_and(|r| !r.is_null());
+    let (out, steps, finished) = if resolves {
+        let (r, _) = cm::parse_resolution(a, cv)?;
+        let (r, steps, finished) = cm::gauss_resolution(a, &r, limit)?;
+        (cm::resolution_json(a, &r)?, steps, finished)
+    } else {
+        let (r, steps, finished) = crate::complex_build::gauss(a, &c, limit)?;
+        (complex_json(a, &r)?, steps, finished)
+    };
     let mut notes = vec![
         "each step removes a summand pair joined by an invertible entry φ of a differential, \
          replacing the rest of that differential by ε − γ φ⁻¹ δ; the result is homotopy \
@@ -780,7 +800,7 @@ fn gauss<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     }
     Ok(with_prov(
         json!({
-            "complex": complex_json(a, &r)?,
+            "complex": out,
             "eliminations": steps.iter().map(|s| json!({
                 "from": s.from, "source": s.source, "target": s.target
             })).collect::<Vec<_>>(),
@@ -844,6 +864,9 @@ fn render<A: Additive>(a: &A, input: &Value) -> Result<Value> {
 /// filled in, whether it is a complex, its Euler characteristic, and, when it is a complex and
 /// linear algebra is available, its homology with a summary for building a resolution.
 pub(crate) fn complex_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    if v.get("resolves").is_some_and(|r| !r.is_null()) {
+        return resolution_cell(a, v);
+    }
     let (c, mut notes) = complex::parse_complex_noted(a, v)?;
     let cj = complex_json(a, &c)?;
     let fs = check_complex(a, &c)?;
@@ -924,4 +947,205 @@ fn resolution_summary<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>, h: &Value
         out["minimal"] = json!(crate::complex_solve::check_minimal(a, c)?.is_empty());
     }
     Ok(out)
+}
+
+/// The value of a complex cell that resolves a module: the filled resolution and its check.
+fn resolution_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    let (r, mut notes) = cm::parse_resolution(a, v)?;
+    let mut out = json!({ "complex": cm::resolution_json(a, &r)? });
+    match a.linear_algebra() {
+        Err(e) => notes.push(format!("no check: {}", e.message)),
+        Ok(()) => {
+            let (check, cnotes) = report_value(a, &r, None)?;
+            notes.extend(cnotes);
+            out["resolution"] = check;
+        }
+    }
+    out["provenance"] = prov_notes(a, notes);
+    Ok(out)
+}
+
+/// In a workspace, `resolves.module` may name an earlier `module` cell: this replaces the name
+/// by that cell's module (the latest one of that name before cell `i`).
+pub(crate) fn resolve_module_name(
+    ws: &crate::workspace::Workspace,
+    i: usize,
+    complex: &Value,
+) -> Result<Value> {
+    let Some(name) = complex
+        .get("resolves")
+        .and_then(|r| r.get("module"))
+        .and_then(Value::as_str)
+    else {
+        return Ok(complex.clone());
+    };
+    let found = ws.cells[..i].iter().rev().find_map(|c| match &c.body {
+        crate::workspace::CellBody::Module { name: n, module } if n == name => Some(module),
+        _ => None,
+    });
+    let module = found.ok_or_else(|| {
+        Error::invalid(format!(
+            "'resolves.module' names '{name}', but no module cell of that name comes before \
+             this one"
+        ))
+    })?;
+    let mut out = complex.clone();
+    out["resolves"]["module"] = module.clone();
+    Ok(out)
+}
+
+/// The value of a workspace cell `module name := {…}`: the module filled in, its check, and its
+/// graded dimensions at the test objects when linear algebra is available.
+pub(crate) fn module_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    module_check(a, &json!({ "module": v }))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Modules and resolutions of them (`docs/complexes.md`, "Resolving a module")
+
+fn module_test_objects<A: Additive>(a: &A, m: &cm::Module<A::Obj, A::Mor>) -> Result<Vec<A::Obj>> {
+    a.test_objects(&cm::module_objects(m))
+}
+
+fn module_check<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let (m, mut notes) = cm::parse_module_noted(a, get(input, "module")?)?;
+    let fs = cm::check_module(a, &m);
+    let mut dims = None;
+    if fs.is_empty() && a.linear_algebra().is_ok() {
+        let tests = module_test_objects(a, &m)?;
+        let max = opt_int(input, "max_degree")?;
+        let (d, w) = cm::module_dims(a, &m, &tests, max, DEFAULT_SPAN)?;
+        notes.extend(window_note(&w, "the dimensions"));
+        dims = Some((d, w));
+    }
+    let mut v = verdict(a, &fs, notes);
+    v["module"] = cm::module_json(a, &m)?;
+    if let Some((d, w)) = dims {
+        v["dimensions"] = cm::dims_json(&d);
+        v["dimension"] = json!(cm::dims_total(&d));
+        v["window"] = window_json(&w);
+        v["complete"] = json!(!w.is_some_and(|w| w.truncated));
+    }
+    Ok(v)
+}
+
+/// The summands to take the head of: `object` (with optional `shift`) or `summands`.
+fn head_summands<A: Additive>(a: &A, input: &Value) -> Result<Vec<complex::Summand<A::Obj>>> {
+    match (input.get("object"), input.get("summands")) {
+        (Some(o), None) if !o.is_null() => {
+            let s = o
+                .as_str()
+                .ok_or_else(|| Error::invalid("'object' is an object (a string)"))?;
+            Ok(vec![complex::Summand {
+                obj: a.parse_obj(s)?,
+                shift: opt_int(input, "shift")?.unwrap_or(0),
+            }])
+        }
+        (None, Some(_)) => summands_of(a, input, "summands"),
+        _ => Err(Error::invalid(
+            "give either 'object' (with an optional 'shift') or 'summands', the projective to \
+             take the head of",
+        )),
+    }
+}
+
+fn module_head<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let ss = head_summands(a, input)?;
+    let h = cm::radical_quotient(a, &ss, opt_int(input, "max_degree")?, DEFAULT_SPAN)?;
+    Ok(with_prov(
+        json!({
+            "module": cm::module_json(a, &h.module)?,
+            "dimensions": cm::dims_json(&h.dims),
+            "dimension": cm::dims_total(&h.dims),
+            "window": window_json(&h.window),
+            "complete": !h.window.is_some_and(|w| w.truncated),
+        }),
+        prov_notes(a, h.notes),
+    ))
+}
+
+fn report_value<A: Additive>(
+    a: &A,
+    r: &cm::Resolution<A::Obj, A::Mor>,
+    max: Option<i64>,
+) -> Result<(Value, Vec<String>)> {
+    let rep = cm::check_resolution(a, r, max, DEFAULT_SPAN)?;
+    let mut v = rep.json(r.complex.conv.step());
+    v["certified_by"] = json!("certificate");
+    Ok((v, rep.notes))
+}
+
+fn resolution_start<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let (m, mut notes) = cm::parse_module_noted(a, get(input, "module")?)?;
+    let fs = cm::check_module(a, &m);
+    if let Some(f) = fs.first() {
+        return Err(Error::invalid(format!(
+            "the module is not well formed: {}: {} (run module.check for all problems)",
+            f.location, f.detail
+        )));
+    }
+    let conv = complex::Conventions::parse(input)?;
+    let r = cm::start_resolution(a, m, conv);
+    let (check, cnotes) = report_value(a, &r, opt_int(input, "max_degree")?)?;
+    notes.extend(cnotes);
+    notes.push(
+        "C₀ is the sum of the generators, mapping to the module by the identity; \
+         resolution.extend covers the kernel of C₀ → M next"
+            .into(),
+    );
+    Ok(with_prov(
+        json!({ "resolution": cm::resolution_json(a, &r)?, "check": check }),
+        prov_notes(a, notes),
+    ))
+}
+
+fn resolution_extend<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let (mut r, mut notes) = cm::parse_resolution(a, get(input, "resolution")?)?;
+    let max = opt_int(input, "max_degree")?;
+    let before = cm::check_resolution(a, &r, max, DEFAULT_SPAN)?;
+    if let Some(f) = before.failures.first() {
+        return Err(Error::invalid(format!(
+            "the resolution does not check ({} failure{}): {}: {} ({}); extending it would \
+             build on that, so fix it first (resolution.check lists them all)",
+            before.failures.len(),
+            if before.failures.len() == 1 { "" } else { "s" },
+            f.location,
+            f.detail,
+            f.condition
+        )));
+    }
+    let e = cm::extend_resolution(a, &mut r, max, DEFAULT_SPAN)?;
+    notes.push(
+        "the new summands generate the kernel degree by degree, modulo what earlier ones \
+         produce; they need not be a minimal set (complex.gauss and complex.minimal help)"
+            .into(),
+    );
+    if let Some(n) = window_note(&e.window, "the kernel") {
+        notes.push(n);
+    }
+    let (check, cnotes) = report_value(a, &r, max)?;
+    notes.extend(cnotes);
+    Ok(with_prov(
+        json!({
+            "resolution": cm::resolution_json(a, &r)?,
+            "added": {
+                "at": pos_json(&e.at),
+                "summands": complex::summands_json(a, &e.summands),
+                "matrix": complex::matrix_json(a, &e.matrix)?,
+            },
+            "window": window_json(&e.window),
+            "complete": !e.window.is_some_and(|w| w.truncated),
+            "check": check,
+        }),
+        prov_notes(a, notes),
+    ))
+}
+
+fn resolution_check<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let (r, mut notes) = cm::parse_resolution(a, get(input, "resolution")?)?;
+    let (mut v, cnotes) = report_value(a, &r, opt_int(input, "max_degree")?)?;
+    notes.extend(cnotes);
+    v["resolution"] = cm::resolution_json(a, &r)?;
+    v["provenance"] = prov_notes(a, notes);
+    Ok(v)
 }

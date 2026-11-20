@@ -12,6 +12,7 @@ pub mod builtin;
 pub mod cartan;
 pub mod complex;
 pub mod complex_build;
+pub mod complex_module;
 pub mod complex_solve;
 pub mod conformance;
 pub mod context;

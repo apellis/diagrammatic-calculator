@@ -81,6 +81,20 @@ print(op("complex.euler", complex=c)["text"])
 print(op("complex.render", complex=c)["tikz"])
 ```
 
+To resolve a module rather than extend a complex, fix the module first; the zeroth term
+may then change (for instance under `complex.gauss`) without changing what is resolved:
+
+```python
+L = op("module.head", object="i@1")["module"]      # the simple head of P(i@1)
+r = op("resolution.start", module=L)["resolution"]
+for _ in range(3):
+    step = op("resolution.extend", resolution=r)
+    r = step["resolution"]
+    print(step["added"]["summands"], step["check"]["next_at"])
+r = op("complex.gauss", complex=r)["complex"]       # still a resolution of L
+assert op("resolution.check", resolution=r)["holds"]
+```
+
 Each response keeps its `certified_by` and `provenance`; report them with any result.
 
 ## Prepare and verify distributions (no publication)

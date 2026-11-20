@@ -73,6 +73,7 @@ const AI_OPS = [
   'hom.basis', 'complex.check', 'chainmap.check', 'homotopy.check', 'complex.homology', 'complex.kernel',
   'map.lift', 'map.extend', 'chainmap.solve', 'homotopy.find', 'complex.minimal', 'complex.shift',
   'complex.cone', 'complex.totalize', 'complex.hom', 'complex.gauss', 'complex.euler', 'complex.render',
+  'module.check', 'module.head', 'resolution.start', 'resolution.extend', 'resolution.check',
 ];
 function inline(v, schema) {
   if (Array.isArray(v)) return v.map((x) => inline(x, schema));

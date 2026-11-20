@@ -1918,8 +1918,13 @@ pub fn run_workspace<R: Ring>(
                     Ok(v)
                 })
             }),
-            CellBody::Complex { complex, .. } => {
-                ("complex", crate::ops_complex::complex_cell(&sc.k, complex))
+            CellBody::Complex { complex, .. } => (
+                "complex",
+                crate::ops_complex::resolve_module_name(ws, i, complex)
+                    .and_then(|c| crate::ops_complex::complex_cell(&sc.k, &c)),
+            ),
+            CellBody::Module { module, .. } => {
+                ("module", crate::ops_complex::module_cell(&sc.k, module))
             }
             CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => unreachable!(),
         };

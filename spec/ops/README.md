@@ -44,6 +44,11 @@ these schemas in `crates/core/tests/schemas.rs`.
 | `complex.gauss` | M3 | `complex.gauss.schema.json` |
 | `complex.euler` | M3 | `complex.euler.schema.json` |
 | `complex.render` | M4 | `complex.render.schema.json` |
+| `module.check` | M5 | `module.check.schema.json` |
+| `module.head` | M5 | `module.head.schema.json` |
+| `resolution.start` | M5 | `resolution.start.schema.json` |
+| `resolution.extend` | M5 | `resolution.extend.schema.json` |
+| `resolution.check` | M5 | `resolution.check.schema.json` |
 
 Locations in the rewriting operations: a term's summands are numbered from 1 in printed order; a
 summand's layers are numbered from 1 at the bottom of its canonical layering, and strands from 1
@@ -56,6 +61,8 @@ same map between a term and one written in its place, which no rewrite connects.
 Complexes over weighted KLR algebras (`docs/complexes.md`, phases M1 to M4) are given as JSON: terms,
 summands with shifts, and differential matrices with rows indexing the target. Their shared
 definitions are in `common.schema.json` (`complex`, `complexMatrix`, `complexVerdict`, and their parts).
+A module is a projective presentation (`module`: generators, relations, and the matrix between
+them); a resolution of it is a complex with `resolves: {module, augmentation}`.
 
 The other operations of the specification (workspace editing, rewriting, solving, graded linear
 algebra, history, export, AI) get their schemas in the phase that implements them, so a schema
