@@ -831,6 +831,14 @@ export type WorkspaceParseResponse =
     }
   | OpError;
 /**
+ * Graded dimensions at the test objects T: dim Hom(T⟨d⟩, M) for each degree d, as a Laurent polynomial in q and as [degree, dimension] pairs.
+ */
+export type ModuleDimensions1 = {
+  test: string;
+  dimensions: string;
+  powers: [number, number][];
+}[];
+/**
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "WorkspaceRunResponse".
  */
@@ -1809,7 +1817,7 @@ export interface WorkspaceParseRequest2 {
  */
 export interface WorkspaceParseCell {
   id: string | null;
-  kind: 'def' | 'watch' | 'solve' | 'check' | 'note' | 'comment' | 'blank';
+  kind: 'def' | 'watch' | 'solve' | 'check' | 'note' | 'comment' | 'complex' | 'module' | 'blank';
   /**
    * The cell in canonical form, without options or ID.
    */
@@ -1818,11 +1826,11 @@ export interface WorkspaceParseCell {
     [k: string]: string;
   };
   /**
-   * Bare names the cell's terms mention (definitions, unknowns, scalars), sorted.
+   * Bare names the cell's terms mention (definitions, unknowns, scalars), sorted; for a complex resolving a module cell, that cell's name.
    */
   uses: string[];
   /**
-   * def: the name defined.
+   * def: the name defined; module: the module's name, which a complex resolving it names.
    */
   defines?: string;
   /**
@@ -1841,6 +1849,22 @@ export interface WorkspaceParseCell {
    * def and watch: the term, as written in canonical form.
    */
   term?: string;
+  /**
+   * complex: the name.
+   */
+  complex_name?: string;
+  /**
+   * complex: the JSON as written.
+   */
+  complex?: {};
+  /**
+   * module: the name.
+   */
+  module_name?: string;
+  /**
+   * module: the JSON as written.
+   */
+  module?: {};
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -1870,7 +1894,7 @@ export interface WorkspaceRunRequest {
  */
 export interface WorkspaceRunCell {
   id: string | null;
-  kind: 'def' | 'watch' | 'solve' | 'check';
+  kind: 'def' | 'watch' | 'solve' | 'check' | 'complex' | 'module';
   status: 'ok' | 'error';
   /**
    * def: the name defined.
@@ -1952,8 +1976,71 @@ export interface WorkspaceRunCell {
    * solve, tier 2 finite: the solutions in the ground field.
    */
   points?: string[][];
+  complex?: Complex1;
+  /**
+   * complex: as in complex.check (a module cell carries holds and failures as in module.check).
+   */
+  check?: {};
+  /**
+   * complex: as in complex.euler.
+   */
+  euler?: {};
+  /**
+   * complex, when it checks: as in complex.homology.
+   */
+  homology?: {};
+  /**
+   * complex: for a resolution (with 'resolves'), as in resolution.check; for a one-dimensional complex, its reading as a resolution of the homology at its last position.
+   */
+  resolution?: {};
+  module?: Module1;
+  dimensions?: ModuleDimensions1;
+  /**
+   * module: as in module.check.
+   */
+  window?: {} | null;
+  /**
+   * module: as in module.check.
+   */
+  complete?: boolean;
   error_kind?: 'syntax' | 'invalid' | 'precondition' | 'limit';
   message?: string;
+}
+/**
+ * complex: the complex with every object and shift filled in (a resolution's module filled in when the cell names it).
+ */
+export interface Complex1 {
+  dimension?: number;
+  /**
+   * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
+   */
+  indexing?: 'cohomological' | 'homological';
+  squares?: 'commute' | 'anticommute';
+  odd_signs?: 'koszul' | 'ignore';
+  terms: {
+    at: ComplexPosition;
+    summands: ComplexSummands;
+  }[];
+  differentials?: {
+    from: ComplexPosition;
+    axis?: number;
+    matrix: ComplexMatrix;
+  }[];
+  /**
+   * Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).
+   */
+  resolves?: {
+    module: Module;
+    augmentation?: ComplexMatrix;
+  };
+}
+/**
+ * A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.
+ */
+export interface Module1 {
+  generators: ComplexSummands;
+  relations?: ComplexSummands;
+  matrix?: ComplexMatrix;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema

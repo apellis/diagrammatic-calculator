@@ -1104,10 +1104,16 @@ fn cell_json(c: &Cell) -> Value {
         CellBody::Complex { name, complex } => {
             v["complex_name"] = json!(name);
             v["complex"] = complex.clone();
+            // a complex resolving a module cell by name depends on that cell
+            if let Some(m) = complex["resolves"]["module"].as_str() {
+                v["uses"] = json!([m]);
+            }
         }
         CellBody::Module { name, module } => {
             v["module_name"] = json!(name);
             v["module"] = module.clone();
+            // so that a complex resolving it by name finds it (workspace.parse "defines")
+            v["defines"] = json!(name);
         }
         CellBody::Note { text } => v["note"] = json!(text),
         _ => {}

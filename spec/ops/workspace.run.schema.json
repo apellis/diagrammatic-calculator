@@ -18,7 +18,7 @@
       "required": ["id", "kind", "status"],
       "properties": {
         "id": { "type": ["string", "null"] },
-        "kind": { "enum": ["def", "watch", "solve", "check"] },
+        "kind": { "enum": ["def", "watch", "solve", "check", "complex", "module"] },
         "status": { "enum": ["ok", "error"] },
         "name": { "description": "def: the name defined.", "type": "string" },
         "term": { "description": "def: the elaborated term; watch: the watched term with definitions substituted, before simplifying.", "type": "string" },
@@ -40,6 +40,15 @@
         "dimension": { "description": "solve, family: the dimension of the solution set.", "type": "integer", "minimum": 0 },
         "variables": { "description": "solve, tier 2: the unknowns, in the order of points.", "type": "array", "items": { "type": "string" } },
         "points": { "description": "solve, tier 2 finite: the solutions in the ground field.", "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+        "complex": { "description": "complex: the complex with every object and shift filled in (a resolution's module filled in when the cell names it).", "$ref": "common.schema.json#/$defs/complex" },
+        "check": { "description": "complex: as in complex.check (a module cell carries holds and failures as in module.check).", "type": "object" },
+        "euler": { "description": "complex: as in complex.euler.", "type": "object" },
+        "homology": { "description": "complex, when it checks: as in complex.homology.", "type": "object" },
+        "resolution": { "description": "complex: for a resolution (with 'resolves'), as in resolution.check; for a one-dimensional complex, its reading as a resolution of the homology at its last position.", "type": "object" },
+        "module": { "description": "module: the module with every object and shift filled in.", "$ref": "common.schema.json#/$defs/module" },
+        "dimensions": { "description": "module: as in module.check.", "$ref": "common.schema.json#/$defs/moduleDimensions" },
+        "window": { "description": "module: as in module.check.", "type": ["object", "null"] },
+        "complete": { "description": "module: as in module.check.", "type": "boolean" },
         "error_kind": { "enum": ["syntax", "invalid", "precondition", "limit"] },
         "message": { "type": "string" }
       }

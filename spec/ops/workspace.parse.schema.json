@@ -52,6 +52,8 @@
             "check",
             "note",
             "comment",
+            "complex",
+            "module",
             "blank"
           ]
         },
@@ -66,14 +68,14 @@
           }
         },
         "uses": {
-          "description": "Bare names the cell's terms mention (definitions, unknowns, scalars), sorted.",
+          "description": "Bare names the cell's terms mention (definitions, unknowns, scalars), sorted; for a complex resolving a module cell, that cell's name.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "defines": {
-          "description": "def: the name defined.",
+          "description": "def: the name defined; module: the module's name, which a complex resolving it names.",
           "type": "string"
         },
         "unknowns": {
@@ -94,7 +96,11 @@
         "term": {
           "description": "def and watch: the term, as written in canonical form.",
           "type": "string"
-        }
+        },
+        "complex_name": { "description": "complex: the name.", "type": "string" },
+        "complex": { "description": "complex: the JSON as written.", "type": "object" },
+        "module_name": { "description": "module: the name.", "type": "string" },
+        "module": { "description": "module: the JSON as written.", "type": "object" }
       }
     },
     "response": {
