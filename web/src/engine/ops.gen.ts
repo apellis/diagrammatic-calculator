@@ -52,6 +52,16 @@ export type ComplexMatrix = ComplexEntry[][];
  */
 export type ComplexSummands = ComplexSummand[];
 /**
+ * A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {"head": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "module".
+ */
+export type Module = Module1 & Module2;
+export type Module1 = {
+  [k: string]: unknown;
+};
+/**
  * Components of a map, one matrix per source position.
  *
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -831,6 +841,20 @@ export type WorkspaceParseResponse =
     }
   | OpError;
 /**
+ * A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {"head": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.
+ */
+export type Module3 = {
+  [k: string]: unknown;
+} & {
+  generators?: ComplexSummands;
+  relations?: ComplexSummands;
+  matrix?: ComplexMatrix;
+  /**
+   * The projective P of P/rad P: an object, a summand, or a list of summands.
+   */
+  head?: string | ComplexSummand | ComplexSummands;
+};
+/**
  * Graded dimensions at the test objects T: dim Hom(T⟨d⟩, M) for each degree d, as a Laurent polynomial in q and as [degree, dimension] pairs.
  */
 export type ModuleDimensions1 = {
@@ -1244,16 +1268,14 @@ export interface Complex {
     augmentation?: ComplexMatrix;
   };
 }
-/**
- * A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.
- *
- * This interface was referenced by `Operations`'s JSON-Schema
- * via the `definition` "module".
- */
-export interface Module {
-  generators: ComplexSummands;
+export interface Module2 {
+  generators?: ComplexSummands;
   relations?: ComplexSummands;
   matrix?: ComplexMatrix;
+  /**
+   * The projective P of P/rad P: an object, a summand, or a list of summands.
+   */
+  head?: string | ComplexSummand | ComplexSummands;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -1993,7 +2015,7 @@ export interface WorkspaceRunCell {
    * complex: for a resolution (with 'resolves'), as in resolution.check; for a one-dimensional complex, its reading as a resolution of the homology at its last position.
    */
   resolution?: {};
-  module?: Module1;
+  module?: Module3;
   dimensions?: ModuleDimensions1;
   /**
    * module: as in module.check.
@@ -2033,14 +2055,6 @@ export interface Complex1 {
     module: Module;
     augmentation?: ComplexMatrix;
   };
-}
-/**
- * A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.
- */
-export interface Module1 {
-  generators: ComplexSummands;
-  relations?: ComplexSummands;
-  matrix?: ComplexMatrix;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema

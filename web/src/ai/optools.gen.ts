@@ -799,11 +799,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -862,8 +859,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -1033,11 +1115,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -1096,8 +1175,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -1248,11 +1412,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -1311,8 +1472,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -1525,11 +1771,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -1588,8 +1831,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -1740,11 +2068,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -1803,8 +2128,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -2098,11 +2508,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -2161,8 +2568,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -2357,11 +2849,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -2420,8 +2909,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -2842,11 +3416,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -2905,8 +3476,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -3057,11 +3713,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -3120,8 +3773,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -3337,11 +4075,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -3400,8 +4135,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -3552,11 +4372,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -3615,8 +4432,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -3868,11 +4770,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -3931,8 +4830,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -4100,11 +5084,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -4163,8 +5144,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -4352,11 +5418,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -4415,8 +5478,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -4567,11 +5715,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -4630,8 +5775,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -4841,11 +6071,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -4904,8 +6131,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -5074,11 +6386,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -5137,8 +6446,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -5289,11 +6683,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -5352,8 +6743,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -5527,11 +7003,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -5590,8 +7063,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -5763,11 +7321,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -5826,8 +7381,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -5995,11 +7635,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -6058,8 +7695,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -6097,11 +7819,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "string"
         },
         "module": {
-          "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+          "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
           "type": "object",
-          "required": [
-            "generators"
-          ],
           "properties": {
             "generators": {
               "type": "array",
@@ -6160,8 +7879,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   ]
                 }
               }
+            },
+            "head": {
+              "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "object"
+                  ],
+                  "properties": {
+                    "object": {
+                      "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                      "type": "string"
+                    },
+                    "loading": {
+                      "type": "string"
+                    },
+                    "shift": {
+                      "description": "X⟨s⟩ has its generator in degree s.",
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "object"
+                    ],
+                    "properties": {
+                      "object": {
+                        "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                        "type": "string"
+                      },
+                      "loading": {
+                        "type": "string"
+                      },
+                      "shift": {
+                        "description": "X⟨s⟩ has its generator in degree s.",
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              ]
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "generators"
+              ],
+              "not": {
+                "required": [
+                  "head"
+                ]
+              }
+            },
+            {
+              "required": [
+                "head"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "generators"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relations"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "matrix"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
         },
         "max_degree": {
           "type": "integer"
@@ -6230,11 +8034,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "string"
         },
         "module": {
-          "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+          "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
           "type": "object",
-          "required": [
-            "generators"
-          ],
           "properties": {
             "generators": {
               "type": "array",
@@ -6293,8 +8094,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   ]
                 }
               }
+            },
+            "head": {
+              "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "object"
+                  ],
+                  "properties": {
+                    "object": {
+                      "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                      "type": "string"
+                    },
+                    "loading": {
+                      "type": "string"
+                    },
+                    "shift": {
+                      "description": "X⟨s⟩ has its generator in degree s.",
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "object"
+                    ],
+                    "properties": {
+                      "object": {
+                        "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                        "type": "string"
+                      },
+                      "loading": {
+                        "type": "string"
+                      },
+                      "shift": {
+                        "description": "X⟨s⟩ has its generator in degree s.",
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              ]
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "generators"
+              ],
+              "not": {
+                "required": [
+                  "head"
+                ]
+              }
+            },
+            {
+              "required": [
+                "head"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "generators"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relations"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "matrix"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
         },
         "indexing": {
           "enum": [
@@ -6465,11 +8351,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -6528,8 +8411,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",
@@ -6700,11 +8668,8 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               ],
               "properties": {
                 "module": {
-                  "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+                  "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
-                  "required": [
-                    "generators"
-                  ],
                   "properties": {
                     "generators": {
                       "type": "array",
@@ -6763,8 +8728,93 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           ]
                         }
                       }
+                    },
+                    "head": {
+                      "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "object"
+                          ],
+                          "properties": {
+                            "object": {
+                              "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                              "type": "string"
+                            },
+                            "loading": {
+                              "type": "string"
+                            },
+                            "shift": {
+                              "description": "X⟨s⟩ has its generator in degree s.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "object"
+                            ],
+                            "properties": {
+                              "object": {
+                                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                                "type": "string"
+                              },
+                              "loading": {
+                                "type": "string"
+                              },
+                              "shift": {
+                                "description": "X⟨s⟩ has its generator in degree s.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
-                  }
+                  },
+                  "oneOf": [
+                    {
+                      "required": [
+                        "generators"
+                      ],
+                      "not": {
+                        "required": [
+                          "head"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "head"
+                      ],
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "generators"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "relations"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "matrix"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
                 },
                 "augmentation": {
                   "description": "Rows index the summands of the target, columns those of the source.",

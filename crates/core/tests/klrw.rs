@@ -130,6 +130,31 @@ fn resolution_workspace_runs() {
 }
 
 #[test]
+fn head_module_is_the_presentation_by_rad() {
+    let src = "diagcalc-workspace/1\ncontext klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic\n\n\
+               module L := {\"head\": \"i@1\"}\n\
+               module M := {\"head\": [{\"object\": \"i@1\", \"shift\": 3}]}\n\
+               module N := {\"head\": \"i@1\", \"generators\": []}\n";
+    let v = ops::run_workspace_with(src, None, Some(8), &[]);
+    let cells: Vec<_> = v["cells"].as_array().unwrap().iter().collect();
+    let l = &cells[0];
+    assert_eq!(l["holds"], true, "{l}");
+    assert_eq!(l["module"]["relations"][0]["shift"], 2, "{l}");
+    assert_eq!(l["module"]["matrix"][0][0], "x_1 e(i@1)", "{l}");
+    assert_eq!(
+        cells[1]["module"]["generators"][0]["shift"], 3,
+        "{}",
+        cells[1]
+    );
+    assert_eq!(
+        cells[1]["module"]["relations"][0]["shift"], 5,
+        "{}",
+        cells[1]
+    );
+    assert_eq!(cells[2]["status"], "error", "{}", cells[2]);
+}
+
+#[test]
 fn resolution_cell_needs_its_module() {
     let src = "diagcalc-workspace/1\ncontext klrw type=A1 ring=QQ\n\ncomplex R := \
                {\"terms\": [{\"at\": 0, \"summands\": [{\"object\": \"i@0\", \"shift\": 0}]}], \

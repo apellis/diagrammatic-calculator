@@ -11,7 +11,7 @@
 use crate::complex::{
     self, Additive, Complex, Failure, Generator, Matrix, Noted, Pos, Space, Summand, Window,
     check_entries, check_zero, complex_json, fmt_pos, homology_piece, kernel_generators, mat_mul,
-    matrix_json, parse_complex_noted, parse_matrix, postcompose, range_over_tests,
+    matrix_json, parse_complex_noted, parse_matrix, parse_summands, postcompose, range_over_tests,
     relative_kernel_generators, space, subspace_generators, summands_json, window,
 };
 use crate::error::{Error, Result};
@@ -58,6 +58,9 @@ pub fn parse_module_noted<A: Additive>(a: &A, v: &Value) -> Result<Noted<Module<
              only inside a workspace)"
         )));
     }
+    if let Some(h) = v.get("head").filter(|h| !h.is_null()) {
+        return head_module(a, v, h);
+    }
     let gens = v
         .get("generators")
         .filter(|g| !g.is_null())
@@ -100,6 +103,36 @@ pub fn parse_module_noted<A: Additive>(a: &A, v: &Value) -> Result<Noted<Module<
         .map(|n| relabel(&n).replace("differential entries", "matrix entries"))
         .collect();
     Ok((Module { gens, rels, matrix }, notes))
+}
+
+/// `{"head": P}`: the module P/rad P, for `P` an object (`"i@1"`), a summand
+/// `{object, shift}`, or a list of summands, as found by [`radical_quotient`].
+fn head_module<A: Additive>(a: &A, v: &Value, h: &Value) -> Result<Noted<Module<A::Obj, A::Mor>>> {
+    if let Some(k) = ["generators", "relations", "matrix"]
+        .iter()
+        .find(|k| v.get(**k).is_some())
+    {
+        return Err(Error::invalid(format!(
+            "a module is either {{\"head\": …}} or a presentation, not both ('{k}' given with \
+             'head')"
+        )));
+    }
+    let ss = match h {
+        Value::String(o) => vec![Summand {
+            obj: a.parse_obj(o)?,
+            shift: 0,
+        }],
+        Value::Object(_) => parse_summands(a, &json!([h]), "'head'")?,
+        Value::Array(_) => parse_summands(a, h, "'head'")?,
+        _ => {
+            return Err(Error::invalid(
+                "'head' is the projective P of P/rad P: an object (\"i@1\"), a summand \
+                 {\"object\", \"shift\"}, or a list of summands",
+            ));
+        }
+    };
+    let hd = radical_quotient(a, &ss, None, crate::ops_complex::DEFAULT_SPAN)?;
+    Ok((hd.module, hd.notes))
 }
 
 pub fn module_json<A: Additive>(a: &A, m: &Module<A::Obj, A::Mor>) -> Result<Value> {

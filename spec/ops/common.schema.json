@@ -681,11 +681,8 @@
       }
     },
     "module": {
-      "description": "A module M = coker(φ: Q₁ → Q₀) over the algebra, given by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i. Without relations, M = Q₀ is projective.",
+      "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
       "type": "object",
-      "required": [
-        "generators"
-      ],
       "properties": {
         "generators": {
           "$ref": "common.schema.json#/$defs/complexSummands"
@@ -695,8 +692,58 @@
         },
         "matrix": {
           "$ref": "common.schema.json#/$defs/complexMatrix"
+        },
+        "head": {
+          "description": "The projective P of P/rad P: an object, a summand, or a list of summands.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "common.schema.json#/$defs/complexSummand"
+            },
+            {
+              "$ref": "common.schema.json#/$defs/complexSummands"
+            }
+          ]
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "generators"
+          ],
+          "not": {
+            "required": [
+              "head"
+            ]
+          }
+        },
+        {
+          "required": [
+            "head"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "generators"
+                ]
+              },
+              {
+                "required": [
+                  "relations"
+                ]
+              },
+              {
+                "required": [
+                  "matrix"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     "moduleDimensions": {
       "description": "Graded dimensions at the test objects T: dim Hom(T⟨d⟩, M) for each degree d, as a Laurent polynomial in q and as [degree, dimension] pairs.",
