@@ -793,6 +793,13 @@ impl RingVisitor for RunWorkspace<'_> {
                         Ok(v)
                     })(),
                 ),
+                CellBody::Complex { .. } => (
+                    "complex",
+                    Err(Error::precondition(format!(
+                        "complexes are available in weighted KLR contexts (klrw), not in {}",
+                        ws.context.presentation
+                    ))),
+                ),
                 CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => continue,
             };
             let mut value = with_status(r);
@@ -1063,6 +1070,7 @@ fn cell_json(c: &Cell) -> Value {
         CellBody::Watch { .. } => "watch",
         CellBody::Solve { .. } => "solve",
         CellBody::Check { .. } => "check",
+        CellBody::Complex { .. } => "complex",
         CellBody::Note { .. } => "note",
         CellBody::Comment(_) => "comment",
         CellBody::Blank => "blank",
@@ -1087,6 +1095,10 @@ fn cell_json(c: &Cell) -> Value {
         CellBody::Watch { term } => v["term"] = json!(crate::text::print(term)),
         CellBody::Solve { unknowns, .. } => v["unknowns"] = json!(unknowns),
         CellBody::Check { name, .. } => v["check"] = json!(name),
+        CellBody::Complex { name, complex } => {
+            v["complex_name"] = json!(name);
+            v["complex"] = complex.clone();
+        }
         CellBody::Note { text } => v["note"] = json!(text),
         _ => {}
     }

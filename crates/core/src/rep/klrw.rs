@@ -1918,6 +1918,9 @@ pub fn run_workspace<R: Ring>(
                     Ok(v)
                 })
             }),
+            CellBody::Complex { complex, .. } => {
+                ("complex", crate::ops_complex::complex_cell(&sc.k, complex))
+            }
             CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => unreachable!(),
         };
         let mut value = crate::ops::with_status(r);

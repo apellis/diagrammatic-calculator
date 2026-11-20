@@ -21,6 +21,11 @@ use crate::ring::Ring;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The source, target, and degree of a homogeneous morphism.
+pub type MorEnds<O> = (O, O, i64);
+/// A value with the notes saying how it was obtained.
+pub type Noted<T> = (T, Vec<String>);
+
 /// An additive category with graded, finite-dimensional Hom spaces over a field, in which
 /// complexes are built.
 pub trait Additive {
@@ -51,6 +56,9 @@ pub trait Additive {
     /// Checks that `f` is a morphism `src → tgt` and returns its degree (`None` for zero); an
     /// error says what is wrong (other ends, or not homogeneous).
     fn mor_degree(&self, src: &Self::Obj, tgt: &Self::Obj, f: &Self::Mor) -> Result<Option<i64>>;
+    /// The source, target, and degree of a nonzero homogeneous morphism, read off the morphism
+    /// itself (`None` for zero); used to infer the objects and shifts a complex leaves out.
+    fn mor_ends(&self, f: &Self::Mor) -> Result<Option<MorEnds<Self::Obj>>>;
     /// The least and greatest degree in which `Hom(src, tgt)` can be nonzero (`None`: zero
     /// space; greatest `None`: unbounded above).
     fn hom_degrees(&self, src: &Self::Obj, tgt: &Self::Obj) -> Result<Option<(i64, Option<i64>)>>;
@@ -386,6 +394,23 @@ pub fn zero_matrix<A: Additive>(a: &A, rows: usize, cols: usize) -> Matrix<A::Mo
 
 /// Parses a complex (`spec/ops/complex.check.schema.json`, `$defs/complex`).
 pub fn parse_complex<A: Additive>(a: &A, v: &Value) -> Result<Complex<A::Obj, A::Mor>> {
+    Ok(parse_complex_noted(a, v)?.0)
+}
+
+/// A summand as written: its object and shift may be left out, to be inferred.
+type Written<O> = (Option<O>, Option<i64>);
+
+/// [`parse_complex`], with notes saying which objects and shifts were inferred. A summand may
+/// leave out its `object` or its `shift`: each nonzero entry `f : X⟨s⟩ → Y⟨t⟩` of a differential
+/// fixes the objects at its ends and the difference `s − t = deg f`. Shifts are propagated along
+/// the entries; a group of summands that no written shift reaches gets shift 0 at its first
+/// summand, taking the positions from the end of the differentials (the last position for
+/// cohomological indexing, the first for homological) and the summands in order. Inferred
+/// values that contradict each other are left for [`check_complex`] to report.
+pub fn parse_complex_noted<A: Additive>(
+    a: &A,
+    v: &Value,
+) -> Result<Noted<Complex<A::Obj, A::Mor>>> {
     let conv = Conventions::parse(v)?;
     let terms_v = v
         .get("terms")
@@ -400,7 +425,7 @@ pub fn parse_complex<A: Additive>(a: &A, v: &Value) -> Result<Complex<A::Obj, A:
                 as usize,
         ),
     };
-    let mut terms: BTreeMap<Pos, Vec<Summand<A::Obj>>> = BTreeMap::new();
+    let mut written: BTreeMap<Pos, Vec<Written<A::Obj>>> = BTreeMap::new();
     for t in terms_v {
         let p = parse_pos(
             t.get("at")
@@ -409,13 +434,13 @@ pub fn parse_complex<A: Additive>(a: &A, v: &Value) -> Result<Complex<A::Obj, A:
         )?;
         dim.get_or_insert(p.len());
         let where_ = format!("the term at {}", fmt_pos(&p));
-        let ss = parse_summands(
+        let ss = parse_written(
             a,
             t.get("summands")
                 .ok_or_else(|| Error::invalid(format!("{where_} needs 'summands'")))?,
             &where_,
         )?;
-        if terms.insert(p.clone(), ss).is_some() {
+        if written.insert(p.clone(), ss).is_some() {
             return Err(Error::invalid(format!(
                 "two terms are at the position {}",
                 fmt_pos(&p)
@@ -423,12 +448,14 @@ pub fn parse_complex<A: Additive>(a: &A, v: &Value) -> Result<Complex<A::Obj, A:
         }
     }
     let dim = dim.unwrap_or(1);
-    let mut c = Complex {
-        dim,
-        conv,
-        terms,
-        diffs: BTreeMap::new(),
+    let step = conv.step();
+    let next = |p: &[i64], axis: usize| {
+        let mut q = p.to_vec();
+        q[axis] += step;
+        q
     };
+    let len = |p: &Pos| written.get(p).map_or(0, Vec::len);
+    let mut diffs = BTreeMap::new();
     if let Some(ds) = v.get("differentials") {
         let ds = ds
             .as_array()
@@ -451,7 +478,7 @@ pub fn parse_complex<A: Additive>(a: &A, v: &Value) -> Result<Complex<A::Obj, A:
                     .ok_or_else(|| Error::invalid("a differential needs 'from', its source"))?,
                 Some(dim),
             )?;
-            let q = c.next(&p, axis);
+            let q = next(&p, axis);
             let where_ = if dim == 1 {
                 format!("the differential from {}", fmt_pos(&p))
             } else {
@@ -461,16 +488,172 @@ pub fn parse_complex<A: Additive>(a: &A, v: &Value) -> Result<Complex<A::Obj, A:
                 a,
                 d.get("matrix")
                     .ok_or_else(|| Error::invalid(format!("{where_} needs 'matrix'")))?,
-                c.at(&q).len(),
-                c.at(&p).len(),
+                len(&q),
+                len(&p),
                 &where_,
             )?;
-            if c.diffs.insert((axis, p.clone()), m).is_some() {
+            if diffs.insert((axis, p.clone()), m).is_some() {
                 return Err(Error::invalid(format!("{where_} is given twice")));
             }
         }
     }
-    Ok(c)
+    // the ends of the nonzero entries: (source summand, target summand, source, target, degree)
+    type Node = (Pos, usize);
+    type Edge<O> = (Node, Node, O, O, i64);
+    let mut edges: Vec<Edge<A::Obj>> = Vec::new();
+    for ((axis, p), m) in &diffs {
+        let q = next(p, *axis);
+        for (r, row) in m.iter().enumerate() {
+            for (c, f) in row.iter().enumerate() {
+                // an entry that is not a homogeneous map is left for the check to report
+                if let Ok(Some((s, t, d))) = a.mor_ends(f) {
+                    edges.push(((p.clone(), c), (q.clone(), r), s, t, d));
+                }
+            }
+        }
+    }
+    let mut notes = Vec::new();
+    let (mut objs_inferred, mut shifts_inferred) = (0usize, 0usize);
+    for (from, to, s, t, _) in &edges {
+        for (node, o) in [(from, s), (to, t)] {
+            let slot = &mut written.get_mut(&node.0).unwrap()[node.1].0;
+            if slot.is_none() {
+                *slot = Some(o.clone());
+                objs_inferred += 1;
+            }
+        }
+    }
+    // the order in which unreached groups are anchored: from the end of the differentials
+    let mut order: Vec<Node> = written
+        .iter()
+        .flat_map(|(p, ss)| (0..ss.len()).map(move |k| (p.clone(), k)))
+        .collect();
+    order.sort_by_key(|(p, k)| (-step * p.iter().sum::<i64>(), p.clone(), *k));
+    let mut anchors = Vec::new();
+    loop {
+        let mut progress = true;
+        while progress {
+            progress = false;
+            for (from, to, _, _, d) in &edges {
+                let sf = written[&from.0][from.1].1;
+                let st = written[&to.0][to.1].1;
+                match (sf, st) {
+                    (Some(x), None) => {
+                        written.get_mut(&to.0).unwrap()[to.1].1 = Some(x - d);
+                        shifts_inferred += 1;
+                        progress = true;
+                    }
+                    (None, Some(y)) => {
+                        written.get_mut(&from.0).unwrap()[from.1].1 = Some(y + d);
+                        shifts_inferred += 1;
+                        progress = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        match order.iter().find(|(p, k)| written[p][*k].1.is_none()) {
+            None => break,
+            Some((p, k)) => {
+                let connected = edges
+                    .iter()
+                    .any(|(f, t, ..)| (&f.0 == p && f.1 == *k) || (&t.0 == p && t.1 == *k));
+                written.get_mut(p).unwrap()[*k].1 = Some(0);
+                if connected {
+                    anchors.push((p.clone(), *k));
+                }
+            }
+        }
+    }
+    let mut terms = BTreeMap::new();
+    for (p, ss) in written {
+        let mut out = Vec::with_capacity(ss.len());
+        for (k, (o, s)) in ss.into_iter().enumerate() {
+            let obj = o.ok_or_else(|| {
+                Error::invalid(format!(
+                    "the term at {}, summand {}: needs 'object' (no nonzero entry of a \
+                     differential starts or ends there, so it cannot be inferred)",
+                    fmt_pos(&p),
+                    k + 1
+                ))
+            })?;
+            out.push(Summand {
+                obj,
+                shift: s.unwrap_or(0),
+            });
+        }
+        terms.insert(p, out);
+    }
+    if objs_inferred > 0 {
+        notes.push(format!(
+            "the objects of {objs_inferred} summand{} were read off the differential entries",
+            if objs_inferred == 1 { "" } else { "s" }
+        ));
+    }
+    if shifts_inferred > 0 || !anchors.is_empty() {
+        let anchored: Vec<String> = anchors
+            .iter()
+            .map(|(p, k)| format!("{}⟨0⟩ at {}", a.fmt_obj(&terms[p][*k].obj), fmt_pos(p)))
+            .collect();
+        notes.push(format!(
+            "the shifts of {} summand{} were inferred from the degrees of the differential \
+             entries{}",
+            shifts_inferred + anchors.len(),
+            if shifts_inferred + anchors.len() == 1 {
+                ""
+            } else {
+                "s"
+            },
+            if anchored.is_empty() {
+                String::new()
+            } else {
+                format!(", starting from {}", anchored.join(", "))
+            }
+        ));
+    }
+    Ok((
+        Complex {
+            dim,
+            conv,
+            terms,
+            diffs,
+        },
+        notes,
+    ))
+}
+
+/// The summands of a term as written, each with an optional object and shift.
+fn parse_written<A: Additive>(a: &A, v: &Value, where_: &str) -> Result<Vec<Written<A::Obj>>> {
+    let xs = v
+        .as_array()
+        .ok_or_else(|| Error::invalid(format!("{where_}: summands are a list")))?;
+    xs.iter()
+        .enumerate()
+        .map(|(k, x)| {
+            let o = match x.get("object").or_else(|| x.get("loading")) {
+                None | Some(Value::Null) => None,
+                Some(Value::String(o)) => Some(a.parse_obj(o).map_err(|e| {
+                    Error::invalid(format!("{where_}, summand {}: {}", k + 1, e.message))
+                })?),
+                Some(_) => {
+                    return Err(Error::invalid(format!(
+                        "{where_}, summand {}: 'object' is a string such as \"e(i|1)\"",
+                        k + 1
+                    )));
+                }
+            };
+            let shift = match x.get("shift") {
+                None | Some(Value::Null) => None,
+                Some(s) => Some(s.as_i64().ok_or_else(|| {
+                    Error::invalid(format!(
+                        "{where_}, summand {}: 'shift' is an integer",
+                        k + 1
+                    ))
+                })?),
+            };
+            Ok((o, shift))
+        })
+        .collect()
 }
 
 /// The JSON form of a complex, with entries in normal form (`null` for zero).

@@ -13,6 +13,7 @@ use crate::error::{Error, Result};
 use crate::ops::{RingVisitor, with_ring};
 use crate::ring::Ring;
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
 /// The operations of this module.
 pub const OPS: [&str; 18] = [
@@ -180,10 +181,12 @@ fn valid_complex<A: Additive>(a: &A, v: &Value, name: &str) -> Result<Complex<A:
 fn dispatch<A: Additive>(a: &A, op: &str, input: &Value) -> Result<Value> {
     match op {
         "complex.check" => {
-            let c = parse_complex(a, get(input, "complex")?)?;
+            let (c, notes) = complex::parse_complex_noted(a, get(input, "complex")?)?;
             let fs = check_complex(a, &c)?;
-            let mut v = verdict(a, &fs, vec![]);
+            let mut v = verdict(a, &fs, notes);
             v["conventions"] = c.conv.to_json();
+            // with the inferred objects and shifts filled in
+            v["complex"] = complex_json(a, &c)?;
             Ok(v)
         }
         "chainmap.check" => {
@@ -835,4 +838,90 @@ fn render<A: Additive>(a: &A, input: &Value) -> Result<Value> {
         json!({ "format": "tikz-cd", "tikz": tex }),
         prov_notes(a, vec!["needs \\usepackage{tikz-cd} and amsmath".into()]),
     ))
+}
+
+/// The value of a workspace cell `complex name := {…}`: the complex with every object and shift
+/// filled in, whether it is a complex, its Euler characteristic, and, when it is a complex and
+/// linear algebra is available, its homology with a summary for building a resolution.
+pub(crate) fn complex_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    let (c, mut notes) = complex::parse_complex_noted(a, v)?;
+    let cj = complex_json(a, &c)?;
+    let fs = check_complex(a, &c)?;
+    let mut out = json!({
+        "complex": cj,
+        "check": verdict(a, &fs, vec![]),
+        "euler": euler(a, &json!({ "complex": cj }))?,
+    });
+    if !fs.is_empty() {
+        notes.push("homology is computed once the check passes".into());
+    } else if let Err(e) = a.linear_algebra() {
+        notes.push(format!("no homology: {}", e.message));
+    } else {
+        let h = homology(a, &json!({ "complex": cj }))?;
+        if c.dim == 1 && !c.terms.is_empty() {
+            out["resolution"] = resolution_summary(a, &c, &h)?;
+        }
+        out["homology"] = h;
+    }
+    let mut prov = a.provenance();
+    prov["notes"] = json!(notes);
+    out["provenance"] = prov;
+    Ok(out)
+}
+
+/// For a one-dimensional complex `P_n → … → P_0` read as a projective resolution of the
+/// homology `M` at its last position (along the differentials): `M`'s graded dimensions at each
+/// test object, where homology is still to be killed, and whether it is a resolution.
+fn resolution_summary<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>, h: &Value) -> Result<Value> {
+    let step = c.conv.step();
+    let support: Vec<i64> = c
+        .terms
+        .iter()
+        .filter(|(_, ss)| !ss.is_empty())
+        .map(|(p, _)| p[0])
+        .collect();
+    let (Some(&lo), Some(&hi)) = (support.first(), support.last()) else {
+        return Ok(Value::Null);
+    };
+    let (start, end) = if step > 0 { (lo, hi) } else { (hi, lo) };
+    let positions = h["positions"].as_array().cloned().unwrap_or_default();
+    let at = |p: i64| positions.iter().find(|x| x["at"] == json!(p));
+    let truncated = |x: &Value| x["window"]["truncated"] == json!(true);
+    let mut module: BTreeMap<String, BTreeMap<i64, i64>> = BTreeMap::new();
+    if let Some(x) = at(end) {
+        for piece in x["pieces"].as_array().into_iter().flatten() {
+            let t = piece["test"].as_str().unwrap_or_default().to_string();
+            let d = piece["degree"].as_i64().unwrap_or(0);
+            let n = piece["dimension"].as_i64().unwrap_or(0);
+            *module.entry(t).or_default().entry(d).or_default() += n;
+        }
+    }
+    let total: i64 = module.values().flat_map(|m| m.values()).sum();
+    let mut gaps = Vec::new();
+    for p in support.iter().copied().filter(|&p| p != start && p != end) {
+        if at(p).is_some_and(|x| x["zero"] != json!(true)) {
+            gaps.push(p);
+        }
+    }
+    let open = start != end && at(start).is_some_and(|x| x["zero"] != json!(true));
+    let complete = positions.iter().all(|x| !truncated(x));
+    let resolved = gaps.is_empty() && !open;
+    let mut out = json!({
+        "module_at": end,
+        "module": module.iter().map(|(t, m)| json!({
+            "test": t,
+            "dimensions": crate::complex_build::laurent_text(m),
+            "powers": m.iter().map(|(e, k)| json!([e, k])).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+        "module_dimension": total,
+        "length": (end - start).abs(),
+        "next_at": if open { json!(start) } else { Value::Null },
+        "not_exact_at": gaps,
+        "resolved": resolved,
+        "complete": complete,
+    });
+    if resolved {
+        out["minimal"] = json!(crate::complex_solve::check_minimal(a, c)?.is_empty());
+    }
+    Ok(out)
 }

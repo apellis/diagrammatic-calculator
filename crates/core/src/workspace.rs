@@ -46,6 +46,13 @@ pub enum CellBody {
         name: String,
         args: Vec<Ast>,
     },
+    /// `complex name := {…}`: a bounded complex in the JSON form of `docs/complexes.md`, written
+    /// on one line. Its result is the complex with every object and shift filled in, whether it
+    /// is a complex, and its homology.
+    Complex {
+        name: String,
+        complex: serde_json::Value,
+    },
     /// `note """text"""`
     Note {
         text: String,
@@ -80,6 +87,7 @@ impl CellBody {
             CellBody::Watch { .. } => Some("wt"),
             CellBody::Solve { .. } => Some("sv"),
             CellBody::Check { .. } => Some("ck"),
+            CellBody::Complex { .. } => Some("cx"),
             CellBody::Note { .. } => Some("nt"),
             CellBody::Comment(_) | CellBody::Blank => None,
         }
@@ -197,6 +205,9 @@ fn parse_cell(
         }
     }
     let (line_body, id) = split_id(after)?;
+    if kw == "complex" {
+        return parse_complex_cell(line_body, id);
+    }
     let (body_text, options) = split_options(line_body);
     let body = match kw {
         "def" => {
@@ -267,6 +278,44 @@ fn parse_cell(
         k => return Err(Error::invalid(format!("unknown cell kind '{k}'"))),
     };
     Ok(Cell { id, body, options })
+}
+
+/// `name := {json}  key=value…`: the JSON object ends where its braces close.
+fn parse_complex_cell(body: &str, id: Option<String>) -> Result<Cell> {
+    let usage = "a complex is written complex name := {\"terms\": […], \"differentials\": […]}";
+    let (name, rest) = body.split_once(":=").ok_or_else(|| Error::invalid(usage))?;
+    let name = name.trim();
+    if !is_ident(name) {
+        return Err(Error::invalid(format!("'{name}' is not a name")));
+    }
+    let rest = rest.trim_start();
+    if !rest.starts_with('{') {
+        return Err(Error::invalid(usage));
+    }
+    let mut it = serde_json::Deserializer::from_str(rest).into_iter::<serde_json::Value>();
+    let complex = match it.next() {
+        Some(Ok(v)) => v,
+        Some(Err(e)) => {
+            return Err(Error::invalid(format!(
+                "the complex is not valid JSON: {e}"
+            )));
+        }
+        None => return Err(Error::invalid(usage)),
+    };
+    let (junk, options) = split_options(&rest[it.byte_offset()..]);
+    if !junk.is_empty() {
+        return Err(Error::invalid(format!(
+            "unexpected '{junk}' after the complex"
+        )));
+    }
+    Ok(Cell {
+        id,
+        body: CellBody::Complex {
+            name: name.to_string(),
+            complex,
+        },
+        options,
+    })
 }
 
 /// Splits at commas outside parentheses.
@@ -389,6 +438,7 @@ impl Cell {
                 let a: Vec<String> = args.iter().map(text::print).collect();
                 format!("check {name}({})", a.join(", "))
             }
+            CellBody::Complex { name, complex } => format!("complex {name} := {complex}"),
             CellBody::Note { text } => format!("note \"\"\"{text}\"\"\""),
             CellBody::Comment(t) => format!("# {t}").trim_end().to_string(),
             CellBody::Blank => String::new(),
@@ -443,7 +493,10 @@ impl Cell {
                 walk(rhs, &mut out);
             }
             CellBody::Check { args, .. } => args.iter().for_each(|a| walk(a, &mut out)),
-            CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => {}
+            CellBody::Complex { .. }
+            | CellBody::Note { .. }
+            | CellBody::Comment(_)
+            | CellBody::Blank => {}
         }
         out.into_iter().collect()
     }
@@ -524,6 +577,18 @@ step 3.\"\"\"  # id=n6
             }
         );
         assert!(Cell::parse("watch a\nwatch b").is_err());
+        let c = Cell::parse(
+            "complex P := { \"terms\": [{\"at\": 0, \"summands\": [{\"object\": \"i@1\"}]}] }  view=table  # id=cx4",
+        )
+        .unwrap();
+        assert_eq!(c.body.id_prefix(), Some("cx"));
+        assert_eq!(
+            c.print(),
+            "complex P := {\"terms\":[{\"at\":0,\"summands\":[{\"object\":\"i@1\"}]}]}  view=table  # id=cx4"
+        );
+        assert_eq!(Cell::parse(&c.print()).unwrap(), c);
+        assert!(Cell::parse("complex P := {\"terms\": [").is_err());
+        assert!(Cell::parse("complex P := {} extra").is_err());
         let s = Cell::parse("solve a a = a for c1, c2").unwrap();
         assert_eq!(s.names_used(), ["a"]);
     }

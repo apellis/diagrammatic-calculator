@@ -144,6 +144,37 @@ impl<R: Ring> Additive for Klrw<R> {
         }
     }
 
+    fn mor_ends(&self, f: &Self::Mor) -> Result<Option<crate::complex::MorEnds<Loading>>> {
+        let nf = self.normal_form(f)?;
+        let Some(first) = nf.first() else {
+            return Ok(None);
+        };
+        let (os, ot) = (
+            self.data.order_type(&first.bottom),
+            self.data.order_type(&first.top),
+        );
+        let d = self.degree(first)?;
+        for s in &nf[1..] {
+            if self.data.order_type(&s.bottom) != os || self.data.order_type(&s.top) != ot {
+                return Err(Error::invalid(format!(
+                    "the term is not a map between two objects: it has summands from e({}) to \
+                     e({}) and from e({}) to e({})",
+                    self.fmt_loading(&first.bottom),
+                    self.fmt_loading(&first.top),
+                    self.fmt_loading(&s.bottom),
+                    self.fmt_loading(&s.top)
+                )));
+            }
+            let e = self.degree(s)?;
+            if e != d {
+                return Err(Error::invalid(format!(
+                    "the term is not homogeneous: it has summands of degrees {d} and {e}"
+                )));
+            }
+        }
+        Ok(Some((first.bottom.clone(), first.top.clone(), d)))
+    }
+
     fn hom_degrees(&self, src: &Loading, tgt: &Loading) -> Result<Option<(i64, Option<i64>)>> {
         if self.cyclo.is_some() {
             let g = self.graded_dimension(src, tgt)?;
