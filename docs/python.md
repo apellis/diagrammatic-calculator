@@ -48,6 +48,41 @@ define each request and response, including strategy, certification, and truncat
 information where applicable. Keep these fields when reporting mathematical results;
 the calculator explores, it does not replace a proof assistant.
 
+## Complexes
+
+The complex operations (`docs/complexes.md`) work the same way; a small wrapper that
+raises on an error response keeps agent code short. This builds the minimal projective
+resolution of a simple module step by step, then checks it:
+
+```python
+import json
+import diagcalc
+
+CTX = 'klrw type=A1 ring=QQ red="2i@0" quotient=cyclotomic'
+
+def op(name, **request):
+    out = json.loads(diagcalc.call(name, json.dumps({"context": CTX, **request})))
+    if out["status"] != "ok":
+        raise RuntimeError(out["message"])
+    return out
+
+def term(at, shift):
+    return {"at": at, "summands": [{"object": "i@1", "shift": shift}]}
+
+c = {"terms": [term(-1, 2), term(0, 0)],
+     "differentials": [{"from": -1, "matrix": [["x_1 e(i@1)"]]}]}
+for at in (-1, -2, -3):
+    step = op("complex.kernel", complex=c, at=at)
+    assert step["complete"]
+    c = step["extended"]
+    assert op("complex.homology", complex=c, at=at)["positions"][0]["zero"]
+assert op("complex.check", complex=c)["holds"]
+print(op("complex.euler", complex=c)["text"])
+print(op("complex.render", complex=c)["tikz"])
+```
+
+Each response keeps its `certified_by` and `provenance`; report them with any result.
+
 ## Prepare and verify distributions (no publication)
 
 Run from the repository root, with Rust and Cargo on `PATH`. Use an isolated build

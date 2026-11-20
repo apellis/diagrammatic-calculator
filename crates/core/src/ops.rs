@@ -1165,7 +1165,7 @@ pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 24] = [
+pub const OPERATIONS: [&str; 36] = [
     "simplify",
     "check",
     "term.render",
@@ -1190,10 +1190,22 @@ pub const OPERATIONS: [&str; 24] = [
     "complex.homology",
     "complex.kernel",
     "hom.basis",
+    "map.lift",
+    "map.extend",
+    "chainmap.solve",
+    "homotopy.find",
+    "complex.minimal",
+    "complex.shift",
+    "complex.cone",
+    "complex.totalize",
+    "complex.hom",
+    "complex.gauss",
+    "complex.euler",
+    "complex.render",
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 24] = [
+pub const SCHEMAS: [(&str, &str); 36] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -1283,6 +1295,54 @@ pub const SCHEMAS: [(&str, &str); 24] = [
     (
         "hom.basis",
         include_str!("../../../spec/ops/hom.basis.schema.json"),
+    ),
+    (
+        "map.lift",
+        include_str!("../../../spec/ops/map.lift.schema.json"),
+    ),
+    (
+        "map.extend",
+        include_str!("../../../spec/ops/map.extend.schema.json"),
+    ),
+    (
+        "chainmap.solve",
+        include_str!("../../../spec/ops/chainmap.solve.schema.json"),
+    ),
+    (
+        "homotopy.find",
+        include_str!("../../../spec/ops/homotopy.find.schema.json"),
+    ),
+    (
+        "complex.minimal",
+        include_str!("../../../spec/ops/complex.minimal.schema.json"),
+    ),
+    (
+        "complex.shift",
+        include_str!("../../../spec/ops/complex.shift.schema.json"),
+    ),
+    (
+        "complex.cone",
+        include_str!("../../../spec/ops/complex.cone.schema.json"),
+    ),
+    (
+        "complex.totalize",
+        include_str!("../../../spec/ops/complex.totalize.schema.json"),
+    ),
+    (
+        "complex.hom",
+        include_str!("../../../spec/ops/complex.hom.schema.json"),
+    ),
+    (
+        "complex.gauss",
+        include_str!("../../../spec/ops/complex.gauss.schema.json"),
+    ),
+    (
+        "complex.euler",
+        include_str!("../../../spec/ops/complex.euler.schema.json"),
+    ),
+    (
+        "complex.render",
+        include_str!("../../../spec/ops/complex.render.schema.json"),
     ),
 ];
 pub const COMMON_SCHEMA: &str = include_str!("../../../spec/ops/common.schema.json");

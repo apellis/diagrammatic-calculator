@@ -1,0 +1,5 @@
+{
+  "op": "complex.gauss",
+  "request": {"context": "klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic", "complex": {"differentials": [{"from": -2, "matrix": [["-x_1 e(i@1)"], ["e(i@1)"]]}, {"from": -1, "matrix": [["e(i@1)", "x_1 e(i@1)"]]}], "dimension": 1, "indexing": "cohomological", "odd_signs": "koszul", "squares": "commute", "terms": [{"at": -2, "summands": [{"object": "i@1", "shift": 2}]}, {"at": -1, "summands": [{"object": "i@1", "shift": 0}, {"object": "i@1", "shift": 2}]}, {"at": 0, "summands": [{"object": "i@1", "shift": 0}]}]}},
+  "expect": {"status": "ok", "eliminations": [{"from": -2, "source": 0, "target": 1}, {"from": -1, "source": 0, "target": 0}], "finished": true}
+}

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/map.extend.schema.json",
+  "title": "map.extend: extend a map along another",
+  "description": "Finds a degree-zero map h: Y → Z with h g = f, for f: X → Z and g: X → Y between finite sums of shifted projectives (extending along g).",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "middle",
+        "target",
+        "f",
+        "g"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "middle": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "f": {
+          "$ref": "common.schema.json#/$defs/complexMatrix"
+        },
+        "g": {
+          "$ref": "common.schema.json#/$defs/complexMatrix"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "exists",
+            "solution",
+            "freedom",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "exists": {
+              "type": "boolean"
+            },
+            "solution": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/complexMatrix"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "freedom": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

@@ -15,14 +15,29 @@ use crate::ring::Ring;
 use serde_json::{Value, json};
 
 /// The operations of this module.
-pub const OPS: [&str; 6] = [
+pub const OPS: [&str; 18] = [
     "complex.check",
     "chainmap.check",
     "homotopy.check",
     "complex.homology",
     "complex.kernel",
     "hom.basis",
+    "map.lift",
+    "map.extend",
+    "chainmap.solve",
+    "homotopy.find",
+    "complex.minimal",
+    "complex.shift",
+    "complex.cone",
+    "complex.totalize",
+    "complex.hom",
+    "complex.gauss",
+    "complex.euler",
+    "complex.render",
 ];
+
+/// How many elimination steps `complex.gauss` takes at most when no `limit` is given.
+pub const DEFAULT_GAUSS_LIMIT: usize = 1000;
 
 /// How many degrees are searched above the lowest when a Hom space is unbounded above and no
 /// `max_degree` is given. Results say when this cut applies.
@@ -194,6 +209,17 @@ fn dispatch<A: Additive>(a: &A, op: &str, input: &Value) -> Result<Value> {
         "complex.homology" => homology(a, input),
         "complex.kernel" => kernel(a, input),
         "hom.basis" => hom_basis(a, input),
+        "map.lift" | "map.extend" => factor(a, op, input),
+        "chainmap.solve" => chainmap_solve(a, input),
+        "homotopy.find" => homotopy_find(a, input),
+        "complex.minimal" => minimal(a, input),
+        "complex.shift" => shift(a, input),
+        "complex.cone" => cone(a, input),
+        "complex.totalize" => totalize(a, input),
+        "complex.hom" => hom_complex(a, input),
+        "complex.gauss" => gauss(a, input),
+        "complex.euler" => euler(a, input),
+        "complex.render" => render(a, input),
         _ => Err(Error::invalid(format!("unknown operation '{op}'"))),
     }
 }
@@ -384,4 +410,429 @@ fn hom_basis<A: Additive>(a: &A, input: &Value) -> Result<Value> {
         "certified_by": "certificate",
         "provenance": prov,
     }))
+}
+
+fn with_prov(mut v: Value, prov: Value) -> Value {
+    v["certified_by"] = json!("certificate");
+    v["provenance"] = prov;
+    v
+}
+
+fn prov_notes<A: Additive>(a: &A, notes: Vec<String>) -> Value {
+    let mut prov = a.provenance();
+    if !notes.is_empty() {
+        prov["notes"] = json!(notes);
+    }
+    prov
+}
+
+/// A map as `[{at, matrix}]`, omitting zero components.
+fn map_json<A: Additive>(a: &A, m: &complex::Map<A::Mor>) -> Result<Value> {
+    let mut out = Vec::new();
+    for (p, mat) in m {
+        let mut zero = true;
+        for f in mat.iter().flatten() {
+            if !a.is_zero(f)? {
+                zero = false;
+                break;
+            }
+        }
+        if !zero {
+            out.push(json!({ "at": pos_json(p), "matrix": complex::matrix_json(a, mat)? }));
+        }
+    }
+    Ok(Value::Array(out))
+}
+
+fn summands_of<A: Additive>(
+    a: &A,
+    input: &Value,
+    key: &str,
+) -> Result<Vec<complex::Summand<A::Obj>>> {
+    complex::parse_summands(a, get(input, key)?, &format!("'{key}'"))
+}
+
+/// `map.lift` (find `h : X → Y` with `g h = f`) and `map.extend` (find `h : Y → Z` with
+/// `h g = f`), for degree-zero maps between finite sums.
+fn factor<A: Additive>(a: &A, op: &str, input: &Value) -> Result<Value> {
+    a.linear_algebra()?;
+    let x = summands_of(a, input, "source")?;
+    let y = summands_of(a, input, "middle")?;
+    let z = summands_of(a, input, "target")?;
+    let f = complex::parse_matrix(a, get(input, "f")?, z.len(), x.len(), "'f'")?;
+    let lifting = op == "map.lift";
+    let g = if lifting {
+        complex::parse_matrix(a, get(input, "g")?, z.len(), y.len(), "'g'")?
+    } else {
+        complex::parse_matrix(a, get(input, "g")?, y.len(), x.len(), "'g'")?
+    };
+    let mut fs = Vec::new();
+    complex::check_entries(a, &x, &z, &f, 0, "'f'", &mut fs);
+    if lifting {
+        complex::check_entries(a, &y, &z, &g, 0, "'g'", &mut fs);
+    } else {
+        complex::check_entries(a, &x, &y, &g, 0, "'g'", &mut fs);
+    }
+    if let Some(e) = fs.first() {
+        return Err(Error::invalid(format!(
+            "{}: {} ({})",
+            e.location, e.detail, e.condition
+        )));
+    }
+    let sol = if lifting {
+        crate::complex_solve::lift(a, &x, &y, &z, &f, &g)?
+    } else {
+        crate::complex_solve::extend(a, &x, &y, &z, &f, &g)?
+    };
+    let what = if lifting { "g h = f" } else { "h g = f" };
+    let v = match sol {
+        None => json!({ "exists": false, "solution": Value::Null, "freedom": 0 }),
+        Some(s) => json!({
+            "exists": true,
+            "solution": complex::matrix_json(a, &s.particular[0])?,
+            "freedom": s.kernel.len(),
+        }),
+    };
+    Ok(with_prov(
+        v,
+        prov_notes(
+            a,
+            vec![format!(
+                "solved {what} as a linear system in the degree-zero Hom spaces; 'freedom' is \
+                 the dimension of the solutions of the homogeneous system"
+            )],
+        ),
+    ))
+}
+
+fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    a.linear_algebra()?;
+    let c = valid_complex(a, get(input, "source")?, "source")?;
+    let d = valid_complex(a, get(input, "target")?, "target")?;
+    if c.dim != d.dim || c.conv.indexing != d.conv.indexing {
+        return Err(Error::invalid(
+            "the source and target have different dimensions or indexing",
+        ));
+    }
+    let zero = vec![0; c.dim];
+    let fixed = match input.get("fixed") {
+        None | Some(Value::Null) => complex::Map::new(),
+        Some(v) => parse_map(a, v, &c, &d, &zero, "fixed")?,
+    };
+    for (p, m) in &fixed {
+        let mut fs = Vec::new();
+        let loc = format!("the component of 'fixed' at {}", fmt_pos(p));
+        complex::check_entries(a, c.at(p), d.at(p), m, 0, &loc, &mut fs);
+        if let Some(e) = fs.first() {
+            return Err(Error::invalid(format!("{}: {}", e.location, e.detail)));
+        }
+    }
+    let (free, sol) = crate::complex_solve::solve_chain_map(a, &c, &d, &fixed)?;
+    let mut v = json!({
+        "free_positions": free.iter().map(|p| pos_json(p)).collect::<Vec<_>>(),
+    });
+    match sol {
+        None => {
+            v["exists"] = json!(false);
+            v["map"] = Value::Null;
+            v["freedom"] = json!(0);
+        }
+        Some(s) => {
+            let mut m = fixed.clone();
+            for (p, x) in free.iter().zip(s.particular) {
+                m.insert(p.clone(), x);
+            }
+            v["exists"] = json!(true);
+            v["map"] = map_json(a, &m)?;
+            v["freedom"] = json!(s.kernel.len());
+            let basis_n = opt_uint(input, "basis", 0)?;
+            if basis_n > 0 {
+                let mut out = Vec::new();
+                for k in s.kernel.iter().take(basis_n) {
+                    let km: complex::Map<A::Mor> =
+                        free.iter().cloned().zip(k.iter().cloned()).collect();
+                    out.push(map_json(a, &km)?);
+                }
+                v["homogeneous_basis"] = Value::Array(out);
+            }
+        }
+    }
+    Ok(with_prov(
+        v,
+        prov_notes(
+            a,
+            vec![
+                "unknown components at every position where both complexes are nonzero and no \
+                 component is fixed; d F = F d imposed along every axis; 'freedom' is the \
+                 dimension of the chain maps vanishing on the fixed components"
+                    .into(),
+            ],
+        ),
+    ))
+}
+
+fn homotopy_find<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    a.linear_algebra()?;
+    let c = valid_complex(a, get(input, "source")?, "source")?;
+    let d = valid_complex(a, get(input, "target")?, "target")?;
+    if c.dim != 1 || d.dim != 1 || c.conv.indexing != d.conv.indexing {
+        return Err(Error::precondition(
+            "homotopies are found between one-dimensional complexes with the same indexing; \
+             totalize first",
+        ));
+    }
+    let zero = vec![0];
+    let f = parse_map(a, get(input, "f")?, &c, &d, &zero, "f")?;
+    let g = match input.get("g") {
+        None | Some(Value::Null) => complex::Map::new(),
+        Some(g) => parse_map(a, g, &c, &d, &zero, "g")?,
+    };
+    let mut fg = f.clone();
+    for (p, gm) in &g {
+        let base = fg
+            .remove(p)
+            .unwrap_or_else(|| complex::zero_matrix(a, d.at(p).len(), c.at(p).len()));
+        fg.insert(p.clone(), complex::mat_add(a, &base, gm, -1));
+    }
+    let (free, sol) = crate::complex_solve::find_homotopy(a, &c, &d, &fg)?;
+    let v = match sol {
+        None => json!({ "exists": false, "h": Value::Null, "freedom": 0 }),
+        Some(s) => {
+            let h: complex::Map<A::Mor> = free.iter().cloned().zip(s.particular).collect();
+            json!({ "exists": true, "h": map_json(a, &h)?, "freedom": s.kernel.len() })
+        }
+    };
+    Ok(with_prov(
+        v,
+        prov_notes(
+            a,
+            vec![
+                "solved f − g = d h + h d with h(p) : C(p) → D(p − step) as a linear system in \
+                 the degree-zero Hom spaces"
+                    .into(),
+            ],
+        ),
+    ))
+}
+
+fn minimal<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    a.linear_algebra()?;
+    let c = valid_complex(a, get(input, "complex")?, "complex")?;
+    let found = crate::complex_solve::check_minimal(a, &c)?;
+    let fs: Vec<Failure> = found.iter().map(|(f, _)| f.clone()).collect();
+    let mut v = verdict(
+        a,
+        &fs,
+        vec![
+            "a differential d : X → Y is in the radical when the left ideal {g d : g : Y → X} of \
+             End(X) is nilpotent; a complex of projectives over a finite-dimensional algebra is \
+             minimal (has no contractible summand) exactly when all its differentials are"
+                .into(),
+        ],
+    );
+    let mut failures = Vec::new();
+    for (f, w) in found.iter().take(SHOWN_FAILURES) {
+        let mut j = f.json();
+        if let Some(w) = w {
+            j["witness"] = complex::matrix_json(a, w)?;
+        }
+        failures.push(j);
+    }
+    v["failures"] = Value::Array(failures);
+    Ok(v)
+}
+
+fn shift<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let c = valid_complex(a, get(input, "complex")?, "complex")?;
+    let by = match input.get("by") {
+        None | Some(Value::Null) => vec![0; c.dim],
+        Some(v) => complex::position(v, c.dim)?,
+    };
+    let grading = opt_int(input, "grading")?.unwrap_or(0);
+    let s = crate::complex_build::shift(a, &c, &by, grading);
+    Ok(with_prov(
+        json!({ "complex": complex_json(a, &s)? }),
+        a.provenance(),
+    ))
+}
+
+fn cone<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let c = valid_complex(a, get(input, "source")?, "source")?;
+    let d = valid_complex(a, get(input, "target")?, "target")?;
+    let zero = vec![0; c.dim];
+    let f = parse_map(a, get(input, "map")?, &c, &d, &zero, "map")?;
+    if let Some(e) = check_chain_map(a, &c, &d, &f)?.first() {
+        return Err(Error::invalid(format!(
+            "'map' is not a chain map: {}: {} ({}); run chainmap.check for all failures",
+            e.location, e.detail, e.condition
+        )));
+    }
+    let k = crate::complex_build::cone(a, &c, &d, &f)?;
+    Ok(with_prov(
+        json!({ "complex": complex_json(a, &k)? }),
+        prov_notes(
+            a,
+            vec![
+                "Cone(F)(p) = C(p + step) ⊕ D(p) (the summands of C first), with differential \
+                 [[−d_C, 0], [F, d_D]]"
+                    .into(),
+            ],
+        ),
+    ))
+}
+
+fn totalize<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let c = valid_complex(a, get(input, "complex")?, "complex")?;
+    let (t, blocks) = crate::complex_build::totalize(a, &c)?;
+    let blocks_json: Vec<Value> = blocks
+        .iter()
+        .map(|(n, bs)| {
+            json!({
+                "at": n,
+                "blocks": bs.iter().map(|(p, o)| json!({ "from": pos_json(p), "first": o }))
+                    .collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let rule = match c.conv.squares {
+        complex::Squares::Commute => {
+            "the differential along axis a is multiplied by (−1)^(p_0 + … + p_(a−1))"
+        }
+        complex::Squares::Anticommute => "the squares anticommute, so no signs are added",
+    };
+    Ok(with_prov(
+        json!({ "complex": complex_json(a, &t)?, "blocks": blocks_json }),
+        prov_notes(
+            a,
+            vec![format!(
+                "Tot(n) is the sum of the terms at the positions with coordinate sum n, in \
+                 increasing order of position; {rule}"
+            )],
+        ),
+    ))
+}
+
+fn hom_complex<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    a.linear_algebra()?;
+    let c = valid_complex(a, get(input, "source")?, "source")?;
+    let d = valid_complex(a, get(input, "target")?, "target")?;
+    let (degrees, w) = match opt_int(input, "degree")? {
+        Some(e) => (vec![e], None),
+        None => {
+            let w = crate::complex_build::hom_window(
+                a,
+                &c,
+                &d,
+                opt_int(input, "max_degree")?,
+                DEFAULT_SPAN,
+            )?;
+            (w.map(|w| (w.lo..=w.hi).collect()).unwrap_or_default(), w)
+        }
+    };
+    let mut out = Vec::new();
+    for e in degrees {
+        let rows = crate::complex_build::hom_cohomology(a, &c, &d, e)?;
+        let nonzero: Vec<Value> = rows
+            .iter()
+            .filter(|(_, _, h)| *h > 0)
+            .map(|(n, dn, h)| json!({ "n": n, "cochains": dn, "dimension": h }))
+            .collect();
+        if nonzero.is_empty() && w.is_some() {
+            continue;
+        }
+        out.push(json!({ "degree": e, "cohomology": nonzero }));
+    }
+    let mut notes = vec![
+        "Hom^n is the product over p of the degree-e maps C(p) → D(p + n), with δ f = d_D f − \
+         (−1)^n f d_C; H^0 in degree e is the space of chain maps C⟨e⟩ → D up to homotopy. When \
+         C is a projective resolution of M, H^n is Ext^n(M, D) only for n below the length of \
+         the resolution that was built"
+            .to_string(),
+    ];
+    if let Some(n) = window_note(&w, "the Hom complex") {
+        notes.push(n);
+    }
+    Ok(with_prov(
+        json!({ "degrees": out, "window": window_json(&w) }),
+        prov_notes(a, notes),
+    ))
+}
+
+fn gauss<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    a.linear_algebra()?;
+    let c = valid_complex(a, get(input, "complex")?, "complex")?;
+    let limit = opt_uint(input, "limit", DEFAULT_GAUSS_LIMIT)?;
+    let (r, steps, finished) = crate::complex_build::gauss(a, &c, limit)?;
+    let mut notes = vec![
+        "each step removes a summand pair joined by an invertible entry φ of a differential, \
+         replacing the rest of that differential by ε − γ φ⁻¹ δ; the result is homotopy \
+         equivalent to the input. Only invertible single entries are used, so the result need \
+         not be minimal: check with complex.minimal"
+            .to_string(),
+    ];
+    if !finished {
+        notes.push(format!(
+            "stopped after {limit} steps (the limit); more eliminations may be possible"
+        ));
+    }
+    Ok(with_prov(
+        json!({
+            "complex": complex_json(a, &r)?,
+            "eliminations": steps.iter().map(|s| json!({
+                "from": s.from, "source": s.source, "target": s.target
+            })).collect::<Vec<_>>(),
+            "finished": finished,
+        }),
+        prov_notes(a, notes),
+    ))
+}
+
+fn euler<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let c = valid_complex(a, get(input, "complex")?, "complex")?;
+    let classes = crate::complex_build::euler(a, &c);
+    let terms: Vec<Value> = classes
+        .iter()
+        .map(|(o, cs)| {
+            json!({
+                "object": a.fmt_obj(o),
+                "coefficient": crate::complex_build::laurent_text(cs),
+                "powers": cs.iter().map(|(e, k)| json!([e, k])).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let text = if classes.is_empty() {
+        "0".to_string()
+    } else {
+        classes
+            .iter()
+            .map(|(o, cs)| {
+                format!(
+                    "({})[{}]",
+                    crate::complex_build::laurent_text(cs),
+                    a.fmt_obj(o)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" + ")
+    };
+    Ok(with_prov(
+        json!({ "terms": terms, "text": text }),
+        prov_notes(
+            a,
+            vec![
+                "Σ_p (−1)^(p_0 + … + p_(n−1)) Σ q^s [X] over the summands X⟨s⟩ of C(p), with \
+                 isotopic objects grouped; the classes [X] are not reduced further"
+                    .into(),
+            ],
+        ),
+    ))
+}
+
+fn render<A: Additive>(a: &A, input: &Value) -> Result<Value> {
+    let c = valid_complex(a, get(input, "complex")?, "complex")?;
+    let tex = crate::complex_build::tikz(a, &c)?;
+    Ok(with_prov(
+        json!({ "format": "tikz-cd", "tikz": tex }),
+        prov_notes(a, vec!["needs \\usepackage{tikz-cd} and amsmath".into()]),
+    ))
 }

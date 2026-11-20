@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.minimal.schema.json",
+  "title": "complex.minimal: is every differential in the radical?",
+  "description": "Checks that every differential lies in the radical of the category of projectives, which for complexes over a finite-dimensional algebra means the complex has no contractible summand. Each failure carries a witness: a map back g such that g d is not nilpotent.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/complexVerdict"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

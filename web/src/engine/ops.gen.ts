@@ -96,6 +96,22 @@ export type ChainFindResponse =
 export type ChainmapCheckResponse = ComplexVerdict | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ChainmapSolveResponse".
+ */
+export type ChainmapSolveResponse =
+  | {
+      status: 'ok';
+      exists: boolean;
+      map: ComplexMap | null;
+      freedom: number;
+      free_positions: ComplexPosition[];
+      homogeneous_basis?: ComplexMap[];
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "CheckRequest".
  */
 export type CheckRequest = TermRequest & CheckRequest1;
@@ -109,6 +125,73 @@ export type CheckResponse = Verdict | OpError;
  * via the `definition` "ComplexCheckResponse".
  */
 export type ComplexCheckResponse = ComplexVerdict | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexConeResponse".
+ */
+export type ComplexConeResponse =
+  | {
+      status: 'ok';
+      complex: Complex;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexEulerResponse".
+ */
+export type ComplexEulerResponse =
+  | {
+      status: 'ok';
+      terms: {
+        object: string;
+        coefficient: string;
+        powers: [number, number][];
+      }[];
+      text: string;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexGaussResponse".
+ */
+export type ComplexGaussResponse =
+  | {
+      status: 'ok';
+      complex: Complex;
+      eliminations: {
+        from: number;
+        source: number;
+        target: number;
+      }[];
+      finished: boolean;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexHomResponse".
+ */
+export type ComplexHomResponse =
+  | {
+      status: 'ok';
+      degrees: {
+        degree: number;
+        cohomology: {
+          n: number;
+          cochains: number;
+          dimension: number;
+        }[];
+      }[];
+      window: DegreeWindow;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "ComplexHomologyResponse".
@@ -150,6 +233,55 @@ export type ComplexKernelResponse =
       window: DegreeWindow;
       complete: boolean;
       extended?: Complex;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexMinimalResponse".
+ */
+export type ComplexMinimalResponse = ComplexVerdict | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexRenderResponse".
+ */
+export type ComplexRenderResponse =
+  | {
+      status: 'ok';
+      format: 'tikz-cd';
+      tikz: string;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexShiftResponse".
+ */
+export type ComplexShiftResponse =
+  | {
+      status: 'ok';
+      complex: Complex;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexTotalizeResponse".
+ */
+export type ComplexTotalizeResponse =
+  | {
+      status: 'ok';
+      complex: Complex;
+      blocks: {
+        at: number;
+        blocks: {
+          from: ComplexPosition;
+          first: number;
+        }[];
+      }[];
       certified_by: 'computation' | 'certificate';
       provenance: Provenance;
     }
@@ -257,6 +389,20 @@ export type HomBasisResponse =
 export type HomotopyCheckResponse = ComplexVerdict | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "HomotopyFindResponse".
+ */
+export type HomotopyFindResponse =
+  | {
+      status: 'ok';
+      exists: boolean;
+      h: ComplexMap | null;
+      freedom: number;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "InterchangeRequest".
  */
 export type InterchangeRequest = TermRequest & Location & InterchangeRequest1;
@@ -270,6 +416,34 @@ export type InterchangeResponse =
       sign: 1 | -1;
       same_diagram: boolean;
       term: string;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "MapExtendResponse".
+ */
+export type MapExtendResponse =
+  | {
+      status: 'ok';
+      exists: boolean;
+      solution: ComplexMatrix | null;
+      freedom: number;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "MapLiftResponse".
+ */
+export type MapLiftResponse =
+  | {
+      status: 'ok';
+      exists: boolean;
+      solution: ComplexMatrix | null;
+      freedom: number;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
     }
   | OpError;
 /**
@@ -610,14 +784,32 @@ export interface Operations {
   ChainFindResponse?: ChainFindResponse;
   ChainmapCheckRequest?: ChainmapCheckRequest;
   ChainmapCheckResponse?: ChainmapCheckResponse;
+  ChainmapSolveRequest?: ChainmapSolveRequest;
+  ChainmapSolveResponse?: ChainmapSolveResponse;
   CheckRequest?: CheckRequest;
   CheckResponse?: CheckResponse;
   ComplexCheckRequest?: ComplexCheckRequest;
   ComplexCheckResponse?: ComplexCheckResponse;
+  ComplexConeRequest?: ComplexConeRequest;
+  ComplexConeResponse?: ComplexConeResponse;
+  ComplexEulerRequest?: ComplexEulerRequest;
+  ComplexEulerResponse?: ComplexEulerResponse;
+  ComplexGaussRequest?: ComplexGaussRequest;
+  ComplexGaussResponse?: ComplexGaussResponse;
+  ComplexHomRequest?: ComplexHomRequest;
+  ComplexHomResponse?: ComplexHomResponse;
   ComplexHomologyRequest?: ComplexHomologyRequest;
   ComplexHomologyResponse?: ComplexHomologyResponse;
   ComplexKernelRequest?: ComplexKernelRequest;
   ComplexKernelResponse?: ComplexKernelResponse;
+  ComplexMinimalRequest?: ComplexMinimalRequest;
+  ComplexMinimalResponse?: ComplexMinimalResponse;
+  ComplexRenderRequest?: ComplexRenderRequest;
+  ComplexRenderResponse?: ComplexRenderResponse;
+  ComplexShiftRequest?: ComplexShiftRequest;
+  ComplexShiftResponse?: ComplexShiftResponse;
+  ComplexTotalizeRequest?: ComplexTotalizeRequest;
+  ComplexTotalizeResponse?: ComplexTotalizeResponse;
   ContextDescribeRequest?: ContextDescribeRequest;
   ContextDescribeResponse?: ContextDescribeResponse;
   ExportLeanRequest?: ExportLeanRequest;
@@ -626,8 +818,14 @@ export interface Operations {
   HomBasisResponse?: HomBasisResponse;
   HomotopyCheckRequest?: HomotopyCheckRequest;
   HomotopyCheckResponse?: HomotopyCheckResponse;
+  HomotopyFindRequest?: HomotopyFindRequest;
+  HomotopyFindResponse?: HomotopyFindResponse;
   InterchangeRequest?: InterchangeRequest;
   InterchangeResponse?: InterchangeResponse;
+  MapExtendRequest?: MapExtendRequest;
+  MapExtendResponse?: MapExtendResponse;
+  MapLiftRequest?: MapLiftRequest;
+  MapLiftResponse?: MapLiftResponse;
   PresentationCheckRequest?: PresentationCheckRequest;
   PresentationCheckResponse?: PresentationCheckResponse;
   RelationApplyRequest?: RelationApplyRequest;
@@ -927,6 +1125,17 @@ export interface ChainmapCheckRequest {
   target: Complex;
   map: ComplexMap;
 }
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ChainmapSolveRequest".
+ */
+export interface ChainmapSolveRequest {
+  context: Context;
+  source: Complex;
+  target: Complex;
+  fixed?: ComplexMap;
+  basis?: number;
+}
 export interface CheckRequest1 {
   name: 'equal' | 'zero' | 'idempotent' | 'orthogonal' | 'homogeneous' | 'central' | 'primitive';
   /**
@@ -942,6 +1151,44 @@ export interface CheckRequest1 {
 export interface ComplexCheckRequest {
   context: Context;
   complex: Complex;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexConeRequest".
+ */
+export interface ComplexConeRequest {
+  context: Context;
+  source: Complex;
+  target: Complex;
+  map: ComplexMap;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexEulerRequest".
+ */
+export interface ComplexEulerRequest {
+  context: Context;
+  complex: Complex;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexGaussRequest".
+ */
+export interface ComplexGaussRequest {
+  context: Context;
+  complex: Complex;
+  limit?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexHomRequest".
+ */
+export interface ComplexHomRequest {
+  context: Context;
+  source: Complex;
+  target: Complex;
+  degree?: number;
+  max_degree?: number;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -965,6 +1212,40 @@ export interface ComplexKernelRequest {
   at: ComplexPosition;
   axis?: number;
   max_degree?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexMinimalRequest".
+ */
+export interface ComplexMinimalRequest {
+  context: Context;
+  complex: Complex;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexRenderRequest".
+ */
+export interface ComplexRenderRequest {
+  context: Context;
+  complex: Complex;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexShiftRequest".
+ */
+export interface ComplexShiftRequest {
+  context: Context;
+  complex: Complex;
+  by?: ComplexPosition;
+  grading?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexTotalizeRequest".
+ */
+export interface ComplexTotalizeRequest {
+  context: Context;
+  complex: Complex;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -1037,12 +1318,47 @@ export interface HomotopyCheckRequest {
   g?: ComplexMap;
   h: ComplexMap;
 }
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "HomotopyFindRequest".
+ */
+export interface HomotopyFindRequest {
+  context: Context;
+  source: Complex;
+  target: Complex;
+  f: ComplexMap;
+  g?: ComplexMap;
+}
 export interface InterchangeRequest1 {
   term: string;
   /**
    * The lower of the two layers.
    */
   layer: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "MapExtendRequest".
+ */
+export interface MapExtendRequest {
+  context: Context;
+  source: ComplexSummands;
+  middle: ComplexSummands;
+  target: ComplexSummands;
+  f: ComplexMatrix;
+  g: ComplexMatrix;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "MapLiftRequest".
+ */
+export interface MapLiftRequest {
+  context: Context;
+  source: ComplexSummands;
+  middle: ComplexSummands;
+  target: ComplexSummands;
+  f: ComplexMatrix;
+  g: ComplexMatrix;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -1461,15 +1777,27 @@ export interface WorkspaceTraceRequest {
 export interface OpTypes {
   'chain.find': { request: ChainFindRequest; response: ChainFindResponse };
   'chainmap.check': { request: ChainmapCheckRequest; response: ChainmapCheckResponse };
+  'chainmap.solve': { request: ChainmapSolveRequest; response: ChainmapSolveResponse };
   'check': { request: CheckRequest; response: CheckResponse };
   'complex.check': { request: ComplexCheckRequest; response: ComplexCheckResponse };
+  'complex.cone': { request: ComplexConeRequest; response: ComplexConeResponse };
+  'complex.euler': { request: ComplexEulerRequest; response: ComplexEulerResponse };
+  'complex.gauss': { request: ComplexGaussRequest; response: ComplexGaussResponse };
+  'complex.hom': { request: ComplexHomRequest; response: ComplexHomResponse };
   'complex.homology': { request: ComplexHomologyRequest; response: ComplexHomologyResponse };
   'complex.kernel': { request: ComplexKernelRequest; response: ComplexKernelResponse };
+  'complex.minimal': { request: ComplexMinimalRequest; response: ComplexMinimalResponse };
+  'complex.render': { request: ComplexRenderRequest; response: ComplexRenderResponse };
+  'complex.shift': { request: ComplexShiftRequest; response: ComplexShiftResponse };
+  'complex.totalize': { request: ComplexTotalizeRequest; response: ComplexTotalizeResponse };
   'context.describe': { request: ContextDescribeRequest; response: ContextDescribeResponse };
   'export.lean': { request: ExportLeanRequest; response: ExportLeanResponse };
   'hom.basis': { request: HomBasisRequest; response: HomBasisResponse };
   'homotopy.check': { request: HomotopyCheckRequest; response: HomotopyCheckResponse };
+  'homotopy.find': { request: HomotopyFindRequest; response: HomotopyFindResponse };
   'interchange': { request: InterchangeRequest; response: InterchangeResponse };
+  'map.extend': { request: MapExtendRequest; response: MapExtendResponse };
+  'map.lift': { request: MapLiftRequest; response: MapLiftResponse };
   'presentation.check': { request: PresentationCheckRequest; response: PresentationCheckResponse };
   'relation.apply': { request: RelationApplyRequest; response: RelationApplyResponse };
   'relations.match': { request: RelationsMatchRequest; response: RelationsMatchResponse };

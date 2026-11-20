@@ -334,6 +334,22 @@ raises the position by 1); `indexing=homological` lowers it. Differentials of di
 commute by default (`squares=anticommute` makes them anticommute). The odd sign rule
 (`odd_signs`, default `koszul`) is recorded but has no effect on these purely even algebras.
 
+Constructions use these signs. Write `step` for `+1` (cohomological) or `−1` (homological).
+
+- Shift: `C[k]⟨s⟩(p) = C(p + k·step)` with every internal shift raised by `s`, and the
+  differential along axis `a` multiplied by `(−1)^{k_a}`.
+- Cone of `F : C → D`: `Cone(p) = C(p + step) ⊕ D(p)`, summands of `C` first, with differential
+  `[[−d_C, 0], [F, d_D]]`.
+- Totalization: `Tot(n) = ⊕_{p_0 + … + p_{m−1} = n} C(p)`, positions in increasing order; the
+  differential along axis `a` is multiplied by `(−1)^{p_0 + … + p_{a−1}}` when squares commute, and
+  left unchanged when they anticommute.
+- Hom complex: `Hom^n(C, D)` in internal degree `e` is the product over `p` of the degree-`e` maps
+  `C(p) → D(p + n)`, and `δf = d_D f − (−1)^n f d_C` maps `Hom^n` to `Hom^{n + step}`. Its `H^0`
+  in degree 0 is the chain maps up to homotopy.
+- Homotopies: `f − g = d h + h d` with `h(p) : C(p) → D(p − step)`.
+- Euler characteristic: `Σ_p (−1)^{p_0 + … + p_{m−1}} Σ_i q^{s_i} [P(ℓ_i)]`, objects identified by
+  order type.
+
 ## Display
 
 The web app shows text typeset wherever it is only read, and as plain text in a fixed-width font

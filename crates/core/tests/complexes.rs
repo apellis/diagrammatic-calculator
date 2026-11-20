@@ -260,3 +260,179 @@ fn a_resolution_step_by_step() {
     let v = call("complex.check", json!({ "context": CYC, "complex": c }));
     assert_eq!(v["holds"], true, "{v:#}");
 }
+
+fn identity_on(c: &Value) -> Value {
+    let mut out = Vec::new();
+    for t in c["terms"].as_array().unwrap() {
+        let n = t["summands"].as_array().unwrap().len();
+        let m: Vec<Vec<&str>> = (0..n)
+            .map(|i| {
+                (0..n)
+                    .map(|j| if i == j { "e(i@1)" } else { "0" })
+                    .collect()
+            })
+            .collect();
+        out.push(json!({ "at": t["at"], "matrix": m }));
+    }
+    Value::Array(out)
+}
+
+#[test]
+fn lifting_and_extending_maps() {
+    let p0 = json!([{ "object": "i@1", "shift": 0 }]);
+    let p2 = json!([{ "object": "i@1", "shift": 2 }]);
+    let v = call(
+        "map.lift",
+        json!({ "context": CYC, "source": p2, "middle": p0, "target": p0,
+                "f": [["x_1 e(i@1)"]], "g": [["e(i@1)"]] }),
+    );
+    assert_eq!(v["exists"], true, "{v:#}");
+    assert_eq!(v["solution"], json!([["x_1 e(i@1)"]]), "{v:#}");
+    let v = call(
+        "map.lift",
+        json!({ "context": CYC, "source": p0, "middle": p2, "target": p0,
+                "f": [["e(i@1)"]], "g": [["x_1 e(i@1)"]] }),
+    );
+    assert_eq!(v["exists"], false, "{v:#}");
+    let v = call(
+        "map.extend",
+        json!({ "context": CYC, "source": p2, "middle": p0, "target": p0,
+                "f": [["x_1 e(i@1)"]], "g": [["x_1 e(i@1)"]] }),
+    );
+    assert_eq!(v["solution"], json!([["e(i@1)"]]), "{v:#}");
+}
+
+#[test]
+fn solving_for_chain_maps_and_homotopies() {
+    // the identity at 0 extends uniquely to a chain endomorphism
+    let v = call(
+        "chainmap.solve",
+        json!({ "context": CYC, "source": two_term(), "target": two_term(),
+                "fixed": [{ "at": 0, "matrix": [["e(i@1)"]] }] }),
+    );
+    assert_eq!(v["exists"], true, "{v:#}");
+    assert_eq!(v["freedom"], 0, "{v:#}");
+    assert_eq!(v["map"], identity_on(&two_term()), "{v:#}");
+    // the identity of P⟨2⟩ → P is not null-homotopic
+    let v = call(
+        "homotopy.find",
+        json!({ "context": CYC, "source": two_term(), "target": two_term(),
+                "f": identity_on(&two_term()) }),
+    );
+    assert_eq!(v["exists"], false, "{v:#}");
+    let v = call(
+        "complex.minimal",
+        json!({ "context": CYC, "complex": two_term() }),
+    );
+    assert_eq!(v["holds"], true, "{v:#}");
+}
+
+#[test]
+fn the_cone_of_the_identity_is_contractible() {
+    let id = identity_on(&two_term());
+    let v = call(
+        "complex.cone",
+        json!({ "context": CYC, "source": two_term(), "target": two_term(), "map": id }),
+    );
+    let cone = v["complex"].clone();
+    let v = call("complex.check", json!({ "context": CYC, "complex": cone }));
+    assert_eq!(v["holds"], true, "{v:#}");
+    let v = call(
+        "complex.minimal",
+        json!({ "context": CYC, "complex": cone }),
+    );
+    assert_eq!(v["holds"], false, "{v:#}");
+    let v = call(
+        "homotopy.find",
+        json!({ "context": CYC, "source": cone, "target": cone, "f": identity_on(&cone) }),
+    );
+    assert_eq!(v["exists"], true, "{v:#}");
+    let h = v["h"].clone();
+    let v = call(
+        "homotopy.check",
+        json!({ "context": CYC, "source": cone, "target": cone, "f": identity_on(&cone), "h": h }),
+    );
+    assert_eq!(v["holds"], true, "{v:#}");
+    let v = call("complex.gauss", json!({ "context": CYC, "complex": cone }));
+    assert_eq!(v["finished"], true, "{v:#}");
+    assert_eq!(v["complex"]["terms"], json!([]), "{v:#}");
+    assert_eq!(v["eliminations"].as_array().unwrap().len(), 2, "{v:#}");
+    let v = call(
+        "complex.hom",
+        json!({ "context": CYC, "source": cone, "target": cone }),
+    );
+    for d in v["degrees"].as_array().unwrap() {
+        for h in d["cohomology"].as_array().unwrap() {
+            assert_eq!(h["dimension"], 0, "{v:#}");
+        }
+    }
+}
+
+#[test]
+fn shifts_totalization_and_euler_characteristic() {
+    let v = call(
+        "complex.shift",
+        json!({ "context": CYC, "complex": two_term(), "by": 1, "grading": 2 }),
+    );
+    let c = &v["complex"];
+    assert_eq!(c["terms"], json!([p(-2, 4), p(-1, 2)]), "{v:#}");
+    assert_eq!(
+        c["differentials"][0]["matrix"],
+        json!([["-x_1 e(i@1)"]]),
+        "{v:#}"
+    );
+    let one = |s: i64| json!([{ "object": "i@1", "shift": s }]);
+    let x = json!([["x_1 e(i@1)"]]);
+    let square = json!({
+        "terms": [
+            { "at": [0, 0], "summands": one(2) }, { "at": [1, 0], "summands": one(0) },
+            { "at": [0, 1], "summands": one(0) }, { "at": [1, 1], "summands": one(-2) },
+        ],
+        "differentials": [
+            { "from": [0, 0], "axis": 0, "matrix": x }, { "from": [0, 1], "axis": 0, "matrix": x },
+            { "from": [0, 0], "axis": 1, "matrix": x }, { "from": [1, 0], "axis": 1, "matrix": x },
+        ],
+    });
+    let v = call(
+        "complex.totalize",
+        json!({ "context": CYC, "complex": square }),
+    );
+    let d = &v["complex"]["differentials"];
+    assert_eq!(
+        d[0]["matrix"],
+        json!([["x_1 e(i@1)"], ["x_1 e(i@1)"]]),
+        "{v:#}"
+    );
+    assert_eq!(
+        d[1]["matrix"],
+        json!([["x_1 e(i@1)", "-x_1 e(i@1)"]]),
+        "{v:#}"
+    );
+    let v = call(
+        "complex.check",
+        json!({ "context": CYC, "complex": v["complex"] }),
+    );
+    assert_eq!(v["holds"], true, "{v:#}");
+    let v = call(
+        "complex.euler",
+        json!({ "context": CYC, "complex": square }),
+    );
+    assert_eq!(v["text"], "(q^2 - 2 + q^-2)[i@1]", "{v:#}");
+}
+
+#[test]
+fn hom_complex_cohomology() {
+    let target = json!({ "terms": [p(0, 0)], "differentials": [] });
+    let v = call(
+        "complex.hom",
+        json!({ "context": CYC, "source": two_term(), "target": target }),
+    );
+    assert_eq!(
+        v["degrees"],
+        json!([
+            { "degree": -2, "cohomology": [{ "n": 1, "cochains": 1, "dimension": 1 }] },
+            { "degree": 2, "cohomology": [{ "n": 0, "cochains": 1, "dimension": 1 }] },
+        ]),
+        "{v:#}"
+    );
+}

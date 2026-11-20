@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.gauss.schema.json",
+  "title": "complex.gauss: Gaussian elimination",
+  "description": "Repeatedly removes a pair of summands joined by an invertible entry φ of a differential, replacing the rest of the differential by ε − γ φ⁻¹ δ. The result is homotopy equivalent to the input. One-dimensional complexes.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "complex",
+            "eliminations",
+            "finished",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "complex": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "eliminations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "source",
+                  "target"
+                ],
+                "properties": {
+                  "from": {
+                    "type": "integer"
+                  },
+                  "source": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "target": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "finished": {
+              "type": "boolean"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

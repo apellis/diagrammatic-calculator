@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/chainmap.solve.schema.json",
+  "title": "chainmap.solve: find a chain map with given components",
+  "description": "Finds a chain map F: C → D whose components at the positions in 'fixed' are the given ones, solving for the other components. Used to lift a map of modules to a map of projective resolutions, one component given and the rest solved for.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "target"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "fixed": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        },
+        "basis": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "exists",
+            "map",
+            "freedom",
+            "free_positions",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "exists": {
+              "type": "boolean"
+            },
+            "map": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/complexMap"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "freedom": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "free_positions": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/complexPosition"
+              }
+            },
+            "homogeneous_basis": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/complexMap"
+              }
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

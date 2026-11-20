@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/map.lift.schema.json",
+  "title": "map.lift: factor a map through another",
+  "description": "Finds a degree-zero map h: X → Y with g h = f, for f: X → Z and g: Y → Z between finite sums of shifted projectives (lifting along g). The matrix of f has a row per summand of Z and a column per summand of X.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "middle",
+        "target",
+        "f",
+        "g"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "middle": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complexSummands"
+        },
+        "f": {
+          "$ref": "common.schema.json#/$defs/complexMatrix"
+        },
+        "g": {
+          "$ref": "common.schema.json#/$defs/complexMatrix"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "exists",
+            "solution",
+            "freedom",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "exists": {
+              "type": "boolean"
+            },
+            "solution": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/complexMatrix"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "freedom": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

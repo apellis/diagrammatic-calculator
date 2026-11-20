@@ -40,6 +40,8 @@ pub trait Additive {
     /// Normal form text; `0` for zero.
     fn fmt_mor(&self, f: &Self::Mor) -> Result<String>;
     fn zero(&self) -> Self::Mor;
+    /// The identity of an object.
+    fn identity(&self, o: &Self::Obj) -> Self::Mor;
     fn add(&self, f: &Self::Mor, g: &Self::Mor) -> Self::Mor;
     fn neg(&self, f: &Self::Mor) -> Self::Mor;
     fn scale(&self, c: &<Self::Field as Ring>::Elem, f: &Self::Mor) -> Self::Mor;
@@ -550,7 +552,8 @@ pub fn mat_mul<A: Additive>(
         .collect()
 }
 
-fn mat_add<A: Additive>(
+/// `f + sign · g`.
+pub fn mat_add<A: Additive>(
     a: &A,
     f: &Matrix<A::Mor>,
     g: &Matrix<A::Mor>,

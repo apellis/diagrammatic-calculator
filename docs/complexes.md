@@ -2,7 +2,9 @@
 
 Bounded complexes of graded right projective modules over a weighted KLR algebra `A` or its
 cyclotomic quotient `T^λ` (Webster, arXiv:1209.2463 and arXiv:1309.3796), with checks, homology,
-and the kernel step of a projective resolution. This is phase M1 of the plan below. The operations
+the kernel step of a projective resolution, maps and homotopies found by linear algebra, and the
+standard constructions (shifts, cones, totalization, Hom complexes, Gaussian elimination, and
+Euler characteristics). Phases M1 to M4 of the plan below are done. The operations
 are ordinary calculator operations (`spec/ops/`), so the command line, the Python bindings, and the
 web app all send the same JSON messages. An agent building a resolution step by step uses
 `complex.kernel` and `complex.homology` in a loop (worked example below).
@@ -58,8 +60,36 @@ Positions not listed are zero, and differentials not listed are zero.
 | `homotopy.check` | `f − g = d h + h d` for maps of one-dimensional complexes, `h` of step `−1` |
 | `complex.homology` | dimensions of `H(Hom(T⟨d⟩, C))` at test objects `T`, with representatives |
 | `complex.kernel` | generators of the kernel of the differential out of a position, and the extended complex |
+| `map.lift` | `h` with `g h = f`, for `f : X → Z` and `g : Y → Z` (lifting through `g`) |
+| `map.extend` | `h` with `h g = f`, for `f : X → Z` and `g : X → Y` (extending along `g`) |
+| `chainmap.solve` | a chain map `C → D` extending given components, and the dimension of the choices |
+| `homotopy.find` | a homotopy `h` with `f − g = d h + h d`, or a proof that none exists |
+| `complex.minimal` | whether every differential lies in the radical, with a witness when one does not |
+| `complex.shift` | `C[k]⟨s⟩` |
+| `complex.cone` | the cone of a chain map |
+| `complex.totalize` | the total complex of a multicomplex, with the blocks each position contributes |
+| `complex.hom` | the cohomology of `Hom(C, D)` in each internal degree (chain maps up to homotopy at `n = 0`) |
+| `complex.gauss` | Gaussian elimination of isomorphism entries: a smaller homotopy-equivalent complex |
+| `complex.euler` | the Euler characteristic `Σ (−1)^p q^s [P(ℓ)]` in the Grothendieck group |
+| `complex.render` | TikZ (`tikz-cd`) source for a one-dimensional complex |
 
-Every result carries `certified_by` and a provenance with the certificate of the basis used.
+Every result carries `certified_by` and a provenance with the certificate of the basis used, and
+a note saying which linear system was solved or which construction was applied.
+
+**Linear problems.** Every problem of M2 is a finite linear system in degree-zero Hom spaces,
+which are finite-dimensional in the cyclotomic quotient. `exists` is decisive. `freedom` is the
+dimension of the solutions of the homogeneous system: 0 means the answer is unique. With
+`basis: true`, `chainmap.solve` also returns a basis of those homogeneous solutions.
+`complex.minimal` tests whether the left ideal `{g d}` of `End(C(p))` spanned by the maps `g` back
+is nilpotent; when it is not, a failure names the differential and, when one is found among the
+tried maps, a `witness` `g` with `g d` not nilpotent.
+
+**Constructions.** The sign conventions of shifts, cones, totalization, and Hom complexes are in
+`docs/conventions.md` (Complexes). `complex.gauss` repeatedly removes an entry `φ` of a
+differential that is an isomorphism, replacing the rest of that differential's neighbourhood by
+`ε − γ φ⁻¹ δ`; it lists each elimination, stops after `limit` steps (default 1000), and says
+`finished: false` if it stopped early. `complex.hom` works in the window of internal degrees where
+some map can be nonzero (`degree` asks for one).
 
 **Homology.** Homology of a complex of projectives is computed through the functors
 `Hom(T⟨d⟩, −)` for the test objects `T`: for each colour multiset of the complex, the loadings the
@@ -95,11 +125,28 @@ degree 2, and the simple module `L` is `P/xP`.
 
 The test `a_resolution_step_by_step` in `crates/core/tests/complexes.rs` runs exactly this loop.
 
+Continuing with maps and constructions:
+
+4. `chainmap.solve` from the two-term complex to itself, with the identity fixed at 0, finds the
+   identity at −1 with `freedom: 0`: a map of modules lifts uniquely to the resolution here.
+5. `homotopy.find` for the identity says it is not null-homotopic, while `complex.cone` of the
+   identity gives a complex on which `homotopy.find` finds a contracting homotopy, and
+   `complex.gauss` reduces it to the zero complex in two eliminations.
+6. `complex.hom` from `P⟨2⟩ → P` to `P` gives `H^0` in internal degree 2 and `H^1` in degree −2;
+   `complex.euler` of `P⟨2⟩ → P` is `(-q^2 + 1)[i@1]`, the class `[L] = [P] − q²[P]` of the
+   simple module in the Grothendieck group.
+
+The tests `solving_for_chain_maps_and_homotopies`, `the_cone_of_the_identity_is_contractible`,
+`shifts_totalization_and_euler_characteristic`, and `hom_complex_cohomology` run these steps.
+
 ## Plan
 
 - **M1** (done): the model, the checks, homology, kernels, and Hom bases.
-- **M2**: lifting maps through surjections and along resolutions, homotopy search, and minimality.
-- **M3**: cones, Hom complexes and Ext, totalization of multicomplexes, Gaussian elimination, and
+- **M2** (done): lifting and extending maps, solving for chain maps and homotopies, and minimality.
+- **M3** (done): shifts, cones, Hom complexes (whose `H^n` in internal degree 0 of a resolution
+  against a module complex computes Ext), totalization of multicomplexes, Gaussian elimination, and
   Euler characteristics.
-- **M4**: the AI sidebar, a web view of complexes, TikZ output, and Python helpers.
-- Later: Rickard and Chuang–Rouquier complexes (bounded), and modules beyond projectives.
+- **M4** (done): every complex operation is a tool of the AI sidebar, Python helpers
+  (`docs/python.md`), and TikZ output (`complex.render`).
+- Later: a web view of complexes, spectral sequences of multicomplexes, Rickard and
+  Chuang–Rouquier complexes (bounded), and modules beyond projectives.

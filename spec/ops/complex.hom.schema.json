@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.hom.schema.json",
+  "title": "complex.hom: cohomology of the Hom complex",
+  "description": "Dimensions of the cohomology of Hom(C, D) in each internal degree e: Hom^n is the product of the degree-e maps C(p) → D(p + n), with δ f = d_D f − (−1)^n f d_C. H^0 in degree e is the space of chain maps C⟨e⟩ → D up to homotopy; with C a projective resolution, H^n gives Ext.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "target"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "degree": {
+          "type": "integer"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "degrees",
+            "window",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "degrees": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "degree",
+                  "cohomology"
+                ],
+                "properties": {
+                  "degree": {
+                    "type": "integer"
+                  },
+                  "cohomology": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "n",
+                        "cochains",
+                        "dimension"
+                      ],
+                      "properties": {
+                        "n": {
+                          "type": "integer"
+                        },
+                        "cochains": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "dimension": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "window": {
+              "$ref": "common.schema.json#/$defs/degreeWindow"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

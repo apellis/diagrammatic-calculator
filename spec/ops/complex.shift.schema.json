@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.shift.schema.json",
+  "title": "complex.shift: shift a complex",
+  "description": "C[k]⟨s⟩: the term at position p is C(p + k·step) with every summand shifted by s, and the differential along axis a is multiplied by (−1)^(k_a).",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/complexPosition"
+        },
+        "grading": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "complex",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "complex": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

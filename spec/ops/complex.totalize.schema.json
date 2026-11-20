@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.totalize.schema.json",
+  "title": "complex.totalize: the total complex of a multicomplex",
+  "description": "Tot(n) is the sum of the terms at the positions with coordinate sum n; when the squares commute, the differential along axis a is multiplied by (−1)^(p_0 + … + p_(a−1)). 'blocks' says where each position's summands start in the total term.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "complex",
+            "blocks",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "complex": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "blocks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "blocks"
+                ],
+                "properties": {
+                  "at": {
+                    "type": "integer"
+                  },
+                  "blocks": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "first"
+                      ],
+                      "properties": {
+                        "from": {
+                          "$ref": "common.schema.json#/$defs/complexPosition"
+                        },
+                        "first": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

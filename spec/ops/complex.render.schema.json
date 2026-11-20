@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.render.schema.json",
+  "title": "complex.render: TikZ source for a complex",
+  "description": "tikz-cd source for a one-dimensional complex: its terms, joined by arrows labelled by the matrices of the differentials.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "format",
+            "tikz",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "format": {
+              "const": "tikz-cd"
+            },
+            "tikz": {
+              "type": "string"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

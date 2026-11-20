@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.euler.schema.json",
+  "title": "complex.euler: the Euler characteristic",
+  "description": "Σ_p (−1)^|p| Σ q^s [X] over the summands X⟨s⟩ of C(p), as Laurent polynomials in q per object (isotopic objects grouped).",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "terms",
+            "text",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "object",
+                  "coefficient",
+                  "powers"
+                ],
+                "properties": {
+                  "object": {
+                    "type": "string"
+                  },
+                  "coefficient": {
+                    "type": "string"
+                  },
+                  "powers": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                }
+              }
+            },
+            "text": {
+              "type": "string"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

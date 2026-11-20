@@ -32,6 +32,18 @@ these schemas in `crates/core/tests/schemas.rs`.
 | `complex.homology` | M1 | `complex.homology.schema.json` |
 | `complex.kernel` | M1 | `complex.kernel.schema.json` |
 | `hom.basis` | M1 | `hom.basis.schema.json` |
+| `map.lift` | M2 | `map.lift.schema.json` |
+| `map.extend` | M2 | `map.extend.schema.json` |
+| `chainmap.solve` | M2 | `chainmap.solve.schema.json` |
+| `homotopy.find` | M2 | `homotopy.find.schema.json` |
+| `complex.minimal` | M2 | `complex.minimal.schema.json` |
+| `complex.shift` | M3 | `complex.shift.schema.json` |
+| `complex.cone` | M3 | `complex.cone.schema.json` |
+| `complex.totalize` | M3 | `complex.totalize.schema.json` |
+| `complex.hom` | M3 | `complex.hom.schema.json` |
+| `complex.gauss` | M3 | `complex.gauss.schema.json` |
+| `complex.euler` | M3 | `complex.euler.schema.json` |
+| `complex.render` | M4 | `complex.render.schema.json` |
 
 Locations in the rewriting operations: a term's summands are numbered from 1 in printed order; a
 summand's layers are numbered from 1 at the bottom of its canonical layering, and strands from 1
@@ -41,7 +53,7 @@ The operations that change a term return its provenance map (`common.schema.json
 `provenanceMap`): where each generator occurrence of the result came from. `term.diff` gives the
 same map between a term and one written in its place, which no rewrite connects.
 
-Complexes over weighted KLR algebras (`docs/complexes.md`, phase M1) are given as JSON: terms,
+Complexes over weighted KLR algebras (`docs/complexes.md`, phases M1 to M4) are given as JSON: terms,
 summands with shifts, and differential matrices with rows indexing the target. Their shared
 definitions are in `common.schema.json` (`complex`, `complexMatrix`, `complexVerdict`, and their parts).
 

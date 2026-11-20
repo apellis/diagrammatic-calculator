@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/homotopy.find.schema.json",
+  "title": "homotopy.find: find a homotopy between chain maps",
+  "description": "Finds h with f − g = d h + h d, for chain maps f, g: C → D of one-dimensional complexes (g omitted: zero); h(p) maps C(p) to D(p − step).",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "target",
+        "f"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "f": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        },
+        "g": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "exists",
+            "h",
+            "freedom",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "exists": {
+              "type": "boolean"
+            },
+            "h": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/complexMap"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "freedom": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

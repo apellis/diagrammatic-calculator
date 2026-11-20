@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.cone.schema.json",
+  "title": "complex.cone: the cone of a chain map",
+  "description": "Cone(F)(p) = C(p + step) ⊕ D(p) for a chain map F: C → D of one-dimensional complexes, with differential [[−d_C, 0], [F, d_D]].",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "target",
+        "map"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "map": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "complex",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "complex": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

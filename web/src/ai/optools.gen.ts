@@ -623,5 +623,3573 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         }
       }
     }
+  },
+  {
+    "op": "hom.basis",
+    "name": "hom_basis",
+    "description": "a basis of a graded Hom space",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "target"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "degree": {
+          "type": "integer"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.check",
+    "name": "complex_check",
+    "description": "is this a complex?",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "chainmap.check",
+    "name": "chainmap_check",
+    "description": "is this a chain map?",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "target",
+        "map"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "map": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "homotopy.check",
+    "name": "homotopy_check",
+    "description": "is h a homotopy from f to g?",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "target",
+        "f",
+        "h"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "f": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "g": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "h": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.homology",
+    "name": "complex_homology",
+    "description": "homology at test objects",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "at": {
+          "description": "A position: an integer, or a list of integers for a multicomplex.",
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "axis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_degree": {
+          "type": "integer"
+        },
+        "representatives": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.kernel",
+    "name": "complex_kernel",
+    "description": "generators of the kernel of a differential",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex",
+        "at"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "at": {
+          "description": "A position: an integer, or a list of integers for a multicomplex.",
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "axis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "map.lift",
+    "name": "map_lift",
+    "description": "factor a map through another",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "middle",
+        "target",
+        "f",
+        "g"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                "type": "string"
+              },
+              "loading": {
+                "type": "string"
+              },
+              "shift": {
+                "description": "X⟨s⟩ has its generator in degree s.",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "middle": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                "type": "string"
+              },
+              "loading": {
+                "type": "string"
+              },
+              "shift": {
+                "description": "X⟨s⟩ has its generator in degree s.",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                "type": "string"
+              },
+              "loading": {
+                "type": "string"
+              },
+              "shift": {
+                "description": "X⟨s⟩ has its generator in degree s.",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "f": {
+          "description": "Rows index the summands of the target, columns those of the source.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "description": "A term, or null (or \"0\") for zero.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "g": {
+          "description": "Rows index the summands of the target, columns those of the source.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "description": "A term, or null (or \"0\") for zero.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "map.extend",
+    "name": "map_extend",
+    "description": "extend a map along another",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "middle",
+        "target",
+        "f",
+        "g"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                "type": "string"
+              },
+              "loading": {
+                "type": "string"
+              },
+              "shift": {
+                "description": "X⟨s⟩ has its generator in degree s.",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "middle": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                "type": "string"
+              },
+              "loading": {
+                "type": "string"
+              },
+              "shift": {
+                "description": "X⟨s⟩ has its generator in degree s.",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                "type": "string"
+              },
+              "loading": {
+                "type": "string"
+              },
+              "shift": {
+                "description": "X⟨s⟩ has its generator in degree s.",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "f": {
+          "description": "Rows index the summands of the target, columns those of the source.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "description": "A term, or null (or \"0\") for zero.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "g": {
+          "description": "Rows index the summands of the target, columns those of the source.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "description": "A term, or null (or \"0\") for zero.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "chainmap.solve",
+    "name": "chainmap_solve",
+    "description": "find a chain map with given components",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "target"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fixed": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "basis": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  {
+    "op": "homotopy.find",
+    "name": "homotopy_find",
+    "description": "find a homotopy between chain maps",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "target",
+        "f"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "f": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "g": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.minimal",
+    "name": "complex_minimal",
+    "description": "is every differential in the radical?",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.shift",
+    "name": "complex_shift",
+    "description": "shift a complex",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "by": {
+          "description": "A position: an integer, or a list of integers for a multicomplex.",
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "grading": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.cone",
+    "name": "complex_cone",
+    "description": "the cone of a chain map",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "target",
+        "map"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "map": {
+          "description": "Components of a map, one matrix per source position.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "matrix"
+            ],
+            "properties": {
+              "at": {
+                "description": "A position: an integer, or a list of integers for a multicomplex.",
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "matrix": {
+                "description": "Rows index the summands of the target, columns those of the source.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "description": "A term, or null (or \"0\") for zero.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.totalize",
+    "name": "complex_totalize",
+    "description": "the total complex of a multicomplex",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.hom",
+    "name": "complex_hom",
+    "description": "cohomology of the Hom complex",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "target"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "degree": {
+          "type": "integer"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.gauss",
+    "name": "complex_gauss",
+    "description": "Gaussian elimination",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.euler",
+    "name": "complex_euler",
+    "description": "the Euler characteristic",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "op": "complex.render",
+    "name": "complex_render",
+    "description": "TikZ source for a complex",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "description": "A context line without the word 'context', e.g. \"klr type=A2 nu=2i+j ring=QQ\" (spec/workspace.md). Defaults to the document's context (with its scalars).",
+          "type": "string"
+        },
+        "complex": {
+          "type": "object",
+          "required": [
+            "terms"
+          ],
+          "properties": {
+            "dimension": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "indexing": {
+              "enum": [
+                "cohomological",
+                "homological"
+              ],
+              "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+            },
+            "squares": {
+              "enum": [
+                "commute",
+                "anticommute"
+              ]
+            },
+            "odd_signs": {
+              "enum": [
+                "koszul",
+                "ignore"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "summands"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "summands": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "object"
+                      ],
+                      "properties": {
+                        "object": {
+                          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+                          "type": "string"
+                        },
+                        "loading": {
+                          "type": "string"
+                        },
+                        "shift": {
+                          "description": "X⟨s⟩ has its generator in degree s.",
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "differentials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "matrix"
+                ],
+                "properties": {
+                  "from": {
+                    "description": "A position: an integer, or a list of integers for a multicomplex.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "axis": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "description": "Rows index the summands of the target, columns those of the source.",
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "description": "A term, or null (or \"0\") for zero.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 ];

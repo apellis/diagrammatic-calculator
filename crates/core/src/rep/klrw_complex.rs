@@ -104,6 +104,10 @@ impl<R: Ring> Additive for Klrw<R> {
         Elem::default()
     }
 
+    fn identity(&self, o: &Loading) -> Self::Mor {
+        Klrw::identity(self, o)
+    }
+
     fn add(&self, f: &Self::Mor, g: &Self::Mor) -> Self::Mor {
         Klrw::add(self, f, g)
     }

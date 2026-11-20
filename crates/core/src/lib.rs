@@ -11,6 +11,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod builtin;
 pub mod cartan;
 pub mod complex;
+pub mod complex_build;
+pub mod complex_solve;
 pub mod conformance;
 pub mod context;
 pub mod elab;
