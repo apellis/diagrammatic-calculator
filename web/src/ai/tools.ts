@@ -94,7 +94,7 @@ const WORKSPACE_TOOLS: ToolDef[] = [
   },
   {
     name: 'cell_add',
-    description: 'Adds a cell (def, watch, solve, check, or note, in the workspace syntax) and returns its ID.',
+    description: 'Adds a cell (def, watch, solve, check, module, complex, or note, in the workspace syntax) and returns its ID.',
     input_schema: {
       type: 'object',
       required: ['text', 'note'],
@@ -394,7 +394,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
       return ok('read the selection', { selection: host.selection() });
     case 'cell_add': {
       const text = (a.text as string).trim();
-      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check, or note.');
+      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check, module, complex, or note.');
       const after = a.after as string | undefined;
       const at = after ? doc.index(after) + 1 : doc.cells.length;
       if (after && at === 0) return fail(`There is no cell ${after}.`);
@@ -405,7 +405,7 @@ async function runWorkspace(host: ToolHost, name: string, a: Record<string, unkn
       const id = a.id as string;
       if (doc.index(id) < 0) return fail(`There is no cell ${id}.`);
       const text = (a.text as string).trim();
-      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check, or note.');
+      if (!kindOf(text)) return fail('A cell starts with def, watch, solve, check, module, complex, or note.');
       doc.updateCell(id, text, n);
       return stepped(`changed ${id}`);
     }

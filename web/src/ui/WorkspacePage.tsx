@@ -7,6 +7,7 @@ import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
 import { exportDch, exportDcw, parseDcw, fileName } from '../doc/dcw';
 import { Cell, TEMPLATES } from './Cell';
+import { complexCellText, readStructured, type ComplexAction } from './Complexes';
 import { NewCell as CellComposer } from './NewCell';
 import { DiagramStart } from './DiagramStart';
 import { Outline } from './Outline';
@@ -738,6 +739,63 @@ function DocView(props: {
     }
   };
 
+  // The tools of complex and module cells: each takes one step and writes it back into the
+  // document as an ordinary edit, so it can be undone, branched, and read like any other.
+  const [complexBusy, setComplexBusy] = createSignal<{ id: string; what: string } | null>(null);
+  const complexAction = async (id: string, action: ComplexAction) => {
+    const cell = cells().find((c) => c.id === id);
+    const v = stateOf(id)?.value as { status: string; complex?: Record<string, unknown>; module?: Record<string, unknown>; resolution?: { next_at?: number | null } } | undefined;
+    const r = cell && readStructured(cell.text);
+    if (!cell || !r || v?.status !== 'ok') return;
+    if (action === 'json') {
+      await navigator.clipboard?.writeText(JSON.stringify(r.kind === 'complex' ? v.complex : v.module, null, 2));
+      return setMessage(r.kind === 'complex' ? 'The complex copied as JSON, every default filled in.' : 'The presentation copied as JSON.');
+    }
+    if (complexBusy()) return;
+    const write = action !== 'tikz';
+    if (write && readOnly()) return refuse();
+    // a resolution of a module cell keeps naming that cell
+    const named = typeof (r.value.resolves?.module) === 'string' ? (r.value.resolves!.module as string) : undefined;
+    const what = { extend: 'Covering the kernel…', kernel: 'Covering the kernel…', gauss: 'Minimizing…', tikz: 'Drawing…', resolve: 'Starting a resolution…' }[action];
+    setComplexBusy({ id, what });
+    try {
+      const context = termContext();
+      const opts = { lane: 'job' as const, timeoutMs: 120_000 };
+      const c = v.complex as never;
+      const o = action === 'extend' ? await engine.call('resolution.extend', { context, resolution: c }, opts)
+        : action === 'kernel' ? await engine.call('complex.kernel', { context, complex: c, at: v.resolution?.next_at ?? 0 }, opts)
+        : action === 'gauss' ? await engine.call('complex.gauss', { context, complex: c }, opts)
+        : action === 'tikz' ? await engine.call('complex.render', { context, complex: c }, opts)
+        : await engine.call('resolution.start', { context, module: v.module as never }, opts);
+      if (o.status === 'cancelled') return setMessage('Stopped.');
+      if (o.status === 'exploded') return setMessage(`${o.message} The command-line tool has no time limit.`);
+      const res = o.response as { status: string; message?: string; resolution?: Record<string, unknown>; extended?: Record<string, unknown>; complex?: Record<string, unknown>; tikz?: string; added?: { summands: unknown[] }; eliminations?: number };
+      if (res.status !== 'ok') return setMessage(res.message ?? 'The step failed.');
+      if (action === 'tikz') {
+        await navigator.clipboard?.writeText(res.tikz ?? '');
+        return setMessage('TikZ copied (tikz-cd).');
+      }
+      if (action === 'resolve') {
+        const taken = new Set(cells().map((x) => readStructured(x.text)?.name ?? /^\s*def\s+([^\s:]+)/.exec(x.text)?.[1]).filter(Boolean));
+        let name = `R_${r.name}`;
+        for (let k = 2; taken.has(name); k++) name = `R${k}_${r.name}`;
+        const index = cells().findIndex((x) => x.id === id) + 1;
+        const nid = doc.addCell(complexCellText(name, res.resolution!, r.name), index);
+        focusCell(nid);
+        return setMessage(`Added ${name}, resolving ${r.name}.`);
+      }
+      const next = action === 'kernel' ? res.extended : action === 'gauss' ? res.complex : res.resolution;
+      if (!next) return;
+      if (action === 'gauss' && !res.eliminations) return setMessage('Nothing to cancel: no entry of a differential is invertible.');
+      const note = action === 'gauss' ? `Gaussian elimination in ${r.name} (${res.eliminations} ${res.eliminations === 1 ? 'pair' : 'pairs'})` : `covered the kernel in ${r.name}`;
+      const empty = action !== 'gauss' && res.added && !res.added.summands.length;
+      doc.updateCell(id, complexCellText(r.name, next, named, r.tail), note);
+      setMessage(empty ? 'The kernel is zero: the resolution is complete.' : note[0].toUpperCase() + note.slice(1) + '.');
+    } finally {
+      setComplexBusy(null);
+    }
+  };
+
   // The focus canvas edits definitions as written; watches are inspection-only.
   // A term using definitions is expanded, and an editable canvas can write that expansion.
   const canvasable = (id: string) => ['def', 'watch'].includes(stateOf(id)?.parsed?.kind ?? '');
@@ -1112,6 +1170,7 @@ function DocView(props: {
                     onToggle={() => toggle(id())} onCommit={(t) => commit(id(), t)} onCancel={() => setActive(null)}
                     onRemove={() => !readOnly() && doc.removeCell(id())} onMove={(d) => !readOnly() && doc.moveCell(id(), i() + d)}
                     onPin={() => pin(id())} pinDisabled={mainReadOnly() || previewing()} onRerun={() => visibleEvaluator()?.rerun(id())} onCopyTikz={() => copyTikz(id())}
+                    onComplexAction={(a) => void complexAction(id(), a)} complexBusy={complexBusy()?.id === id() ? complexBusy()!.what : undefined}
                     onCanvas={(w) => openCanvas(id(), w)} validate={validate} onInsertBelow={() => insertBelow(id())}
                     onStop={() => stop(id())} onRunLonger={() => runLonger(id())} commandLine={() => commandLine(id())} trace={trace(id())}
                     comments={props.comments().filter((x) => x.cell === id())} onComment={readOnly() ? undefined : (t) => props.onComment(id(), text(), t)} />
@@ -1207,7 +1266,7 @@ function DocView(props: {
           <Dialog label={`Snapshot ${s.name}`} onClose={() => setModal(null)}>
               <h3 style={{ margin: '0 0 8px' }}>{s.name}</h3>
               <table class="kv"><tbody>
-                <tr><td>cell</td><td><span class="kind">{kindOf(s.cellText) ?? 'def'}</span> <Typeset text={s.cellText.replace(/^(def|watch|solve|check)\s+/, '')} /></td></tr>
+                <tr><td>cell</td><td><span class="kind">{kindOf(s.cellText) ?? 'def'}</span> <Typeset text={s.cellText.replace(/^(def|watch|solve|check|complex|module)\s+/, '')} /></td></tr>
                 <tr><td>context</td><td><ContextText context={s.context} /></td></tr>
                 <tr><td>computed by</td><td>{s.author ? `${authorLabel(s.author)} (browser)` : 'Unknown (older snapshot)'}</td></tr>
                 <tr><td>version</td><td>{s.version}, {new Date(s.time).toLocaleString()}</td></tr>

@@ -6,6 +6,7 @@ import { dotTitle, NoteView, Summary, summary } from './Results';
 import { Typeset } from './Typeset';
 import { ContextText } from './ContextChip';
 import { ago } from '../app';
+import { structuredHead } from './Complexes';
 
 export function label(c: CellData, s?: CellState): string {
   const p = s?.parsed;
@@ -13,13 +14,23 @@ export function label(c: CellData, s?: CellState): string {
   if (p?.kind === 'note') return (p.note ?? '').split('\n')[0] || 'note';
   if (p?.kind === 'check') return c.text.replace(/^check\s+/, '');
   if (kindOf(c.text) === 'comment') return c.text.replace(/^\s*#\s?/, '');
+  const k = kindOf(c.text);
+  if (k === 'complex' || k === 'module') return structuredHead(c.text) ?? c.text;
   return c.text.replace(/^(watch|solve)\s+/, '');
 }
+
+/** Complex and module cells: their shape in words, not typeset. */
+const plain = (c: CellData) => {
+  const k = kindOf(c.text);
+  return k === 'complex' || k === 'module';
+};
 
 /** A cell's label typeset; a note's first line as written. */
 function Label(props: { c: CellData; s?: CellState }) {
   return (
-    <Show when={props.s?.parsed?.kind === 'note' || kindOf(props.c.text) === 'comment'} fallback={<Typeset text={label(props.c, props.s)} />}>
+    <Show when={props.s?.parsed?.kind === 'note' || kindOf(props.c.text) === 'comment'} fallback={
+      <Show when={plain(props.c)} fallback={<Typeset text={label(props.c, props.s)} />}><span class="cx-head">{label(props.c, props.s)}</span></Show>
+    }>
       <NoteView text={label(props.c, props.s)} inline />
     </Show>
   );

@@ -628,3 +628,26 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .about-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 16px 0; }
 .about-facts dt { color: var(--muted); }
 .about-facts dd { margin: 0; }
+
+/* Complex and module cells (Complexes.tsx): the terms left to right with their maps over the arrows. */
+.cx-head { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; }
+.cx { display: flex; flex-direction: column; gap: 8px; }
+.cx-diagram { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 6px 2px 10px; }
+.cx-term { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
+.cx-summands { display: flex; flex-direction: column; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; background: var(--sunken); font-family: var(--mono, ui-monospace, monospace); font-size: 13px; white-space: nowrap; }
+.cx-module .cx-summands { background: transparent; border-style: dashed; font-style: italic; }
+.cx-oplus { color: var(--muted); font-size: 11px; line-height: 1; }
+.cx-pos { font-size: 11px; }
+.cx-h { font-size: 11px; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.cx-h.zero { color: var(--good); background: var(--good-soft); }
+.cx-h.nonzero { color: var(--warn); background: var(--warn-soft); }
+.cx-arrow { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; min-width: 44px; }
+.cx-shaft { color: var(--muted); font-size: 18px; line-height: 1; }
+.cx-name { font-size: 13px; font-style: italic; color: var(--text); }
+.cx-matrix { border-collapse: collapse; font-size: 12px; border-left: 1px solid var(--muted); border-right: 1px solid var(--muted); border-radius: 3px; }
+.cx-matrix td { padding: 0 5px; text-align: center; }
+.cx-matrix-none { display: inline-block; min-height: 1em; }
+.cx-status { display: flex; flex-direction: column; gap: 3px; }
+.cx-failures { margin: 0; padding-left: 18px; font-size: 13px; }
+.cx-multi ul { margin: 4px 0; padding-left: 18px; }
+.cx-tools { gap: 6px; }

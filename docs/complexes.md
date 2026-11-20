@@ -65,7 +65,8 @@ A module is given by a presentation `Q₁ --φ--> Q₀ → M → 0`, with `Q₀`
 `M` is the cokernel of `φ`, whose matrix has one row per generator and one column per relation
 (the convention of every matrix here). A projective is a module with no relations, and
 `module.head` writes down the presentation of `P/rad P` for a projective `P`, so simple modules
-and their sums need not be presented by hand. The module stays fixed while a resolution of it is
+and their sums need not be presented by hand. In a module cell the same is written
+`{"head": "i@1"}` (the objects of `P`, as in a context line). The module stays fixed while a resolution of it is
 built, so `C₀` may change during the search without changing what is resolved.
 
 A **resolution** of `M` is a one-dimensional complex `⋯ → C₋₁ → C₀` ending at position 0 (in
@@ -175,6 +176,16 @@ With the module itself: `module.head` with `object: "i@1"` gives the presentatio
 `check.next_at` moving to `−n − 1` (the test `resolving_the_simple_module`; the workspace
 `examples/klrw-a1-resolution.dcw` holds the first step as cells).
 
+In the web app the same steps are buttons on the cells. A module cell `module L := {"head": "i@1"}`
+shows its presentation `Q₁ → Q₀ → L` and its graded dimension, and **Start a resolution** adds a
+complex cell `R_L` resolving `L` below it. That cell draws the terms from left to right with
+their positions, the matrices over the arrows, and `ε` into `L`, says whether it is a resolution
+yet and what is left to cover, and offers **Cover the kernel** (one `resolution.extend`),
+**Minimize** (`complex.gauss`), **Copy TikZ**, and **Copy JSON**. Each button rewrites the cell's
+text, so undo, history, and branches work as for any edit, and the cell keeps naming `L`, so
+editing the module cell changes what is resolved. On a complex that resolves nothing,
+**Cover the kernel** becomes `complex.kernel` at the far end.
+
 Continuing with maps and constructions:
 
 4. `chainmap.solve` from the two-term complex to itself, with the identity fixed at 0, finds the
@@ -198,7 +209,7 @@ The tests `solving_for_chain_maps_and_homotopies`, `the_cone_of_the_identity_is_
   Euler characteristics.
 - **M4** (done): every complex operation is a tool of the AI sidebar, Python helpers
   (`docs/python.md`), and TikZ output (`complex.render`).
-- **M5**: modules by presentations, `P/rad P`, and resolutions of a module built step by step,
-  with module cells in workspaces and a web view of complexes.
+- **M5** (done): modules by presentations, `P/rad P`, and resolutions of a module built step by
+  step, with module and complex cells in workspaces, their web views, and the step tools on them.
 - Later: spectral sequences of multicomplexes, Rickard and
   Chuang–Rouquier complexes (bounded), and modules beyond projectives.

@@ -324,7 +324,7 @@ that contains spaces. A key that is not listed here and does not contain `_` is 
 | Check | `check test(args)` | The tests are `equal(a, b)`, `zero(a)`, `idempotent(a)`, `orthogonal(a, b)`, `homogeneous(a)`, `central(a)`, and `primitive(a)`. |
 | Note | `note """text"""` | May span several lines. |
 | Complex | `complex R := {…}` | A bounded complex of projectives in the JSON form of `docs/complexes.md`, on one line; weighted KLR contexts only. |
-| Module | `module L := {…}` | A module given by a presentation, in the JSON form of `docs/complexes.md`; weighted KLR contexts only. A complex with `"resolves": {"module": "L"}` resolves the latest module cell named `L` before it. |
+| Module | `module L := {…}` | A module given by a presentation, in the JSON form of `docs/complexes.md`, or `{"head": "i@1"}` for `P/rad P`; weighted KLR contexts only. A complex with `"resolves": {"module": "L"}` resolves the latest module cell named `L` before it. |
 | Comment | a line starting with `#` | Ignored by the calculator. |
 
 A cell may end with two spaces and options: `view=diagrams` changes how the result is shown, and

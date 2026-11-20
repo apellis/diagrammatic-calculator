@@ -7,6 +7,7 @@ import { Editor, type RemoteCursor } from './Editor';
 import { dotTitle, NoteView, Outcome, ResultView, Summary, summary, type Tracer } from './Results';
 import { Typeset } from './Typeset';
 import { cellTex, optionTex, splitOptions } from './tex';
+import { structuredHead, type ComplexAction } from './Complexes';
 import type { CellComment } from './AIPanel';
 
 export const TEMPLATES: [string, string, number?][] = [
@@ -15,7 +16,14 @@ export const TEMPLATES: [string, string, number?][] = [
   ['solve', 'solve  = 0 for c1, c2', 6],
   ['check', 'check idempotent()', 17],
   ['note', 'note """"""', 8],
+  // a module: P/rad P of an object (a simple head), or {generators, relations, matrix}
+  ['module', 'module L := {"head": ""}', 22],
+  // a resolution starts from a module cell's "Start a resolution", or from its terms written out
+  ['complex', 'complex C := {"terms": [], "differentials": []}', 24],
 ];
+
+/** Complex and module cells are JSON; their heads and texts are shown in words instead. */
+const structured = (k: string) => k === 'complex' || k === 'module';
 
 export interface CellProps {
   id: string;
@@ -38,6 +46,10 @@ export interface CellProps {
   onPin: () => void;
   onRerun: () => void;
   onCopyTikz: () => void;
+  /** The tools of a complex or module cell: the next step of a resolution, Gauss, TikZ, JSON. */
+  onComplexAction?: (a: ComplexAction) => void;
+  /** What a complex or module tool is doing, while it runs. */
+  complexBusy?: string;
   /** Opens the focus canvas, at a summand when one was double-clicked. */
   onCanvas?: (word?: string) => void;
   /** Why a text cannot be a cell (it does not parse), or null when it can. */
@@ -91,6 +103,7 @@ export function Cell(props: CellProps) {
     const p = props.state?.parsed;
     if (p?.kind === 'note') return (p.note ?? '').split('\n')[0];
     if (kind() === 'comment') return props.text.replace(/^\s*#\s?/, '');
+    if (structured(kind())) return structuredHead(props.text) ?? props.text.replace(/^(complex|module)\s+/, '');
     return props.text.replace(/^(def|watch|solve|check)\s+/, '');
   };
   const slash = () => draft().startsWith('/');
@@ -206,7 +219,11 @@ export function Cell(props: CellProps) {
         <span class="text grow" data-text={head()}>
           <Show when={!props.expanded}>
           <Show when={head()} fallback={<span class="muted">empty cell</span>}>
-            <Show when={kind() === 'note' || kind() === 'comment'} fallback={<Typeset text={head()} tex={cellTex(head().replace(/\s+/g, ' '))} />}>
+            <Show when={kind() === 'note' || kind() === 'comment'} fallback={
+              <Show when={structured(kind())} fallback={<Typeset text={head()} tex={cellTex(head().replace(/\s+/g, ' '))} />}>
+                <span class="cx-head">{head()}</span>
+              </Show>
+            }>
               <NoteView text={head()} inline />
             </Show>
           </Show>
@@ -260,7 +277,7 @@ export function Cell(props: CellProps) {
             </div>
           </Show>
           <Show when={props.state && !props.isNew && ((kind() !== 'note' && kind() !== 'comment') || editing())}>
-            <ResultView s={props.state!} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} trace={props.trace} />
+            <ResultView s={props.state!} onComplexAction={props.readOnly ? undefined : props.onComplexAction} complexBusy={props.complexBusy} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} trace={props.trace} />
           </Show>
           {/* New cells have no saved result or position yet. */}
           <Show when={!props.isNew} fallback={
@@ -275,10 +292,13 @@ export function Cell(props: CellProps) {
               <Show when={props.state?.status === 'failed' && props.state.value?.status === 'error' && 'message' in props.state.value && props.state.value.message === 'cancelled'}>
                 <button class="ghost" onClick={props.onRerun}>Retry</button>
               </Show>
-              <Show when={!props.readOnly}>
+              {/* complex and module cells carry their own tools, under their diagram */}
+              <Show when={!props.readOnly && !structured(kind())}>
                 <button class="ghost" onClick={props.onPin} disabled={props.pinDisabled || !canPin()}>Pin result</button>
               </Show>
-              <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
+              <Show when={!structured(kind())}>
+                <button class="ghost" onClick={props.onCopyTikz} disabled={!canTikz()}>Copy TikZ</button>
+              </Show>
               <Show when={props.onCanvas && ['def', 'watch'].includes(kind())}>
                 <button class="ghost" onClick={() => props.onCanvas?.()} title="Open the focus canvas (F)" data-testid="open-canvas">Canvas</button>
               </Show>
@@ -347,8 +367,14 @@ function CellText(props: { text: string; kind: string; onEdit?: () => void }) {
       onKeyDown={(e) => props.onEdit && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), props.onEdit())}>
       <Show when={props.kind === 'note' || props.kind === 'comment'} fallback={
         <Show when={props.text.trim()} fallback={<span class="muted">empty cell</span>}>
+        <Show when={structured(props.kind)} fallback={<>
           <Typeset text={first()} display />
           <For each={options()}>{(o) => <div class="opt"><Typeset text={o} tex={optionTex(o)} /></div>}</For>
+        </>}>
+          {/* the JSON is edited as text; read, it is the shape in words (the diagram is below) */}
+          <div class="cx-head">{structuredHead(props.text) ?? props.text.replace(/^(complex|module)\s+/, '')}</div>
+          <Show when={props.onEdit}><div class="hint small">Click to edit its JSON.</div></Show>
+        </Show>
         </Show>
       }>
         <NoteView text={props.kind === 'comment' ? props.text.replace(/^\s*#\s?/, '') : note()} />

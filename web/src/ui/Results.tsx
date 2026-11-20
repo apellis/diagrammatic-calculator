@@ -8,6 +8,7 @@ import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
 import { proseHtml } from './prose';
 import { certainty } from '../eval/certainty';
+import { ComplexView, ModuleView, readStructured, type ComplexAction, type ComplexResult, type ModuleResult } from './Complexes';
 
 export { certainty, conjecture, type Certainty } from '../eval/certainty';
 
@@ -39,8 +40,28 @@ export function summary(s: CellState): string {
       return (r.holds ? 'holds' : 'fails') + stale;
     case 'solve':
       return solveSummary(r) + stale;
+    case 'complex':
+      return complexSummary(r as unknown as ComplexResult) + stale;
+    case 'module': {
+      const m = r as unknown as ModuleResult;
+      if (m.holds === false) return 'not a module' + stale;
+      return (m.dimension !== undefined ? `dimension ${m.dimension}${m.complete === false ? ' so far' : ''}` : 'module') + stale;
+    }
   }
   return '';
+}
+
+/** A complex in one line: a resolution's progress, or whether the complex is exact. */
+export function complexSummary(r: ComplexResult): string {
+  const res = r.resolution;
+  if (r.complex?.resolves) {
+    if (!res || res.holds === false) return 'not a resolution';
+    const n = res.length ?? 0;
+    return res.resolved ? `resolves, length ${n}${res.minimal === true ? ', minimal' : ''}` : `length ${n} so far, next term at ${String(res.next_at).replace('-', '−')}`;
+  }
+  if (r.check && r.check.holds === false) return 'not a complex';
+  if (r.homology?.exact !== undefined) return r.homology.exact ? 'exact' : 'not exact';
+  return 'complex';
 }
 
 /** A clock that ticks every second while some component reads it. */
@@ -114,7 +135,8 @@ export function dotTitle(s?: CellState): string {
 
 /** A current yes/no result (a check's value), whose verdict `Outcome` shows; null otherwise. */
 export function verdictOf(s?: CellState): Ok | null {
-  return s && s.status === 'fresh' && !s.parseError && ok(s.value) && typeof s.value.holds === 'boolean' ? s.value : null;
+  // a module cell carries `holds` as module.check does; its verdict is in its own view, not a pill
+  return s && s.status === 'fresh' && !s.parseError && ok(s.value) && s.value.kind !== 'module' && typeof s.value.holds === 'boolean' ? s.value : null;
 }
 
 /**
@@ -471,6 +493,9 @@ export function Brief(props: { s?: CellState }) {
         <Match when={r()?.kind === 'check' && r()}>
           {(x) => <span class={`badge ${x().holds ? 'good' : 'bad'}`}>{x().holds ? 'holds' : 'fails'}</span>}
         </Match>
+        <Match when={(r()?.kind === 'complex' || r()?.kind === 'module') && r()}>
+          <span>{summary(props.s!)}</span>
+        </Match>
         <Match when={r()?.kind === 'solve' && r()}>
           {(x) => <>{solveSummary(x())}<Show when={x().solution}>{(m) => <>: <Value text={assignments(m())} /></>}</Show></>}
         </Match>
@@ -559,7 +584,17 @@ export function ResultView(props: {
   onStop?: () => void;
   onRunLonger?: () => void;
   commandLine?: () => string | undefined;
+  /** The tools of a complex or module cell. */
+  onComplexAction?: (a: ComplexAction) => void;
+  complexBusy?: string;
 }) {
+  /** The cell's own name, for a complex or module cell. */
+  const cellName = () => /^\s*(?:complex|module)\s+([^\s:]+)/.exec(props.s.text)?.[1];
+  /** The module cell a resolution names, when it names one. */
+  const resolvedName = () => {
+    const m = readStructured(props.s.text)?.value.resolves?.module;
+    return typeof m === 'string' ? m : undefined;
+  };
   /** The cell's own text after its kind word, which a definition's text form may just repeat. */
   const source = () => props.s.text.replace(/^(def|watch)\s+/, '');
   const v = () => props.s.value;
@@ -583,6 +618,8 @@ export function ResultView(props: {
                 <Match when={res.kind === 'def'}><Sum r={res} text={`${res.name} := ${res.term}`} valueKey={props.s.valueKey} onFocus={props.onFocus} source={source()} /></Match>
                 <Match when={res.kind === 'check'}><CheckView r={res} /></Match>
                 <Match when={res.kind === 'solve'}><SolveView r={res} /></Match>
+                <Match when={res.kind === 'complex'}><ComplexView r={res as unknown as ComplexResult} name={cellName()} module={resolvedName()} onAction={props.s.status === 'fresh' ? props.onComplexAction : undefined} busy={props.complexBusy} /></Match>
+                <Match when={res.kind === 'module'}><ModuleView r={res as unknown as ModuleResult} name={cellName()} head={/"head"\s*:/.test(props.s.text)} onAction={props.s.status === 'fresh' ? props.onComplexAction : undefined} busy={props.complexBusy} /></Match>
               </Switch>
               <Warnings value={res} />
               <div class="row">
