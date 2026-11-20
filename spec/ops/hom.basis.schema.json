@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/hom.basis.schema.json",
+  "title": "hom.basis: a basis of a graded Hom space",
+  "description": "A basis of Hom(P(source), P(target)) = e(target) A e(source) in one degree, or in every degree where it is nonzero (up to max_degree when unbounded).",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "target"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "degree": {
+          "type": "integer"
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "source",
+            "target",
+            "degrees",
+            "window",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "source": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "degrees": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "degree",
+                  "dimension",
+                  "basis"
+                ],
+                "properties": {
+                  "degree": {
+                    "type": "integer"
+                  },
+                  "dimension": {
+                    "type": "integer"
+                  },
+                  "basis": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "window": {
+              "$ref": "common.schema.json#/$defs/degreeWindow"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

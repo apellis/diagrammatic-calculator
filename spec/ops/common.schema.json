@@ -435,6 +435,235 @@
           }
         }
       }
+    },
+    "complexPosition": {
+      "description": "A position: an integer, or a list of integers for a multicomplex.",
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1
+        }
+      ]
+    },
+    "complexEntry": {
+      "description": "A term, or null (or \"0\") for zero.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "complexMatrix": {
+      "description": "Rows index the summands of the target, columns those of the source.",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "$ref": "common.schema.json#/$defs/complexEntry"
+        }
+      }
+    },
+    "complexSummand": {
+      "type": "object",
+      "required": [
+        "object"
+      ],
+      "properties": {
+        "object": {
+          "description": "An indecomposable object, e.g. a loading \"i@0 R@0.5\" or e(...).",
+          "type": "string"
+        },
+        "loading": {
+          "type": "string"
+        },
+        "shift": {
+          "description": "X⟨s⟩ has its generator in degree s.",
+          "type": "integer"
+        }
+      }
+    },
+    "complexSummands": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/complexSummand"
+      }
+    },
+    "complex": {
+      "type": "object",
+      "required": [
+        "terms"
+      ],
+      "properties": {
+        "dimension": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "indexing": {
+          "enum": [
+            "cohomological",
+            "homological"
+          ],
+          "description": "cohomological (default): d raises the position by 1; homological: d lowers it by 1."
+        },
+        "squares": {
+          "enum": [
+            "commute",
+            "anticommute"
+          ]
+        },
+        "odd_signs": {
+          "enum": [
+            "koszul",
+            "ignore"
+          ]
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "summands"
+            ],
+            "properties": {
+              "at": {
+                "$ref": "common.schema.json#/$defs/complexPosition"
+              },
+              "summands": {
+                "$ref": "common.schema.json#/$defs/complexSummands"
+              }
+            }
+          }
+        },
+        "differentials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "from",
+              "matrix"
+            ],
+            "properties": {
+              "from": {
+                "$ref": "common.schema.json#/$defs/complexPosition"
+              },
+              "axis": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "matrix": {
+                "$ref": "common.schema.json#/$defs/complexMatrix"
+              }
+            }
+          }
+        }
+      }
+    },
+    "complexMap": {
+      "description": "Components of a map, one matrix per source position.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "at",
+          "matrix"
+        ],
+        "properties": {
+          "at": {
+            "$ref": "common.schema.json#/$defs/complexPosition"
+          },
+          "matrix": {
+            "$ref": "common.schema.json#/$defs/complexMatrix"
+          }
+        }
+      }
+    },
+    "complexFailure": {
+      "type": "object",
+      "required": [
+        "condition",
+        "location",
+        "detail"
+      ],
+      "properties": {
+        "condition": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "degreeWindow": {
+      "description": "The degrees searched; truncated when Hom spaces are unbounded above and higher degrees were not searched.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "from",
+        "to",
+        "truncated"
+      ],
+      "properties": {
+        "from": {
+          "type": "integer"
+        },
+        "to": {
+          "type": "integer"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "complexVerdict": {
+      "type": "object",
+      "required": [
+        "status",
+        "holds",
+        "failures",
+        "failure_count",
+        "certified_by",
+        "provenance"
+      ],
+      "properties": {
+        "status": {
+          "const": "ok"
+        },
+        "holds": {
+          "type": "boolean"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/complexFailure"
+          }
+        },
+        "failure_count": {
+          "type": "integer"
+        },
+        "certified_by": {
+          "enum": [
+            "computation",
+            "certificate"
+          ]
+        },
+        "provenance": {
+          "$ref": "common.schema.json#/$defs/provenance"
+        },
+        "conventions": {
+          "type": "object"
+        }
+      }
     }
   }
 }

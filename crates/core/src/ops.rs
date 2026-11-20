@@ -1165,7 +1165,7 @@ pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 18] = [
+pub const OPERATIONS: [&str; 24] = [
     "simplify",
     "check",
     "term.render",
@@ -1184,10 +1184,16 @@ pub const OPERATIONS: [&str; 18] = [
     "term.layout",
     "term.edit",
     "term.diff",
+    "complex.check",
+    "chainmap.check",
+    "homotopy.check",
+    "complex.homology",
+    "complex.kernel",
+    "hom.basis",
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 18] = [
+pub const SCHEMAS: [(&str, &str); 24] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -1253,6 +1259,30 @@ pub const SCHEMAS: [(&str, &str); 18] = [
     (
         "term.diff",
         include_str!("../../../spec/ops/term.diff.schema.json"),
+    ),
+    (
+        "complex.check",
+        include_str!("../../../spec/ops/complex.check.schema.json"),
+    ),
+    (
+        "chainmap.check",
+        include_str!("../../../spec/ops/chainmap.check.schema.json"),
+    ),
+    (
+        "homotopy.check",
+        include_str!("../../../spec/ops/homotopy.check.schema.json"),
+    ),
+    (
+        "complex.homology",
+        include_str!("../../../spec/ops/complex.homology.schema.json"),
+    ),
+    (
+        "complex.kernel",
+        include_str!("../../../spec/ops/complex.kernel.schema.json"),
+    ),
+    (
+        "hom.basis",
+        include_str!("../../../spec/ops/hom.basis.schema.json"),
     ),
 ];
 pub const COMMON_SCHEMA: &str = include_str!("../../../spec/ops/common.schema.json");
@@ -1425,6 +1455,9 @@ pub fn call(op: &str, input: &Value) -> Value {
                 } else {
                     crate::ops_rewrite::run(op, &r)
                 }
+            }
+            op if crate::ops_complex::OPS.contains(&op) => {
+                crate::ops_complex::run(op, input).map(|v| with_status(Ok(v)))?
             }
             _ => return Err(Error::invalid(format!("unknown operation '{op}'"))),
         })

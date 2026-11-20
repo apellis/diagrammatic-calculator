@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/homotopy.check.schema.json",
+  "title": "homotopy.check: is h a homotopy from f to g?",
+  "description": "Checks f − g = d h + h d for maps of one-dimensional complexes; h at p maps C(p) to D(p − step). g defaults to zero.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "target",
+        "f",
+        "h"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "f": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        },
+        "g": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        },
+        "h": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/complexVerdict"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

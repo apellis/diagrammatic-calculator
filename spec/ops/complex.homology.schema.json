@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.homology.schema.json",
+  "title": "complex.homology: homology at test objects",
+  "description": "Computes the homology of Hom(T⟨d⟩, C) at each position along an axis, for the test objects T (the order types of the loadings in the complex) and each degree d; only nonzero pieces are listed. The complex is checked first.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "at": {
+          "$ref": "common.schema.json#/$defs/complexPosition"
+        },
+        "axis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_degree": {
+          "type": "integer"
+        },
+        "representatives": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "axis",
+            "positions",
+            "exact",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "axis": {
+              "type": "integer"
+            },
+            "exact": {
+              "description": "Every listed position has zero homology in every degree, and no window was truncated.",
+              "type": "boolean"
+            },
+            "positions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "at",
+                  "window",
+                  "zero",
+                  "pieces"
+                ],
+                "properties": {
+                  "at": {
+                    "$ref": "common.schema.json#/$defs/complexPosition"
+                  },
+                  "window": {
+                    "$ref": "common.schema.json#/$defs/degreeWindow"
+                  },
+                  "zero": {
+                    "type": "boolean"
+                  },
+                  "pieces": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "test",
+                        "degree",
+                        "dimension"
+                      ],
+                      "properties": {
+                        "test": {
+                          "type": "string"
+                        },
+                        "degree": {
+                          "type": "integer"
+                        },
+                        "dimension": {
+                          "type": "integer"
+                        },
+                        "representatives": {
+                          "type": "array",
+                          "items": {
+                            "description": "A column of morphisms from T⟨d⟩ to the summands at the position, in order.",
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

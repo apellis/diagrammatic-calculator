@@ -139,7 +139,7 @@ fn arrangements(sorted: &[u16]) -> Vec<Vec<u16>> {
 }
 
 /// The exponent vectors `m` with `Σ w_k m_k = total`.
-fn monomials(weights: &[i64], total: i64) -> Vec<Vec<u32>> {
+pub(crate) fn monomials(weights: &[i64], total: i64) -> Vec<Vec<u32>> {
     fn go(w: &[i64], k: usize, rest: i64, cur: &mut Vec<u32>, out: &mut Vec<Vec<u32>>) {
         if k == w.len() {
             if rest == 0 {
@@ -172,7 +172,7 @@ fn col_order(a: &Col, b: &Col) -> std::cmp::Ordering {
 
 impl<R: Ring> Klrw<R> {
     /// The permutations `π` with `colour(top_{π(k)}) = colour(bottom_k)`.
-    fn compatible(&self, bottom: &Loading, top: &Loading) -> Vec<Perm> {
+    pub(crate) fn compatible(&self, bottom: &Loading, top: &Loading) -> Vec<Perm> {
         let (cb, ct) = (bottom.colours(), top.colours());
         Perm::all(bottom.n())
             .into_iter()
@@ -180,7 +180,7 @@ impl<R: Ring> Klrw<R> {
             .collect()
     }
 
-    fn perm_degree(&self, bottom: &Loading, top: &Loading, p: &Perm) -> Result<i64> {
+    pub(crate) fn perm_degree(&self, bottom: &Loading, top: &Loading, p: &Perm) -> Result<i64> {
         let seg = self.data.segment(bottom, top, p)?;
         let colours = bottom.colours();
         Ok(seg
@@ -190,7 +190,7 @@ impl<R: Ring> Klrw<R> {
             .sum())
     }
 
-    fn dot_weights(&self, l: &Loading) -> Vec<i64> {
+    pub(crate) fn dot_weights(&self, l: &Loading) -> Vec<i64> {
         l.colours()
             .iter()
             .map(|&c| 2 * self.data.d[c as usize])

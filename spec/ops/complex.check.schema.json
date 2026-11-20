@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.check.schema.json",
+  "title": "complex.check: is this a complex?",
+  "description": "Checks that every matrix entry is a morphism between the right objects of the right degree (degree s − t from X⟨s⟩ to Y⟨t⟩), that d ∘ d = 0 along each axis, and that squares commute or anticommute as the conventions say. Weighted KLR contexts only.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/complexVerdict"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

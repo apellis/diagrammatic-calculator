@@ -323,6 +323,17 @@ exported yet, and `lcross-rotation`, `cyclic-dot-even`, `cyclic-crossing` have n
 yet; their signs agree with odd-lean's `rot_tau_left`, `eq_1_26`, and `eq_1_28` (the last with the
 sign of ERRATA [BE2] 3) by comparison of the statements.
 
+## Complexes
+
+Complexes of right projectives over a weighted KLR algebra (`docs/complexes.md`) are read as
+follows. `P(ℓ)⟨s⟩` is `e(ℓ) A` with its generator in degree `s`, so a degree-zero map
+`P(a)⟨s⟩ → P(b)⟨t⟩` is an element of `e(b) A e(a)` of degree `s − t`. A matrix has one row per
+summand of the target and one column per summand of the source, and its entries act by left
+multiplication: `g ∘ f` stacks `g` on top of `f`. Indexing is cohomological by default (`d`
+raises the position by 1); `indexing=homological` lowers it. Differentials of different axes
+commute by default (`squares=anticommute` makes them anticommute). The odd sign rule
+(`odd_signs`, default `koszul`) is recorded but has no effect on these purely even algebras.
+
 ## Display
 
 The web app shows text typeset wherever it is only read, and as plain text in a fixed-width font

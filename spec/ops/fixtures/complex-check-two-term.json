@@ -1,0 +1,5 @@
+{
+  "op": "complex.check",
+  "request": { "context": "klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic", "complex": {"terms": [{"at": -1, "summands": [{"object": "i@1", "shift": 2}]}, {"at": 0, "summands": [{"object": "i@1", "shift": 0}]}], "differentials": [{"from": -1, "matrix": [["x_1 e(i@1)"]]}]} },
+  "expect": { "status": "ok", "holds": true, "failure_count": 0 }
+}

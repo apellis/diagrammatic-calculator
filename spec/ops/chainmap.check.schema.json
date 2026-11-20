@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/chainmap.check.schema.json",
+  "title": "chainmap.check: is this a chain map?",
+  "description": "Checks a map F: C → D given by one matrix per position: entries of degree zero, and d F = F d along every axis.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "source",
+        "target",
+        "map"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "target": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "map": {
+          "$ref": "common.schema.json#/$defs/complexMap"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/complexVerdict"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

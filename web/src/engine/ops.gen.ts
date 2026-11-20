@@ -26,6 +26,53 @@ export type ProvenanceMap = {
   }[];
 }[];
 /**
+ * A position: an integer, or a list of integers for a multicomplex.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexPosition".
+ */
+export type ComplexPosition = number | [number, ...number[]];
+/**
+ * A term, or null (or "0") for zero.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexEntry".
+ */
+export type ComplexEntry = string | null;
+/**
+ * Rows index the summands of the target, columns those of the source.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexMatrix".
+ */
+export type ComplexMatrix = ComplexEntry[][];
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexSummands".
+ */
+export type ComplexSummands = ComplexSummand[];
+/**
+ * Components of a map, one matrix per source position.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexMap".
+ */
+export type ComplexMap = {
+  at: ComplexPosition;
+  matrix: ComplexMatrix;
+}[];
+/**
+ * The degrees searched; truncated when Hom spaces are unbounded above and higher degrees were not searched.
+ *
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "degreeWindow".
+ */
+export type DegreeWindow = {
+  from: number;
+  to: number;
+  truncated: boolean;
+} | null;
+/**
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "ChainFindRequest".
  */
@@ -44,6 +91,11 @@ export type ChainFindResponse =
   | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ChainmapCheckResponse".
+ */
+export type ChainmapCheckResponse = ComplexVerdict | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "CheckRequest".
  */
 export type CheckRequest = TermRequest & CheckRequest1;
@@ -52,6 +104,56 @@ export type CheckRequest = TermRequest & CheckRequest1;
  * via the `definition` "CheckResponse".
  */
 export type CheckResponse = Verdict | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexCheckResponse".
+ */
+export type ComplexCheckResponse = ComplexVerdict | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexHomologyResponse".
+ */
+export type ComplexHomologyResponse =
+  | {
+      status: 'ok';
+      axis: number;
+      /**
+       * Every listed position has zero homology in every degree, and no window was truncated.
+       */
+      exact: boolean;
+      positions: {
+        at: ComplexPosition;
+        window: DegreeWindow;
+        zero: boolean;
+        pieces: {
+          test: string;
+          degree: number;
+          dimension: number;
+          representatives?: (string | null)[][];
+        }[];
+      }[];
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexKernelResponse".
+ */
+export type ComplexKernelResponse =
+  | {
+      status: 'ok';
+      at: ComplexPosition;
+      into: ComplexPosition;
+      summands: ComplexSummands;
+      matrix: ComplexMatrix;
+      window: DegreeWindow;
+      complete: boolean;
+      extended?: Complex;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "ContextDescribeResponse".
@@ -129,6 +231,30 @@ export type ExportLeanResponse =
       lean: string;
     }
   | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "HomBasisResponse".
+ */
+export type HomBasisResponse =
+  | {
+      status: 'ok';
+      source: string;
+      target: string;
+      degrees: {
+        degree: number;
+        dimension: number;
+        basis: string[];
+      }[];
+      window: DegreeWindow;
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "HomotopyCheckResponse".
+ */
+export type HomotopyCheckResponse = ComplexVerdict | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "InterchangeRequest".
@@ -470,14 +596,36 @@ export interface Operations {
   chain?: Chain;
   summand?: Summand;
   provenanceMap?: ProvenanceMap;
+  complexPosition?: ComplexPosition;
+  complexEntry?: ComplexEntry;
+  complexMatrix?: ComplexMatrix;
+  complexSummand?: ComplexSummand;
+  complexSummands?: ComplexSummands;
+  complex?: Complex;
+  complexMap?: ComplexMap;
+  complexFailure?: ComplexFailure;
+  degreeWindow?: DegreeWindow;
+  complexVerdict?: ComplexVerdict;
   ChainFindRequest?: ChainFindRequest;
   ChainFindResponse?: ChainFindResponse;
+  ChainmapCheckRequest?: ChainmapCheckRequest;
+  ChainmapCheckResponse?: ChainmapCheckResponse;
   CheckRequest?: CheckRequest;
   CheckResponse?: CheckResponse;
+  ComplexCheckRequest?: ComplexCheckRequest;
+  ComplexCheckResponse?: ComplexCheckResponse;
+  ComplexHomologyRequest?: ComplexHomologyRequest;
+  ComplexHomologyResponse?: ComplexHomologyResponse;
+  ComplexKernelRequest?: ComplexKernelRequest;
+  ComplexKernelResponse?: ComplexKernelResponse;
   ContextDescribeRequest?: ContextDescribeRequest;
   ContextDescribeResponse?: ContextDescribeResponse;
   ExportLeanRequest?: ExportLeanRequest;
   ExportLeanResponse?: ExportLeanResponse;
+  HomBasisRequest?: HomBasisRequest;
+  HomBasisResponse?: HomBasisResponse;
+  HomotopyCheckRequest?: HomotopyCheckRequest;
+  HomotopyCheckResponse?: HomotopyCheckResponse;
   InterchangeRequest?: InterchangeRequest;
   InterchangeResponse?: InterchangeResponse;
   PresentationCheckRequest?: PresentationCheckRequest;
@@ -705,10 +853,79 @@ export interface Summand {
    */
   svg: string;
 }
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexSummand".
+ */
+export interface ComplexSummand {
+  /**
+   * An indecomposable object, e.g. a loading "i@0 R@0.5" or e(...).
+   */
+  object: string;
+  loading?: string;
+  /**
+   * X⟨s⟩ has its generator in degree s.
+   */
+  shift?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complex".
+ */
+export interface Complex {
+  dimension?: number;
+  /**
+   * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
+   */
+  indexing?: 'cohomological' | 'homological';
+  squares?: 'commute' | 'anticommute';
+  odd_signs?: 'koszul' | 'ignore';
+  terms: {
+    at: ComplexPosition;
+    summands: ComplexSummands;
+  }[];
+  differentials?: {
+    from: ComplexPosition;
+    axis?: number;
+    matrix: ComplexMatrix;
+  }[];
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexFailure".
+ */
+export interface ComplexFailure {
+  condition: string;
+  location: string;
+  detail: string;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "complexVerdict".
+ */
+export interface ComplexVerdict {
+  status: 'ok';
+  holds: boolean;
+  failures: ComplexFailure[];
+  failure_count: number;
+  certified_by: 'computation' | 'certificate';
+  provenance: Provenance;
+  conventions?: {};
+}
 export interface ChainFindRequest1 {
   term: string;
   rhs?: string;
   max_steps?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ChainmapCheckRequest".
+ */
+export interface ChainmapCheckRequest {
+  context: Context;
+  source: Complex;
+  target: Complex;
+  map: ComplexMap;
 }
 export interface CheckRequest1 {
   name: 'equal' | 'zero' | 'idempotent' | 'orthogonal' | 'homogeneous' | 'central' | 'primitive';
@@ -717,6 +934,37 @@ export interface CheckRequest1 {
    * @maxItems 2
    */
   terms: [string] | [string, string];
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexCheckRequest".
+ */
+export interface ComplexCheckRequest {
+  context: Context;
+  complex: Complex;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexHomologyRequest".
+ */
+export interface ComplexHomologyRequest {
+  context: Context;
+  complex: Complex;
+  at?: ComplexPosition;
+  axis?: number;
+  max_degree?: number;
+  representatives?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexKernelRequest".
+ */
+export interface ComplexKernelRequest {
+  context: Context;
+  complex: Complex;
+  at: ComplexPosition;
+  axis?: number;
+  max_degree?: number;
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -765,6 +1013,29 @@ export interface ExportLeanRequest1 {
    */
   doc?: string;
   max_steps?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "HomBasisRequest".
+ */
+export interface HomBasisRequest {
+  context: Context;
+  source: string;
+  target: string;
+  degree?: number;
+  max_degree?: number;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "HomotopyCheckRequest".
+ */
+export interface HomotopyCheckRequest {
+  context: Context;
+  source: Complex;
+  target: Complex;
+  f: ComplexMap;
+  g?: ComplexMap;
+  h: ComplexMap;
 }
 export interface InterchangeRequest1 {
   term: string;
@@ -1189,9 +1460,15 @@ export interface WorkspaceTraceRequest {
 /** Each operation's request and response types, by operation name. */
 export interface OpTypes {
   'chain.find': { request: ChainFindRequest; response: ChainFindResponse };
+  'chainmap.check': { request: ChainmapCheckRequest; response: ChainmapCheckResponse };
   'check': { request: CheckRequest; response: CheckResponse };
+  'complex.check': { request: ComplexCheckRequest; response: ComplexCheckResponse };
+  'complex.homology': { request: ComplexHomologyRequest; response: ComplexHomologyResponse };
+  'complex.kernel': { request: ComplexKernelRequest; response: ComplexKernelResponse };
   'context.describe': { request: ContextDescribeRequest; response: ContextDescribeResponse };
   'export.lean': { request: ExportLeanRequest; response: ExportLeanResponse };
+  'hom.basis': { request: HomBasisRequest; response: HomBasisResponse };
+  'homotopy.check': { request: HomotopyCheckRequest; response: HomotopyCheckResponse };
   'interchange': { request: InterchangeRequest; response: InterchangeResponse };
   'presentation.check': { request: PresentationCheckRequest; response: PresentationCheckResponse };
   'relation.apply': { request: RelationApplyRequest; response: RelationApplyResponse };

@@ -1,0 +1,11 @@
+{
+  "op": "hom.basis",
+  "request": { "context": "klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic", "source": "i@1", "target": "i@1" },
+  "expect": {
+    "status": "ok",
+    "degrees": [
+      { "degree": 0, "dimension": 1, "basis": ["e(i@1)"] },
+      { "degree": 2, "dimension": 1, "basis": ["x_1 e(i@1)"] }
+    ]
+  }
+}

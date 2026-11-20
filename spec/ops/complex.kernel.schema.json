@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.kernel.schema.json",
+  "title": "complex.kernel: generators of the kernel of a differential",
+  "description": "Finds generators of the kernel of the differential from a position, degree by degree at the test objects, as summands T⟨d⟩ with the matrix of their inclusion. When the position before is empty in a one-dimensional complex, the extended complex is returned too: one step of a projective resolution.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex",
+        "at"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "at": {
+          "$ref": "common.schema.json#/$defs/complexPosition"
+        },
+        "axis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_degree": {
+          "type": "integer"
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "at",
+            "into",
+            "summands",
+            "matrix",
+            "window",
+            "complete",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "at": {
+              "$ref": "common.schema.json#/$defs/complexPosition"
+            },
+            "into": {
+              "$ref": "common.schema.json#/$defs/complexPosition"
+            },
+            "summands": {
+              "$ref": "common.schema.json#/$defs/complexSummands"
+            },
+            "matrix": {
+              "$ref": "common.schema.json#/$defs/complexMatrix"
+            },
+            "window": {
+              "$ref": "common.schema.json#/$defs/degreeWindow"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "extended": {
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

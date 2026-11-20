@@ -26,6 +26,12 @@ these schemas in `crates/core/tests/schemas.rs`.
 | `term.layout` | 4b | `term.layout.schema.json` |
 | `term.edit` | 4b | `term.edit.schema.json` |
 | `term.diff` | 4b | `term.diff.schema.json` |
+| `complex.check` | M1 | `complex.check.schema.json` |
+| `chainmap.check` | M1 | `chainmap.check.schema.json` |
+| `homotopy.check` | M1 | `homotopy.check.schema.json` |
+| `complex.homology` | M1 | `complex.homology.schema.json` |
+| `complex.kernel` | M1 | `complex.kernel.schema.json` |
+| `hom.basis` | M1 | `hom.basis.schema.json` |
 
 Locations in the rewriting operations: a term's summands are numbered from 1 in printed order; a
 summand's layers are numbered from 1 at the bottom of its canonical layering, and strands from 1
@@ -34,6 +40,10 @@ another order reachable by interchanges; the drawing's coefficient then carries 
 The operations that change a term return its provenance map (`common.schema.json`,
 `provenanceMap`): where each generator occurrence of the result came from. `term.diff` gives the
 same map between a term and one written in its place, which no rewrite connects.
+
+Complexes over weighted KLR algebras (`docs/complexes.md`, phase M1) are given as JSON: terms,
+summands with shifts, and differential matrices with rows indexing the target. Their shared
+definitions are in `common.schema.json` (`complex`, `complexMatrix`, `complexVerdict`, and their parts).
 
 The other operations of the specification (workspace editing, rewriting, solving, graded linear
 algebra, history, export, AI) get their schemas in the phase that implements them, so a schema

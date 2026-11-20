@@ -319,7 +319,7 @@ impl<R: Ring> Klrw<R> {
         })
     }
 
-    fn coeff(&self) -> &PolyRing<R> {
+    pub(crate) fn coeff(&self) -> &PolyRing<R> {
         &self.klr.coeff
     }
 
@@ -1507,9 +1507,9 @@ impl<R: Ring> Klrw<R> {
             let row: Vec<C<R>> = (0..m)
                 .map(|l| {
                     let mut t = ring.zero();
-                    for i in 0..m {
-                        for j in 0..m {
-                            t = ring.add(&t, &ring.mul(&lm[k][j][i], &lm[l][i][j]));
+                    for (i, row) in lm[l].iter().enumerate() {
+                        for (j, x) in row.iter().enumerate() {
+                            t = ring.add(&t, &ring.mul(&lm[k][j][i], x));
                         }
                     }
                     t
