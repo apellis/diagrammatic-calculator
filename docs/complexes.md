@@ -338,15 +338,17 @@ term cells keep exact polynomials in `h`.
 of `h`. `complex.deform` takes a one-dimensional complex and a list of `unknowns` (references
 `{"map": "differential", "from": p}`, with `row` and `col` to pick one entry, rows and columns
 numbered from 0) and adds to those entries corrections `h^m X_m`, `1 ≤ m ≤ N`, so that
-`d² = 0`. The coefficient of `h^m` in `d²` is `Σ_{a+b=m} d_b d_a`, and the only terms in it that
-involve `X_m` are `d_0 X_m + X_m d_0`; once the lower orders are fixed, order `m` is the linear
-system
+`d² = 0`. A composite of `h`-free maps can itself involve `h` (for instance with `Q_ij=h`, where
+two crossings compose to `h` times an idempotent), so write `[f]_k` for the coefficient of `h^k`
+in `f`. The coefficient of `h^m` in `d²` is `Σ_{a+b+k=m} [d_b d_a]_k`, and the only terms in it
+that involve `X_m` are `[d_0 X_m + X_m d_0]_0`; once the lower orders are fixed, order `m` is the
+linear system
 
 ```text
-d_0 X_m + X_m d_0 = − Σ_{a+b=m} d_b d_a        (with d_m its given part)
+[d_0 X_m + X_m d_0]_0 = − Σ_{a+b+k=m} [d_b d_a]_k        (with d_m its given part)
 ```
 
-in the `h`-free category, `X_m` of internal degree `−md` and supported on the unknown entries.
+in the category modulo `h`, `X_m` of internal degree `−md` and supported on the unknown entries.
 This is the order-by-order Maurer–Cartan equation behind iterated cones and deformations of
 differentials. The result lists, for each order, the `correction` chosen (as `h^m X_m`) and a
 basis of the `freedom` (the solutions of the homogeneous system: any other choice differs from

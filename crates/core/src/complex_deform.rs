@@ -3,15 +3,18 @@
 //!
 //! A one-dimensional complex over `k[h]/(h^{N+1})` has differential `d = Σ_a h^a d_a` with every
 //! `d_a` free of `h`. Some entries of the differential are declared unknown; the solver adds to
-//! them corrections `h^m X_m`, `1 ≤ m ≤ N`, so that `d² = 0`. The coefficient of `h^m` in `d²` is
-//! `Σ_{a+b=m} d_b d_a`, and the only terms in it that involve `X_m` are `d_0 X_m + X_m d_0`. So,
-//! once the orders below `m` are fixed, order `m` is the linear system
+//! them corrections `h^m X_m`, `1 ≤ m ≤ N`, so that `d² = 0`. A composite of `h`-free maps need not
+//! be free of `h` (when `h` is a coefficient of the relations, as in `Q_ij = h`), so write
+//! `[f]_k` for the coefficient of `h^k` in `f`. The coefficient of `h^m` in `d²` is
+//! `Σ_{a+b+k=m} [d_b d_a]_k`, and the only terms in it that involve `X_m` are
+//! `[d_0 X_m + X_m d_0]_0`. So, once the orders below `m` are fixed, order `m` is the linear system
 //!
 //! ```text
-//!     d_0 X_m + X_m d_0 = − Σ_{a+b=m} d_b d_a        (d_m: the given part only)
+//!     [d_0 X_m + X_m d_0]_0 = − Σ_{a+b+k=m} [d_b d_a]_k        (d_m: the given part only)
 //! ```
 //!
-//! in the `h`-free category, with `X_m` restricted to the unknown entries. Its solutions are a
+//! in the category taken modulo `h` (the composite of `h`-free maps reduced to its `h`-free part),
+//! with `X_m` restricted to the unknown entries. Its solutions are a
 //! particular one plus the kernel (the freedom at order `m`); when there is none, the right side
 //! is the obstruction, reported at the first position where the system becomes inconsistent.
 //! This is the order-by-order solution of the Maurer–Cartan equation used for iterated cones and
@@ -172,14 +175,28 @@ pub fn deform<A: ParamSplit>(
         orders: Vec::new(),
         obstruction: None,
     };
-    for (p, q, r) in &squares {
-        let dd = mat_mul(
-            a,
-            &out.parts[q][0],
-            &out.parts[p][0],
-            c.at(r).len(),
-            c.at(p).len(),
-        );
+    // the category modulo h: compositions keep only their h-free part
+    let a0 = Truncated::new(a, &t.param, 0, delta)?;
+    // the coefficient of h^m in d_b d_a, summed over a + b ≤ m
+    let coeff = |parts: &BTreeMap<Pos, Vec<Matrix<A::Mor>>>, p: &Pos, q: &Pos, m: usize| {
+        let (np, nr) = (c.at(p).len(), c.at(&c.next(q, 0)).len());
+        let mut out = zero_matrix(a, nr, np);
+        for x in 0..=m {
+            for y in 0..=m - x {
+                let dd = mat_mul(a, &parts[q][y], &parts[p][x], nr, np);
+                for (i, row) in dd.iter().enumerate() {
+                    for (j, f) in row.iter().enumerate() {
+                        let k = m - x - y;
+                        let part = &t.parts(f)?[k];
+                        out[i][j] = a.add(&out[i][j], part);
+                    }
+                }
+            }
+        }
+        Ok::<_, Error>(out)
+    };
+    for (p, q, _) in &squares {
+        let dd = coeff(&out.parts, p, q, 0)?;
         if dd.iter().flatten().any(|f| !a.is_zero(f).unwrap_or(true)) {
             out.obstruction = Some((
                 0,
@@ -210,7 +227,7 @@ pub fn deform<A: ParamSplit>(
             .iter()
             .map(|p| {
                 let ents = &mask[p];
-                masked_hom_space(a, c.at(p), c.at(&c.next(p, 0)), e, &|i, j| {
+                masked_hom_space(&a0, c.at(p), c.at(&c.next(p, 0)), e, &|i, j| {
                     ents.contains(&(i, j))
                 })
             })
@@ -219,11 +236,7 @@ pub fn deform<A: ParamSplit>(
         let mut eq_at = Vec::new();
         for (p, q, r) in &squares {
             let (np, nr) = (c.at(p).len(), c.at(r).len());
-            let mut rhs = zero_matrix(a, nr, np);
-            for x in 0..=m {
-                let dd = mat_mul(a, &out.parts[q][m - x], &out.parts[p][x], nr, np);
-                rhs = mat_add(a, &rhs, &dd, -1);
-            }
+            let rhs = mat_add(a, &zero_matrix(a, nr, np), &coeff(&out.parts, p, q, m)?, -1);
             let mut terms = Vec::new();
             if let Some(&u) = index.get(p) {
                 terms.push(Term {
@@ -242,14 +255,14 @@ pub fn deform<A: ParamSplit>(
                 });
             }
             eqs.push(Equation {
-                space: hom_space(a, c.at(p), c.at(r), e)?,
+                space: hom_space(&a0, c.at(p), c.at(r), e)?,
                 terms,
                 rhs,
                 label: format!("d ∘ d from {} at order {m}", fmt_pos(p)),
             });
             eq_at.push((p.clone(), q.clone()));
         }
-        match solve_system(a, &unknowns, &eqs)? {
+        match solve_system(&a0, &unknowns, &eqs)? {
             Some(s) => {
                 let mut correction = Map::new();
                 for (u, p) in free.iter().enumerate() {
@@ -274,7 +287,7 @@ pub fn deform<A: ParamSplit>(
                 // before it
                 let mut at = eqs.len() - 1;
                 for k in 0..eqs.len() {
-                    if solve_system(a, &unknowns, &eqs[..=k])?.is_none() {
+                    if solve_system(&a0, &unknowns, &eqs[..=k])?.is_none() {
                         at = k;
                         break;
                     }
