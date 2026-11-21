@@ -2025,6 +2025,10 @@ export interface WorkspaceRunCell {
    * module: as in module.check.
    */
   complete?: boolean;
+  /**
+   * complex and module: what the cell's view draws. 'objects' maps each object to its strands from left to right, the red strands of the context among them ({label, at, red}); 'entries' maps each matrix entry to its first summands ('summands', as in watch, with a drawing each) and the number left out ('more').
+   */
+  display?: {};
   error_kind?: 'syntax' | 'invalid' | 'precondition' | 'limit';
   message?: string;
 }

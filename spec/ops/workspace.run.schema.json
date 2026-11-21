@@ -49,6 +49,7 @@
         "dimensions": { "description": "module: as in module.check.", "$ref": "common.schema.json#/$defs/moduleDimensions" },
         "window": { "description": "module: as in module.check.", "type": ["object", "null"] },
         "complete": { "description": "module: as in module.check.", "type": "boolean" },
+        "display": { "description": "complex and module: what the cell's view draws. 'objects' maps each object to its strands from left to right, the red strands of the context among them ({label, at, red}); 'entries' maps each matrix entry to its first summands ('summands', as in watch, with a drawing each) and the number left out ('more').", "type": "object" },
         "error_kind": { "enum": ["syntax", "invalid", "precondition", "limit"] },
         "message": { "type": "string" }
       }

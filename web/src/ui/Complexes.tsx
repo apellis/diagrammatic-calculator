@@ -1,19 +1,23 @@
 // Complex and module cells: the terms and maps of a complex drawn left to right, what a
 // resolution still lacks, and the tools that take the next step. The cell's text is JSON, which
 // these views read so that nobody has to (docs/complexes.md).
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
+import type { Summand } from '../engine/ops.gen';
 import { Typeset } from './Typeset';
 
 export interface SummandJ { object: string; shift?: number }
 interface TermJ { at: number | number[]; summands: SummandJ[] }
-interface DiffJ { from: number | number[]; axis?: number; matrix: string[][] }
-interface ModuleJ { generators?: SummandJ[]; relations?: SummandJ[]; matrix?: string[][]; head?: unknown }
+/** A matrix entry: its text, or null (or `0`) for zero. */
+type EntryText = string | null;
+const isZero = (e: EntryText) => e == null || e.trim() === '0';
+interface DiffJ { from: number | number[]; axis?: number; matrix: EntryText[][] }
+interface ModuleJ { generators?: SummandJ[]; relations?: SummandJ[]; matrix?: EntryText[][]; head?: unknown }
 export interface ComplexJ {
   terms?: TermJ[];
   differentials?: DiffJ[];
   dimension?: number;
   indexing?: 'cohomological' | 'homological';
-  resolves?: { module: string | ModuleJ; augmentation?: string[][] };
+  resolves?: { module: string | ModuleJ; augmentation?: EntryText[][] };
 }
 interface Dims { test: string; dimensions: string; powers?: [number, number][] }
 interface FailureJ { location: string; detail: string }
@@ -33,8 +37,13 @@ interface ResolutionJ {
   module_dimension?: number;
   minimal?: boolean | null;
 }
+/** A strand of an object, left to right: a colour at a position, or a red strand with its weight. */
+export interface StrandJ { label: string; at: string; red?: boolean }
+/** What the engine draws for a cell (`display`): the strands of each object, each matrix entry. */
+export interface DisplayJ { objects?: Record<string, StrandJ[]>; entries?: Record<string, { summands: Summand[]; more?: number }> }
 export interface ComplexResult {
   kind: 'complex';
+  display?: DisplayJ;
   complex?: ComplexJ;
   check?: { holds: boolean; failures?: FailureJ[]; failure_count?: number };
   homology?: HomologyJ;
@@ -43,6 +52,7 @@ export interface ComplexResult {
 }
 export interface ModuleResult {
   kind: 'module';
+  display?: DisplayJ;
   module?: ModuleJ;
   holds?: boolean;
   failures?: FailureJ[];
@@ -129,25 +139,73 @@ function ordered(c: ComplexJ): TermJ[] {
   return [...ts].sort((a, b) => step * (at(a) - at(b)));
 }
 
-function MatrixView(props: { m?: string[][]; label: string }) {
+/**
+ * A projective, named by its strands from left to right: `P(i+j | i j)⟨2⟩` with the red strands of
+ * the context in red and each position as a subscript. The exact object is the tooltip.
+ */
+export function Proj(props: { s: SummandJ; d?: DisplayJ }) {
+  const strands = () => props.d?.objects?.[props.s.object];
+  return (
+    <span class="cx-proj" title={summandText(props.s)} data-object={props.s.object}>
+      <Show when={strands()} fallback={summandText(props.s)}>
+        {(ss) => (
+          <>
+            P(<For each={ss()}>{(x, i) => <><Show when={i() > 0}>{' '}</Show><span class={x.red ? 'cx-strand cx-red' : 'cx-strand'}>{x.label}<sub>{x.at}</sub></span></>}</For>)
+            <Show when={props.s.shift}><span class="cx-shift">⟨{props.s.shift}⟩</span></Show>
+          </>
+        )}
+      </Show>
+    </span>
+  );
+}
+
+/** One matrix entry: the diagram of each of its summands, or its text when there is no drawing. */
+function Entry(props: { e: EntryText; d?: DisplayJ }) {
+  const drawn = () => (props.e == null ? undefined : props.d?.entries?.[props.e]);
+  return (
+    <Show when={!isZero(props.e)} fallback={<span class="hint">0</span>}>
+      <Show when={drawn()?.summands.length} fallback={<Typeset text={props.e!} />}>
+        <span class="cx-entry" title={props.e!} data-testid="cx-entry">
+          <For each={drawn()!.summands}>
+            {(x, k) => (
+              <>
+                <Show when={k() > 0 || x.negative}><span class="cx-sign">{x.negative ? '−' : '+'}</span></Show>
+                <Show when={x.coefficient}><span class="cx-coeff">{x.coefficient}</span></Show>
+                <span class="cx-diag" innerHTML={x.svg} />
+              </>
+            )}
+          </For>
+          <Show when={(drawn()!.more ?? 0) > 0}><span class="hint"> + {drawn()!.more} more</span></Show>
+        </span>
+      </Show>
+    </Show>
+  );
+}
+
+/** A matrix with its rows labelled by the target summands and its columns by the source ones. */
+function MatrixView(props: { m?: EntryText[][]; label: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[] }) {
   const rows = () => props.m ?? [];
+  const heads = () => !!(props.src?.length === rows()[0]?.length && props.tgt?.length === rows().length);
   return (
     <Show when={rows().length && rows()[0].length} fallback={<span class="hint">0</span>}>
       <table class="cx-matrix" aria-label={props.label}>
+        <Show when={heads()}>
+          <thead><tr><th /><For each={props.src}>{(s) => <th><Proj s={s} d={props.d} /></th>}</For></tr></thead>
+        </Show>
         <tbody>
-          <For each={rows()}>{(r) => <tr><For each={r}>{(e) => <td>{e.trim() === '0' ? <span class="hint">0</span> : <Typeset text={e} />}</td>}</For></tr>}</For>
+          <For each={rows()}>{(r, i) => <tr><Show when={heads()}><th><Proj s={props.tgt![i()]} d={props.d} /></th></Show><For each={r}>{(e) => <td><Entry e={e} d={props.d} /></td>}</For></tr>}</For>
         </tbody>
       </table>
     </Show>
   );
 }
 
-function Term(props: { t: TermJ; homology?: NonNullable<HomologyJ['positions']>[number]; caption?: string }) {
+function Term(props: { t: TermJ; d?: DisplayJ; homology?: NonNullable<HomologyJ['positions']>[number]; caption?: string }) {
   return (
     <div class="cx-term" data-testid="cx-term">
       <div class="cx-summands">
         <Show when={props.t.summands.length} fallback={<span class="hint">0</span>}>
-          <For each={props.t.summands}>{(s, i) => <><Show when={i() > 0}><span class="cx-oplus">⊕</span></Show><span class="cx-summand">{summandText(s)}</span></>}</For>
+          <For each={props.t.summands}>{(s, i) => <><Show when={i() > 0}><span class="cx-oplus">⊕</span></Show><span class="cx-summand"><Proj s={s} d={props.d} /></span></>}</For>
         </Show>
       </div>
       <div class="cx-pos hint">{props.caption ?? posText(props.t.at)}</div>
@@ -178,10 +236,27 @@ function laurent(ds: [number, number][]): string {
 }
 const dimsLine = (ds?: Dims[]) => (ds ?? []).map((d) => `${d.dimensions} at ${d.test}`).join(', ');
 
-function Arrow(props: { m?: string[][]; label: string; name?: string }) {
+/**
+ * An arrow with its map: a 1×1 matrix is drawn on the arrow itself; a larger one is a button
+ * (`2×3`) that opens the matrix, its rows and columns labelled by the summands they belong to.
+ */
+function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[] }) {
+  const [open, setOpen] = createSignal(false);
+  const rows = () => props.m?.length ?? 0;
+  const cols = () => props.m?.[0]?.length ?? 0;
+  const single = () => rows() === 1 && cols() === 1;
+  const nonzero = () => (props.m ?? []).flat().filter((e) => !isZero(e)).length;
   return (
     <div class="cx-arrow">
-      <Show when={props.m} fallback={<span class="cx-matrix-none" />}><MatrixView m={props.m} label={props.label} /></Show>
+      <Show when={props.m && rows() && cols()} fallback={<span class="cx-matrix-none" />}>
+        <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={props.m![0][0]} d={props.d} /></div>}>
+          <button class="cx-matrix-chip ghost" aria-expanded={open()} data-testid="cx-matrix-toggle" onClick={() => setOpen(!open())}
+            title={open() ? 'Hide the matrix' : 'Show the matrix: rows are the summands of the target, columns those of the source'}>
+            {rows()}×{cols()} matrix, {nonzero()} nonzero {open() ? '▴' : '▾'}
+          </button>
+          <Show when={open()}><MatrixView m={props.m} label={props.label} d={props.d} src={props.src} tgt={props.tgt} /></Show>
+        </Show>
+      </Show>
       <div class="cx-shaft" aria-hidden="true">{props.name ? <span class="cx-name">{props.name}</span> : null}⟶</div>
     </div>
   );
@@ -211,6 +286,8 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
   const hom = (p: number) => props.r.homology?.positions?.find((x) => (Array.isArray(x.at) ? x.at[0] : x.at) === p);
   const res = () => props.r.resolution;
   const resolves = () => c().resolves;
+  const d = () => props.r.display;
+  const moduleGens = () => { const m = resolves()?.module; return typeof m === 'object' ? m.generators : undefined; };
   const moduleName = () => props.module ?? (typeof resolves()?.module === 'string' ? (resolves()!.module as string) : 'M');
   const checkOk = () => (resolves() ? res()?.holds !== false : props.r.check?.holds !== false);
   const failures = () => (resolves() ? res()?.failures : props.r.check?.failures);
@@ -219,19 +296,21 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
   const busy = () => !!props.busy;
   return (
     <div class="cx" data-testid="complex-view">
-      <Show when={oneDim()} fallback={<MultiView c={c()} />}>
+      <Show when={oneDim()} fallback={<MultiView c={c()} d={props.r.display} />}>
         <div class="cx-diagram" role="figure" aria-label={`the complex${props.name ? ' ' + props.name : ''}`}>
           <For each={terms()}>
             {(t, i) => (
-              <>
-                <Show when={i() > 0}><Arrow m={diff(at(terms()[i() - 1]))} label={`differential from ${posText(at(terms()[i() - 1]))}`} /></Show>
-                <Term t={t} homology={resolves() ? undefined : hom(at(t))} />
-              </>
+              <span class="cx-step">
+                <Show when={i() > 0}><Arrow m={diff(at(terms()[i() - 1]))} label={`differential from ${posText(at(terms()[i() - 1]))}`} d={d()} src={terms()[i() - 1].summands} tgt={t.summands} /></Show>
+                <Term t={t} d={d()} homology={resolves() ? undefined : hom(at(t))} />
+              </span>
             )}
           </For>
           <Show when={resolves()}>
-            <Arrow m={resolves()!.augmentation} label="the augmentation ε" name="ε " />
-            <div class="cx-term cx-module" data-testid="cx-module"><div class="cx-summands"><span class="cx-summand">{moduleName()}</span></div><div class="cx-pos hint">module</div></div>
+            <span class="cx-step">
+              <Arrow m={resolves()!.augmentation} label="the augmentation ε" name="ε " d={d()} src={terms().at(-1)?.summands} tgt={moduleGens()} />
+              <div class="cx-term cx-module" data-testid="cx-module"><div class="cx-summands"><span class="cx-summand">{moduleName()}</span></div><div class="cx-pos hint">module</div></div>
+            </span>
           </Show>
         </div>
       </Show>
@@ -293,13 +372,13 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
 }
 
 /** A complex of dimension above one: its terms and differentials, listed. */
-function MultiView(props: { c: ComplexJ }) {
+function MultiView(props: { c: ComplexJ; d?: DisplayJ }) {
   return (
     <div class="cx-multi">
       <div class="hint">A {props.c.dimension}-dimensional complex; the diagram is drawn for one-dimensional ones.</div>
       <ul>
-        <For each={props.c.terms ?? []}>{(t) => <li>{posText(t.at)}: {termText(t.summands)}</li>}</For>
-        <For each={props.c.differentials ?? []}>{(d) => <li>d<sub>{d.axis ?? 0}</sub> from {posText(d.from)}: <MatrixView m={d.matrix} label="differential" /></li>}</For>
+        <For each={props.c.terms ?? []}>{(t) => <li>{posText(t.at)}: <For each={t.summands}>{(s, i) => <><Show when={i() > 0}> ⊕ </Show><Proj s={s} d={props.d} /></>}</For></li>}</For>
+        <For each={props.c.differentials ?? []}>{(x) => <li>d<sub>{x.axis ?? 0}</sub> from {posText(x.from)}: <MatrixView m={x.matrix} label="differential" d={props.d} /></li>}</For>
       </ul>
     </div>
   );
@@ -313,10 +392,10 @@ export function ModuleView(props: { r: ModuleResult; name?: string; head?: boole
     <div class="cx" data-testid="module-view">
       <div class="cx-diagram" role="figure" aria-label={`the presentation of ${props.name ?? 'the module'}`}>
         <Show when={rels().length}>
-          <Term t={{ at: 1, summands: rels() }} caption="relations" />
-          <Arrow m={m().matrix} label="the presentation matrix" name="φ " />
+          <Term t={{ at: 1, summands: rels() }} d={props.r.display} caption="relations" />
+          <Arrow m={m().matrix} label="the presentation matrix" name="φ " d={props.r.display} src={rels()} tgt={gens()} />
         </Show>
-        <Term t={{ at: 0, summands: gens() }} caption="generators" />
+        <Term t={{ at: 0, summands: gens() }} d={props.r.display} caption="generators" />
         <Arrow label="" />
         <div class="cx-term cx-module"><div class="cx-summands"><span class="cx-summand">{props.name ?? 'M'}</span></div><div class="cx-pos hint">module</div></div>
       </div>

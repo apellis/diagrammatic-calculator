@@ -141,6 +141,21 @@ fn head_module_is_the_presentation_by_rad() {
     assert_eq!(l["holds"], true, "{l}");
     assert_eq!(l["module"]["relations"][0]["shift"], 2, "{l}");
     assert_eq!(l["module"]["matrix"][0][0], "x_1 e(i@1)", "{l}");
+    // what the web view draws: the strands of each object with the red one, and each entry
+    assert_eq!(
+        l["display"]["objects"]["i@1"],
+        serde_json::json!([
+            { "label": "2i", "at": "0", "red": true },
+            { "label": "i", "at": "1", "red": false }
+        ]),
+        "{l}"
+    );
+    let e = &l["display"]["entries"]["x_1 e(i@1)"];
+    assert_eq!(e["more"], 0, "{l}");
+    assert!(
+        e["summands"][0]["svg"].as_str().unwrap().contains("<svg"),
+        "{l}"
+    );
     assert_eq!(
         cells[1]["module"]["generators"][0]["shift"], 3,
         "{}",

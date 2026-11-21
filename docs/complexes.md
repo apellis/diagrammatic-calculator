@@ -179,7 +179,12 @@ With the module itself: `module.head` with `object: "i@1"` gives the presentatio
 In the web app the same steps are buttons on the cells. A module cell `module L := {"head": "i@1"}`
 shows its presentation `Q₁ → Q₀ → L` and its graded dimension, and **Start a resolution** adds a
 complex cell `R_L` resolving `L` below it. That cell draws the terms from left to right with
-their positions, the matrices over the arrows, and `ε` into `L`, says whether it is a resolution
+their positions and `ε` into `L`. Each projective reads as its strands, `P(2i₀ i₁)⟨2⟩` for
+`P(i@1)⟨2⟩` over `red=2i@0`: labels with their positions as subscripts, red strands in red. A
+map between single summands is drawn on its arrow as the diagram of its element (at most four
+terms, then "+ n more"); a larger matrix shows its size and number of nonzero entries and opens,
+on a click, into a table with the source summands as columns and the target summands as rows
+(this display comes from the engine as the cell's `display` field). The cell says whether it is a resolution
 yet and what is left to cover, and offers **Cover the kernel** (one `resolution.extend`),
 **Minimize** (`complex.gauss`), **Copy TikZ**, and **Copy JSON**. Each button rewrites the cell's
 text, so undo, history, and branches work as for any edit, and the cell keeps naming `L`, so

@@ -12,7 +12,9 @@ test('resolving a simple module step by step with the cell tools', async ({ page
   // collapsed or not, the cell reads as a module, not as JSON
   await expect(m.locator('.head .cx-head')).toHaveCount(0);
   await expect(m.getByTestId('module-view')).toBeVisible();
-  await expect(m.getByTestId('module-view')).toContainText('P(i@1)⟨2⟩');
+  // projectives read as their strands, the red ones in red, each with its position
+  await expect(m.getByTestId('module-view')).toContainText('P(2i0 i1)⟨2⟩');
+  await expect(m.locator('.cx-red').first()).toHaveText(/2i/);
   await expect(m.getByTestId('module-view')).toContainText('graded dimension: 1 at i@1');
   await m.getByTestId('md-resolve').click();
 
@@ -26,6 +28,8 @@ test('resolving a simple module step by step with the cell tools', async ({ page
   await r.getByTestId('cx-extend').click();
   await expect(r.getByTestId('cx-term')).toHaveCount(2);
   await expect(r.getByTestId('resolution-status')).toContainText('length 1');
+  // a 1×1 differential is drawn on its arrow
+  await expect(r.getByTestId('cx-entry').first().locator('svg')).toBeVisible();
   await r.getByTestId('cx-extend').click();
   await expect(r.getByTestId('cx-term')).toHaveCount(3);
   await expect(r.getByTestId('cx-extend')).toContainText('−3');

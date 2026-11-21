@@ -632,9 +632,15 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 /* Complex and module cells (Complexes.tsx): the terms left to right with their maps over the arrows. */
 .cx-head { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; }
 .cx { display: flex; flex-direction: column; gap: 8px; }
-.cx-diagram { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 6px 2px 10px; }
+.cx-diagram { display: flex; flex-wrap: wrap; align-items: center; row-gap: 12px; padding: 6px 2px 10px; }
+.cx-step { display: flex; align-items: center; gap: 4px; max-width: 100%; }
 .cx-term { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
-.cx-summands { display: flex; flex-direction: column; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; background: var(--sunken); font-family: var(--mono, ui-monospace, monospace); font-size: 13px; white-space: nowrap; }
+.cx-summands { display: flex; flex-direction: column; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; background: var(--sunken); font-size: 15px; white-space: nowrap; }
+.cx-proj { font-family: var(--serif, 'KaTeX_Main', 'Times New Roman', serif); }
+.cx-strand { font-style: italic; }
+.cx-strand sub { font-style: normal; font-size: 10px; color: var(--muted); margin-left: 1px; }
+.cx-red { color: #c0392b; font-style: normal; font-weight: 600; }
+.cx-shift { margin-left: 2px; }
 .cx-module .cx-summands { background: transparent; border-style: dashed; font-style: italic; }
 .cx-oplus { color: var(--muted); font-size: 11px; line-height: 1; }
 .cx-pos { font-size: 11px; }
@@ -644,8 +650,17 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .cx-arrow { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; min-width: 44px; }
 .cx-shaft { color: var(--muted); font-size: 18px; line-height: 1; }
 .cx-name { font-size: 13px; font-style: italic; color: var(--text); }
-.cx-matrix { border-collapse: collapse; font-size: 12px; border-left: 1px solid var(--muted); border-right: 1px solid var(--muted); border-radius: 3px; }
-.cx-matrix td { padding: 0 5px; text-align: center; }
+.cx-matrix { border-collapse: collapse; font-size: 12px; margin: 2px 0; }
+.cx-matrix td { padding: 2px 6px; text-align: center; border-left: 1px solid var(--border); }
+.cx-matrix tbody td:first-of-type { border-left: 1px solid var(--muted); }
+.cx-matrix tbody td:last-child { border-right: 1px solid var(--muted); }
+.cx-matrix th { font-weight: normal; font-size: 12px; padding: 0 6px; color: var(--muted); }
+.cx-matrix th .cx-proj { color: var(--text); }
+.cx-on-arrow { max-width: 360px; overflow-x: auto; }
+.cx-entry { display: inline-flex; align-items: center; gap: 2px; }
+.cx-diag svg { height: 68px; width: auto; display: block; }
+.cx-sign, .cx-coeff { font-size: 14px; padding: 0 1px; }
+.cx-matrix-chip { font-size: 12px; padding: 1px 8px; white-space: nowrap; }
 .cx-matrix-none { display: inline-block; min-height: 1em; }
 .cx-status { display: flex; flex-direction: column; gap: 3px; }
 .cx-failures { margin: 0; padding-left: 18px; font-size: 13px; }

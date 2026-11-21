@@ -1114,6 +1114,105 @@ impl<R: Ring> Klrw<R> {
             .map(Value::Array)
     }
 
+    /// What the web views of a complex or module cell draw, added to the cell's value as
+    /// `display`: for each object, its strands from left to right with the red strands of the
+    /// context among them (`objects`), and for each matrix entry, its summands with a drawing of
+    /// each (`entries`, at most [`DISPLAY_SUMMANDS`] summands; `more` counts the rest). Entries
+    /// that do not parse are left out: the cell's check reports them.
+    pub fn display_json(&self, v: &Value) -> Value {
+        let mut objects = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        self.collect_display(v, &mut objects, &mut entries);
+        json!({ "objects": objects, "entries": entries })
+    }
+
+    fn collect_display(
+        &self,
+        v: &Value,
+        objects: &mut BTreeMap<String, Value>,
+        entries: &mut BTreeMap<String, Value>,
+    ) {
+        match v {
+            Value::Object(o) => {
+                for (k, x) in o {
+                    match (k.as_str(), x) {
+                        ("object", Value::String(s)) if !objects.contains_key(s) => {
+                            if let Ok(l) = self.parse_loading(s) {
+                                objects.insert(s.clone(), self.strands_json(&l));
+                            }
+                        }
+                        ("matrix" | "augmentation", Value::Array(rows)) => {
+                            for e in rows.iter().flat_map(|r| r.as_array().into_iter().flatten()) {
+                                if let Some(s) = e.as_str()
+                                    && !entries.contains_key(s)
+                                    && let Some(d) = self.entry_json(s)
+                                {
+                                    entries.insert(s.to_string(), d);
+                                }
+                            }
+                        }
+                        _ => self.collect_display(x, objects, entries),
+                    }
+                }
+            }
+            Value::Array(xs) => xs
+                .iter()
+                .for_each(|x| self.collect_display(x, objects, entries)),
+            _ => {}
+        }
+    }
+
+    /// The strands of `e(l)` from left to right, the red strands of the context included:
+    /// `[{label, at, red}]`, a red strand labelled by its weight (`2i`, `i+j`).
+    fn strands_json(&self, l: &Loading) -> Value {
+        let mut xs: Vec<(Q, bool, String)> =
+            l.0.iter()
+                .map(|(c, x)| (x.clone(), false, self.klr.colours[*c as usize].name.clone()))
+                .collect();
+        for r in &self.data.reds {
+            let w: Vec<String> = r
+                .exps
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| **e > 0)
+                .map(|(c, e)| {
+                    let n = &self.klr.colours[c].name;
+                    if *e == 1 {
+                        n.clone()
+                    } else {
+                        format!("{e}{n}")
+                    }
+                })
+                .collect();
+            xs.push((
+                r.pos.clone(),
+                true,
+                if w.is_empty() {
+                    "0".into()
+                } else {
+                    w.join("+")
+                },
+            ));
+        }
+        xs.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+        json!(
+            xs.iter()
+                .map(|(x, red, label)| json!({ "label": label, "at": fmt_q(x), "red": red }))
+                .collect::<Vec<_>>()
+        )
+    }
+
+    fn entry_json(&self, s: &str) -> Option<Value> {
+        let f = self
+            .term(&crate::text::parse(s).ok()?, &BTreeMap::new())
+            .ok()?;
+        let nf = self.normal_form(&f).ok()?;
+        Some(json!({
+            "summands": self.summands_json(&nf, DISPLAY_SUMMANDS).ok()?,
+            "more": nf.len().saturating_sub(DISPLAY_SUMMANDS),
+        }))
+    }
+
     /// What `context.describe` reports: the colours, the edges with their weights, and the red
     /// strands. The generators are the dot and the crossing, which the canvas inserts.
     pub fn describe(&self, spec: &ContextSpec) -> Result<Value> {
@@ -1834,6 +1933,15 @@ impl<R: Ring> Scoped<R> {
 
 /// `workspace.run` in a klrw context. As for the other contexts, each cell runs with the
 /// unknowns of solve cells that it, or the definitions it uses, mention as extra scalars.
+/// The most summands of a matrix entry that `display` draws.
+const DISPLAY_SUMMANDS: usize = 4;
+
+fn with_display<R: Ring>(k: &Klrw<R>, mut v: Value) -> Value {
+    let d = k.display_json(&v);
+    v["display"] = d;
+    v
+}
+
 pub fn run_workspace<R: Ring>(
     ws: &crate::workspace::Workspace,
     base: R,
@@ -1921,11 +2029,13 @@ pub fn run_workspace<R: Ring>(
             CellBody::Complex { complex, .. } => (
                 "complex",
                 crate::ops_complex::resolve_module_name(ws, i, complex)
-                    .and_then(|c| crate::ops_complex::complex_cell(&sc.k, &c)),
+                    .and_then(|c| crate::ops_complex::complex_cell(&sc.k, &c))
+                    .map(|v| with_display(&sc.k, v)),
             ),
-            CellBody::Module { module, .. } => {
-                ("module", crate::ops_complex::module_cell(&sc.k, module))
-            }
+            CellBody::Module { module, .. } => (
+                "module",
+                crate::ops_complex::module_cell(&sc.k, module).map(|v| with_display(&sc.k, v)),
+            ),
             CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => unreachable!(),
         };
         let mut value = crate::ops::with_status(r);
