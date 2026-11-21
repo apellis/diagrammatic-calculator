@@ -4,7 +4,7 @@ vi.mock('solid-js/web', async (original) => ({
   ...await original<typeof import('solid-js/web')>(),
   delegateEvents: () => {},
 }));
-import { applyEntryEdit, complexCellText, readStructured, structuredHead } from './Complexes';
+import { applyEntryEdit, complexCellText, fallbackRead, flagsFor, mapOf, readStructured, sameRef, structuredHead, type FailureJ } from './Complexes';
 
 it('reads a complex or module cell: name, JSON, and the options after it', () => {
   const r = readStructured('complex R := {"terms": [{"at": 0, "summands": [{"object": "i@1"}]}], "differentials": []} cap=4');
@@ -53,4 +53,40 @@ it('an entry edit of a chain map component creates or updates the component at i
   expect(h.map[0]).toEqual({ at: 0, matrix: [[null]] });
   expect(f.map).toHaveLength(1);
   expect(h.source).toBe('C');
+});
+
+it('compares references to maps', () => {
+  expect(sameRef({ map: 'differential', from: -1, axis: 0 }, { map: 'differential', from: [-1], axis: 0 })).toBe(true);
+  expect(sameRef({ map: 'differential', from: -1, axis: 0 }, { map: 'differential', from: -2, axis: 0 })).toBe(false);
+  expect(sameRef({ map: 'component', at: 0 }, { map: 'component', at: [0] })).toBe(true);
+  expect(sameRef({ map: 'augmentation' }, { map: 'presentation' })).toBe(false);
+});
+
+it('marks the maps and entries a failed check involves', () => {
+  const fs = [
+    { location: 'd ∘ d from -2', detail: '', maps: [{ map: 'differential', from: -2, axis: 0 }, { map: 'differential', from: -1, axis: 0 }] },
+    { location: 'degree', detail: '', maps: [{ map: 'differential', from: -1, axis: 0, row: 0, col: 1 }] },
+  ] as unknown as FailureJ[];
+  const a = flagsFor(fs, { map: 'differential', from: -2, axis: 0 });
+  expect(a.map).toBe(true);
+  expect(a.entries.size).toBe(0);
+  const b = flagsFor(fs, { map: 'differential', from: -1, axis: 0 });
+  expect(b.map).toBe(true);
+  expect([...b.entries]).toEqual(['0,1']);
+  expect(flagsFor(fs, { map: 'augmentation' })).toEqual({ map: false, entries: new Set() });
+});
+
+it('reads a cell the engine rejected from its text, keeping every entry', () => {
+  const text = 'complex C := {"terms":[{"at":-1,"summands":[{"object":"i@1","shift":2},{"object":"i@1"}]},{"at":0,"summands":[{"object":"i@1"}]}],"differentials":[{"from":-1,"matrix":[["x_1 e(i@1) +"]]}]}';
+  const s = fallbackRead(text, 'cannot read x_1 e(i@1) +');
+  expect(s?.error).toBe('cannot read x_1 e(i@1) +');
+  const m = s && mapOf(s, { map: 'differential', from: -1, axis: 0 });
+  // one row (the target), two columns (the source); the missing entry is zero
+  expect(m?.m).toEqual([['x_1 e(i@1) +', null]]);
+  expect(m?.title).toBe('the differential from −1');
+  // a module given by its head has nothing to show until the engine finds its presentation
+  expect(fallbackRead('module L := {"head": "i@1"}', 'error')).toBeNull();
+  const cm = fallbackRead('chainmap F := {"source": "C", "target": "C", "map": [{"at": 0, "matrix": [["e(i@1)"]]}]}', 'error',
+    () => ({ terms: [{ at: 0, summands: [{ object: 'i@1' }] }] }));
+  expect(cm && mapOf(cm, { map: 'component', at: 0 })?.m).toEqual([['e(i@1)']]);
 });

@@ -1285,6 +1285,14 @@ export interface ComplexFailure {
   condition: string;
   location: string;
   detail: string;
+  /**
+   * The maps the failure involves, so a front end can highlight them: {"map": "differential", "from": p, "axis": a}, {"map": "component", "at": p}, {"map": "augmentation"}, or {"map": "presentation"}, with "row" and "col" when one entry is meant.
+   */
+  maps?: {
+    map: 'differential' | 'component' | 'augmentation' | 'presentation';
+    row?: number;
+    col?: number;
+  }[];
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema

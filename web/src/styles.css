@@ -676,3 +676,34 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .cx-failures { margin: 0; padding-left: 18px; font-size: 13px; }
 .cx-multi ul { margin: 4px 0; padding-left: 18px; }
 .cx-tools { gap: 6px; }
+/* Checks that fail are marked where they fail; the entries themselves are always kept. */
+.cx-arrow.cx-bad .cx-shaft, .cx-arrow.cx-bad .cx-name { color: var(--bad); }
+.cx-arrow.cx-bad .cx-matrix { outline: 1px solid var(--bad); outline-offset: 2px; border-radius: 3px; }
+.cx-bad-chip { color: var(--bad); border-color: var(--bad); }
+.cx-bad-entry { display: inline-flex; border-radius: 4px; outline: 1.5px solid var(--bad); background: var(--bad-soft); }
+.cx-pane-btn { font-size: 11px; padding: 1px 6px; min-height: 0; margin-top: 2px; }
+.cx-error { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 6px 8px; margin: 4px 0; border: 1px solid var(--bad); border-radius: 6px; background: var(--bad-soft); font-size: 13px; }
+/* The map pane: the stage splits into the document and one map of a complex. */
+.stage.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.stage.split.third { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.stage.split > .main { min-width: 0; overflow: auto; }
+.map-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: auto; border-left: 2px solid var(--accent); background: var(--panel); }
+.map-pane-bar { position: sticky; top: 0; z-index: 6; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--accent-soft); }
+.map-pane-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.map-pane-widths { display: inline-flex; gap: 2px; }
+.map-pane-widths button { min-width: 30px; }
+.map-pane-widths button.on { background: var(--accent); color: var(--on-accent); }
+.map-pane-close { font-weight: 600; }
+.map-pane-body { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 16px; }
+.map-pane-intro { margin: 0; }
+.map-pane-matrix { align-self: flex-start; max-width: 100%; overflow-x: auto; display: block; }
+.map-pane-matrix .cx-entry-btn.on { outline: 2px solid var(--accent); }
+.map-pane-matrix .cx-entry-btn.on.cx-bad-entry { outline-color: var(--bad); box-shadow: 0 0 0 4px var(--accent-soft); }
+.map-pane-entry { display: flex; flex-direction: column; gap: 6px; }
+.map-pane-entry .row { display: flex; gap: 6px; align-items: center; }
+.map-pane-canvas { position: relative; height: 440px; min-height: 320px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.map-pane-canvas .canvas.embedded { z-index: 1; }
+@media (max-width: 760px) {
+  .stage.split, .stage.split.third { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .map-pane { border-left: 0; border-top: 2px solid var(--accent); }
+}

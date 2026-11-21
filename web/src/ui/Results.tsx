@@ -8,7 +8,7 @@ import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
 import { proseHtml } from './prose';
 import { certainty } from '../eval/certainty';
-import { ChainMapView, ComplexView, ModuleView, readStructured, type ChainMapResult, type ComplexAction, type ComplexResult, type ModuleResult } from './Complexes';
+import { ChainMapView, ComplexView, fallbackRead, ModuleView, readStructured, type ChainMapResult, type ComplexAction, type ComplexJ, type ComplexResult, type ModuleResult } from './Complexes';
 
 export { certainty, conjecture, type Certainty } from '../eval/certainty';
 
@@ -591,6 +591,8 @@ export function ResultView(props: {
   /** The tools of a complex or module cell. */
   onComplexAction?: (a: ComplexAction) => void;
   complexBusy?: string;
+  /** A complex cell by name, for drawing a chain map whose own cell cannot be read. */
+  lookupComplex?: (name: string) => ComplexJ | undefined;
 }) {
   /** The cell's own name, for a complex or module cell. */
   const cellName = () => /^\s*(?:complex|module|chainmap)\s+([^\s:]+)/.exec(props.s.text)?.[1];
@@ -608,9 +610,30 @@ export function ResultView(props: {
   /** The cell's own text after its kind word, which a definition's text form may just repeat. */
   const source = () => props.s.text.replace(/^(def|watch)\s+/, '');
   const v = () => props.s.value;
+  /** A complex, chain map or module cell the engine could not read, drawn as written: its maps
+   *  stay on screen and editable, with the engine's message, instead of disappearing. */
+  const unread = () => {
+    const x = v();
+    if (x?.status !== 'error' || (x as { message: string }).message === 'cancelled') return null;
+    return fallbackRead(props.s.text, (x as { message: string }).message, props.lookupComplex);
+  };
+  // edits of a cell drawn as written work on its text, so they are safe while it is being checked
+  const unreadAction = () => (props.s.status === 'running' ? undefined : props.onComplexAction);
   return (
     <Switch>
       <Match when={props.s.parseError}><div class="error">{props.s.parseError}</div></Match>
+      <Match when={unread()} keyed>
+        {(u) => (
+          <div class={props.s.status === 'stale' ? 'result stale' : 'result'} data-testid="result">
+            <Show when={props.s.status === 'stale'}><div class="hint">Checking the last change…</div></Show>
+            <Switch>
+              <Match when={u.kind === 'complex' && u}>{(c) => <ComplexView r={c().r as ComplexResult} name={cellName()} module={resolvedName()} onAction={unreadAction()} error={u.error} />}</Match>
+              <Match when={u.kind === 'chainmap' && u}>{(c) => <ChainMapView r={c().r as ChainMapResult} name={cellName()} source={mapEnds().source} target={mapEnds().target} onAction={unreadAction()} error={u.error} />}</Match>
+              <Match when={u.kind === 'module' && u}>{(c) => <ModuleView r={c().r as ModuleResult} name={cellName()} onAction={unreadAction()} error={u.error} />}</Match>
+            </Switch>
+          </div>
+        )}
+      </Match>
       <Match when={props.s.parsed?.kind === 'note'}><NoteView text={props.s.parsed!.note ?? ''} /></Match>
       <Match when={props.s.status === 'running' || props.s.status === 'stale' && (v()?.kind === 'check' || v()?.kind === 'solve' || v()?.status !== 'ok')}><Running s={props.s} onStop={props.onStop} /></Match>
       <Match when={v()?.status === 'error'}><div class="error">{(v() as { message: string }).message === 'cancelled' ? 'Stopped before it finished. Retry to run it again.' : (v() as { message: string }).message}</div></Match>

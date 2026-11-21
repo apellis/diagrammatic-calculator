@@ -765,16 +765,46 @@ pub struct Failure {
     pub condition: &'static str,
     pub location: String,
     pub detail: String,
+    /// The maps the failure is about, so a view can mark them: each is `{"map": "differential",
+    /// "from": p, "axis": a}`, `{"map": "component", "at": p}`, `{"map": "augmentation"}`, or
+    /// `{"map": "presentation"}`, with `row` and `col` when one entry is meant.
+    pub maps: Vec<Value>,
 }
 
 impl Failure {
     pub fn json(&self) -> Value {
-        json!({ "condition": self.condition, "location": self.location, "detail": self.detail })
+        json!({
+            "condition": self.condition,
+            "location": self.location,
+            "detail": self.detail,
+            "maps": self.maps,
+        })
     }
+}
+
+/// The reference `{"map": "differential", "from": p, "axis": a}` to a differential of a complex.
+pub fn diff_ref(p: &[i64], axis: usize) -> Value {
+    json!({ "map": "differential", "from": pos_json(p), "axis": axis })
+}
+
+/// The reference `{"map": "component", "at": p}` to a component of a map of complexes.
+pub fn component_ref(p: &[i64]) -> Value {
+    json!({ "map": "component", "at": pos_json(p) })
+}
+
+fn entry_ref(map: &Value, i: usize, j: usize) -> Vec<Value> {
+    if map.is_null() {
+        return vec![];
+    }
+    let mut r = map.clone();
+    r["row"] = json!(i);
+    r["col"] = json!(j);
+    vec![r]
 }
 
 /// Checks the entries of a matrix from `src` to `tgt`: each lies in the right Hom space and has
 /// the degree of a degree-zero map between the shifted summands (plus `extra`).
+#[allow(clippy::too_many_arguments)]
 pub fn check_entries<A: Additive>(
     a: &A,
     src: &[Summand<A::Obj>],
@@ -782,6 +812,7 @@ pub fn check_entries<A: Additive>(
     m: &Matrix<A::Mor>,
     extra: i64,
     location: &str,
+    map: &Value,
     out: &mut Vec<Failure>,
 ) {
     for (i, row) in m.iter().enumerate() {
@@ -793,6 +824,7 @@ pub fn check_entries<A: Additive>(
                     condition: "entry",
                     location: loc,
                     detail: e.message,
+                    maps: entry_ref(map, i, j),
                 }),
                 Ok(None) => {}
                 Ok(Some(d)) => {
@@ -809,6 +841,7 @@ pub fn check_entries<A: Additive>(
                                 a.fmt_obj(&t.obj),
                                 t.shift
                             ),
+                            maps: entry_ref(map, i, j),
                         });
                     }
                 }
@@ -823,6 +856,7 @@ pub fn check_zero<A: Additive>(
     m: &Matrix<A::Mor>,
     condition: &'static str,
     location: &str,
+    maps: &[Value],
     out: &mut Vec<Failure>,
 ) -> Result<()> {
     for (i, row) in m.iter().enumerate() {
@@ -832,6 +866,7 @@ pub fn check_zero<A: Additive>(
                     condition,
                     location: format!("{location}, entry ({}, {})", i + 1, j + 1),
                     detail: a.fmt_mor(f)?,
+                    maps: maps.to_vec(),
                 });
             }
         }
@@ -857,7 +892,17 @@ pub fn check_complex<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<
             fmt_pos(p),
             axis_name(c, *axis)
         );
-        check_entries(a, c.at(p), c.at(&c.next(p, *axis)), m, 0, &loc, &mut out);
+        let r = diff_ref(p, *axis);
+        check_entries(
+            a,
+            c.at(p),
+            c.at(&c.next(p, *axis)),
+            m,
+            0,
+            &loc,
+            &r,
+            &mut out,
+        );
     }
     if !out.is_empty() {
         return Ok(out);
@@ -872,7 +917,8 @@ pub fn check_complex<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<
             let d2 = c.diff(a, axis, &q);
             let dd = mat_mul(a, &d2, &d1, c.at(&q).len(), c.at(&p).len());
             let loc = format!("d ∘ d from {}{}", fmt_pos(&p), axis_name(c, axis));
-            check_zero(a, &dd, "d^2", &loc, &mut out)?;
+            let maps = [diff_ref(&p, axis), diff_ref(&q, axis)];
+            check_zero(a, &dd, "d^2", &loc, &maps, &mut out)?;
             for b in axis + 1..c.dim {
                 let pb = c.next(&p, b);
                 let pab = c.next(&q, b);
@@ -894,7 +940,13 @@ pub fn check_complex<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<
                 };
                 let s = mat_add(a, &x, &y, sign);
                 let loc = format!("the square at {} on axes {axis} and {b}", fmt_pos(&p));
-                check_zero(a, &s, "square", &loc, &mut out)?;
+                let maps = [
+                    diff_ref(&p, axis),
+                    diff_ref(&q, b),
+                    diff_ref(&p, b),
+                    diff_ref(&pb, axis),
+                ];
+                check_zero(a, &s, "square", &loc, &maps, &mut out)?;
             }
         }
     }
@@ -972,7 +1024,7 @@ pub fn check_chain_map<A: Additive>(
     let mut out = Vec::new();
     for (p, m) in f {
         let loc = format!("the map at {}", fmt_pos(p));
-        check_entries(a, c.at(p), d.at(p), m, 0, &loc, &mut out);
+        check_entries(a, c.at(p), d.at(p), m, 0, &loc, &component_ref(p), &mut out);
     }
     if !out.is_empty() {
         return Ok(out);
@@ -991,7 +1043,14 @@ pub fn check_chain_map<A: Additive>(
             let y = mat_mul(a, &fq, &c.diff(a, axis, &p), c.at(&q).len(), c.at(&p).len());
             let s = mat_add(a, &x, &y, -1);
             let loc = format!("d F − F d from {}{}", fmt_pos(&p), axis_name(c, axis));
-            check_zero(a, &s, "chain map", &loc, &mut out)?;
+            check_zero(
+                a,
+                &s,
+                "chain map",
+                &loc,
+                &[component_ref(&p), component_ref(&q)],
+                &mut out,
+            )?;
         }
     }
     Ok(out)
@@ -1016,12 +1075,21 @@ pub fn check_homotopy<A: Additive>(
     let mut out = Vec::new();
     for (p, m) in h {
         let loc = format!("the homotopy at {}", fmt_pos(p));
-        check_entries(a, c.at(p), d.at(&c.prev(p, 0)), m, 0, &loc, &mut out);
+        check_entries(
+            a,
+            c.at(p),
+            d.at(&c.prev(p, 0)),
+            m,
+            0,
+            &loc,
+            &Value::Null,
+            &mut out,
+        );
     }
     for (name, map) in [("f", f), ("g", g)] {
         for (p, m) in map {
             let loc = format!("the map {name} at {}", fmt_pos(p));
-            check_entries(a, c.at(p), d.at(p), m, 0, &loc, &mut out);
+            check_entries(a, c.at(p), d.at(p), m, 0, &loc, &Value::Null, &mut out);
         }
     }
     if !out.is_empty() {
@@ -1050,7 +1118,7 @@ pub fn check_homotopy<A: Additive>(
         let y = mat_mul(a, &hf, &c.diff(a, 0, &p), c.at(&fwd).len(), cols);
         let s = mat_add(a, &mat_add(a, &fg, &x, -1), &y, -1);
         let loc = format!("f − g − (d h + h d) at {}", fmt_pos(&p));
-        check_zero(a, &s, "homotopy", &loc, &mut out)?;
+        check_zero(a, &s, "homotopy", &loc, &[], &mut out)?;
     }
     Ok(out)
 }

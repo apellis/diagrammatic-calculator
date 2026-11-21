@@ -7,7 +7,8 @@ import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
 import { exportDch, exportDcw, parseDcw, fileName } from '../doc/dcw';
 import { Cell, TEMPLATES } from './Cell';
-import { applyEntryEdit, complexCellText, readStructured, type ComplexAction } from './Complexes';
+import { applyEntryEdit, complexCellText, fallbackRead, mapOf, readStructured, type ComplexAction, type ComplexJ, type MapRef, type StructuredRead } from './Complexes';
+import { MapPane, type PaneWidth } from './MapPane';
 import { NewCell as CellComposer } from './NewCell';
 import { DiagramStart } from './DiagramStart';
 import { Outline } from './Outline';
@@ -742,11 +743,50 @@ function DocView(props: {
   // The tools of complex and module cells: each takes one step and writes it back into the
   // document as an ordinary edit, so it can be undone, branched, and read like any other.
   const [complexBusy, setComplexBusy] = createSignal<{ id: string; what: string } | null>(null);
+  // One map of a complex, chain map or module cell, open in a pane beside the document.
+  const [mapPane, setMapPane] = createSignal<{ id: string; ref: MapRef } | null>(null);
+  const [paneWidth, setPaneWidth] = createSignal<PaneWidth>('half');
+  /** A complex cell by name, as computed or else as written, for drawing a chain map whose cell
+   *  cannot be read. */
+  const lookupComplex = (name: string): ComplexJ | undefined => {
+    const c = cells().find((x) => readStructured(x.text)?.name === name);
+    const r = c && readStructured(c.text);
+    if (!c || r?.kind !== 'complex') return undefined;
+    const v = stateOf(c.id)?.value as { status: string; complex?: ComplexJ } | undefined;
+    return v?.status === 'ok' && v.complex ? v.complex : r.value;
+  };
+  /** A structured cell as the views draw it: the engine's value, or the text as written when the
+   *  engine could not read it (so that no map disappears while it is being edited). */
+  const structuredOf = (id: string): StructuredRead | null => {
+    const s = stateOf(id);
+    const v = s?.value as { status: string; kind?: string; message?: string } | undefined;
+    if (!s || !v) return null;
+    if (v.status === 'ok' && (v.kind === 'complex' || v.kind === 'chainmap' || v.kind === 'module')) return { kind: v.kind, r: v } as StructuredRead;
+    if (v.status === 'error') return fallbackRead(s.text, v.message ?? 'the engine could not read this cell', lookupComplex);
+    return null;
+  };
   const complexAction = async (id: string, action: ComplexAction) => {
     const cell = cells().find((c) => c.id === id);
-    const v = stateOf(id)?.value as { status: string; complex?: Record<string, unknown>; module?: Record<string, unknown>; resolution?: { next_at?: number | null }; source?: Record<string, unknown>; target?: Record<string, unknown>; map?: unknown[] } | undefined;
+    const st = stateOf(id);
+    const v = st?.value as { status: string; complex?: Record<string, unknown>; module?: Record<string, unknown>; resolution?: { next_at?: number | null }; source?: Record<string, unknown>; target?: Record<string, unknown>; map?: unknown[] } | undefined;
     const r = cell && readStructured(cell.text);
-    if (!cell || !r || v?.status !== 'ok') return;
+    if (!cell || !r) return;
+    if (typeof action === 'object' && 'pane' in action) {
+      setCanvas(null);
+      return setMapPane({ id, ref: action.pane });
+    }
+    // an entry edit works on the cell as written whenever the engine's value is not a fresh one
+    // (it could not read the cell, or it is still checking the last edit), so no edit is lost
+    const current = v?.status === 'ok' && st?.status === 'fresh';
+    if (typeof action === 'object' && !current) {
+      if (readOnly()) return refuse();
+      const e = action.edit;
+      const note = `edited an entry in ${r.name}`;
+      const next = r.kind === 'chainmap' ? { ...r.value, map: applyEntryEdit({ map: r.value.map ?? [] }, e).map } : applyEntryEdit(r.value as Record<string, unknown>, e);
+      doc.updateCell(id, `${r.kind} ${r.name} := ${JSON.stringify(next)}${r.tail ? ' ' + r.tail : ''}`, note);
+      return setMessage(note[0].toUpperCase() + note.slice(1) + '.');
+    }
+    if (v?.status !== 'ok') return;
     if (action === 'json') {
       const out = r.kind === 'complex' ? v.complex : r.kind === 'chainmap' ? { source: v.source, target: v.target, map: v.map } : v.module;
       await navigator.clipboard?.writeText(JSON.stringify(out, null, 2));
@@ -1147,7 +1187,7 @@ function DocView(props: {
             onSelect={(id) => { if (narrow()) setOutline(false); focusCell(id); }}
             onVersion={(n) => setModal({ version: n })} onSnapshot={(i) => setModal({ snapshot: i })} />
         </Show>
-        <div class="stage">
+        <div class="stage" classList={{ split: !!mapPane() && !canvas(), third: paneWidth() === 'third' }}>
         <main class="main">
           <div class="cells">
             <Show when={props.branching.current}>
@@ -1199,7 +1239,7 @@ function DocView(props: {
                     onToggle={() => toggle(id())} onCommit={(t) => commit(id(), t)} onCancel={() => setActive(null)}
                     onRemove={() => !readOnly() && doc.removeCell(id())} onMove={(d) => !readOnly() && doc.moveCell(id(), i() + d)}
                     onPin={() => pin(id())} pinDisabled={mainReadOnly() || previewing()} onRerun={() => visibleEvaluator()?.rerun(id())} onCopyTikz={() => copyTikz(id())}
-                    onComplexAction={(a) => void complexAction(id(), a)} complexBusy={complexBusy()?.id === id() ? complexBusy()!.what : undefined}
+                    onComplexAction={(a) => void complexAction(id(), a)} lookupComplex={lookupComplex} complexBusy={complexBusy()?.id === id() ? complexBusy()!.what : undefined}
                     onCanvas={(w) => openCanvas(id(), w)} validate={validate} onInsertBelow={() => insertBelow(id())}
                     onStop={() => stop(id())} onRunLonger={() => runLonger(id())} commandLine={() => commandLine(id())} trace={trace(id())}
                     comments={props.comments().filter((x) => x.cell === id())} onComment={readOnly() ? undefined : (t) => props.onComment(id(), text(), t)} />
@@ -1212,6 +1252,19 @@ function DocView(props: {
             </div></Show>
           </div>
         </main>
+        <Show when={!canvas() && mapPane()} keyed>
+          {(p) => {
+            const name = () => readStructured(cells().find((c) => c.id === p.id)?.text ?? '')?.name ?? 'the cell';
+            const read = () => structuredOf(p.id);
+            return <MapPane cellId={p.id} cell={name()} mapRef={p.ref} data={read() ? mapOf(read()!, p.ref) : null} error={read()?.error}
+              readOnly={readOnly() || previewing()} width={paneWidth()} onWidth={setPaneWidth}
+              onEdit={(e) => void complexAction(p.id, { edit: e })}
+              onClose={() => { const id = p.id; setMapPane(null); focusCell(id); }}
+              canvas={(c) => <Canvas doc={doc} readOnly={readOnly() || previewing()} engine={engine} cellId={c.cellId} title={c.title} context={termContext()}
+                term={c.term} expanded={false} generators={described()?.generators ?? []} colours={described()?.colours ?? []} hintsVersion={hintsVersion()}
+                embedded onWrite={(t) => c.onWrite(t)} onClose={() => c.onClose()} />} />;
+          }}
+        </Show>
         <Show when={canvas()?.id && `${canvas()!.id}:${previewing()}`} keyed>
           {(_identity) => {
             const id = canvas()!.id;

@@ -4,7 +4,8 @@ Bounded complexes of graded right projective modules over a weighted KLR algebra
 cyclotomic quotient `T^λ` (Webster, arXiv:1209.2463 and arXiv:1309.3796), with checks, homology,
 the kernel step of a projective resolution, maps and homotopies found by linear algebra, and the
 standard constructions (shifts, cones, totalization, Hom complexes, Gaussian elimination, and
-Euler characteristics). Phases M1 to M4 of the plan below are done. The operations
+Euler characteristics), and modules given by presentations (simple modules among them) with their
+projective resolutions. Phases M1 to M5 of the plan below are done. The operations
 are ordinary calculator operations (`spec/ops/`), so the command line, the Python bindings, and the
 web app all send the same JSON messages. An agent building a resolution step by step uses
 `complex.kernel` and `complex.homology` in a loop (worked example below).
@@ -106,6 +107,84 @@ Matrix rows are the summands of the target and columns those of the source. The 
 Each entry of a component is edited in place; the status line says after every edit whether
 `d F = F d` still holds, and lists the positions where it fails. When it holds, **Take the cone**
 adds a complex cell `Cone_F` below, built by `complex.cone`.
+
+## In the web app
+
+In a weighted KLR document (context `klrw …`) three kinds of cell hold this material. Each is
+one line of text, so undo, history, branches, and `.dcw` files treat it like any other cell; the
+buttons on a cell only rewrite that line.
+
+### Projectives, modules, and simple modules
+
+- A **projective** `P(ℓ)⟨s⟩` is written as a summand, `{"object": "i@1", "shift": 2}`, inside a
+  complex or a presentation. As a module it is a module cell with no relations:
+  `module P := {"generators": [{"object": "i@1"}]}`.
+- A **module given by a presentation** lists its generators, its relations, and the matrix `φ`
+  (one row per generator, one column per relation), as in "Modules and resolutions" above:
+  `module M := {"generators": [{"object": "i@1"}], "relations": [{"object": "i@1", "shift": 4}], "matrix": [["x_1^2 e(i@1)"]]}`
+  is `P / x² P`. Any finitely presented module can be written this way, projective or not.
+- A **simple module**, or a sum of them, is `P / rad P`: `module L := {"head": "i@1"}` asks the
+  engine for the presentation (`module.head`). The head may also be a summand
+  `{"object": "i@1", "shift": 2}` or a list of summands, for a sum of shifted heads.
+  Editing an entry of such a cell writes the presentation out explicitly.
+
+A module cell shows `Q₁ → Q₀ → M`, the graded dimension of `M` at each test object, and
+**Start a resolution**, which adds a complex cell resolving it.
+
+### Complexes and resolutions
+
+`complex C := {…}` holds a complex in the JSON form above (the defaults may be left out; the
+engine fills in the objects and shifts it can infer, and the details say which). The cell draws
+the terms from left to right with their positions, each map on its arrow, and one status line:
+whether `d² = 0` holds, and where the homology is not zero, with its graded dimension there. A
+complex with `"resolves": {"module": "L"}` is a resolution of the latest module cell named `L`
+before it; its status says what is left to cover. The tools under the status line are
+**Cover the kernel** (`resolution.extend`, or `complex.kernel` at the far end of a complex that
+resolves nothing), **Minimize** (`complex.gauss`), **Copy TikZ** (`complex.render`), and
+**Copy JSON**. The Euler characteristic is shown under the status line. Cones, Hom complexes,
+shifts, totalization, and the other operations of the table below are tools of the AI sidebar.
+
+### Chain maps
+
+`chainmap F := {"source": "C", "target": "D", "map": […]}` is drawn as a ladder (see "Chain maps"
+above). Its status says whether `d F = F d`, and **Take the cone** adds the cell `Cone_F`.
+
+### Editing maps
+
+Every map on a cell can be edited entry by entry: a differential, a component of a chain map, the
+augmentation `ε` of a resolution, or the matrix `φ` of a presentation. Click an entry (on the
+arrow, or in the matrix a larger map opens into), type its new value, and press Enter; empty or `0`
+writes zero, and Escape leaves the entry as it was. The field says which summands the entry goes
+between and the degree it must have.
+
+**Nothing is thrown away.** The cell keeps every entry as written, also while the cell fails its
+checks, so a map can be changed through several invalid steps on the way to a valid one:
+
+- When a check fails (an entry of the wrong degree, `d² ≠ 0`, `ε d ≠ 0` into the relations, or
+  `d F ≠ F d`), the cell says so in its status line and lists the failures. Every map a failure
+  involves has a red arrow, and a failure at one entry of a map (a degree) marks that entry in red.
+  A failure of `d ∘ d` or of `d F = F d` marks every map in the composite. A matrix with a marked
+  entry opens by itself. The tools that need a valid cell are hidden until it checks again.
+- When the engine cannot read an entry at all (a typing error), the cell shows the message with
+  **cannot be checked** and still draws every map as written from the cell's text, so the entry
+  can be corrected in place.
+- While the engine checks the last change, the cell shows the maps as just written, and further
+  edits apply to them.
+
+Each edit is one step of the document's history, so Undo restores the entry before it.
+
+### The map pane
+
+**⤢ edit** under a map opens it in a pane beside the document: the stage splits in two, the
+document on the left (still scrollable and editable) and the map on the right. The buttons **½**
+and **⅓** set the share of the width the pane takes; **✕ Close**, or Escape outside a text field
+or the canvas, closes it and returns to the document alone. The pane shows the map's matrix, the
+failures that involve it, and the chosen entry: the summands it goes between, its degree, its text
+in a field, and, when it is not zero, its diagram on an embedded canvas. The canvas has the usual
+gestures and keys (press `?` on it); every change made there, or with **Write** or **Set to 0**,
+is written into the cell at once, checked again, and can be undone. Red marks in the pane are
+those of the cell, and the first entry that a failed check involves is chosen when the pane opens.
+If the cell no longer has the map (its terms changed), the pane says so.
 
 ## Operations
 
@@ -239,5 +318,5 @@ The tests `solving_for_chain_maps_and_homotopies`, `the_cone_of_the_identity_is_
   (`docs/python.md`), and TikZ output (`complex.render`).
 - **M5** (done): modules by presentations, `P/rad P`, and resolutions of a module built step by
   step, with module and complex cells in workspaces, their web views, and the step tools on them.
-- Later: spectral sequences of multicomplexes, Rickard and
-  Chuang–Rouquier complexes (bounded), and modules beyond projectives.
+- Later: spectral sequences of multicomplexes, and Rickard and
+  Chuang–Rouquier complexes (bounded).

@@ -13,6 +13,7 @@ const SECTIONS: [string, string][] = [
   ['help-context', 'Contexts'],
   ['help-results', 'Reading results'],
   ['help-canvas', 'Drawing and the canvas'],
+  ['help-complexes', 'Modules, complexes, and maps'],
   ['help-files', 'Saving, files, and sharing'],
   ['help-keys', 'Keyboard shortcuts'],
   ['help-more', 'Further reading'],
@@ -130,6 +131,19 @@ export function HelpPage(props: { from?: string }) {
         <p>In weighted KLR documents, ghost strands are drawn dashed; Settings › Appearance hides them without changing any element. The canvas edits them too: drop a dot or a crossing, or delete a layer, and the term is reduced to the normal form again; the relations do not apply there.</p>
       </section>
 
+      <section id="help-complexes">
+        <h2>Modules, complexes, and maps</h2>
+        <p>In a weighted KLR document (context <code>klrw …</code>), cells can hold graded projective modules, other modules, complexes of projectives, and chain maps. Each is one line of JSON after its word; a projective <code>P(ℓ)⟨s⟩</code> is written <code>{'{"object": "i@1", "shift": 2}'}</code>.</p>
+        <Table head={['Cell', 'What it holds']} rows={[
+          ['module L := {"head": "i@1"}', <>the simple head <code>P/rad P</code> of a projective (or a sum of them)</>],
+          ['module M := {"generators": […], "relations": […], "matrix": […]}', 'any module, by a presentation; with no relations it is projective'],
+          ['complex C := {"terms": […], "differentials": […]}', <>a complex of projectives; the cell checks <code>d² = 0</code> and shows where the homology is not zero</>],
+          ['complex R := {…, "resolves": {"module": "L"}}', 'a resolution of the module cell L, built a step at a time with Cover the kernel'],
+          ['chainmap F := {"source": "C", "target": "D", "map": […]}', <>a map of complexes, checked for <code>d F = F d</code>; Take the cone adds its cone</>],
+        ]} />
+        <p>Click an entry of a map to change it, or <strong>⤢ edit</strong> to open the map in a pane beside the document, with the diagram editor for each entry; <strong>½</strong> and <strong>⅓</strong> set its width, and <strong>✕ Close</strong> or Escape closes it. Edits are kept even when the cell stops checking: the failing maps and entries are marked in red and listed, so you can pass through invalid steps on the way to a valid one, and Undo goes back one edit at a time.</p>
+      </section>
+
       <section id="help-files">
         <h2>Saving, files, and sharing</h2>
         <ul>
@@ -158,6 +172,7 @@ export function HelpPage(props: { from?: string }) {
           <li><a href={`${DOCS}/language.md`} target="_blank" rel="noopener">The input language</a>: a tutorial and the full reference, with every symbol, generator, option, and error message.</li>
           <li><a href={`${DOCS}/conventions.md`} target="_blank" rel="noopener">Conventions</a>: how each notation is read, its signs, and how it is drawn and typeset.</li>
           <li><a href={`${DOCS}/klrw.md`} target="_blank" rel="noopener">Weighted KLR algebras</a>: loadings, ghosts, red strands, and the basis.</li>
+          <li><a href={`${DOCS}/complexes.md`} target="_blank" rel="noopener">Modules and complexes</a>: presentations, simple modules, resolutions, chain maps, cones, Hom complexes, and editing maps.</li>
         </ul>
       </section>
     </div>

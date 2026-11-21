@@ -332,6 +332,10 @@ A cell may end with two spaces and options: `view=diagrams` changes how the resu
 `strategy=<name>` chooses the method used to decide equality. The app also writes a trailing
 `# id=…` to identify each cell; you never need to type it.
 
+Complex, module, and chain map cells keep their text as written when a check fails or an entry
+cannot be read: the app marks the failing maps and entries in red and leaves the maps editable,
+in place or in a pane beside the document (`docs/complexes.md`, "In the web app").
+
 A `.dcw` file is the line `diagcalc-workspace/1`, then a line `context ...`, then one cell per
 line.
 

@@ -7,7 +7,7 @@ import { Editor, type RemoteCursor } from './Editor';
 import { dotTitle, NoteView, Outcome, ResultView, Summary, summary, type Tracer } from './Results';
 import { Typeset } from './Typeset';
 import { cellTex, optionTex, splitOptions } from './tex';
-import { structuredHead, type ComplexAction } from './Complexes';
+import { structuredHead, type ComplexAction, type ComplexJ } from './Complexes';
 import type { CellComment } from './AIPanel';
 
 export const TEMPLATES: [string, string, number?][] = [
@@ -52,6 +52,8 @@ export interface CellProps {
   onComplexAction?: (a: ComplexAction) => void;
   /** What a complex or module tool is doing, while it runs. */
   complexBusy?: string;
+  /** A complex cell by name, for drawing a chain map whose own cell cannot be read. */
+  lookupComplex?: (name: string) => ComplexJ | undefined;
   /** Opens the focus canvas, at a summand when one was double-clicked. */
   onCanvas?: (word?: string) => void;
   /** Why a text cannot be a cell (it does not parse), or null when it can. */
@@ -279,7 +281,7 @@ export function Cell(props: CellProps) {
             </div>
           </Show>
           <Show when={props.state && !props.isNew && ((kind() !== 'note' && kind() !== 'comment') || editing())}>
-            <ResultView s={props.state!} onComplexAction={props.readOnly ? undefined : props.onComplexAction} complexBusy={props.complexBusy} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} trace={props.trace} />
+            <ResultView s={props.state!} onComplexAction={props.readOnly ? undefined : props.onComplexAction} complexBusy={props.complexBusy} lookupComplex={props.lookupComplex} onFocus={props.onCanvas} onStop={props.onStop} onRunLonger={props.onRunLonger} commandLine={props.commandLine} trace={props.trace} />
           </Show>
           {/* New cells have no saved result or position yet. */}
           <Show when={!props.isNew} fallback={

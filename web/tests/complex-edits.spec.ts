@@ -1,0 +1,61 @@
+import { expect, test } from '@playwright/test';
+import { cell, newDoc, setContext } from './helpers';
+
+// A complex whose second differential is zero; writing a nonzero entry there breaks d² = 0.
+const COMPLEX =
+  'complex C := {"terms":[{"at":-2,"summands":[{"object":"i@1","shift":2}]},{"at":-1,"summands":[{"object":"i@1"}]},{"at":0,"summands":[{"object":"i@1"}]}],"differentials":[{"from":-2,"matrix":[["x_1 e(i@1)"]]}]}';
+
+async function setup(page: import('@playwright/test').Page) {
+  await newDoc(page);
+  await setContext(page, 'klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic');
+  await page.keyboard.insertText(COMPLEX);
+  await page.keyboard.press('Enter');
+  const c = cell(page, 0);
+  await expect(c.getByTestId('complex-status')).toBeVisible();
+  return c;
+}
+
+test('an edit that breaks a check keeps the entry and marks it in red', async ({ page }) => {
+  const c = await setup(page);
+  await c.getByTestId('cx-entry-edit').nth(1).click();
+  await c.getByTestId('cx-entry-input').fill('e(i@1)');
+  await page.keyboard.press('Enter');
+  await expect(c.getByTestId('complex-status')).toContainText(/not a complex|fails|d\s*∘\s*d|d²/i);
+  // Both differentials take part in d ∘ d, so both arrows are marked; both entries are kept.
+  await expect(c.locator('.cx-arrow[data-bad="true"]')).toHaveCount(2);
+  await expect(c.getByTestId('cx-entry-edit')).toHaveCount(2);
+  await c.getByTestId('cx-entry-edit').nth(1).click();
+  await expect(c.getByTestId('cx-entry-input')).toHaveValue('e(i@1)');
+});
+
+test('an unreadable entry is shown with the error and nothing is thrown away', async ({ page }) => {
+  const c = await setup(page);
+  await c.getByTestId('cx-entry-edit').nth(0).click();
+  await c.getByTestId('cx-entry-input').fill('x_1 e(i@1) +');
+  await page.keyboard.press('Enter');
+  await expect(c.getByTestId('cx-error')).toBeVisible();
+  await expect(c.getByTestId('cx-entry-edit')).not.toHaveCount(0);
+  // The entry can be repaired in place.
+  await c.getByTestId('cx-entry-edit').nth(0).click();
+  await c.getByTestId('cx-entry-input').fill('x_1 e(i@1)');
+  await page.keyboard.press('Enter');
+  await expect(c.getByTestId('cx-error')).toHaveCount(0);
+});
+
+test('the map pane splits the stage, edits an entry, and closes', async ({ page }) => {
+  const c = await setup(page);
+  await c.getByTestId('cx-pane-open').first().click();
+  const pane = page.getByTestId('map-pane');
+  await expect(pane).toBeVisible();
+  await expect(page.locator('.stage.split')).toBeVisible();
+  await expect(pane.getByTestId('map-pane-canvas')).toBeVisible();
+  await pane.getByRole('button', { name: '⅓' }).click();
+  await expect(page.locator('.stage.split.third')).toBeVisible();
+  await pane.getByTestId('map-pane-input').fill('2 x_1 e(i@1)');
+  await pane.getByTestId('map-pane-write').click();
+  await expect(pane.getByTestId('map-pane-write')).toBeDisabled();
+  await expect(pane.getByTestId('map-pane-input')).toHaveValue(/^2/);
+  await pane.getByTestId('map-pane-close').click();
+  await expect(pane).toHaveCount(0);
+  await expect(page.locator('.stage.split')).toHaveCount(0);
+});

@@ -153,6 +153,7 @@ pub fn check_module<A: Additive>(a: &A, m: &Module<A::Obj, A::Mor>) -> Vec<Failu
         &m.matrix,
         0,
         "the presentation matrix",
+        &json!({"map": "presentation"}),
         &mut fs,
     );
     fs
@@ -640,6 +641,7 @@ pub fn check_resolution<A: Additive>(
         &r.aug,
         0,
         "the augmentation",
+        &json!({"map": "augmentation"}),
         &mut failures,
     );
     let start = start_of(c);
@@ -662,7 +664,7 @@ pub fn check_resolution<A: Additive>(
         let ed = mat_mul(a, &r.aug, &d0, m.gens.len(), cm.len());
         let lands = if m.rels.is_empty() {
             let mut fs = Vec::new();
-            check_zero(a, &ed, "augmentation", "ε ∘ d", &mut fs)?;
+            check_zero(a, &ed, "augmentation", "ε ∘ d", &[], &mut fs)?;
             fs.is_empty()
         } else {
             crate::complex_solve::lift(a, &cm, &m.rels, &m.gens, &ed, &m.matrix)?.is_some()
@@ -671,6 +673,10 @@ pub fn check_resolution<A: Additive>(
             failures.push(Failure {
                 condition: "augmentation",
                 location: format!("ε ∘ d from {}", fmt_pos(&prev0)),
+                maps: vec![
+                    json!({"map": "augmentation"}),
+                    crate::complex::diff_ref(&prev0, 0),
+                ],
                 detail: if m.rels.is_empty() {
                     "ε ∘ d is not zero, so C₋₁ → C₀ → M is not a complex".into()
                 } else {
@@ -726,6 +732,7 @@ pub fn check_resolution<A: Additive>(
                     failures.push(Failure {
                         condition: "onto",
                         location: format!("the augmentation at {tn}⟨{d}⟩"),
+                        maps: vec![json!({"map": "augmentation"})],
                         detail: format!(
                             "C₀ → M is not onto: its image misses {} of the {} dimensions of \
                              Hom({tn}⟨{d}⟩, M)",
@@ -749,6 +756,7 @@ pub fn check_resolution<A: Additive>(
                         failures.push(Failure {
                             condition: "exact",
                             location: format!("position 0 at {tn}⟨{d}⟩"),
+                            maps: vec![json!({"map": "augmentation"})],
                             detail: format!(
                                 "the kernel of C₀ → M is not the image of C₋₁: {h} \
                                  dimension{} left over",
@@ -782,6 +790,10 @@ pub fn check_resolution<A: Additive>(
                     failures.push(Failure {
                         condition: "exact",
                         location: format!("position {} at {tn}⟨{d}⟩", fmt_pos(&p)),
+                        maps: vec![
+                            crate::complex::diff_ref(&c.prev(&p, 0), 0),
+                            crate::complex::diff_ref(&p, 0),
+                        ],
                         detail: format!("homology of dimension {h}"),
                     });
                 }

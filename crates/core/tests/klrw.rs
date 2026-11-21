@@ -235,3 +235,41 @@ fn chain_map_cells_name_their_complexes() {
     let pcx = pc.iter().find(|c| c["kind"] == "complex").unwrap();
     assert_eq!(pcx["defines"], "C", "{pcx}");
 }
+
+/// A cell whose maps fail a check still has a value: the maps as written, the failures, and
+/// whatever does not depend on the check. Nothing the user wrote is replaced by an error.
+#[test]
+fn cells_that_fail_their_checks_keep_their_maps() {
+    let bad = "{\"terms\":[{\"at\":-2,\"summands\":[{\"object\":\"i@1\",\"shift\":2}]},\
+               {\"at\":-1,\"summands\":[{\"object\":\"i@1\"}]},\
+               {\"at\":0,\"summands\":[{\"object\":\"i@1\"}]}],\
+               \"differentials\":[{\"from\":-2,\"matrix\":[[\"x_1 e(i@1)\"]]},\
+               {\"from\":-1,\"matrix\":[[\"e(i@1)\"]]}]}";
+    let res = "{\"terms\":[{\"at\":-1,\"summands\":[{\"object\":\"i@1\",\"shift\":2}]},\
+               {\"at\":0,\"summands\":[{\"object\":\"i@1\"}]}],\
+               \"differentials\":[{\"from\":-1,\"matrix\":[[\"e(i@1)\"]]}],\
+               \"resolves\":{\"module\":\"L\",\"augmentation\":[[\"e(i@1)\"]]}}";
+    let src = format!(
+        "diagcalc-workspace/1\ncontext klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic\n\n\
+         complex C := {bad}\n\
+         module L := {{\"head\": \"i@1\"}}\n\
+         complex R := {res}\n\
+         chainmap F := {{\"source\": \"C\", \"target\": \"C\", \"map\": \
+         [{{\"at\": 0, \"matrix\": [[\"e(i@1)\"]]}}]}}\n"
+    );
+    let v = ops::run_workspace_with(&src, None, Some(8), &[]);
+    let cells: Vec<_> = v["cells"].as_array().unwrap().iter().collect();
+    for c in &cells {
+        assert_ne!(c["status"], "error", "{c}");
+    }
+    let c = cells.iter().find(|c| c["kind"] == "complex").unwrap();
+    assert_eq!(c["check"]["holds"], false, "{c}");
+    assert_eq!(
+        c["complex"]["differentials"].as_array().unwrap().len(),
+        2,
+        "{c}"
+    );
+    assert!(c["euler"]["text"].is_string(), "{c}");
+    let f = cells.iter().find(|c| c["kind"] == "chainmap").unwrap();
+    assert!(f["check"]["holds"].is_boolean(), "{f}");
+}

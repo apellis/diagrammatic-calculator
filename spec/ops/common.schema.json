@@ -614,6 +614,21 @@
         },
         "detail": {
           "type": "string"
+        },
+        "maps": {
+          "description": "The maps the failure involves, so a front end can highlight them: {\"map\": \"differential\", \"from\": p, \"axis\": a}, {\"map\": \"component\", \"at\": p}, {\"map\": \"augmentation\"}, or {\"map\": \"presentation\"}, with \"row\" and \"col\" when one entry is meant.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["map"],
+            "properties": {
+              "map": {
+                "enum": ["differential", "component", "augmentation", "presentation"]
+              },
+              "row": {"type": "integer", "minimum": 0},
+              "col": {"type": "integer", "minimum": 0}
+            }
+          }
         }
       }
     },

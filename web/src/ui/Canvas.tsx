@@ -93,6 +93,8 @@ export interface CanvasProps {
   onAsk?: () => void;
   /** The cell's computed value, whose provenance the canvas shows. */
   value?: CellValue;
+  /** Drawn inside another view (the map pane), which has its own way back: no "Back" button. */
+  embedded?: boolean;
 }
 
 type Match = Extract<RelationsMatchResponse, { status: 'ok' }>['matches'][number];
@@ -1364,9 +1366,9 @@ export function Canvas(props: CanvasProps) {
   };
 
   return (
-    <div class="canvas" classList={{ readonly: !!props.readOnly }} ref={root} tabindex={0} data-keeps-focus role="application" aria-label={`Canvas for ${props.title}`} onKeyDown={onKey} onKeyUp={onKeyUp}>
+    <div class="canvas" classList={{ readonly: !!props.readOnly, embedded: !!props.embedded }} ref={root} tabindex={0} data-keeps-focus role="application" aria-label={`Canvas for ${props.title}`} onKeyDown={onKey} onKeyUp={onKeyUp}>
       <div class="canvas-bar">
-        <button onClick={() => props.onClose()} title="Close the canvas and go back to the document (Esc)" data-testid="canvas-back">← Back to the document</button>
+        <Show when={!props.embedded}><button onClick={() => props.onClose()} title="Close the canvas and go back to the document (Esc)" data-testid="canvas-back">← Back to the document</button></Show>
         <strong>{props.title}</strong>
         <Show when={props.readOnly}><span class="hint">Read only</span></Show>
         <span class="hint">{total() > layouts().length ? `${layouts().length} of ${total()} summands` : `${total()} ${total() === 1 ? 'summand' : 'summands'}`}</span>

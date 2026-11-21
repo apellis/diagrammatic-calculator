@@ -613,6 +613,7 @@ pub fn check_minimal<A: Additive>(
                     Failure {
                         condition: "minimal",
                         location: format!("the differential from {}{along}", fmt_pos(&p)),
+                        maps: vec![crate::complex::diff_ref(&p, axis)],
                         detail: "it is not in the radical: the maps g d, for g a map back, \
                                  span a left ideal of End that is not nilpotent, so the complex \
                                  has a contractible summand there"

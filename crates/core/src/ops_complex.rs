@@ -481,11 +481,11 @@ fn factor<A: Additive>(a: &A, op: &str, input: &Value) -> Result<Value> {
         complex::parse_matrix(a, get(input, "g")?, y.len(), x.len(), "'g'")?
     };
     let mut fs = Vec::new();
-    complex::check_entries(a, &x, &z, &f, 0, "'f'", &mut fs);
+    complex::check_entries(a, &x, &z, &f, 0, "'f'", &Value::Null, &mut fs);
     if lifting {
-        complex::check_entries(a, &y, &z, &g, 0, "'g'", &mut fs);
+        complex::check_entries(a, &y, &z, &g, 0, "'g'", &Value::Null, &mut fs);
     } else {
-        complex::check_entries(a, &x, &y, &g, 0, "'g'", &mut fs);
+        complex::check_entries(a, &x, &y, &g, 0, "'g'", &Value::Null, &mut fs);
     }
     if let Some(e) = fs.first() {
         return Err(Error::invalid(format!(
@@ -536,7 +536,7 @@ fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     for (p, m) in &fixed {
         let mut fs = Vec::new();
         let loc = format!("the component of 'fixed' at {}", fmt_pos(p));
-        complex::check_entries(a, c.at(p), d.at(p), m, 0, &loc, &mut fs);
+        complex::check_entries(a, c.at(p), d.at(p), m, 0, &loc, &Value::Null, &mut fs);
         if let Some(e) = fs.first() {
             return Err(Error::invalid(format!("{}: {}", e.location, e.detail)));
         }
@@ -812,7 +812,13 @@ fn gauss<A: Additive>(a: &A, input: &Value) -> Result<Value> {
 
 fn euler<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     let c = valid_complex(a, get(input, "complex")?, "complex")?;
-    let classes = crate::complex_build::euler(a, &c);
+    Ok(euler_of(a, &c))
+}
+
+/// The Euler characteristic of a sequence of terms. It depends only on the terms, so a cell
+/// shows it even while `d ∘ d ≠ 0`.
+fn euler_of<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Value {
+    let classes = crate::complex_build::euler(a, c);
     let terms: Vec<Value> = classes
         .iter()
         .map(|(o, cs)| {
@@ -838,7 +844,7 @@ fn euler<A: Additive>(a: &A, input: &Value) -> Result<Value> {
             .collect::<Vec<_>>()
             .join(" + ")
     };
-    Ok(with_prov(
+    with_prov(
         json!({ "terms": terms, "text": text }),
         prov_notes(
             a,
@@ -848,7 +854,7 @@ fn euler<A: Additive>(a: &A, input: &Value) -> Result<Value> {
                     .into(),
             ],
         ),
-    ))
+    )
 }
 
 fn render<A: Additive>(a: &A, input: &Value) -> Result<Value> {
@@ -873,7 +879,7 @@ pub(crate) fn complex_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
     let mut out = json!({
         "complex": cj,
         "check": verdict(a, &fs, vec![]),
-        "euler": euler(a, &json!({ "complex": cj }))?,
+        "euler": euler_of(a, &c),
     });
     if !fs.is_empty() {
         notes.push("homology is computed once the check passes".into());

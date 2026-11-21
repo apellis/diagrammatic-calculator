@@ -20,7 +20,8 @@ export interface ComplexJ {
   resolves?: { module: string | ModuleJ; augmentation?: EntryText[][] };
 }
 interface Dims { test: string; dimensions: string; powers?: [number, number][] }
-interface FailureJ { location: string; detail: string }
+/** A failed check: where, what, and the maps it involves (with `row` and `col` for one entry). */
+export interface FailureJ { location: string; detail: string; maps?: (MapRef & { row?: number; col?: number })[] }
 interface HomologyJ { positions?: { at: number | number[]; zero: boolean; pieces?: { test: string; degree: number; dimension: number }[]; window?: { truncated: boolean } }[]; exact?: boolean }
 interface ResolutionJ {
   holds?: boolean;
@@ -67,7 +68,31 @@ export type MapRef = { map: 'differential'; from: number | number[]; axis: numbe
 /** A new value for one entry of a map: its row (target summand) and column (source summand). */
 export interface EntryEdit { ref: MapRef; row: number; col: number; rows: number; cols: number; text: string | null }
 /** What the tools of a complex or module cell can do, including writing one entry of a map. */
-export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve' | 'cone' | { edit: EntryEdit };
+export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve' | 'cone' | { edit: EntryEdit } | { pane: MapRef };
+
+const asPos = (p: number | number[]) => JSON.stringify(Array.isArray(p) ? p : [p]);
+/** Whether two references name the same map. */
+export function sameRef(a: MapRef, b: MapRef): boolean {
+  if (a.map !== b.map) return false;
+  if (a.map === 'differential' && b.map === 'differential') return asPos(a.from) === asPos(b.from) && (a.axis ?? 0) === (b.axis ?? 0);
+  if (a.map === 'component' && b.map === 'component') return asPos(a.at) === asPos(b.at);
+  return true;
+}
+/** Where failed checks point inside one map: the map as a whole, and particular entries (`row,col`). */
+export interface Flags { map: boolean; entries: Set<string> }
+export function flagsFor(fs: FailureJ[] | undefined, ref: MapRef | undefined): Flags {
+  const out: Flags = { map: false, entries: new Set() };
+  if (!ref) return out;
+  for (const f of fs ?? []) for (const r of f.maps ?? []) {
+    if (!sameRef(r, ref)) continue;
+    if (r.row != null && r.col != null) out.entries.add(`${r.row},${r.col}`);
+    else out.map = true;
+  }
+  return out;
+}
+/** The failures that involve a map. */
+export const failuresOf = (fs: FailureJ[] | undefined, ref: MapRef) => (fs ?? []).filter((f) => f.maps?.some((r) => sameRef(r, ref)));
+const flagged = (f: Flags | undefined) => !!f && (f.map || f.entries.size > 0);
 
 /** A chain map as written: its source and target (names of complex cells, or complexes) and its components. */
 export interface ChainMapJ { source?: string | ComplexJ; target?: string | ComplexJ; map?: { at: number | number[]; matrix: EntryText[][] }[] }
@@ -114,7 +139,7 @@ export function complexCellText(name: string, c: ComplexJ & Record<string, unkno
   const out: Record<string, unknown> = {};
   const defaults: Record<string, unknown> = { dimension: 1, indexing: 'cohomological', odd_signs: 'koszul', squares: 'commute' };
   for (const [k, v] of Object.entries(c)) if (defaults[k] !== v) out[k] = v;
-  const terms = (out.terms as TermJ[] | undefined)?.map((t) => ({ ...t, summands: t.summands.map((x) => (x.shift ? x : { object: x.object })) }));
+  const terms = (out.terms as TermJ[] | undefined)?.map((t) => ({ ...t, summands: t.summands.map((x) => (typeof x !== 'object' || x.shift ? x : { object: x.object })) }));
   if (terms) out.terms = terms;
   if (module && out.resolves) out.resolves = { ...(out.resolves as object), module };
   return `complex ${name} := ${JSON.stringify(out)}${tail ? ' ' + tail : ''}`;
@@ -186,7 +211,7 @@ interface EntryPlace { ref: MapRef; row: number; col: number; rows: number; cols
  * With a place, clicking it opens its text for editing (Enter writes it into the cell, Escape
  * leaves it); an empty text or `0` makes the entry zero.
  */
-function Entry(props: { e: EntryText; d?: DisplayJ; place?: EntryPlace }) {
+function Entry(props: { e: EntryText; d?: DisplayJ; place?: EntryPlace; bad?: boolean }) {
   const [editing, setEditing] = createSignal(false);
   const [draft, setDraft] = createSignal('');
   const open = () => { setDraft(isZero(props.e) ? '' : props.e!); setEditing(true); };
@@ -219,8 +244,9 @@ function Entry(props: { e: EntryText; d?: DisplayJ; place?: EntryPlace }) {
         <span class="hint cx-edit-hint">{hint()}. Enter writes it, Escape leaves it.</span>
       </span>
     }>
-      <Show when={props.place} fallback={<EntryShown e={props.e} d={props.d} />}>
-        <button class="cx-entry-btn" data-testid="cx-entry-edit" title={`${isZero(props.e) ? '0' : props.e}: click to edit`} onClick={open}>
+      <Show when={props.place} fallback={<span classList={{ 'cx-bad-entry': !!props.bad }} data-bad={props.bad ? 'true' : undefined}><EntryShown e={props.e} d={props.d} /></span>}>
+        <button class="cx-entry-btn" classList={{ 'cx-bad-entry': !!props.bad }} data-bad={props.bad ? 'true' : undefined} data-testid="cx-entry-edit"
+          title={`${isZero(props.e) ? '0' : props.e}${props.bad ? ': a check fails at this entry' : ''}: click to edit`} onClick={open}>
           <EntryShown e={props.e} d={props.d} />
         </button>
       </Show>
@@ -228,7 +254,7 @@ function Entry(props: { e: EntryText; d?: DisplayJ; place?: EntryPlace }) {
   );
 }
 
-function EntryShown(props: { e: EntryText; d?: DisplayJ }) {
+export function EntryShown(props: { e: EntryText; d?: DisplayJ }) {
   const drawn = () => (props.e == null ? undefined : props.d?.entries?.[props.e]);
   return (
     <Show when={!isZero(props.e)} fallback={<span class="hint">0</span>}>
@@ -251,7 +277,7 @@ function EntryShown(props: { e: EntryText; d?: DisplayJ }) {
 }
 
 /** A matrix with its rows labelled by the target summands and its columns by the source ones. */
-function MatrixView(props: { m?: EntryText[][]; label: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit }) {
+function MatrixView(props: { m?: EntryText[][]; label: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit; flags?: Flags }) {
   const rows = () => props.m ?? [];
   const heads = () => !!(props.src?.length === rows()[0]?.length && props.tgt?.length === rows().length);
   return (
@@ -261,7 +287,7 @@ function MatrixView(props: { m?: EntryText[][]; label: string; d?: DisplayJ; src
           <thead><tr><th /><For each={props.src}>{(s) => <th><Proj s={s} d={props.d} /></th>}</For></tr></thead>
         </Show>
         <tbody>
-          <For each={rows()}>{(r, i) => <tr><Show when={heads()}><th><Proj s={props.tgt![i()]} d={props.d} /></th></Show><For each={r}>{(e, j) => <td><Entry e={e} d={props.d} place={place(props, i(), j())} /></td>}</For></tr>}</For>
+          <For each={rows()}>{(r, i) => <tr><Show when={heads()}><th><Proj s={props.tgt![i()]} d={props.d} /></th></Show><For each={r}>{(e, j) => <td><Entry e={e} d={props.d} place={place(props, i(), j())} bad={props.flags?.entries.has(`${i()},${j()}`)} /></td>}</For></tr>}</For>
         </tbody>
       </table>
     </Show>
@@ -308,8 +334,12 @@ const dimsLine = (ds?: Dims[]) => (ds ?? []).map((d) => `${d.dimensions} at ${d.
  * An arrow with its map: a 1×1 matrix is drawn on the arrow itself; a larger one is a button
  * (`2×3`) that opens the matrix, its rows and columns labelled by the summands they belong to.
  */
-function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit; down?: boolean }) {
-  const [open, setOpen] = createSignal(false);
+function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit; down?: boolean; flags?: Flags }) {
+  // a matrix with a failing entry opens by itself, so that the entry marked in red is visible
+  const [shut, setShut] = createSignal<boolean | undefined>(undefined);
+  const open = () => !(shut() ?? !(props.flags?.entries.size));
+  const setOpen = (o: boolean) => setShut(!o);
+  const bad = () => flagged(props.flags);
   // an editable map that is not written down is zero, of the size of its summands
   const m = () => props.m ?? (props.edit && props.src?.length && props.tgt?.length ? props.tgt.map(() => props.src!.map(() => null as EntryText)) : undefined);
   const rows = () => m()?.length ?? 0;
@@ -318,15 +348,20 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
   const nonzero = () => (m() ?? []).flat().filter((e) => !isZero(e)).length;
   const sub = () => ({ ...props, m: m() });
   return (
-    <div class={props.down ? 'cx-arrow cx-down' : 'cx-arrow'}>
+    <div class={props.down ? 'cx-arrow cx-down' : 'cx-arrow'} classList={{ 'cx-bad': bad() }} data-bad={bad() ? 'true' : undefined}
+      title={bad() ? `${props.label}: a check fails here (see the problems below)` : undefined}>
       <Show when={m() && rows() && cols()} fallback={<span class="cx-matrix-none" />}>
-        <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={m()![0][0]} d={props.d} place={place(sub(), 0, 0)} /></div>}>
-          <button class="cx-matrix-chip ghost" aria-expanded={open()} data-testid="cx-matrix-toggle" onClick={() => setOpen(!open())}
+        <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={m()![0][0]} d={props.d} place={place(sub(), 0, 0)} bad={props.flags?.entries.has('0,0')} /></div>}>
+          <button class="cx-matrix-chip ghost" classList={{ 'cx-bad-chip': bad() }} aria-expanded={open()} data-testid="cx-matrix-toggle" onClick={() => setOpen(!open())}
             title={open() ? 'Hide the matrix' : 'Show the matrix: rows are the summands of the target, columns those of the source'}>
-            {rows()}×{cols()} matrix, {nonzero()} nonzero {open() ? '▴' : '▾'}
+            {bad() ? '⚠ ' : ''}{rows()}×{cols()} matrix, {nonzero()} nonzero {open() ? '▴' : '▾'}
           </button>
-          <Show when={open()}><MatrixView m={m()} label={props.label} d={props.d} src={props.src} tgt={props.tgt} edit={props.edit} /></Show>
+          <Show when={open()}><MatrixView m={m()} label={props.label} d={props.d} src={props.src} tgt={props.tgt} edit={props.edit} flags={props.flags} /></Show>
         </Show>
+      </Show>
+      <Show when={props.edit?.onPane && m() && rows() && cols()}>
+        <button class="ghost cx-pane-btn" data-testid="cx-pane-open" onClick={() => props.edit!.onPane!()}
+          title={`Edit ${props.label} beside the document, entry by entry, with the diagram editor`} aria-label={`Edit ${props.label} beside the document`}>⤢ edit</button>
       </Show>
       <div class="cx-shaft" aria-hidden="true">{props.name ? <span class="cx-name">{props.name}</span> : null}{props.down ? '↓' : '⟶'}</div>
     </div>
@@ -334,7 +369,7 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
 }
 
 /** An editable map: which one it is, and where its edits go. */
-interface MapEdit { ref: MapRef; onEdit: (e: EntryEdit) => void }
+interface MapEdit { ref: MapRef; onEdit: (e: EntryEdit) => void; onPane?: () => void }
 
 function place(p: { m?: EntryText[][]; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit }, row: number, col: number): EntryPlace | undefined {
   if (!p.edit || !p.m) return undefined;
@@ -345,9 +380,21 @@ function Failures(props: { fs?: FailureJ[]; count?: number }) {
   return (
     <Show when={props.fs?.length}>
       <ul class="cx-failures">
-        <For each={props.fs}>{(f) => <li><b>{f.location}</b>: {f.detail}</li>}</For>
+        <For each={props.fs}>{(f) => <li><b>{f.location}</b>: {f.detail}<Show when={f.maps?.length}><span class="hint"> (marked in red above)</span></Show></li>}</For>
         <Show when={(props.count ?? 0) > (props.fs?.length ?? 0)}><li class="hint">and {props.count! - props.fs!.length} more</li></Show>
       </ul>
+    </Show>
+  );
+}
+
+/** The engine could not read the cell: what it said, and that nothing written has been dropped. */
+function ErrorLine(props: { error?: string }) {
+  return (
+    <Show when={props.error}>
+      <div class="cx-error" role="alert" data-testid="cx-error">
+        <div class="row"><span class="badge bad">cannot be checked</span><span class="error">{props.error}</span></div>
+        <div class="hint">Every entry is kept as written. Fix the entry or the text the message points to; the checks and tools come back when the cell reads again.</div>
+      </div>
     </Show>
   );
 }
@@ -359,7 +406,7 @@ function Tools(props: { children: unknown }) {
 /** The last verdict of each complex cell and the one before it, by name, for the status line. */
 const verdicts = new Map<string, { now: string; before?: string }>();
 
-export function ComplexView(props: { r: ComplexResult; name?: string; module?: string; onAction?: (a: ComplexAction) => void; busy?: string }) {
+export function ComplexView(props: { r: ComplexResult; name?: string; module?: string; onAction?: (a: ComplexAction) => void; busy?: string; error?: string }) {
   const c = () => props.r.complex ?? {};
   const oneDim = () => (c().dimension ?? 1) === 1;
   const terms = () => ordered(c());
@@ -401,16 +448,18 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
     if (!seen || seen.now !== now) verdicts.set(key, { now, before: seen?.now });
     return now ? verdicts.get(key)!.before : undefined;
   };
-  const editable = (ref: () => MapRef): MapEdit | undefined => (props.onAction ? { ref: ref(), onEdit: (e) => act({ edit: e }) } : undefined);
+  const editable = (ref: () => MapRef): MapEdit | undefined => (props.onAction ? { ref: ref(), onEdit: (e) => act({ edit: e }), onPane: () => act({ pane: ref() }) } : undefined);
+  const diffRef = (p: number): MapRef => ({ map: 'differential', from: p, axis: 0 });
   return (
     <div class="cx" data-testid="complex-view">
+      <ErrorLine error={props.error} />
       <Show when={oneDim()} fallback={<MultiView c={c()} d={props.r.display} />}>
         <div class="cx-diagram" role="figure" aria-label={`the complex${props.name ? ' ' + props.name : ''}`}>
           <For each={terms()}>
             {(t, i) => (
               <span class="cx-step">
                 <Show when={i() > 0}><Arrow m={diff(at(terms()[i() - 1]))} label={`differential from ${posText(at(terms()[i() - 1]))}`} d={d()} src={terms()[i() - 1].summands} tgt={t.summands}
-                  edit={editable(() => ({ map: 'differential', from: at(terms()[i() - 1]), axis: 0 }))} /></Show>
+                  edit={editable(() => diffRef(at(terms()[i() - 1])))} flags={flagsFor(failures(), diffRef(at(terms()[i() - 1])))} /></Show>
                 <Term t={t} d={d()} homology={resolves() ? undefined : hom(at(t))} />
               </span>
             )}
@@ -418,7 +467,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
           <Show when={resolves()}>
             <span class="cx-step">
               <Arrow m={resolves()!.augmentation} label="the augmentation ε" name="ε " d={d()} src={terms().at(-1)?.summands} tgt={moduleGens()}
-                edit={editable(() => ({ map: 'augmentation' }))} />
+                edit={editable(() => ({ map: 'augmentation' }))} flags={flagsFor(failures(), { map: 'augmentation' })} />
               <div class="cx-term cx-module" data-testid="cx-module"><div class="cx-summands"><span class="cx-summand">{moduleName()}</span></div><div class="cx-pos hint">module</div></div>
             </span>
           </Show>
@@ -456,7 +505,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
         )}
       </Show>
       <Show when={before()}><div class="hint" data-testid="status-before">Before the last change: {before()}.</div></Show>
-      <Show when={props.onAction}>
+      <Show when={props.onAction && !props.error}>
         <Tools>
           <Show when={checkOk() && resolves() && res() && !res()!.resolved}>
             <button class="primary" disabled={busy()} onClick={() => act('extend')} data-testid="cx-extend"
@@ -503,7 +552,7 @@ function MultiView(props: { c: ComplexJ; d?: DisplayJ }) {
  * F(p) as a downward arrow between them, editable entry by entry. The status line says whether
  * dF = Fd, and where it fails.
  */
-export function ChainMapView(props: { r: ChainMapResult; name?: string; source?: string; target?: string; onAction?: (a: ComplexAction) => void; busy?: string }) {
+export function ChainMapView(props: { r: ChainMapResult; name?: string; source?: string; target?: string; onAction?: (a: ComplexAction) => void; busy?: string; error?: string }) {
   const src = () => props.r.source ?? {};
   const tgt = () => props.r.target ?? {};
   const oneDim = () => (src().dimension ?? 1) === 1;
@@ -516,10 +565,11 @@ export function ChainMapView(props: { r: ChainMapResult; name?: string; source?:
   const comp = (p: number) => props.r.map?.find((x) => (Array.isArray(x.at) ? x.at[0] : x.at) === p)?.matrix;
   const d = () => props.r.display;
   const ok = () => props.r.check?.holds !== false;
-  const editable = (p: number): MapEdit | undefined => (props.onAction ? { ref: { map: 'component', at: p }, onEdit: (e) => props.onAction!({ edit: e }) } : undefined);
+  const editable = (p: number): MapEdit | undefined => (props.onAction ? { ref: { map: 'component', at: p }, onEdit: (e) => props.onAction!({ edit: e }), onPane: () => props.onAction!({ pane: { map: 'component', at: p } }) } : undefined);
   const names = () => `${props.source ?? 'C'} → ${props.target ?? 'D'}`;
   return (
     <div class="cx" data-testid="chainmap-view">
+      <ErrorLine error={props.error} />
       <Show when={oneDim()} fallback={<div class="hint">A map of {src().dimension}-dimensional complexes; the ladder is drawn for one-dimensional ones.</div>}>
         <div class="cm-ladder" role="figure" aria-label={`the chain map${props.name ? ' ' + props.name : ''}: ${names()}`}
           style={{ 'grid-template-columns': `auto repeat(${Math.max(1, positions().length * 2 - 1)}, auto)` }}>
@@ -537,7 +587,7 @@ export function ChainMapView(props: { r: ChainMapResult; name?: string; source?:
             {(p, i) => (
               <>
                 <Show when={i() > 0}><span /></Show>
-                <div data-testid="cm-component"><Arrow down m={comp(p)} label={`the component at ${posText(p)}`} d={d()} src={term(src(), p).summands} tgt={term(tgt(), p).summands} edit={editable(p)} /></div>
+                <div data-testid="cm-component"><Arrow down m={comp(p)} label={`the component at ${posText(p)}`} d={d()} src={term(src(), p).summands} tgt={term(tgt(), p).summands} edit={editable(p)} flags={flagsFor(props.r.check?.failures, { map: 'component', at: p })} /></div>
               </>
             )}
           </For>
@@ -552,14 +602,14 @@ export function ChainMapView(props: { r: ChainMapResult; name?: string; source?:
           </For>
         </div>
       </Show>
-      <div class="cx-status" data-testid="chainmap-status">
+      <Show when={!props.error}><div class="cx-status" data-testid="chainmap-status">
         <div class="row" style={{ 'flex-wrap': 'wrap' }}>
           <span class={`badge ${ok() ? 'good' : 'bad'}`} data-testid="verdict">{ok() ? 'a chain map' : 'not a chain map'}</span>
           <span>{ok() ? `dF = Fd at every position: ${props.name ?? 'F'} is a chain map ${names()}.` : `dF ≠ Fd (${props.r.check?.failure_count ?? '?'} ${props.r.check?.failure_count === 1 ? 'problem' : 'problems'}); fix an entry of a component.`}</span>
         </div>
-      </div>
+      </div></Show>
       <Show when={!ok()}><Failures fs={props.r.check?.failures} count={props.r.check?.failure_count} /></Show>
-      <Show when={props.onAction}>
+      <Show when={props.onAction && !props.error}>
         <Tools>
           <Show when={ok()}>
             <button class="primary" disabled={!!props.busy} onClick={() => props.onAction!('cone')} data-testid="cm-cone"
@@ -575,17 +625,19 @@ export function ChainMapView(props: { r: ChainMapResult; name?: string; source?:
   );
 }
 
-export function ModuleView(props: { r: ModuleResult; name?: string; head?: boolean; onAction?: (a: ComplexAction) => void; busy?: string }) {
+export function ModuleView(props: { r: ModuleResult; name?: string; head?: boolean; onAction?: (a: ComplexAction) => void; busy?: string; error?: string }) {
   const m = () => props.r.module ?? {};
   const gens = () => m().generators ?? [];
   const rels = () => m().relations ?? [];
   return (
     <div class="cx" data-testid="module-view">
+      <ErrorLine error={props.error} />
       <div class="cx-diagram" role="figure" aria-label={`the presentation of ${props.name ?? 'the module'}`}>
         <Show when={rels().length}>
           <Term t={{ at: 1, summands: rels() }} d={props.r.display} caption="relations" />
           <Arrow m={m().matrix} label="the presentation matrix" name="φ " d={props.r.display} src={rels()} tgt={gens()}
-            edit={props.onAction ? { ref: { map: 'presentation' }, onEdit: (e) => props.onAction!({ edit: e }) } : undefined} />
+            edit={props.onAction ? { ref: { map: 'presentation' }, onEdit: (e) => props.onAction!({ edit: e }), onPane: () => props.onAction!({ pane: { map: 'presentation' } }) } : undefined}
+            flags={flagsFor(props.r.failures, { map: 'presentation' })} />
         </Show>
         <Term t={{ at: 0, summands: gens() }} d={props.r.display} caption="generators" />
         <Arrow label="" />
@@ -599,7 +651,7 @@ export function ModuleView(props: { r: ModuleResult; name?: string; head?: boole
       <Show when={props.r.dimensions}>
         <div class="cx-status">graded dimension: {dimsLine(props.r.dimensions) || 'zero'}{props.r.dimension !== undefined ? ` (total ${props.r.dimension})` : ''}{props.r.complete === false ? ' (in the degrees computed)' : ''}</div>
       </Show>
-      <Show when={props.onAction}>
+      <Show when={props.onAction && !props.error}>
         <Tools>
           <Show when={props.r.holds !== false}>
             <button class="primary" disabled={!!props.busy} onClick={() => props.onAction!('resolve')} data-testid="md-resolve"
@@ -647,4 +699,64 @@ export function applyEntryEdit(value: Record<string, unknown>, e: EntryEdit): Re
     next.differentials = ds;
   }
   return next;
+}
+
+/** A complex, chain map or module cell, read either from the engine's value or, when the engine
+ *  could not read it, straight from the cell's text, so that its maps stay on screen and editable. */
+export type StructuredRead =
+  | { kind: 'complex'; r: ComplexResult; error?: string }
+  | { kind: 'chainmap'; r: ChainMapResult; error?: string }
+  | { kind: 'module'; r: ModuleResult; error?: string };
+
+/** The cell as the views draw it when the engine answered with an error: its terms and maps as
+ *  written. A chain map's source and target named as cells are looked up by `lookup`. */
+export function fallbackRead(text: string, error: string, lookup?: (name: string) => ComplexJ | undefined): StructuredRead | null {
+  const r = readStructured(text);
+  if (!r) return null;
+  const v = r.value;
+  if (r.kind === 'complex') return { kind: 'complex', r: { kind: 'complex', complex: v }, error };
+  if (r.kind === 'module') {
+    // a module given by its head has no presentation to show until the engine finds it
+    if (v.head !== undefined) return null;
+    return { kind: 'module', r: { kind: 'module', module: v }, error };
+  }
+  const end = (x: unknown) => (typeof x === 'string' ? lookup?.(x) : (x as ComplexJ | undefined)) ?? {};
+  return { kind: 'chainmap', r: { kind: 'chainmap', source: end(v.source), target: end(v.target), map: v.map }, error };
+}
+
+/** One map of a cell, for the side pane: its matrix (zeros filled in to the size of its summands),
+ *  the summands of its source and target, and the failed checks that involve it. */
+export interface MapData { title: string; m: EntryText[][]; src: SummandJ[]; tgt: SummandJ[]; display?: DisplayJ; failures: FailureJ[]; flags: Flags }
+
+export function mapOf(s: StructuredRead, ref: MapRef): MapData | null {
+  const atOf = (t: TermJ) => (Array.isArray(t.at) ? t.at[0] : t.at);
+  const first = (p: number | number[]) => (Array.isArray(p) ? p[0] : p);
+  const fill = (m: EntryText[][] | undefined, src: SummandJ[], tgt: SummandJ[]) =>
+    tgt.map((_, i) => src.map((_, j) => m?.[i]?.[j] ?? null));
+  const out = (title: string, m: EntryText[][] | undefined, src: SummandJ[], tgt: SummandJ[], fs?: FailureJ[]): MapData | null =>
+    src.length && tgt.length ? { title, m: fill(m, src, tgt), src, tgt, display: s.r.display, failures: failuresOf(fs, ref), flags: flagsFor(fs, ref) } : null;
+  if (s.kind === 'complex') {
+    const c = s.r.complex ?? {};
+    const ts = ordered(c);
+    const fs = c.resolves ? s.r.resolution?.failures : s.r.check?.failures;
+    if (ref.map === 'augmentation') {
+      const m = c.resolves?.module;
+      return out('the augmentation ε', c.resolves?.augmentation, ts.at(-1)?.summands ?? [], typeof m === 'object' ? m.generators ?? [] : [], fs);
+    }
+    if (ref.map !== 'differential') return null;
+    const i = ts.findIndex((t) => atOf(t) === first(ref.from));
+    if (i < 0 || i + 1 >= ts.length) return null;
+    const d = c.differentials?.find((x) => first(x.from) === first(ref.from) && (x.axis ?? 0) === (ref.axis ?? 0));
+    return out(`the differential from ${posText(ref.from)}`, d?.matrix, ts[i].summands, ts[i + 1].summands, fs);
+  }
+  if (s.kind === 'chainmap') {
+    if (ref.map !== 'component') return null;
+    const p = first(ref.at);
+    const term = (c?: ComplexJ) => c?.terms?.find((t) => atOf(t) === p)?.summands ?? [];
+    const comp = s.r.map?.find((x) => first(x.at) === p);
+    return out(`the component at ${posText(ref.at)}`, comp?.matrix, term(s.r.source), term(s.r.target), s.r.check?.failures);
+  }
+  if (ref.map !== 'presentation') return null;
+  const m = s.r.module ?? {};
+  return out('the presentation matrix φ', m.matrix, m.relations ?? [], m.generators ?? [], s.r.failures);
 }
