@@ -656,8 +656,13 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .cx-matrix tbody td:last-child { border-right: 1px solid var(--muted); }
 .cx-matrix th { font-weight: normal; font-size: 12px; padding: 0 6px; color: var(--muted); }
 .cx-matrix th .cx-proj { color: var(--text); }
-.cx-on-arrow { max-width: 360px; overflow-x: auto; }
+.cx-on-arrow { max-width: 360px; overflow-x: auto; padding: 2px; }
 .cx-entry { display: inline-flex; align-items: center; gap: 2px; }
+.cx-entry-btn { all: unset; cursor: pointer; display: inline-flex; border-radius: 4px; padding: 1px 2px; outline: 1px dashed transparent; }
+.cx-entry-btn:hover, .cx-entry-btn:focus-visible { outline-color: var(--accent, var(--muted)); background: var(--hover, transparent); }
+.cx-edit { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.cx-edit input { font-size: 12px; min-width: 14ch; padding: 2px 4px; }
+.cx-edit-hint { font-size: 11px; max-width: 32ch; text-align: left; white-space: normal; }
 .cx-diag svg { height: 68px; width: auto; display: block; }
 .cx-sign, .cx-coeff { font-size: 14px; padding: 0 1px; }
 .cx-matrix-chip { font-size: 12px; padding: 1px 8px; white-space: nowrap; }

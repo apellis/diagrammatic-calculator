@@ -33,6 +33,17 @@ test('resolving a simple module step by step with the cell tools', async ({ page
   await r.getByTestId('cx-extend').click();
   await expect(r.getByTestId('cx-term')).toHaveCount(3);
   await expect(r.getByTestId('cx-extend')).toContainText('−3');
+  // an entry of a map is edited in place: the hint names its source, target, and degree
+  await r.getByTestId('cx-entry-edit').first().click();
+  const input = r.getByTestId('cx-entry-input');
+  await expect(input).toBeFocused();
+  await expect(r.locator('.cx-edit-hint')).toContainText('of degree');
+  await page.keyboard.press('Escape');
+  await expect(input).toHaveCount(0);
+  await r.getByTestId('cx-entry-edit').first().click();
+  await input.fill('0');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => page.evaluate(() => document.querySelector('.cell[data-kind="complex"] [data-testid="cell-display"]')?.getAttribute('data-text'))).toContain('[[null]]');
   // the cell still names the module cell, so changing L changes what it resolves
   await expect(r).toHaveAttribute('data-kind', 'complex');
   expect(await page.evaluate(() => document.querySelector('.cell[data-kind="complex"] [data-testid="cell-display"]')?.getAttribute('data-text'))).toContain('"module":"L"');

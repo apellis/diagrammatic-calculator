@@ -7,7 +7,7 @@ import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
 import { exportDch, exportDcw, parseDcw, fileName } from '../doc/dcw';
 import { Cell, TEMPLATES } from './Cell';
-import { complexCellText, readStructured, type ComplexAction } from './Complexes';
+import { applyEntryEdit, complexCellText, readStructured, type ComplexAction } from './Complexes';
 import { NewCell as CellComposer } from './NewCell';
 import { DiagramStart } from './DiagramStart';
 import { Outline } from './Outline';
@@ -750,6 +750,22 @@ function DocView(props: {
     if (action === 'json') {
       await navigator.clipboard?.writeText(JSON.stringify(r.kind === 'complex' ? v.complex : v.module, null, 2));
       return setMessage(r.kind === 'complex' ? 'The complex copied as JSON, every default filled in.' : 'The presentation copied as JSON.');
+    }
+    if (typeof action === 'object') {
+      // one entry of a map, written in place: the cell text changes, and the engine checks it again
+      if (readOnly()) return refuse();
+      const e = action.edit;
+      const where = e.ref.map === 'differential' ? 'the differential' : e.ref.map === 'augmentation' ? 'the augmentation' : 'the presentation matrix';
+      const note = `edited an entry of ${where} in ${r.name}`;
+      if (r.kind === 'complex') {
+        const named = typeof (r.value.resolves?.module) === 'string' ? (r.value.resolves!.module as string) : undefined;
+        doc.updateCell(id, complexCellText(r.name, applyEntryEdit(v.complex ?? {}, e) as never, named, r.tail), note);
+      } else {
+        const { generators, relations, matrix } = applyEntryEdit(v.module ?? {}, e) as Record<string, unknown>;
+        doc.updateCell(id, `module ${r.name} := ${JSON.stringify({ generators, relations, matrix })}${r.tail ? ' ' + r.tail : ''}`, note);
+      }
+      return setMessage(r.kind === 'module' && r.value.head !== undefined
+        ? `Edited; ${r.name} is now written as an explicit presentation.` : note[0].toUpperCase() + note.slice(1) + '.');
     }
     if (complexBusy()) return;
     const write = action !== 'tikz';

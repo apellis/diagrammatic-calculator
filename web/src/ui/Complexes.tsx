@@ -62,8 +62,12 @@ export interface ModuleResult {
   complete?: boolean;
 }
 
-/** What the tools of a complex or module cell can do. */
-export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve';
+/** Which map of a cell an edited entry belongs to: a differential, the augmentation, or φ. */
+export type MapRef = { map: 'differential'; from: number | number[]; axis: number } | { map: 'augmentation' } | { map: 'presentation' };
+/** A new value for one entry of a map: its row (target summand) and column (source summand). */
+export interface EntryEdit { ref: MapRef; row: number; col: number; rows: number; cols: number; text: string | null }
+/** What the tools of a complex or module cell can do, including writing one entry of a map. */
+export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve' | { edit: EntryEdit };
 
 /** `complex R := {…}` or `module L := {…}`, read: the name and the JSON (null when it does not parse). */
 export function readStructured(text: string): { kind: 'complex' | 'module'; name: string; value: ComplexJ & ModuleJ; tail: string } | null {
@@ -159,8 +163,57 @@ export function Proj(props: { s: SummandJ; d?: DisplayJ }) {
   );
 }
 
-/** One matrix entry: the diagram of each of its summands, or its text when there is no drawing. */
-function Entry(props: { e: EntryText; d?: DisplayJ }) {
+/** Where an entry sits, so that it can be edited: its map, its place, and the summands it joins. */
+interface EntryPlace { ref: MapRef; row: number; col: number; rows: number; cols: number; src?: SummandJ; tgt?: SummandJ; onEdit: (e: EntryEdit) => void }
+
+/**
+ * One matrix entry: the diagram of each of its summands, or its text when there is no drawing.
+ * With a place, clicking it opens its text for editing (Enter writes it into the cell, Escape
+ * leaves it); an empty text or `0` makes the entry zero.
+ */
+function Entry(props: { e: EntryText; d?: DisplayJ; place?: EntryPlace }) {
+  const [editing, setEditing] = createSignal(false);
+  const [draft, setDraft] = createSignal('');
+  const open = () => { setDraft(isZero(props.e) ? '' : props.e!); setEditing(true); };
+  const commit = () => {
+    const p = props.place!;
+    setEditing(false);
+    const t = draft().trim();
+    const next = t === '' || t === '0' ? null : t;
+    if (next === (isZero(props.e) ? null : props.e!.trim())) return;
+    p.onEdit({ ref: p.ref, row: p.row, col: p.col, rows: p.rows, cols: p.cols, text: next });
+  };
+  const degree = () => {
+    const p = props.place;
+    return p?.src && p.tgt ? (p.src.shift ?? 0) - (p.tgt.shift ?? 0) : undefined;
+  };
+  const hint = () => {
+    const p = props.place;
+    if (!p?.src || !p.tgt) return 'an element of the algebra; empty or 0 for zero';
+    return `from ${summandText(p.src)} to ${summandText(p.tgt)}: an element of e(${p.tgt.object}) A e(${p.src.object}) of degree ${degree()}; empty or 0 for zero`;
+  };
+  return (
+    <Show when={!editing()} fallback={
+      <span class="cx-edit">
+        <input class="mono" data-testid="cx-entry-input" value={draft()} placeholder={props.place?.tgt && props.place.src ? `… e(${props.place.src.object})` : '0'}
+          aria-label={hint()} title={hint()}
+          ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
+          onInput={(ev) => setDraft(ev.currentTarget.value)}
+          onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } else if (ev.key === 'Escape') { ev.preventDefault(); setEditing(false); } }}
+          onBlur={() => setEditing(false)} />
+        <span class="hint cx-edit-hint">{hint()}. Enter writes it, Escape leaves it.</span>
+      </span>
+    }>
+      <Show when={props.place} fallback={<EntryShown e={props.e} d={props.d} />}>
+        <button class="cx-entry-btn" data-testid="cx-entry-edit" title={`${isZero(props.e) ? '0' : props.e}: click to edit`} onClick={open}>
+          <EntryShown e={props.e} d={props.d} />
+        </button>
+      </Show>
+    </Show>
+  );
+}
+
+function EntryShown(props: { e: EntryText; d?: DisplayJ }) {
   const drawn = () => (props.e == null ? undefined : props.d?.entries?.[props.e]);
   return (
     <Show when={!isZero(props.e)} fallback={<span class="hint">0</span>}>
@@ -183,7 +236,7 @@ function Entry(props: { e: EntryText; d?: DisplayJ }) {
 }
 
 /** A matrix with its rows labelled by the target summands and its columns by the source ones. */
-function MatrixView(props: { m?: EntryText[][]; label: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[] }) {
+function MatrixView(props: { m?: EntryText[][]; label: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit }) {
   const rows = () => props.m ?? [];
   const heads = () => !!(props.src?.length === rows()[0]?.length && props.tgt?.length === rows().length);
   return (
@@ -193,7 +246,7 @@ function MatrixView(props: { m?: EntryText[][]; label: string; d?: DisplayJ; src
           <thead><tr><th /><For each={props.src}>{(s) => <th><Proj s={s} d={props.d} /></th>}</For></tr></thead>
         </Show>
         <tbody>
-          <For each={rows()}>{(r, i) => <tr><Show when={heads()}><th><Proj s={props.tgt![i()]} d={props.d} /></th></Show><For each={r}>{(e) => <td><Entry e={e} d={props.d} /></td>}</For></tr>}</For>
+          <For each={rows()}>{(r, i) => <tr><Show when={heads()}><th><Proj s={props.tgt![i()]} d={props.d} /></th></Show><For each={r}>{(e, j) => <td><Entry e={e} d={props.d} place={place(props, i(), j())} /></td>}</For></tr>}</For>
         </tbody>
       </table>
     </Show>
@@ -240,26 +293,37 @@ const dimsLine = (ds?: Dims[]) => (ds ?? []).map((d) => `${d.dimensions} at ${d.
  * An arrow with its map: a 1×1 matrix is drawn on the arrow itself; a larger one is a button
  * (`2×3`) that opens the matrix, its rows and columns labelled by the summands they belong to.
  */
-function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[] }) {
+function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit }) {
   const [open, setOpen] = createSignal(false);
-  const rows = () => props.m?.length ?? 0;
-  const cols = () => props.m?.[0]?.length ?? 0;
+  // an editable map that is not written down is zero, of the size of its summands
+  const m = () => props.m ?? (props.edit && props.src?.length && props.tgt?.length ? props.tgt.map(() => props.src!.map(() => null as EntryText)) : undefined);
+  const rows = () => m()?.length ?? 0;
+  const cols = () => m()?.[0]?.length ?? 0;
   const single = () => rows() === 1 && cols() === 1;
-  const nonzero = () => (props.m ?? []).flat().filter((e) => !isZero(e)).length;
+  const nonzero = () => (m() ?? []).flat().filter((e) => !isZero(e)).length;
+  const sub = () => ({ ...props, m: m() });
   return (
     <div class="cx-arrow">
-      <Show when={props.m && rows() && cols()} fallback={<span class="cx-matrix-none" />}>
-        <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={props.m![0][0]} d={props.d} /></div>}>
+      <Show when={m() && rows() && cols()} fallback={<span class="cx-matrix-none" />}>
+        <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={m()![0][0]} d={props.d} place={place(sub(), 0, 0)} /></div>}>
           <button class="cx-matrix-chip ghost" aria-expanded={open()} data-testid="cx-matrix-toggle" onClick={() => setOpen(!open())}
             title={open() ? 'Hide the matrix' : 'Show the matrix: rows are the summands of the target, columns those of the source'}>
             {rows()}×{cols()} matrix, {nonzero()} nonzero {open() ? '▴' : '▾'}
           </button>
-          <Show when={open()}><MatrixView m={props.m} label={props.label} d={props.d} src={props.src} tgt={props.tgt} /></Show>
+          <Show when={open()}><MatrixView m={m()} label={props.label} d={props.d} src={props.src} tgt={props.tgt} edit={props.edit} /></Show>
         </Show>
       </Show>
       <div class="cx-shaft" aria-hidden="true">{props.name ? <span class="cx-name">{props.name}</span> : null}⟶</div>
     </div>
   );
+}
+
+/** An editable map: which one it is, and where its edits go. */
+interface MapEdit { ref: MapRef; onEdit: (e: EntryEdit) => void }
+
+function place(p: { m?: EntryText[][]; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit }, row: number, col: number): EntryPlace | undefined {
+  if (!p.edit || !p.m) return undefined;
+  return { ref: p.edit.ref, row, col, rows: p.m.length, cols: p.m[0]?.length ?? 0, src: p.src?.[col], tgt: p.tgt?.[row], onEdit: p.edit.onEdit };
 }
 
 function Failures(props: { fs?: FailureJ[]; count?: number }) {
@@ -294,6 +358,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
   const failureCount = () => (resolves() ? res()?.failure_count : props.r.check?.failure_count);
   const act = (a: ComplexAction) => props.onAction?.(a);
   const busy = () => !!props.busy;
+  const editable = (ref: () => MapRef): MapEdit | undefined => (props.onAction ? { ref: ref(), onEdit: (e) => act({ edit: e }) } : undefined);
   return (
     <div class="cx" data-testid="complex-view">
       <Show when={oneDim()} fallback={<MultiView c={c()} d={props.r.display} />}>
@@ -301,14 +366,16 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
           <For each={terms()}>
             {(t, i) => (
               <span class="cx-step">
-                <Show when={i() > 0}><Arrow m={diff(at(terms()[i() - 1]))} label={`differential from ${posText(at(terms()[i() - 1]))}`} d={d()} src={terms()[i() - 1].summands} tgt={t.summands} /></Show>
+                <Show when={i() > 0}><Arrow m={diff(at(terms()[i() - 1]))} label={`differential from ${posText(at(terms()[i() - 1]))}`} d={d()} src={terms()[i() - 1].summands} tgt={t.summands}
+                  edit={editable(() => ({ map: 'differential', from: at(terms()[i() - 1]), axis: 0 }))} /></Show>
                 <Term t={t} d={d()} homology={resolves() ? undefined : hom(at(t))} />
               </span>
             )}
           </For>
           <Show when={resolves()}>
             <span class="cx-step">
-              <Arrow m={resolves()!.augmentation} label="the augmentation ε" name="ε " d={d()} src={terms().at(-1)?.summands} tgt={moduleGens()} />
+              <Arrow m={resolves()!.augmentation} label="the augmentation ε" name="ε " d={d()} src={terms().at(-1)?.summands} tgt={moduleGens()}
+                edit={editable(() => ({ map: 'augmentation' }))} />
               <div class="cx-term cx-module" data-testid="cx-module"><div class="cx-summands"><span class="cx-summand">{moduleName()}</span></div><div class="cx-pos hint">module</div></div>
             </span>
           </Show>
@@ -393,7 +460,8 @@ export function ModuleView(props: { r: ModuleResult; name?: string; head?: boole
       <div class="cx-diagram" role="figure" aria-label={`the presentation of ${props.name ?? 'the module'}`}>
         <Show when={rels().length}>
           <Term t={{ at: 1, summands: rels() }} d={props.r.display} caption="relations" />
-          <Arrow m={m().matrix} label="the presentation matrix" name="φ " d={props.r.display} src={rels()} tgt={gens()} />
+          <Arrow m={m().matrix} label="the presentation matrix" name="φ " d={props.r.display} src={rels()} tgt={gens()}
+            edit={props.onAction ? { ref: { map: 'presentation' }, onEdit: (e) => props.onAction!({ edit: e }) } : undefined} />
         </Show>
         <Term t={{ at: 0, summands: gens() }} d={props.r.display} caption="generators" />
         <Arrow label="" />
@@ -421,4 +489,31 @@ export function ModuleView(props: { r: ModuleResult; name?: string; head?: boole
       </Show>
     </div>
   );
+}
+
+/** The value of a complex or module with one matrix entry replaced; a missing map or row is
+ *  filled with zeros first, so an entry of a zero map can be written. Pure, for the cell tools. */
+export function applyEntryEdit(value: Record<string, unknown>, e: EntryEdit): Record<string, unknown> {
+  const next = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+  const setIn = (m: EntryText[][] | undefined): EntryText[][] => {
+    const out: EntryText[][] = Array.from({ length: Math.max(e.rows, m?.length ?? 0) }, (_, i) =>
+      Array.from({ length: Math.max(e.cols, m?.[i]?.length ?? 0) }, (_, j) => m?.[i]?.[j] ?? null));
+    out[e.row][e.col] = e.text;
+    return out;
+  };
+  const ref = e.ref;
+  if (ref.map === 'presentation') next.matrix = setIn(next.matrix as EntryText[][] | undefined);
+  else if (ref.map === 'augmentation') {
+    const r = (next.resolves ?? {}) as Record<string, unknown>;
+    r.augmentation = setIn(r.augmentation as EntryText[][] | undefined);
+    next.resolves = r;
+  } else {
+    const same = (p: number | number[]) => JSON.stringify(Array.isArray(p) ? p : [p]) === JSON.stringify(Array.isArray(ref.from) ? ref.from : [ref.from]);
+    const ds = ((next.differentials ?? []) as { from: number | number[]; axis?: number; matrix?: EntryText[][] }[]);
+    let d = ds.find((x) => same(x.from) && (x.axis ?? 0) === ref.axis);
+    if (!d) { d = { from: ref.from, axis: ref.axis, matrix: [] }; ds.push(d); }
+    d.matrix = setIn(d.matrix);
+    next.differentials = ds;
+  }
+  return next;
 }

@@ -184,7 +184,11 @@ their positions and `ε` into `L`. Each projective reads as its strands, `P(2i�
 map between single summands is drawn on its arrow as the diagram of its element (at most four
 terms, then "+ n more"); a larger matrix shows its size and number of nonzero entries and opens,
 on a click, into a table with the source summands as columns and the target summands as rows
-(this display comes from the engine as the cell's `display` field). The cell says whether it is a resolution
+(this display comes from the engine as the cell's `display` field). Clicking an entry, of a
+differential, of `ε`, or of a presentation matrix `φ`, edits it in place: the field names the
+source and target summands and the degree the entry must have (`s − t` from `P(a)⟨s⟩` to
+`P(b)⟨t⟩`), Enter rewrites the cell's text (empty or `0` writes zero), and the engine checks the
+result again. Editing a `{"head": …}` module writes it out as an explicit presentation. The cell says whether it is a resolution
 yet and what is left to cover, and offers **Cover the kernel** (one `resolution.extend`),
 **Minimize** (`complex.gauss`), **Copy TikZ**, and **Copy JSON**. Each button rewrites the cell's
 text, so undo, history, and branches work as for any edit, and the cell keeps naming `L`, so

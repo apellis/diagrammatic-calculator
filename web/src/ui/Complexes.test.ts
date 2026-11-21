@@ -4,7 +4,7 @@ vi.mock('solid-js/web', async (original) => ({
   ...await original<typeof import('solid-js/web')>(),
   delegateEvents: () => {},
 }));
-import { complexCellText, readStructured, structuredHead } from './Complexes';
+import { applyEntryEdit, complexCellText, readStructured, structuredHead } from './Complexes';
 
 it('reads a complex or module cell: name, JSON, and the options after it', () => {
   const r = readStructured('complex R := {"terms": [{"at": 0, "summands": [{"object": "i@1"}]}], "differentials": []} cap=4');
@@ -32,4 +32,15 @@ it('writes back a tool result without the defaults, still naming the module cell
   } as never, 'L', 'cap=4');
   expect(text).toBe('complex R := {"terms":[{"at":0,"summands":[{"object":"i@1"}]}],"differentials":[],"resolves":{"module":"L"}} cap=4');
   expect(readStructured(text)?.value.resolves?.module).toBe('L');
+});
+
+it('an entry edit fills a missing map with zeros and leaves the rest alone', () => {
+  const c = { terms: [{ at: -1, summands: [{ object: 'a' }] }, { at: 0, summands: [{ object: 'b' }, { object: 'c' }] }], differentials: [] };
+  const n = applyEntryEdit(c, { ref: { map: 'differential', from: -1, axis: 0 }, row: 1, col: 0, rows: 2, cols: 1, text: 'x' });
+  expect(n.differentials).toEqual([{ from: -1, axis: 0, matrix: [[null], ['x']] }]);
+  expect(c.differentials).toEqual([]);
+  const m = applyEntryEdit({ generators: [], relations: [], matrix: [['y', 'z']] }, { ref: { map: 'presentation' }, row: 0, col: 1, rows: 1, cols: 2, text: null });
+  expect(m.matrix).toEqual([['y', null]]);
+  const r = applyEntryEdit({ resolves: { module: 'L', augmentation: [['1']] } }, { ref: { map: 'augmentation' }, row: 0, col: 0, rows: 1, cols: 1, text: '2' });
+  expect(r.resolves).toEqual({ module: 'L', augmentation: [['2']] });
 });
