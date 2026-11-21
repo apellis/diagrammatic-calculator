@@ -4,6 +4,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import type { Summand } from '../engine/ops.gen';
 import { Typeset } from './Typeset';
+import { DeformPanel, useDeform, type DeformUnknown } from './Deform';
 
 export interface SummandJ { object: string; shift?: number }
 interface TermJ { at: number | number[]; summands: SummandJ[] }
@@ -68,7 +69,8 @@ export type MapRef = { map: 'differential'; from: number | number[]; axis: numbe
 /** A new value for one entry of a map: its row (target summand) and column (source summand). */
 export interface EntryEdit { ref: MapRef; row: number; col: number; rows: number; cols: number; text: string | null }
 /** What the tools of a complex or module cell can do, including writing one entry of a map. */
-export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve' | 'cone' | { edit: EntryEdit } | { pane: MapRef };
+export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve' | 'cone' | { edit: EntryEdit } | { pane: MapRef }
+  | { deform: DeformUnknown[] } | { deformApply: 'new' | 'replace' };
 
 const asPos = (p: number | number[]) => JSON.stringify(Array.isArray(p) ? p : [p]);
 /** Whether two references name the same map. */
@@ -459,6 +461,13 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
   };
   const editable = (ref: () => MapRef): MapEdit | undefined => (props.onAction ? { ref: ref(), onEdit: (e) => act({ edit: e }), onPane: () => act({ pane: ref() }) } : undefined);
   const diffRef = (p: number): MapRef => ({ map: 'differential', from: p, axis: 0 });
+  // the deformation solver: its panel, and the obstruction of its last run marked on the arrows
+  const deform = useDeform();
+  const deformOpen = () => !!props.name && !!deform?.open(props.name);
+  const deformRun = () => (props.name ? deform?.run(props.name) : undefined);
+  const deformFailures = () => (deformRun() && deformRun()!.input === JSON.stringify(c()) ? deformRun()!.result.failures : []);
+  const flagFs = () => [...(failures() ?? []), ...deformFailures()];
+  const diffs = () => terms().slice(1).map((t, i) => ({ from: at(terms()[i]), rows: t.summands.length, cols: terms()[i].summands.length }));
   return (
     <div class="cx" data-testid="complex-view">
       <ErrorLine error={props.error} />
@@ -468,7 +477,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
             {(t, i) => (
               <span class="cx-step">
                 <Show when={i() > 0}><Arrow m={diff(at(terms()[i() - 1]))} label={`differential from ${posText(at(terms()[i() - 1]))}`} d={d()} src={terms()[i() - 1].summands} tgt={t.summands}
-                  edit={editable(() => diffRef(at(terms()[i() - 1])))} flags={flagsFor(failures(), diffRef(at(terms()[i() - 1])))} /></Show>
+                  edit={editable(() => diffRef(at(terms()[i() - 1])))} flags={flagsFor(flagFs(), diffRef(at(terms()[i() - 1])))} /></Show>
                 <Term t={t} d={d()} homology={resolves() ? undefined : hom(at(t))} />
               </span>
             )}
@@ -476,7 +485,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
           <Show when={resolves()}>
             <span class="cx-step">
               <Arrow m={resolves()!.augmentation} label="the augmentation ε" name="ε " d={d()} src={terms().at(-1)?.summands} tgt={moduleGens()}
-                edit={editable(() => ({ map: 'augmentation' }))} flags={flagsFor(failures(), { map: 'augmentation' })} />
+                edit={editable(() => ({ map: 'augmentation' }))} flags={flagsFor(flagFs(), { map: 'augmentation' })} />
               <div class="cx-term cx-module" data-testid="cx-module"><div class="cx-summands"><span class="cx-summand">{moduleName()}</span></div><div class="cx-pos hint">module</div></div>
             </span>
           </Show>
@@ -534,10 +543,19 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
               Minimize
             </button>
           </Show>
+          <Show when={oneDim() && deform && props.name}>
+            <button classList={{ primary: deformOpen() }} aria-pressed={deformOpen()} onClick={() => deform!.setOpen(props.name!, !deformOpen())} data-testid="cx-deform"
+              title="Correct entries of the differentials order by order in h so that d² = 0 (needs truncate=h^N in the context)">
+              Deform…
+            </button>
+          </Show>
           <Show when={oneDim()}><button class="ghost" disabled={busy()} onClick={() => act('tikz')}>Copy TikZ</button></Show>
           <button class="ghost" disabled={busy()} onClick={() => act('json')} title="The complex as JSON, for Python or the command line">Copy JSON</button>
           <Show when={props.busy}><span class="hint" role="status"><span class="spinner" aria-hidden="true" /> {props.busy}</span></Show>
         </Tools>
+        <Show when={deformOpen() && oneDim()}>
+          <DeformPanel name={props.name!} complex={c()} diffs={diffs()} onAction={act} busy={busy()} onClose={() => deform!.setOpen(props.name!, false)} />
+        </Show>
       </Show>
     </div>
   );

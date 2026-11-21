@@ -142,6 +142,7 @@ export function HelpPage(props: { from?: string }) {
           ['chainmap F := {"source": "C", "target": "D", "map": […]}', <>a map of complexes, checked for <code>d F = F d</code>; Take the cone adds its cone</>],
         ]} />
         <p>Click an entry of a map to change it, or double-click the map to open it in a pane beside the cell, with the diagram editor for each entry; <strong>✕ Close</strong> or Escape closes it. Edits are kept even when the cell stops checking: the failing maps and entries are marked in red and listed, so you can pass through invalid steps on the way to a valid one, and Undo goes back one edit at a time.</p>
+        <p>With <code>truncate=h^N</code> (and <code>hdeg=d</code>) in the context, coefficients are taken modulo <code>h^(N+1)</code>. <strong>Deform…</strong> on a complex lets you tick the entries of its differentials that may change and solves <code>d² = 0</code> one order of <code>h</code> at a time: it shows each order's correction and the freedom left, or the order where it is obstructed, and adds the corrected complex as a new cell.</p>
       </section>
 
       <section id="help-files">

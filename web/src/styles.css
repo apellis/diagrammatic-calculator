@@ -676,6 +676,18 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .cx-failures { margin: 0; padding-left: 18px; font-size: 13px; }
 .cx-multi ul { margin: 4px 0; padding-left: 18px; }
 .cx-tools { gap: 6px; }
+/* The deformation solver of a complex cell: the entries that may change, then the result by order. */
+.dx { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding: 8px; border: 1px solid var(--border, var(--muted)); border-radius: 6px; font-size: 13px; }
+.dx-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.dx-diff { margin: 0; padding: 4px 8px; border: 1px solid var(--border, var(--muted)); border-radius: 4px; }
+.dx-diff legend { font-size: 12px; padding: 0 3px; }
+.dx-grid { border-collapse: collapse; }
+.dx-grid td { padding: 1px 2px; }
+.dx-result { display: flex; flex-direction: column; gap: 4px; }
+.dx-orders, .dx-entries { margin: 0; padding-left: 18px; }
+.dx-entries { display: inline; padding-left: 0; list-style: none; }
+.dx-entries li { display: inline; }
+.dx-entries li + li::before { content: '; '; }
 /* Checks that fail are marked where they fail; the entries themselves are always kept. */
 .cx-arrow.cx-bad .cx-shaft, .cx-arrow.cx-bad .cx-name { color: var(--bad); }
 .cx-arrow.cx-bad .cx-matrix { outline: 1px solid var(--bad); outline-offset: 2px; border-radius: 3px; }

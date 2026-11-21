@@ -9,6 +9,7 @@ import { exportDch, exportDcw, parseDcw, fileName } from '../doc/dcw';
 import { Cell, TEMPLATES } from './Cell';
 import { applyEntryEdit, complexCellText, fallbackRead, mapOf, readStructured, type ComplexAction, type ComplexJ, type MapRef, type StructuredRead } from './Complexes';
 import { MapPane } from './MapPane';
+import { createDeformStore, DeformContext, type DeformResult } from './Deform';
 import { NewCell as CellComposer } from './NewCell';
 import { DiagramStart } from './DiagramStart';
 import { Outline } from './Outline';
@@ -743,6 +744,7 @@ function DocView(props: {
   // The tools of complex and module cells: each takes one step and writes it back into the
   // document as an ordinary edit, so it can be undone, branched, and read like any other.
   const [complexBusy, setComplexBusy] = createSignal<{ id: string; what: string } | null>(null);
+  const deformStore = createDeformStore(context);
   // One map of a complex, chain map or module cell, open in a pane in the cell's own row.
   const [mapPane, setMapPane] = createSignal<{ id: string; ref: MapRef } | null>(null);
   /** A complex cell by name, as computed or else as written, for drawing a chain map whose cell
@@ -777,7 +779,7 @@ function DocView(props: {
     // an entry edit works on the cell as written whenever the engine's value is not a fresh one
     // (it could not read the cell, or it is still checking the last edit), so no edit is lost
     const current = v?.status === 'ok' && st?.status === 'fresh';
-    if (typeof action === 'object' && !current) {
+    if (typeof action === 'object' && 'edit' in action && !current) {
       if (readOnly()) return refuse();
       const e = action.edit;
       const note = `edited an entry in ${r.name}`;
@@ -786,6 +788,7 @@ function DocView(props: {
       return setMessage(note[0].toUpperCase() + note.slice(1) + '.');
     }
     if (v?.status !== 'ok') return;
+    if (typeof action === 'object' && ('deform' in action || 'deformApply' in action)) return deformAction(id, r, v.complex ?? {}, action);
     if (action === 'json') {
       const out = r.kind === 'complex' ? v.complex : r.kind === 'chainmap' ? { source: v.source, target: v.target, map: v.map } : v.module;
       await navigator.clipboard?.writeText(JSON.stringify(out, null, 2));
@@ -859,6 +862,44 @@ function DocView(props: {
       const empty = action !== 'gauss' && res.added && !res.added.summands.length;
       doc.updateCell(id, complexCellText(r.name, next, named, r.tail), note);
       setMessage(empty ? 'The kernel is zero: the resolution is complete.' : note[0].toUpperCase() + note.slice(1) + '.');
+    } finally {
+      setComplexBusy(null);
+    }
+  };
+
+  /** The deformation solver of a complex cell: a run (kept by the cell's name), or its result applied. */
+  const deformAction = async (id: string, r: NonNullable<ReturnType<typeof readStructured>>, complex: Record<string, unknown>, action: ComplexAction) => {
+    if (typeof action !== 'object' || complexBusy()) return;
+    const { name, tail } = r;
+    const named = typeof (r.value.resolves?.module) === 'string' ? (r.value.resolves!.module as string) : undefined;
+    if ('deformApply' in action) {
+      const run = deformStore.run(name);
+      if (!run || run.input !== JSON.stringify(complex)) return setMessage('Solve again: the complex changed since the last run.');
+      if (readOnly()) return refuse();
+      const upTo = run.result.solved_to_order;
+      if (action.deformApply === 'replace') {
+        doc.updateCell(id, complexCellText(name, run.result.complex, named, tail), `corrected ${name} through order ${upTo} in h`);
+        return setMessage(`Corrected ${name} through order ${upTo} in h; undo restores the differentials as written.`);
+      }
+      const taken = new Set(cells().map((x) => readStructured(x.text)?.name ?? /^\s*def\s+([^\s:]+)/.exec(x.text)?.[1]).filter(Boolean));
+      let fresh = `${name}_h`;
+      for (let k = 2; taken.has(fresh); k++) fresh = `${name}_h${k}`;
+      const nid = doc.addCell(complexCellText(fresh, run.result.complex, named, tail), cells().findIndex((x) => x.id === id) + 1);
+      focusCell(nid);
+      return setMessage(`Added ${fresh}, ${name} corrected through order ${upTo} in h.`);
+    }
+    if (!('deform' in action)) return;
+    setComplexBusy({ id, what: 'Solving order by order…' });
+    try {
+      const unknowns = action.deform.map((u) => ({ map: 'differential' as const, from: u.from, ...(u.row != null ? { row: u.row } : {}), ...(u.col != null ? { col: u.col } : {}) }));
+      const o = await engine.call('complex.deform', { context: termContext(), complex: complex as never, unknowns }, { lane: 'job' as const, timeoutMs: 120_000 });
+      if (o.status === 'cancelled') return setMessage('Stopped.');
+      if (o.status === 'exploded') return setMessage(`${o.message} The command-line tool has no time limit.`);
+      const res = o.response as { status: string; message?: string } & Partial<DeformResult>;
+      if (res.status !== 'ok') return setMessage(res.message ?? 'The solver failed.');
+      deformStore.setRun(name, { input: JSON.stringify(complex), unknowns: action.deform, result: res as DeformResult });
+      const f = res.failures?.[0];
+      setMessage(res.solved ? `Solved d² = 0 through order ${res.solved_to_order} in h.` : f?.order === 0 ? 'The h-free part is not a complex, so nothing can be solved.' : `Obstructed at order ${f?.order}: no correction of the chosen entries works there.`);
     } finally {
       setComplexBusy(null);
     }
@@ -1072,7 +1113,7 @@ function DocView(props: {
   const defaultBranchName = () => `what if ${main.branches.size + 1}`;
 
   return (
-    <>
+    <DeformContext.Provider value={deformStore}>
       <header class="topbar">
         {/* inside a canvas, back means the document; from the document, the list of documents */}
         <Show when={canvas()} fallback={<button class="ghost" title="All documents" aria-label="All documents" onClick={() => (location.hash = '#/')}>←</button>}>
@@ -1374,7 +1415,7 @@ function DocView(props: {
           </Dialog>
         )}
       </Show>
-    </>
+    </DeformContext.Provider>
   );
 }
 

@@ -144,6 +144,19 @@ resolves nothing), **Minimize** (`complex.gauss`), **Copy TikZ** (`complex.rende
 **Copy JSON**. The Euler characteristic is shown under the status line. Cones, Hom complexes,
 shifts, totalization, and the other operations of the table below are tools of the AI sidebar.
 
+**Deform…** opens the deformation solver (`complex.deform`, see "Parameters and deformations"
+below) under a one-dimensional complex, also when the complex fails its checks. Without
+`truncate=h^N` in the context it says what to add. Otherwise it shows a grid of check boxes for
+each differential (rows are target summands, columns source summands, numbered from 0); tick the
+entries that may be corrected, or the box by a differential's name for all of it, and press
+**Solve to order N**. The result says whether every order was solved, lists the correction
+`h^m X_m` chosen at each order and the dimension of the freedom there (with a basis under a
+disclosure), or names the order where the equations have no solution; the two differentials of that
+composite get red arrows. **Add the corrected complex as a new cell** adds `C_h` below and leaves
+the cell as it is; **Write into this cell** replaces its differentials by the corrected ones, as
+one step of the history. A result computed before the complex last changed is labelled so and
+cannot be applied.
+
 ### Chain maps
 
 `chainmap F := {"source": "C", "target": "D", "map": […]}` is drawn as a ladder (see "Chain maps"
@@ -365,6 +378,7 @@ in the answer.
 - **M5** (done): modules by presentations, `P/rad P`, and resolutions of a module built step by
   step, with module and complex cells in workspaces, their web views, and the step tools on them.
 - **P1** (done): coefficients in `k[h]/(h^{N+1})` for every complex operation (`truncate`, `hdeg`).
-- **T1** (done): `complex.deform`, unknown blocks solved order by order with freedom and obstructions.
+- **T1** (done): `complex.deform`, unknown blocks solved order by order with freedom and obstructions,
+  and the **Deform…** tool on complex cells.
 - Later: spectral sequences of multicomplexes, and Rickard and
   Chuang–Rouquier complexes (bounded).
