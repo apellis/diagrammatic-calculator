@@ -711,22 +711,30 @@ pub fn matrix_json<A: Additive>(a: &A, m: &Matrix<A::Mor>) -> Result<Value> {
     Ok(Value::Array(rows))
 }
 
-/// `g · f` (first `f`, then `g`), where `f` has `inner` rows and `cols` columns. The sizes are
-/// explicit, since a matrix with no rows does not record its number of columns.
+/// `g · f` (first `f`, then `g`), with `cols` columns. The inner size is the number of rows of
+/// `f`; `cols` is explicit, since a matrix with no rows does not record its number of columns.
 pub fn mat_mul<A: Additive>(
     a: &A,
     g: &Matrix<A::Mor>,
     f: &Matrix<A::Mor>,
-    inner: usize,
     cols: usize,
 ) -> Matrix<A::Mor> {
+    // the inner dimension is the number of rows of `f`, never passed by the caller: a wrong
+    // inner size silently drops summands of the middle object
+    let inner = f.len();
     g.iter()
         .map(|grow| {
+            assert_eq!(
+                grow.len(),
+                inner,
+                "mat_mul: g has {} columns but f has {inner} rows",
+                grow.len()
+            );
             (0..cols)
                 .map(|j| {
                     let mut acc = a.zero();
-                    for k in 0..inner {
-                        acc = a.add(&acc, &a.compose(&grow[k], &f[k][j]));
+                    for (gk, frow) in grow.iter().zip(f) {
+                        acc = a.add(&acc, &a.compose(gk, &frow[j]));
                     }
                     acc
                 })
@@ -915,7 +923,7 @@ pub fn check_complex<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<
             }
             let d1 = c.diff(a, axis, &p);
             let d2 = c.diff(a, axis, &q);
-            let dd = mat_mul(a, &d2, &d1, c.at(&q).len(), c.at(&p).len());
+            let dd = mat_mul(a, &d2, &d1, c.at(&p).len());
             let loc = format!("d ∘ d from {}{}", fmt_pos(&p), axis_name(c, axis));
             let maps = [diff_ref(&p, axis), diff_ref(&q, axis)];
             check_zero(a, &dd, "d^2", &loc, &maps, &mut out)?;
@@ -926,14 +934,8 @@ pub fn check_complex<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<
                     continue;
                 }
                 // d_b(p + e_a) d_a(p) ∓ d_a(p + e_b) d_b(p)
-                let x = mat_mul(a, &c.diff(a, b, &q), &d1, c.at(&q).len(), c.at(&p).len());
-                let y = mat_mul(
-                    a,
-                    &c.diff(a, axis, &pb),
-                    &c.diff(a, b, &p),
-                    c.at(&pb).len(),
-                    c.at(&p).len(),
-                );
+                let x = mat_mul(a, &c.diff(a, b, &q), &d1, c.at(&p).len());
+                let y = mat_mul(a, &c.diff(a, axis, &pb), &c.diff(a, b, &p), c.at(&p).len());
                 let sign = match c.conv.squares {
                     Squares::Commute => -1,
                     Squares::Anticommute => 1,
@@ -1039,8 +1041,8 @@ pub fn check_chain_map<A: Additive>(
             }
             let fp = component(a, f, &p, d.at(&p).len(), c.at(&p).len());
             let fq = component(a, f, &q, d.at(&q).len(), c.at(&q).len());
-            let x = mat_mul(a, &d.diff(a, axis, &p), &fp, d.at(&p).len(), c.at(&p).len());
-            let y = mat_mul(a, &fq, &c.diff(a, axis, &p), c.at(&q).len(), c.at(&p).len());
+            let x = mat_mul(a, &d.diff(a, axis, &p), &fp, c.at(&p).len());
+            let y = mat_mul(a, &fq, &c.diff(a, axis, &p), c.at(&p).len());
             let s = mat_add(a, &x, &y, -1);
             let loc = format!("d F − F d from {}{}", fmt_pos(&p), axis_name(c, axis));
             check_zero(
@@ -1112,10 +1114,10 @@ pub fn check_homotopy<A: Additive>(
         );
         // d_D(back) h(p) : C(p) → D(back) → D(p)
         let hp = component(a, h, &p, d.at(&back).len(), cols);
-        let x = mat_mul(a, &d.diff(a, 0, &back), &hp, d.at(&back).len(), cols);
+        let x = mat_mul(a, &d.diff(a, 0, &back), &hp, cols);
         // h(fwd) d_C(p) : C(p) → C(fwd) → D(p)
         let hf = component(a, h, &fwd, rows, c.at(&fwd).len());
-        let y = mat_mul(a, &hf, &c.diff(a, 0, &p), c.at(&fwd).len(), cols);
+        let y = mat_mul(a, &hf, &c.diff(a, 0, &p), cols);
         let s = mat_add(a, &mat_add(a, &fg, &x, -1), &y, -1);
         let loc = format!("f − g − (d h + h d) at {}", fmt_pos(&p));
         check_zero(a, &s, "homotopy", &loc, &[], &mut out)?;

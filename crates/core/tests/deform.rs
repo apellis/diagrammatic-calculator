@@ -222,3 +222,27 @@ fn deform_corrects_against_h_from_a_composite() {
     );
     assert_eq!(c2["holds"], true, "{c2:#}");
 }
+
+#[test]
+fn deform_sees_every_summand_of_the_middle_term() {
+    // P → P ⊕ P → P with d₋₂ = (0, 1)ᵀ and d₋₁ = (0, 1): d² = 1 through the second summand of
+    // the middle term, so the h-free part is not a complex. The coefficients of d² were once
+    // computed with the inner dimension of the product taken from the target (one summand), which
+    // dropped the second summand and reported the complex solved.
+    let ctx = "klrw type=A1 ring=QQ red=\"i@0\" quotient=cyclotomic truncate=h^2 hdeg=0";
+    let s = |at: i64, n: usize| json!({ "at": at, "summands": vec![json!({ "object": "i@1", "shift": 0 }); n] });
+    let c = json!({
+        "terms": [s(-2, 1), s(-1, 2), s(0, 1)],
+        "differentials": [
+            { "from": -2, "matrix": [[null], ["e(i@1)"]] },
+            { "from": -1, "matrix": [[null, "e(i@1)"]] },
+        ],
+    });
+    let v = call("complex.check", json!({ "context": ctx, "complex": c }));
+    assert_eq!(v["holds"], false, "{v:#}");
+    let v = call("complex.deform", json!({ "context": ctx, "complex": c }));
+    assert_eq!(v["solved"], false, "{v:#}");
+    assert_eq!(v["solved_to_order"], Value::Null, "{v:#}");
+    assert_eq!(v["failures"][0]["condition"], "d^2", "{v:#}");
+    assert_eq!(v["failures"][0]["order"], 0, "{v:#}");
+}

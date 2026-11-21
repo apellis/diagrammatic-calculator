@@ -451,7 +451,7 @@ pub fn hom_cohomology<A: Additive>(
                 let mut col = vec![k.zero(); nt];
                 // d_D f : C(p) → D(q + step), at the target component p
                 if let Some(&o) = toff.get(p) {
-                    let x = mat_mul(a, &d.diff(a, 0, &q), &f, d.at(&q).len(), c.at(p).len());
+                    let x = mat_mul(a, &d.diff(a, 0, &q), &f, c.at(p).len());
                     let th = &tgt.iter().find(|(pp, _)| pp == p).unwrap().1;
                     for (t, v) in coords_of(a, th, &x)?.into_iter().enumerate() {
                         col[o + t] = k.add(&col[o + t], &v);
@@ -462,7 +462,7 @@ pub fn hom_cohomology<A: Additive>(
                 if let Some(&o) = toff.get(&pb)
                     && !c.at(&pb).is_empty()
                 {
-                    let y = mat_mul(a, &f, &c.diff(a, 0, &pb), c.at(p).len(), c.at(&pb).len());
+                    let y = mat_mul(a, &f, &c.diff(a, 0, &pb), c.at(&pb).len());
                     let y = if sign < 0 { negate(a, &y) } else { y };
                     let th = &tgt.iter().find(|(pp, _)| *pp == pb).unwrap().1;
                     for (t, v) in coords_of(a, th, &y)?.into_iter().enumerate() {

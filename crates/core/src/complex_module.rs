@@ -663,7 +663,7 @@ pub fn check_resolution<A: Additive>(
     let cm = c.at(&prev0).to_vec();
     let d0 = c.diff(a, 0, &prev0);
     if !cm.is_empty() {
-        let ed = mat_mul(a, &r.aug, &d0, m.gens.len(), cm.len());
+        let ed = mat_mul(a, &r.aug, &d0, cm.len());
         let lands = if m.rels.is_empty() {
             let mut fs = Vec::new();
             check_zero(a, &ed, "augmentation", "ε ∘ d", &[], &mut fs)?;

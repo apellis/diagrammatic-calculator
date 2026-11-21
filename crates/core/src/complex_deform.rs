@@ -183,7 +183,7 @@ pub fn deform<A: ParamSplit>(
         let mut out = zero_matrix(a, nr, np);
         for x in 0..=m {
             for y in 0..=m - x {
-                let dd = mat_mul(a, &parts[q][y], &parts[p][x], nr, np);
+                let dd = mat_mul(a, &parts[q][y], &parts[p][x], np);
                 for (i, row) in dd.iter().enumerate() {
                     for (j, f) in row.iter().enumerate() {
                         let k = m - x - y;

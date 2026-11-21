@@ -387,7 +387,7 @@ pub fn solve_chain_map<A: Additive>(
                     right: None,
                 });
             } else if let Some(fp) = fixed.get(p) {
-                let x = mat_mul(a, &dd, fp, d.at(p).len(), cp.len());
+                let x = mat_mul(a, &dd, fp, cp.len());
                 rhs = mat_add(a, &rhs, &x, -1);
             }
             if let Some(&u) = index.get(&q) {
@@ -398,7 +398,7 @@ pub fn solve_chain_map<A: Additive>(
                     right: Some(dc.clone()),
                 });
             } else if let Some(fq) = fixed.get(&q) {
-                let y = mat_mul(a, fq, &dc, c.at(&q).len(), cp.len());
+                let y = mat_mul(a, fq, &dc, cp.len());
                 rhs = mat_add(a, &rhs, &y, 1);
             }
             eqs.push(Equation {
@@ -496,7 +496,7 @@ pub fn radical_witness<A: Additive>(
     for (i, j, b) in &back.basis {
         let mut g = zero_matrix(a, nx, ny);
         g[*i][*j] = b.clone();
-        let gm = mat_mul(a, &g, m, ny, nx);
+        let gm = mat_mul(a, &g, m, nx);
         if red.insert(coords_of(a, &end, &gm)?) {
             gens.push((g, gm));
         }
@@ -514,7 +514,7 @@ pub fn radical_witness<A: Additive>(
         let mut next = Vec::new();
         for l in &lgens {
             for s in &power {
-                let p = mat_mul(a, l, s, nx, nx);
+                let p = mat_mul(a, l, s, nx);
                 if red.insert(coords_of(a, &end, &p)?) {
                     next.push(p);
                 }
@@ -562,7 +562,7 @@ fn is_nilpotent<A: Additive>(
         if v.iter().all(|c| k.is_zero(c)) {
             return Ok(true);
         }
-        p = mat_mul(a, &p, x, n, n);
+        p = mat_mul(a, &p, x, n);
     }
     Ok(false)
 }

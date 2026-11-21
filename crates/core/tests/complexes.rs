@@ -539,6 +539,31 @@ fn resolving_the_simple_module() {
 }
 
 #[test]
+fn augmentation_check_sees_every_summand_of_c0() {
+    // the free module P, resolved by P --(0, 1)ᵀ--> P ⊕ P with ε = (1, 1): ε ∘ d = 1 ≠ 0 through
+    // the second summand of C₀. The composite was once computed with the inner dimension taken
+    // from the generators of the module (one), which dropped that summand and found ε ∘ d = 0.
+    let p = || json!({ "object": "i@1", "shift": 0 });
+    let r = json!({
+        "terms": [
+            { "at": -1, "summands": [p()] },
+            { "at": 0, "summands": [p(), p()] },
+        ],
+        "differentials": [{ "from": -1, "matrix": [[null], ["e(i@1)"]] }],
+        "resolves": {
+            "module": { "generators": [p()] },
+            "augmentation": [["e(i@1)", "e(i@1)"]],
+        },
+    });
+    let v = call(
+        "resolution.check",
+        json!({ "context": CYC, "resolution": r }),
+    );
+    assert_eq!(v["holds"], false, "{v:#}");
+    assert_eq!(v["failures"][0]["condition"], "augmentation", "{v:#}");
+}
+
+#[test]
 fn resolving_a_projective_and_gauss_on_resolutions() {
     // P itself: C₀ = P is already a resolution
     let p = json!({ "generators": [{ "object": "i@1", "shift": 0 }] });
