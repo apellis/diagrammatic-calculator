@@ -60,6 +60,13 @@ pub enum CellBody {
         name: String,
         module: serde_json::Value,
     },
+    /// `chainmap name := {"source": …, "target": …, "map": […]}`: a map between two complexes,
+    /// each named by an earlier complex cell or written inline, in the JSON form of
+    /// `docs/complexes.md`. Its result says whether it commutes with the differentials.
+    ChainMap {
+        name: String,
+        map: serde_json::Value,
+    },
     /// `note """text"""`
     Note {
         text: String,
@@ -96,6 +103,7 @@ impl CellBody {
             CellBody::Check { .. } => Some("ck"),
             CellBody::Complex { .. } => Some("cx"),
             CellBody::Module { .. } => Some("md"),
+            CellBody::ChainMap { .. } => Some("cm"),
             CellBody::Note { .. } => Some("nt"),
             CellBody::Comment(_) | CellBody::Blank => None,
         }
@@ -213,7 +221,7 @@ fn parse_cell(
         }
     }
     let (line_body, id) = split_id(after)?;
-    if kw == "complex" || kw == "module" {
+    if kw == "complex" || kw == "module" || kw == "chainmap" {
         return parse_json_cell(kw, line_body, id);
     }
     let (body_text, options) = split_options(line_body);
@@ -294,6 +302,9 @@ fn parse_json_cell(kw: &str, body: &str, id: Option<String>) -> Result<Cell> {
     let usage = if kw == "module" {
         "a module is written module name := {\"generators\": […], \"relations\": […], \
          \"matrix\": […]}"
+    } else if kw == "chainmap" {
+        "a chain map is written chainmap name := {\"source\": \"C\", \"target\": \"D\", \
+         \"map\": [{\"at\": 0, \"matrix\": […]}, …]}"
     } else {
         "a complex is written complex name := {\"terms\": […], \"differentials\": […]}"
     };
@@ -326,6 +337,8 @@ fn parse_json_cell(kw: &str, body: &str, id: Option<String>) -> Result<Cell> {
             name,
             module: value,
         }
+    } else if kw == "chainmap" {
+        CellBody::ChainMap { name, map: value }
     } else {
         CellBody::Complex {
             name,
@@ -457,6 +470,7 @@ impl Cell {
             }
             CellBody::Complex { name, complex } => format!("complex {name} := {complex}"),
             CellBody::Module { name, module } => format!("module {name} := {module}"),
+            CellBody::ChainMap { name, map } => format!("chainmap {name} := {map}"),
             CellBody::Note { text } => format!("note \"\"\"{text}\"\"\""),
             CellBody::Comment(t) => format!("# {t}").trim_end().to_string(),
             CellBody::Blank => String::new(),
@@ -513,6 +527,7 @@ impl Cell {
             CellBody::Check { args, .. } => args.iter().for_each(|a| walk(a, &mut out)),
             CellBody::Complex { .. }
             | CellBody::Module { .. }
+            | CellBody::ChainMap { .. }
             | CellBody::Note { .. }
             | CellBody::Comment(_)
             | CellBody::Blank => {}

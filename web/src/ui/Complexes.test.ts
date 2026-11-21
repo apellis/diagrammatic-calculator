@@ -44,3 +44,13 @@ it('an entry edit fills a missing map with zeros and leaves the rest alone', () 
   const r = applyEntryEdit({ resolves: { module: 'L', augmentation: [['1']] } }, { ref: { map: 'augmentation' }, row: 0, col: 0, rows: 1, cols: 1, text: '2' });
   expect(r.resolves).toEqual({ module: 'L', augmentation: [['2']] });
 });
+
+it('an entry edit of a chain map component creates or updates the component at its position', () => {
+  const f = { source: 'C', target: 'D', map: [{ at: 0, matrix: [['1']] }] };
+  const g = applyEntryEdit(f as never, { ref: { map: 'component', at: -1 }, row: 0, col: 1, rows: 1, cols: 2, text: 'x' }) as typeof f;
+  expect(g.map).toEqual([{ at: 0, matrix: [['1']] }, { at: -1, matrix: [[null, 'x']] }]);
+  const h = applyEntryEdit(g as never, { ref: { map: 'component', at: 0 }, row: 0, col: 0, rows: 1, cols: 1, text: null }) as typeof f;
+  expect(h.map[0]).toEqual({ at: 0, matrix: [[null]] });
+  expect(f.map).toHaveLength(1);
+  expect(h.source).toBe('C');
+});

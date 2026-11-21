@@ -15,14 +15,14 @@ export function label(c: CellData, s?: CellState): string {
   if (p?.kind === 'check') return c.text.replace(/^check\s+/, '');
   if (kindOf(c.text) === 'comment') return c.text.replace(/^\s*#\s?/, '');
   const k = kindOf(c.text);
-  if (k === 'complex' || k === 'module') return structuredHead(c.text) ?? c.text;
+  if (k === 'complex' || k === 'module' || k === 'chainmap') return structuredHead(c.text) ?? c.text;
   return c.text.replace(/^(watch|solve)\s+/, '');
 }
 
 /** Complex and module cells: their shape in words, not typeset. */
 const plain = (c: CellData) => {
   const k = kindOf(c.text);
-  return k === 'complex' || k === 'module';
+  return k === 'complex' || k === 'module' || k === 'chainmap';
 };
 
 /** A cell's label typeset; a note's first line as written. */

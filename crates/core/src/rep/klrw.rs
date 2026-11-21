@@ -2036,6 +2036,12 @@ pub fn run_workspace<R: Ring>(
                 "module",
                 crate::ops_complex::module_cell(&sc.k, module).map(|v| with_display(&sc.k, v)),
             ),
+            CellBody::ChainMap { map, .. } => (
+                "chainmap",
+                crate::ops_complex::resolve_complex_names(ws, i, map)
+                    .and_then(|m| crate::ops_complex::chainmap_cell(&sc.k, &m))
+                    .map(|v| with_display(&sc.k, v)),
+            ),
             CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => unreachable!(),
         };
         let mut value = crate::ops::with_status(r);

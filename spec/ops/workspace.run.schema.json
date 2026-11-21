@@ -18,7 +18,7 @@
       "required": ["id", "kind", "status"],
       "properties": {
         "id": { "type": ["string", "null"] },
-        "kind": { "enum": ["def", "watch", "solve", "check", "complex", "module"] },
+        "kind": { "enum": ["def", "watch", "solve", "check", "complex", "module", "chainmap"] },
         "status": { "enum": ["ok", "error"] },
         "name": { "description": "def: the name defined.", "type": "string" },
         "term": { "description": "def: the elaborated term; watch: the watched term with definitions substituted, before simplifying.", "type": "string" },
@@ -41,7 +41,10 @@
         "variables": { "description": "solve, tier 2: the unknowns, in the order of points.", "type": "array", "items": { "type": "string" } },
         "points": { "description": "solve, tier 2 finite: the solutions in the ground field.", "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
         "complex": { "description": "complex: the complex with every object and shift filled in (a resolution's module filled in when the cell names it).", "$ref": "common.schema.json#/$defs/complex" },
-        "check": { "description": "complex: as in complex.check (a module cell carries holds and failures as in module.check).", "type": "object" },
+        "check": { "description": "complex: as in complex.check; chainmap: as in chainmap.check (a module cell carries holds and failures as in module.check).", "type": "object" },
+        "source": { "description": "chainmap: the source complex with every object and shift filled in.", "$ref": "common.schema.json#/$defs/complex" },
+        "target": { "description": "chainmap: the target complex with every object and shift filled in.", "$ref": "common.schema.json#/$defs/complex" },
+        "map": { "description": "chainmap: its nonzero components, [{at, matrix}], rows indexing the target's summands and columns the source's.", "type": "array" },
         "euler": { "description": "complex: as in complex.euler.", "type": "object" },
         "homology": { "description": "complex, when it checks: as in complex.homology.", "type": "object" },
         "resolution": { "description": "complex: for a resolution (with 'resolves'), as in resolution.check; for a one-dimensional complex, its reading as a resolution of the homology at its last position.", "type": "object" },
@@ -49,7 +52,7 @@
         "dimensions": { "description": "module: as in module.check.", "$ref": "common.schema.json#/$defs/moduleDimensions" },
         "window": { "description": "module: as in module.check.", "type": ["object", "null"] },
         "complete": { "description": "module: as in module.check.", "type": "boolean" },
-        "display": { "description": "complex and module: what the cell's view draws. 'objects' maps each object to its strands from left to right, the red strands of the context among them ({label, at, red}); 'entries' maps each matrix entry to its first summands ('summands', as in watch, with a drawing each) and the number left out ('more').", "type": "object" },
+        "display": { "description": "complex, module, and chainmap: what the cell's view draws. 'objects' maps each object to its strands from left to right, the red strands of the context among them ({label, at, red}); 'entries' maps each matrix entry to its first summands ('summands', as in watch, with a drawing each) and the number left out ('more').", "type": "object" },
         "error_kind": { "enum": ["syntax", "invalid", "precondition", "limit"] },
         "message": { "type": "string" }
       }

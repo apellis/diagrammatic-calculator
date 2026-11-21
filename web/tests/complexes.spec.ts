@@ -67,3 +67,38 @@ test('the status line of a complex, before and after editing an entry', async ({
   await expect(status).toContainText('not zero at −1 (q^2 + q^4 at i@1)');
   await expect(c.getByTestId('status-before')).toContainText('Before the last change: not exact: the homology is not zero at −1 (q^4 at i@1)');
 });
+
+// A chain map is a cell naming its source and target: drawn as a ladder, its components edited in
+// place, its status checked after every edit, and its cone one click away.
+test('a chain map cell: edit a component, see the check, take the cone', async ({ page }) => {
+  await newDoc(page);
+  await setContext(page, 'klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic');
+  await page.keyboard.insertText('complex C := {"terms":[{"at":-1,"summands":[{"object":"i@1","shift":2}]},{"at":0,"summands":[{"object":"i@1"}]}],"differentials":[{"from":-1,"matrix":[["x_1 e(i@1)"]]}]}');
+  await page.keyboard.press('Enter');
+  await expect(cell(page, 0).getByTestId('complex-status')).toBeVisible();
+  await page.getByTestId('add-cell').click();
+  await page.keyboard.insertText('chainmap F := {"source":"C","target":"C","map":[]}');
+  await page.keyboard.press('Enter');
+  const f = cell(page, 1);
+  await expect(f).toHaveAttribute('data-kind', 'chainmap');
+  await expect(f.getByTestId('chainmap-view')).toBeVisible();
+  // the zero map is a chain map
+  await expect(f.getByTestId('chainmap-status').getByTestId('verdict')).toHaveText('a chain map');
+  await expect(f.getByTestId('cm-component')).toHaveCount(2);
+  // a component at 0 alone is not: dF ≠ Fd from −1
+  await f.getByTestId('cm-component').nth(1).getByTestId('cx-entry-edit').click();
+  await f.getByTestId('cx-entry-input').fill('e(i@1)');
+  await page.keyboard.press('Enter');
+  await expect(f.getByTestId('chainmap-status').getByTestId('verdict')).toHaveText('not a chain map');
+  await expect(f.getByTestId('cm-cone')).toHaveCount(0);
+  // the identity is
+  await f.getByTestId('cm-component').nth(0).getByTestId('cx-entry-edit').click();
+  await f.getByTestId('cx-entry-input').fill('e(i@1)');
+  await page.keyboard.press('Enter');
+  await expect(f.getByTestId('chainmap-status').getByTestId('verdict')).toHaveText('a chain map');
+  expect(await page.evaluate(() => document.querySelector('.cell[data-kind="chainmap"] [data-testid="cell-display"]')?.getAttribute('data-text'))).toContain('"source":"C"');
+  await f.getByTestId('cm-cone').click();
+  const cone = cell(page, 2);
+  await expect(cone.locator('.head .kind')).toHaveText('complex');
+  await expect(cone.getByTestId('cx-term')).toHaveCount(3);
+});

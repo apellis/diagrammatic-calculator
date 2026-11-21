@@ -668,6 +668,11 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .cx-matrix-chip { font-size: 12px; padding: 1px 8px; white-space: nowrap; }
 .cx-matrix-none { display: inline-block; min-height: 1em; }
 .cx-status { display: flex; flex-direction: column; gap: 3px; }
+/* Chain map cells: source on top, target below, the components as downward arrows between them. */
+.cm-ladder { display: grid; justify-content: start; align-items: center; justify-items: center; column-gap: 4px; row-gap: 6px; padding: 6px 2px 10px; overflow-x: auto; max-width: 100%; }
+.cm-side { justify-self: end; font-style: italic; padding-right: 6px; }
+.cx-arrow.cx-down { min-width: 0; min-height: 44px; }
+.cx-arrow.cx-down .cx-shaft { display: flex; align-items: center; gap: 4px; font-size: 20px; }
 .cx-failures { margin: 0; padding-left: 18px; font-size: 13px; }
 .cx-multi ul { margin: 4px 0; padding-left: 18px; }
 .cx-tools { gap: 6px; }

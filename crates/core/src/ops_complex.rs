@@ -994,6 +994,67 @@ pub(crate) fn resolve_module_name(
     Ok(out)
 }
 
+/// In a workspace, the `source` and `target` of a chain map may name earlier `complex` cells:
+/// this replaces each name by that cell's complex (the latest one of that name before cell
+/// `i`), without what it resolves.
+pub(crate) fn resolve_complex_names(
+    ws: &crate::workspace::Workspace,
+    i: usize,
+    map: &Value,
+) -> Result<Value> {
+    let mut out = map.clone();
+    for key in ["source", "target"] {
+        let Some(name) = map.get(key).and_then(Value::as_str) else {
+            continue;
+        };
+        let j = ws.cells[..i]
+            .iter()
+            .rposition(|c| {
+                matches!(&c.body, crate::workspace::CellBody::Complex { name: n, .. } if n == name)
+            })
+            .ok_or_else(|| {
+                Error::invalid(format!(
+                    "'{key}' names '{name}', but no complex cell of that name comes before this                      one"
+                ))
+            })?;
+        let crate::workspace::CellBody::Complex { complex, .. } = &ws.cells[j].body else {
+            unreachable!()
+        };
+        let mut c = resolve_module_name(ws, j, complex)?;
+        if let Some(o) = c.as_object_mut() {
+            o.remove("resolves");
+        }
+        out[key] = c;
+    }
+    Ok(out)
+}
+
+/// The value of a workspace cell `chainmap name := {…}`: its source and target filled in, its
+/// nonzero components, and whether it commutes with the differentials.
+pub(crate) fn chainmap_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    let c = parse_complex(a, get(v, "source")?)?;
+    let d = parse_complex(a, get(v, "target")?)?;
+    if c.dim != d.dim {
+        return Err(Error::invalid(format!(
+            "the source has dimension {} and the target {}: a chain map needs equal dimensions",
+            c.dim, d.dim
+        )));
+    }
+    let zero = vec![0; c.dim];
+    let f = match v.get("map") {
+        None | Some(Value::Null) => complex::Map::new(),
+        Some(m) => parse_map(a, m, &c, &d, &zero, "map")?,
+    };
+    let fs = check_chain_map(a, &c, &d, &f)?;
+    Ok(json!({
+        "source": complex_json(a, &c)?,
+        "target": complex_json(a, &d)?,
+        "map": map_json(a, &f)?,
+        "check": verdict(a, &fs, vec![]),
+        "provenance": a.provenance(),
+    }))
+}
+
 /// The value of a workspace cell `module name := {…}`: the module filled in, its check, and its
 /// graded dimensions at the test objects when linear algebra is available.
 pub(crate) fn module_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {

@@ -325,6 +325,7 @@ that contains spaces. A key that is not listed here and does not contain `_` is 
 | Note | `note """text"""` | May span several lines. |
 | Complex | `complex R := {…}` | A bounded complex of projectives in the JSON form of `docs/complexes.md`, on one line; weighted KLR contexts only. |
 | Module | `module L := {…}` | A module given by a presentation, in the JSON form of `docs/complexes.md`, or `{"head": "i@1"}` for `P/rad P`; weighted KLR contexts only. A complex with `"resolves": {"module": "L"}` resolves the latest module cell named `L` before it. |
+| Chain map | `chainmap F := {"source": "C", "target": "D", "map": […]}` | A map of complexes in the JSON form of `docs/complexes.md`; `source` and `target` name earlier complex cells (the latest of that name) or are written inline. The result says whether `dF = Fd`. Weighted KLR contexts only. |
 | Comment | a line starting with `#` | Ignored by the calculator. |
 
 A cell may end with two spaces and options: `view=diagrams` changes how the result is shown, and

@@ -20,10 +20,12 @@ export const TEMPLATES: [string, string, number?][] = [
   ['module', 'module L := {"head": ""}', 22],
   // a resolution starts from a module cell's "Start a resolution", or from its terms written out
   ['complex', 'complex C := {"terms": [], "differentials": []}', 24],
+  // a chain map between two complex cells, named; its components are then edited in the view
+  ['chainmap', 'chainmap F := {"source": "", "target": "", "map": []}', 26],
 ];
 
 /** Complex and module cells are JSON; their heads and texts are shown in words instead. */
-const structured = (k: string) => k === 'complex' || k === 'module';
+const structured = (k: string) => k === 'complex' || k === 'module' || k === 'chainmap';
 
 export interface CellProps {
   id: string;
@@ -103,7 +105,7 @@ export function Cell(props: CellProps) {
     const p = props.state?.parsed;
     if (p?.kind === 'note') return (p.note ?? '').split('\n')[0];
     if (kind() === 'comment') return props.text.replace(/^\s*#\s?/, '');
-    if (structured(kind())) return structuredHead(props.text) ?? props.text.replace(/^(complex|module)\s+/, '');
+    if (structured(kind())) return structuredHead(props.text) ?? props.text.replace(/^(complex|module|chainmap)\s+/, '');
     return props.text.replace(/^(def|watch|solve|check)\s+/, '');
   };
   const slash = () => draft().startsWith('/');
@@ -372,7 +374,7 @@ function CellText(props: { text: string; kind: string; onEdit?: () => void }) {
           <For each={options()}>{(o) => <div class="opt"><Typeset text={o} tex={optionTex(o)} /></div>}</For>
         </>}>
           {/* the JSON is edited as text; read, it is the shape in words (the diagram is below) */}
-          <div class="cx-head">{structuredHead(props.text) ?? props.text.replace(/^(complex|module)\s+/, '')}</div>
+          <div class="cx-head">{structuredHead(props.text) ?? props.text.replace(/^(complex|module|chainmap)\s+/, '')}</div>
           <Show when={props.onEdit}><div class="hint small">Click to edit its JSON.</div></Show>
         </Show>
         </Show>

@@ -744,20 +744,26 @@ function DocView(props: {
   const [complexBusy, setComplexBusy] = createSignal<{ id: string; what: string } | null>(null);
   const complexAction = async (id: string, action: ComplexAction) => {
     const cell = cells().find((c) => c.id === id);
-    const v = stateOf(id)?.value as { status: string; complex?: Record<string, unknown>; module?: Record<string, unknown>; resolution?: { next_at?: number | null } } | undefined;
+    const v = stateOf(id)?.value as { status: string; complex?: Record<string, unknown>; module?: Record<string, unknown>; resolution?: { next_at?: number | null }; source?: Record<string, unknown>; target?: Record<string, unknown>; map?: unknown[] } | undefined;
     const r = cell && readStructured(cell.text);
     if (!cell || !r || v?.status !== 'ok') return;
     if (action === 'json') {
-      await navigator.clipboard?.writeText(JSON.stringify(r.kind === 'complex' ? v.complex : v.module, null, 2));
-      return setMessage(r.kind === 'complex' ? 'The complex copied as JSON, every default filled in.' : 'The presentation copied as JSON.');
+      const out = r.kind === 'complex' ? v.complex : r.kind === 'chainmap' ? { source: v.source, target: v.target, map: v.map } : v.module;
+      await navigator.clipboard?.writeText(JSON.stringify(out, null, 2));
+      return setMessage(r.kind === 'complex' ? 'The complex copied as JSON, every default filled in.' : r.kind === 'chainmap' ? 'The chain map copied as JSON, its source and target filled in.' : 'The presentation copied as JSON.');
     }
     if (typeof action === 'object') {
       // one entry of a map, written in place: the cell text changes, and the engine checks it again
       if (readOnly()) return refuse();
       const e = action.edit;
-      const where = e.ref.map === 'differential' ? 'the differential' : e.ref.map === 'augmentation' ? 'the augmentation' : 'the presentation matrix';
+      const where = e.ref.map === 'differential' ? 'the differential' : e.ref.map === 'augmentation' ? 'the augmentation' : e.ref.map === 'component' ? 'a component' : 'the presentation matrix';
       const note = `edited an entry of ${where} in ${r.name}`;
-      if (r.kind === 'complex') {
+      if (r.kind === 'chainmap') {
+        // the source and target stay as written (names of complex cells, or complexes); only the components change
+        const { source, target, map } = r.value as Record<string, unknown>;
+        const next = applyEntryEdit({ map: map ?? [] }, e);
+        doc.updateCell(id, `chainmap ${r.name} := ${JSON.stringify({ source, target, map: next.map })}${r.tail ? ' ' + r.tail : ''}`, note);
+      } else if (r.kind === 'complex') {
         const named = typeof (r.value.resolves?.module) === 'string' ? (r.value.resolves!.module as string) : undefined;
         doc.updateCell(id, complexCellText(r.name, applyEntryEdit(v.complex ?? {}, e) as never, named, r.tail), note);
       } else {
@@ -772,7 +778,7 @@ function DocView(props: {
     if (write && readOnly()) return refuse();
     // a resolution of a module cell keeps naming that cell
     const named = typeof (r.value.resolves?.module) === 'string' ? (r.value.resolves!.module as string) : undefined;
-    const what = { extend: 'Covering the kernel…', kernel: 'Covering the kernel…', gauss: 'Minimizing…', tikz: 'Drawing…', resolve: 'Starting a resolution…' }[action];
+    const what = { extend: 'Covering the kernel…', kernel: 'Covering the kernel…', gauss: 'Minimizing…', tikz: 'Drawing…', resolve: 'Starting a resolution…', cone: 'Taking the cone…' }[action];
     setComplexBusy({ id, what });
     try {
       const context = termContext();
@@ -782,6 +788,7 @@ function DocView(props: {
         : action === 'kernel' ? await engine.call('complex.kernel', { context, complex: c, at: v.resolution?.next_at ?? 0 }, opts)
         : action === 'gauss' ? await engine.call('complex.gauss', { context, complex: c }, opts)
         : action === 'tikz' ? await engine.call('complex.render', { context, complex: c }, opts)
+        : action === 'cone' ? await engine.call('complex.cone', { context, source: v.source as never, target: v.target as never, map: v.map as never }, opts)
         : await engine.call('resolution.start', { context, module: v.module as never }, opts);
       if (o.status === 'cancelled') return setMessage('Stopped.');
       if (o.status === 'exploded') return setMessage(`${o.message} The command-line tool has no time limit.`);
@@ -791,11 +798,17 @@ function DocView(props: {
         await navigator.clipboard?.writeText(res.tikz ?? '');
         return setMessage('TikZ copied (tikz-cd).');
       }
-      if (action === 'resolve') {
+      if (action === 'resolve' || action === 'cone') {
         const taken = new Set(cells().map((x) => readStructured(x.text)?.name ?? /^\s*def\s+([^\s:]+)/.exec(x.text)?.[1]).filter(Boolean));
-        let name = `R_${r.name}`;
-        for (let k = 2; taken.has(name); k++) name = `R${k}_${r.name}`;
+        const stem = action === 'cone' ? 'Cone' : 'R';
+        let name = `${stem}_${r.name}`;
+        for (let k = 2; taken.has(name); k++) name = `${stem}${k}_${r.name}`;
         const index = cells().findIndex((x) => x.id === id) + 1;
+        if (action === 'cone') {
+          const nid = doc.addCell(complexCellText(name, res.complex!), index);
+          focusCell(nid);
+          return setMessage(`Added ${name}, the cone of ${r.name}.`);
+        }
         const nid = doc.addCell(complexCellText(name, res.resolution!, r.name), index);
         focusCell(nid);
         return setMessage(`Added ${name}, resolving ${r.name}.`);

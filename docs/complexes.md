@@ -91,6 +91,22 @@ surjectivity are tested at the test objects, in the degree windows below.
 - `complex.gauss` on a resolution keeps the augmentation in step: the result is again a
   resolution of the same module.
 
+## Chain maps
+
+A chain map cell names its source and target complexes and lists its components:
+
+```text
+chainmap F := {"source": "C", "target": "D", "map": [{"at": 0, "matrix": [["e(i@1)"]]}]}
+```
+
+`source` and `target` are names of earlier complex cells (or complexes written out in full), so
+editing `C` or `D` changes what `F` is checked against. A component that is not listed is zero.
+Matrix rows are the summands of the target and columns those of the source. The cell runs
+`chainmap.check` and draws a ladder: `C` on top, `D` below, the components as downward arrows.
+Each entry of a component is edited in place; the status line says after every edit whether
+`d F = F d` still holds, and lists the positions where it fails. When it holds, **Take the cone**
+adds a complex cell `Cone_F` below, built by `complex.cone`.
+
 ## Operations
 
 | Operation | Does |

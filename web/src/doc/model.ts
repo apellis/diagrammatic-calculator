@@ -20,7 +20,7 @@ export const AI = { author: 'AI' };
 /** The origin of history bookkeeping, which undo ignores. */
 const HISTORY = { author: 'history' };
 
-export type CellKind = 'def' | 'watch' | 'solve' | 'check' | 'note' | 'complex' | 'module' | 'comment';
+export type CellKind = 'def' | 'watch' | 'solve' | 'check' | 'note' | 'complex' | 'module' | 'chainmap' | 'comment';
 
 export interface Version {
   n: number;
@@ -119,7 +119,7 @@ export interface Comparison {
 export function kindOf(text: string): CellKind | null {
   const w = text.trimStart().split(/\s/, 1)[0];
   if (w.startsWith('#')) return 'comment';
-  return (['def', 'watch', 'solve', 'check', 'note', 'complex', 'module'] as const).find((k) => k === w) ?? null;
+  return (['def', 'watch', 'solve', 'check', 'note', 'complex', 'module', 'chainmap'] as const).find((k) => k === w) ?? null;
 }
 
 /**
@@ -128,7 +128,7 @@ export function kindOf(text: string): CellKind | null {
  * ID never reads as one. Documents and files from before the two-letter prefixes keep their
  * one-letter IDs (d1, w2, …), which are read as they are; numbers are shared by every kind.
  */
-export const LETTER: Record<CellKind, string> = { def: 'df', watch: 'wt', solve: 'sv', check: 'ck', note: 'nt', complex: 'cx', module: 'md', comment: 'rm' };
+export const LETTER: Record<CellKind, string> = { def: 'df', watch: 'wt', solve: 'sv', check: 'ck', note: 'nt', complex: 'cx', module: 'md', chainmap: 'cm', comment: 'rm' };
 
 /** The number of a cell ID (`df12` and the older `d12` both give 12), or 0 if it has none. */
 export const idNumber = (id: string | undefined): number => Number(/^[A-Za-z]*(\d+)$/.exec(id ?? '')?.[1] ?? 0) || 0;

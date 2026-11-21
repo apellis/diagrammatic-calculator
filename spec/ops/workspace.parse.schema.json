@@ -54,6 +54,7 @@
             "comment",
             "complex",
             "module",
+            "chainmap",
             "blank"
           ]
         },
@@ -68,14 +69,14 @@
           }
         },
         "uses": {
-          "description": "Bare names the cell's terms mention (definitions, unknowns, scalars), sorted; for a complex resolving a module cell, that cell's name.",
+          "description": "Bare names the cell's terms mention (definitions, unknowns, scalars), sorted; for a complex resolving a module cell, that cell's name; for a chain map, the complex cells its source and target name.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "defines": {
-          "description": "def: the name defined; module: the module's name, which a complex resolving it names.",
+          "description": "def: the name defined; module: the module's name, which a complex resolving it names; complex: its name, which a chain map names; chainmap: its name.",
           "type": "string"
         },
         "unknowns": {
@@ -100,7 +101,9 @@
         "complex_name": { "description": "complex: the name.", "type": "string" },
         "complex": { "description": "complex: the JSON as written.", "type": "object" },
         "module_name": { "description": "module: the name.", "type": "string" },
-        "module": { "description": "module: the JSON as written.", "type": "object" }
+        "module": { "description": "module: the JSON as written.", "type": "object" },
+        "chainmap_name": { "description": "chainmap: the name.", "type": "string" },
+        "chainmap": { "description": "chainmap: the JSON as written.", "type": "object" }
       }
     },
     "response": {

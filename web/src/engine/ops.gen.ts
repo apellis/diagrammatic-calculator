@@ -1839,7 +1839,7 @@ export interface WorkspaceParseRequest2 {
  */
 export interface WorkspaceParseCell {
   id: string | null;
-  kind: 'def' | 'watch' | 'solve' | 'check' | 'note' | 'comment' | 'complex' | 'module' | 'blank';
+  kind: 'def' | 'watch' | 'solve' | 'check' | 'note' | 'comment' | 'complex' | 'module' | 'chainmap' | 'blank';
   /**
    * The cell in canonical form, without options or ID.
    */
@@ -1848,11 +1848,11 @@ export interface WorkspaceParseCell {
     [k: string]: string;
   };
   /**
-   * Bare names the cell's terms mention (definitions, unknowns, scalars), sorted; for a complex resolving a module cell, that cell's name.
+   * Bare names the cell's terms mention (definitions, unknowns, scalars), sorted; for a complex resolving a module cell, that cell's name; for a chain map, the complex cells its source and target name.
    */
   uses: string[];
   /**
-   * def: the name defined; module: the module's name, which a complex resolving it names.
+   * def: the name defined; module: the module's name, which a complex resolving it names; complex: its name, which a chain map names; chainmap: its name.
    */
   defines?: string;
   /**
@@ -1887,6 +1887,14 @@ export interface WorkspaceParseCell {
    * module: the JSON as written.
    */
   module?: {};
+  /**
+   * chainmap: the name.
+   */
+  chainmap_name?: string;
+  /**
+   * chainmap: the JSON as written.
+   */
+  chainmap?: {};
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -1916,7 +1924,7 @@ export interface WorkspaceRunRequest {
  */
 export interface WorkspaceRunCell {
   id: string | null;
-  kind: 'def' | 'watch' | 'solve' | 'check' | 'complex' | 'module';
+  kind: 'def' | 'watch' | 'solve' | 'check' | 'complex' | 'module' | 'chainmap';
   status: 'ok' | 'error';
   /**
    * def: the name defined.
@@ -2000,9 +2008,15 @@ export interface WorkspaceRunCell {
   points?: string[][];
   complex?: Complex1;
   /**
-   * complex: as in complex.check (a module cell carries holds and failures as in module.check).
+   * complex: as in complex.check; chainmap: as in chainmap.check (a module cell carries holds and failures as in module.check).
    */
   check?: {};
+  source?: Complex2;
+  target?: Complex3;
+  /**
+   * chainmap: its nonzero components, [{at, matrix}], rows indexing the target's summands and columns the source's.
+   */
+  map?: unknown[];
   /**
    * complex: as in complex.euler.
    */
@@ -2026,7 +2040,7 @@ export interface WorkspaceRunCell {
    */
   complete?: boolean;
   /**
-   * complex and module: what the cell's view draws. 'objects' maps each object to its strands from left to right, the red strands of the context among them ({label, at, red}); 'entries' maps each matrix entry to its first summands ('summands', as in watch, with a drawing each) and the number left out ('more').
+   * complex, module, and chainmap: what the cell's view draws. 'objects' maps each object to its strands from left to right, the red strands of the context among them ({label, at, red}); 'entries' maps each matrix entry to its first summands ('summands', as in watch, with a drawing each) and the number left out ('more').
    */
   display?: {};
   error_kind?: 'syntax' | 'invalid' | 'precondition' | 'limit';
@@ -2036,6 +2050,62 @@ export interface WorkspaceRunCell {
  * complex: the complex with every object and shift filled in (a resolution's module filled in when the cell names it).
  */
 export interface Complex1 {
+  dimension?: number;
+  /**
+   * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
+   */
+  indexing?: 'cohomological' | 'homological';
+  squares?: 'commute' | 'anticommute';
+  odd_signs?: 'koszul' | 'ignore';
+  terms: {
+    at: ComplexPosition;
+    summands: ComplexSummands;
+  }[];
+  differentials?: {
+    from: ComplexPosition;
+    axis?: number;
+    matrix: ComplexMatrix;
+  }[];
+  /**
+   * Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).
+   */
+  resolves?: {
+    module: Module;
+    augmentation?: ComplexMatrix;
+  };
+}
+/**
+ * chainmap: the source complex with every object and shift filled in.
+ */
+export interface Complex2 {
+  dimension?: number;
+  /**
+   * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
+   */
+  indexing?: 'cohomological' | 'homological';
+  squares?: 'commute' | 'anticommute';
+  odd_signs?: 'koszul' | 'ignore';
+  terms: {
+    at: ComplexPosition;
+    summands: ComplexSummands;
+  }[];
+  differentials?: {
+    from: ComplexPosition;
+    axis?: number;
+    matrix: ComplexMatrix;
+  }[];
+  /**
+   * Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).
+   */
+  resolves?: {
+    module: Module;
+    augmentation?: ComplexMatrix;
+  };
+}
+/**
+ * chainmap: the target complex with every object and shift filled in.
+ */
+export interface Complex3 {
   dimension?: number;
   /**
    * cohomological (default): d raises the position by 1; homological: d lowers it by 1.

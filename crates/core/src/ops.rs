@@ -793,14 +793,14 @@ impl RingVisitor for RunWorkspace<'_> {
                         Ok(v)
                     })(),
                 ),
-                CellBody::Complex { .. } | CellBody::Module { .. } => (
-                    if matches!(cell.body, CellBody::Module { .. }) {
-                        "module"
-                    } else {
-                        "complex"
+                CellBody::Complex { .. } | CellBody::Module { .. } | CellBody::ChainMap { .. } => (
+                    match cell.body {
+                        CellBody::Module { .. } => "module",
+                        CellBody::ChainMap { .. } => "chainmap",
+                        _ => "complex",
                     },
                     Err(Error::precondition(format!(
-                        "complexes and modules are available in weighted KLR contexts (klrw), \
+                        "complexes, modules, and chain maps are available in weighted KLR contexts (klrw), \
                          not in {}",
                         ws.context.presentation
                     ))),
@@ -1077,6 +1077,7 @@ fn cell_json(c: &Cell) -> Value {
         CellBody::Check { .. } => "check",
         CellBody::Complex { .. } => "complex",
         CellBody::Module { .. } => "module",
+        CellBody::ChainMap { .. } => "chainmap",
         CellBody::Note { .. } => "note",
         CellBody::Comment(_) => "comment",
         CellBody::Blank => "blank",
@@ -1104,10 +1105,23 @@ fn cell_json(c: &Cell) -> Value {
         CellBody::Complex { name, complex } => {
             v["complex_name"] = json!(name);
             v["complex"] = complex.clone();
+            // so that a chain map naming it finds it
+            v["defines"] = json!(name);
             // a complex resolving a module cell by name depends on that cell
             if let Some(m) = complex["resolves"]["module"].as_str() {
                 v["uses"] = json!([m]);
             }
+        }
+        CellBody::ChainMap { name, map } => {
+            v["chainmap_name"] = json!(name);
+            v["chainmap"] = map.clone();
+            v["defines"] = json!(name);
+            // a chain map naming complex cells depends on them
+            let uses: Vec<&str> = ["source", "target"]
+                .iter()
+                .filter_map(|k| map[*k].as_str())
+                .collect();
+            v["uses"] = json!(uses);
         }
         CellBody::Module { name, module } => {
             v["module_name"] = json!(name);

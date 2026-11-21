@@ -192,3 +192,46 @@ fn resolution_cell_needs_its_module() {
         "{c}"
     );
 }
+
+#[test]
+fn chain_map_cells_name_their_complexes() {
+    let c = "{\"terms\":[{\"at\":-1,\"summands\":[{\"object\":\"i@1\",\"shift\":2}]},\
+             {\"at\":0,\"summands\":[{\"object\":\"i@1\"}]}],\
+             \"differentials\":[{\"from\":-1,\"matrix\":[[\"x_1 e(i@1)\"]]}]}";
+    let src = format!(
+        "diagcalc-workspace/1\ncontext klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic\n\n\
+         complex C := {c}\n\
+         chainmap F := {{\"source\": \"C\", \"target\": \"C\", \"map\": \
+         [{{\"at\": -1, \"matrix\": [[\"e(i@1)\"]]}}, {{\"at\": 0, \"matrix\": [[\"e(i@1)\"]]}}]}}\n\
+         chainmap G := {{\"source\": \"C\", \"target\": \"C\", \"map\": \
+         [{{\"at\": 0, \"matrix\": [[\"e(i@1)\"]]}}]}}\n\
+         chainmap H := {{\"source\": \"D\", \"target\": \"C\", \"map\": []}}\n"
+    );
+    let v = ops::run_workspace_with(&src, None, Some(8), &[]);
+    let cells: Vec<_> = v["cells"].as_array().unwrap().iter().collect();
+    let maps: Vec<_> = cells.iter().filter(|c| c["kind"] == "chainmap").collect();
+    let f = maps[0];
+    assert_eq!(f["kind"], "chainmap", "{f}");
+    assert_eq!(f["check"]["holds"], true, "{f}");
+    assert_eq!(f["map"].as_array().unwrap().len(), 2, "{f}");
+    assert_eq!(f["source"]["terms"][0]["summands"][0]["shift"], 2, "{f}");
+    assert!(f["display"]["entries"]["e(i@1)"].is_object(), "{f}");
+    // the identity at 0 alone does not commute with d: −1 → 0
+    let g = maps[1];
+    assert_eq!(g["check"]["holds"], false, "{g}");
+    let h = maps[2];
+    assert_eq!(h["status"], "error", "{h}");
+    assert!(h.to_string().contains("no complex cell"), "{h}");
+    // a chain map uses the complex cells it names, and a complex defines its name
+    let p = ops::parse_workspace(Some(&src), None);
+    let pc: Vec<_> = p["cells"].as_array().unwrap().iter().collect();
+    let pf = pc.iter().find(|c| c["kind"] == "chainmap").unwrap();
+    assert_eq!(pf["uses"], serde_json::json!(["C", "C"]), "{pf}");
+    assert_eq!(pf["defines"], "F", "{pf}");
+    assert!(
+        pf["text"].as_str().unwrap().starts_with("chainmap F := {"),
+        "{pf}"
+    );
+    let pcx = pc.iter().find(|c| c["kind"] == "complex").unwrap();
+    assert_eq!(pcx["defines"], "C", "{pcx}");
+}

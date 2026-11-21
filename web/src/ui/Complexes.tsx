@@ -63,15 +63,26 @@ export interface ModuleResult {
 }
 
 /** Which map of a cell an edited entry belongs to: a differential, the augmentation, or φ. */
-export type MapRef = { map: 'differential'; from: number | number[]; axis: number } | { map: 'augmentation' } | { map: 'presentation' };
+export type MapRef = { map: 'differential'; from: number | number[]; axis: number } | { map: 'augmentation' } | { map: 'presentation' } | { map: 'component'; at: number | number[] };
 /** A new value for one entry of a map: its row (target summand) and column (source summand). */
 export interface EntryEdit { ref: MapRef; row: number; col: number; rows: number; cols: number; text: string | null }
 /** What the tools of a complex or module cell can do, including writing one entry of a map. */
-export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve' | { edit: EntryEdit };
+export type ComplexAction = 'extend' | 'kernel' | 'gauss' | 'tikz' | 'json' | 'resolve' | 'cone' | { edit: EntryEdit };
+
+/** A chain map as written: its source and target (names of complex cells, or complexes) and its components. */
+export interface ChainMapJ { source?: string | ComplexJ; target?: string | ComplexJ; map?: { at: number | number[]; matrix: EntryText[][] }[] }
+export interface ChainMapResult {
+  kind: 'chainmap';
+  display?: DisplayJ;
+  source?: ComplexJ;
+  target?: ComplexJ;
+  map?: { at: number | number[]; matrix: EntryText[][] }[];
+  check?: { holds: boolean; failures?: FailureJ[]; failure_count?: number };
+}
 
 /** `complex R := {…}` or `module L := {…}`, read: the name and the JSON (null when it does not parse). */
-export function readStructured(text: string): { kind: 'complex' | 'module'; name: string; value: ComplexJ & ModuleJ; tail: string } | null {
-  const m = /^\s*(complex|module)\s+([^\s:]+)\s*:=\s*([\s\S]*)$/.exec(text);
+export function readStructured(text: string): { kind: 'complex' | 'module' | 'chainmap'; name: string; value: ComplexJ & ModuleJ & ChainMapJ; tail: string } | null {
+  const m = /^\s*(complex|module|chainmap)\s+([^\s:]+)\s*:=\s*([\s\S]*)$/.exec(text);
   if (!m) return null;
   const body = m[3].trim();
   // the JSON object ends at its matching brace; options may follow it
@@ -88,7 +99,7 @@ export function readStructured(text: string): { kind: 'complex' | 'module'; name
     else if (c === '}' && --depth === 0) { end = i + 1; break; }
   }
   try {
-    return { kind: m[1] as 'complex' | 'module', name: m[2], value: JSON.parse(end > 0 ? body.slice(0, end) : body), tail: end > 0 ? body.slice(end).trim() : '' };
+    return { kind: m[1] as 'complex' | 'module' | 'chainmap', name: m[2], value: JSON.parse(end > 0 ? body.slice(0, end) : body), tail: end > 0 ? body.slice(end).trim() : '' };
   } catch {
     return null;
   }
@@ -119,6 +130,10 @@ export function structuredHead(text: string): string | null {
   const r = readStructured(text);
   if (!r) return null;
   const v = r.value;
+  if (r.kind === 'chainmap') {
+    const end = (x: unknown) => (typeof x === 'string' && x ? x : '?');
+    return `${r.name} : ${end(v.source)} → ${end(v.target)}`;
+  }
   if (r.kind === 'module') {
     if (v.head !== undefined) {
       const h = v.head;
@@ -293,7 +308,7 @@ const dimsLine = (ds?: Dims[]) => (ds ?? []).map((d) => `${d.dimensions} at ${d.
  * An arrow with its map: a 1×1 matrix is drawn on the arrow itself; a larger one is a button
  * (`2×3`) that opens the matrix, its rows and columns labelled by the summands they belong to.
  */
-function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit }) {
+function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: DisplayJ; src?: SummandJ[]; tgt?: SummandJ[]; edit?: MapEdit; down?: boolean }) {
   const [open, setOpen] = createSignal(false);
   // an editable map that is not written down is zero, of the size of its summands
   const m = () => props.m ?? (props.edit && props.src?.length && props.tgt?.length ? props.tgt.map(() => props.src!.map(() => null as EntryText)) : undefined);
@@ -303,7 +318,7 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
   const nonzero = () => (m() ?? []).flat().filter((e) => !isZero(e)).length;
   const sub = () => ({ ...props, m: m() });
   return (
-    <div class="cx-arrow">
+    <div class={props.down ? 'cx-arrow cx-down' : 'cx-arrow'}>
       <Show when={m() && rows() && cols()} fallback={<span class="cx-matrix-none" />}>
         <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={m()![0][0]} d={props.d} place={place(sub(), 0, 0)} /></div>}>
           <button class="cx-matrix-chip ghost" aria-expanded={open()} data-testid="cx-matrix-toggle" onClick={() => setOpen(!open())}
@@ -313,7 +328,7 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
           <Show when={open()}><MatrixView m={m()} label={props.label} d={props.d} src={props.src} tgt={props.tgt} edit={props.edit} /></Show>
         </Show>
       </Show>
-      <div class="cx-shaft" aria-hidden="true">{props.name ? <span class="cx-name">{props.name}</span> : null}⟶</div>
+      <div class="cx-shaft" aria-hidden="true">{props.name ? <span class="cx-name">{props.name}</span> : null}{props.down ? '↓' : '⟶'}</div>
     </div>
   );
 }
@@ -483,6 +498,83 @@ function MultiView(props: { c: ComplexJ; d?: DisplayJ }) {
   );
 }
 
+/**
+ * A chain map F: C → D drawn as a ladder: C along the top, D along the bottom, and each component
+ * F(p) as a downward arrow between them, editable entry by entry. The status line says whether
+ * dF = Fd, and where it fails.
+ */
+export function ChainMapView(props: { r: ChainMapResult; name?: string; source?: string; target?: string; onAction?: (a: ComplexAction) => void; busy?: string }) {
+  const src = () => props.r.source ?? {};
+  const tgt = () => props.r.target ?? {};
+  const oneDim = () => (src().dimension ?? 1) === 1;
+  const at = (t: TermJ) => (Array.isArray(t.at) ? t.at[0] : t.at);
+  const step = () => (src().indexing === 'homological' ? -1 : 1);
+  // every position where the source or the target has a term, in the order the arrows point
+  const positions = () => [...new Set([...(src().terms ?? []), ...(tgt().terms ?? [])].map(at))].sort((a, b) => step() * (a - b));
+  const term = (c: ComplexJ, p: number): TermJ => c.terms?.find((t) => at(t) === p) ?? { at: p, summands: [] };
+  const diff = (c: ComplexJ, p: number) => c.differentials?.find((d) => (Array.isArray(d.from) ? d.from[0] : d.from) === p && !d.axis)?.matrix;
+  const comp = (p: number) => props.r.map?.find((x) => (Array.isArray(x.at) ? x.at[0] : x.at) === p)?.matrix;
+  const d = () => props.r.display;
+  const ok = () => props.r.check?.holds !== false;
+  const editable = (p: number): MapEdit | undefined => (props.onAction ? { ref: { map: 'component', at: p }, onEdit: (e) => props.onAction!({ edit: e }) } : undefined);
+  const names = () => `${props.source ?? 'C'} → ${props.target ?? 'D'}`;
+  return (
+    <div class="cx" data-testid="chainmap-view">
+      <Show when={oneDim()} fallback={<div class="hint">A map of {src().dimension}-dimensional complexes; the ladder is drawn for one-dimensional ones.</div>}>
+        <div class="cm-ladder" role="figure" aria-label={`the chain map${props.name ? ' ' + props.name : ''}: ${names()}`}
+          style={{ 'grid-template-columns': `auto repeat(${Math.max(1, positions().length * 2 - 1)}, auto)` }}>
+          <div class="cm-side hint">{props.source ?? 'C'}</div>
+          <For each={positions()}>
+            {(p, i) => (
+              <>
+                <Show when={i() > 0}><Arrow m={diff(src(), positions()[i() - 1])} label={`the differential of ${props.source ?? 'C'} from ${posText(positions()[i() - 1])}`} d={d()} src={term(src(), positions()[i() - 1]).summands} tgt={term(src(), p).summands} /></Show>
+                <Term t={term(src(), p)} d={d()} />
+              </>
+            )}
+          </For>
+          <div class="cm-side hint">{props.name ?? 'F'}</div>
+          <For each={positions()}>
+            {(p, i) => (
+              <>
+                <Show when={i() > 0}><span /></Show>
+                <div data-testid="cm-component"><Arrow down m={comp(p)} label={`the component at ${posText(p)}`} d={d()} src={term(src(), p).summands} tgt={term(tgt(), p).summands} edit={editable(p)} /></div>
+              </>
+            )}
+          </For>
+          <div class="cm-side hint">{props.target ?? 'D'}</div>
+          <For each={positions()}>
+            {(p, i) => (
+              <>
+                <Show when={i() > 0}><Arrow m={diff(tgt(), positions()[i() - 1])} label={`the differential of ${props.target ?? 'D'} from ${posText(positions()[i() - 1])}`} d={d()} src={term(tgt(), positions()[i() - 1]).summands} tgt={term(tgt(), p).summands} /></Show>
+                <Term t={term(tgt(), p)} d={d()} />
+              </>
+            )}
+          </For>
+        </div>
+      </Show>
+      <div class="cx-status" data-testid="chainmap-status">
+        <div class="row" style={{ 'flex-wrap': 'wrap' }}>
+          <span class={`badge ${ok() ? 'good' : 'bad'}`} data-testid="verdict">{ok() ? 'a chain map' : 'not a chain map'}</span>
+          <span>{ok() ? `dF = Fd at every position: ${props.name ?? 'F'} is a chain map ${names()}.` : `dF ≠ Fd (${props.r.check?.failure_count ?? '?'} ${props.r.check?.failure_count === 1 ? 'problem' : 'problems'}); fix an entry of a component.`}</span>
+        </div>
+      </div>
+      <Show when={!ok()}><Failures fs={props.r.check?.failures} count={props.r.check?.failure_count} /></Show>
+      <Show when={props.onAction}>
+        <Tools>
+          <Show when={ok()}>
+            <button class="primary" disabled={!!props.busy} onClick={() => props.onAction!('cone')} data-testid="cm-cone"
+              title="Add a complex cell below: the cone of this map, C shifted by one step ⊕ D at each position, with differential [[−d, 0], [F, d]]">
+              Take the cone
+            </button>
+          </Show>
+          <button class="ghost" disabled={!!props.busy} onClick={() => props.onAction!('json')} title="The chain map as JSON, its source and target filled in">Copy JSON</button>
+          <Show when={props.busy}><span class="hint" role="status"><span class="spinner" aria-hidden="true" /> {props.busy}</span></Show>
+        </Tools>
+      </Show>
+    </div>
+  );
+}
+
 export function ModuleView(props: { r: ModuleResult; name?: string; head?: boolean; onAction?: (a: ComplexAction) => void; busy?: string }) {
   const m = () => props.r.module ?? {};
   const gens = () => m().generators ?? [];
@@ -534,13 +626,20 @@ export function applyEntryEdit(value: Record<string, unknown>, e: EntryEdit): Re
     return out;
   };
   const ref = e.ref;
-  if (ref.map === 'presentation') next.matrix = setIn(next.matrix as EntryText[][] | undefined);
+  const samePos = (p: number | number[], q: number | number[]) => JSON.stringify(Array.isArray(p) ? p : [p]) === JSON.stringify(Array.isArray(q) ? q : [q]);
+  if (ref.map === 'component') {
+    const ms = ((next.map ?? []) as { at: number | number[]; matrix?: EntryText[][] }[]);
+    let c = ms.find((x) => samePos(x.at, ref.at));
+    if (!c) { c = { at: ref.at, matrix: [] }; ms.push(c); }
+    c.matrix = setIn(c.matrix);
+    next.map = ms;
+  } else if (ref.map === 'presentation') next.matrix = setIn(next.matrix as EntryText[][] | undefined);
   else if (ref.map === 'augmentation') {
     const r = (next.resolves ?? {}) as Record<string, unknown>;
     r.augmentation = setIn(r.augmentation as EntryText[][] | undefined);
     next.resolves = r;
   } else {
-    const same = (p: number | number[]) => JSON.stringify(Array.isArray(p) ? p : [p]) === JSON.stringify(Array.isArray(ref.from) ? ref.from : [ref.from]);
+    const same = (p: number | number[]) => samePos(p, ref.from);
     const ds = ((next.differentials ?? []) as { from: number | number[]; axis?: number; matrix?: EntryText[][] }[]);
     let d = ds.find((x) => same(x.from) && (x.axis ?? 0) === ref.axis);
     if (!d) { d = { from: ref.from, axis: ref.axis, matrix: [] }; ds.push(d); }

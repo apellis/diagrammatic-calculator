@@ -8,7 +8,7 @@ import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
 import { proseHtml } from './prose';
 import { certainty } from '../eval/certainty';
-import { ComplexView, ModuleView, readStructured, type ComplexAction, type ComplexResult, type ModuleResult } from './Complexes';
+import { ChainMapView, ComplexView, ModuleView, readStructured, type ChainMapResult, type ComplexAction, type ComplexResult, type ModuleResult } from './Complexes';
 
 export { certainty, conjecture, type Certainty } from '../eval/certainty';
 
@@ -42,6 +42,10 @@ export function summary(s: CellState): string {
       return solveSummary(r) + stale;
     case 'complex':
       return complexSummary(r as unknown as ComplexResult) + stale;
+    case 'chainmap': {
+      const c = (r as unknown as ChainMapResult).check;
+      return (c?.holds === false ? 'not a chain map' : 'a chain map') + stale;
+    }
     case 'module': {
       const m = r as unknown as ModuleResult;
       if (m.holds === false) return 'not a module' + stale;
@@ -493,7 +497,7 @@ export function Brief(props: { s?: CellState }) {
         <Match when={r()?.kind === 'check' && r()}>
           {(x) => <span class={`badge ${x().holds ? 'good' : 'bad'}`}>{x().holds ? 'holds' : 'fails'}</span>}
         </Match>
-        <Match when={(r()?.kind === 'complex' || r()?.kind === 'module') && r()}>
+        <Match when={(r()?.kind === 'complex' || r()?.kind === 'module' || r()?.kind === 'chainmap') && r()}>
           <span>{summary(props.s!)}</span>
         </Match>
         <Match when={r()?.kind === 'solve' && r()}>
@@ -589,7 +593,13 @@ export function ResultView(props: {
   complexBusy?: string;
 }) {
   /** The cell's own name, for a complex or module cell. */
-  const cellName = () => /^\s*(?:complex|module)\s+([^\s:]+)/.exec(props.s.text)?.[1];
+  const cellName = () => /^\s*(?:complex|module|chainmap)\s+([^\s:]+)/.exec(props.s.text)?.[1];
+  /** The complex cells a chain map names as its source and target, when it names them. */
+  const mapEnds = () => {
+    const v = readStructured(props.s.text)?.value;
+    const n = (x: unknown) => (typeof x === 'string' ? x : undefined);
+    return { source: n(v?.source), target: n(v?.target) };
+  };
   /** The module cell a resolution names, when it names one. */
   const resolvedName = () => {
     const m = readStructured(props.s.text)?.value.resolves?.module;
@@ -619,6 +629,7 @@ export function ResultView(props: {
                 <Match when={res.kind === 'check'}><CheckView r={res} /></Match>
                 <Match when={res.kind === 'solve'}><SolveView r={res} /></Match>
                 <Match when={res.kind === 'complex'}><ComplexView r={res as unknown as ComplexResult} name={cellName()} module={resolvedName()} onAction={props.s.status === 'fresh' ? props.onComplexAction : undefined} busy={props.complexBusy} /></Match>
+                <Match when={res.kind === 'chainmap'}><ChainMapView r={res as unknown as ChainMapResult} name={cellName()} source={mapEnds().source} target={mapEnds().target} onAction={props.s.status === 'fresh' ? props.onComplexAction : undefined} busy={props.complexBusy} /></Match>
                 <Match when={res.kind === 'module'}><ModuleView r={res as unknown as ModuleResult} name={cellName()} head={/"head"\s*:/.test(props.s.text)} onAction={props.s.status === 'fresh' ? props.onComplexAction : undefined} busy={props.complexBusy} /></Match>
               </Switch>
               <Warnings value={res} />
