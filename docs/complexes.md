@@ -188,7 +188,10 @@ on a click, into a table with the source summands as columns and the target summ
 differential, of `ε`, or of a presentation matrix `φ`, edits it in place: the field names the
 source and target summands and the degree the entry must have (`s − t` from `P(a)⟨s⟩` to
 `P(b)⟨t⟩`), Enter rewrites the cell's text (empty or `0` writes zero), and the engine checks the
-result again. Editing a `{"head": …}` module writes it out as an explicit presentation. The cell says whether it is a resolution
+result again. Editing a `{"head": …}` module writes it out as an explicit presentation. A complex that resolves
+nothing has one status line: `d² = 0` and where its homology is not zero, with the graded
+dimensions there (or `not a complex` and the failed checks), and after a change of verdict the line
+it had before. The cell says whether it is a resolution
 yet and what is left to cover, and offers **Cover the kernel** (one `resolution.extend`),
 **Minimize** (`complex.gauss`), **Copy TikZ**, and **Copy JSON**. Each button rewrites the cell's
 text, so undo, history, and branches work as for any edit, and the cell keeps naming `L`, so

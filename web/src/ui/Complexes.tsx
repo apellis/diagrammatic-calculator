@@ -283,8 +283,8 @@ function laurent(ds: [number, number][]): string {
   const out = ds.filter(([, n]) => n).sort((a, b) => a[0] - b[0]).map(([d, n]) => {
     const c = Math.abs(n) === 1 && d !== 0 ? '' : String(Math.abs(n));
     const q = d === 0 ? '' : d === 1 ? 'q' : `q^${d}`;
-    return `${n < 0 ? '−' : '+'}${c}${q}`;
-  }).join(' ').replace(/^\+/, '');
+    return `${n < 0 ? '− ' : '+ '}${c}${q}`;
+  }).join(' ').replace(/^\+ /, '').replace(/^− /, '−');
   return out || '0';
 }
 const dimsLine = (ds?: Dims[]) => (ds ?? []).map((d) => `${d.dimensions} at ${d.test}`).join(', ');
@@ -341,6 +341,9 @@ function Tools(props: { children: unknown }) {
   return <div class="cx-tools row" style={{ 'flex-wrap': 'wrap' }}>{props.children as never}</div>;
 }
 
+/** The last verdict of each complex cell and the one before it, by name, for the status line. */
+const verdicts = new Map<string, { now: string; before?: string }>();
+
 export function ComplexView(props: { r: ComplexResult; name?: string; module?: string; onAction?: (a: ComplexAction) => void; busy?: string }) {
   const c = () => props.r.complex ?? {};
   const oneDim = () => (c().dimension ?? 1) === 1;
@@ -358,6 +361,31 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
   const failureCount = () => (resolves() ? res()?.failure_count : props.r.check?.failure_count);
   const act = (a: ComplexAction) => props.onAction?.(a);
   const busy = () => !!props.busy;
+  // one line saying what the complex is, kept across edits so a change of verdict is visible
+  const unexact = () => (props.r.homology?.positions ?? []).filter((x) => !x.zero);
+  const truncated = () => (props.r.homology?.positions ?? []).some((x) => x.window?.truncated);
+  const plainStatus = () => {
+    const bad = unexact();
+    const where = bad.length
+      ? `the homology is not zero at ${bad.map((x) => `${posText(x.at)}${x.pieces?.length ? ` (${dimsOf(x.pieces)})` : ''}`).join(', ')}`
+      : 'the homology is zero at every position';
+    return `d² = 0, so this is a complex; ${where}${truncated() ? ', in the degrees computed' : ''}.`;
+  };
+  const summary = (): string => {
+    if (!checkOk()) return `${resolves() ? 'not a resolution' : 'not a complex'} (${failureCount() ?? '?'} ${failureCount() === 1 ? 'problem' : 'problems'})`;
+    const r = res();
+    if (resolves() && r) return r.resolved ? `resolves ${moduleName()}, length ${r.length}` : `resolution in progress, length ${r.length}`;
+    if (props.r.homology) return props.r.homology.exact ? 'exact everywhere' : `not exact: ${plainStatus().replace(/^.*?; /, '').replace(/\.$/, '')}`;
+    return '';
+  };
+  // the view is rebuilt when the cell changes, so the last verdict is kept by the cell's name
+  const before = () => {
+    const now = summary();
+    const key = props.name ?? '';
+    const seen = verdicts.get(key);
+    if (!seen || seen.now !== now) verdicts.set(key, { now, before: seen?.now });
+    return now ? verdicts.get(key)!.before : undefined;
+  };
   const editable = (ref: () => MapRef): MapEdit | undefined => (props.onAction ? { ref: ref(), onEdit: (e) => act({ edit: e }) } : undefined);
   return (
     <div class="cx" data-testid="complex-view">
@@ -382,7 +410,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
         </div>
       </Show>
       <Show when={!checkOk()}>
-        <div class="row"><span class="badge bad" data-testid="verdict">{resolves() ? 'not a resolution' : 'not a complex'}</span><span class="hint">{failureCount()} {failureCount() === 1 ? 'problem' : 'problems'}; fix the text of the cell, then the tools come back.</span></div>
+        <div class="row"><span class="badge bad" data-testid="verdict">{resolves() ? 'not a resolution' : 'not a complex'}</span><span class="hint">{failureCount()} {failureCount() === 1 ? 'problem' : 'problems'}; fix an entry or the text of the cell, then the tools come back.</span></div>
         <Failures fs={failures()} count={failureCount()} />
       </Show>
       <Show when={checkOk() && resolves() && res()}>
@@ -403,12 +431,16 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
       </Show>
       <Show when={checkOk() && !resolves() && props.r.homology}>
         {(h) => (
-          <div class="cx-status">
-            <span class={`badge ${h().exact ? 'good' : 'warn'}`}>{h().exact ? 'exact' : 'not exact'}</span>
-            <Show when={props.r.euler?.terms?.length}><span class="hint"> Euler characteristic: {props.r.euler!.terms!.map((t) => `(${t.coefficient})[${t.object}]`).join(' + ')}</span></Show>
+          <div class="cx-status" data-testid="complex-status">
+            <div class="row" style={{ 'flex-wrap': 'wrap' }}>
+              <span class={`badge ${h().exact ? 'good' : 'warn'}`} data-testid="verdict">{h().exact ? 'exact everywhere' : 'not exact'}</span>
+              <span>{plainStatus()}</span>
+            </div>
+            <Show when={props.r.euler?.terms?.length}><div class="hint">Euler characteristic: {props.r.euler!.terms!.map((t) => `(${t.coefficient})[${t.object}]`).join(' + ')}</div></Show>
           </div>
         )}
       </Show>
+      <Show when={before()}><div class="hint" data-testid="status-before">Before the last change: {before()}.</div></Show>
       <Show when={props.onAction}>
         <Tools>
           <Show when={checkOk() && resolves() && res() && !res()!.resolved}>

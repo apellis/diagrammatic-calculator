@@ -48,3 +48,22 @@ test('resolving a simple module step by step with the cell tools', async ({ page
   await expect(r).toHaveAttribute('data-kind', 'complex');
   expect(await page.evaluate(() => document.querySelector('.cell[data-kind="complex"] [data-testid="cell-display"]')?.getAttribute('data-text'))).toContain('"module":"L"');
 });
+
+// A plain complex says in one line whether d² = 0 and where it is not exact, and after an edit
+// what it said before.
+test('the status line of a complex, before and after editing an entry', async ({ page }) => {
+  await newDoc(page);
+  await setContext(page, 'klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic');
+  await page.keyboard.insertText('complex C := {"terms":[{"at":-1,"summands":[{"object":"i@1","shift":2}]},{"at":0,"summands":[{"object":"i@1"}]}],"differentials":[{"from":-1,"matrix":[["x_1 e(i@1)"]]}]}');
+  await page.keyboard.press('Enter');
+  const c = cell(page, 0);
+  const status = c.getByTestId('complex-status');
+  await expect(status).toContainText('d² = 0, so this is a complex');
+  await expect(status).toContainText('not zero at −1 (q^4 at i@1), 0 (1 at i@1)');
+  await expect(c.getByTestId('status-before')).toHaveCount(0);
+  await c.getByTestId('cx-entry-edit').first().click();
+  await c.getByTestId('cx-entry-input').fill('0');
+  await page.keyboard.press('Enter');
+  await expect(status).toContainText('not zero at −1 (q^2 + q^4 at i@1)');
+  await expect(c.getByTestId('status-before')).toContainText('Before the last change: not exact: the homology is not zero at −1 (q^4 at i@1)');
+});
