@@ -20,7 +20,9 @@ test('an edit that breaks a check keeps the entry and marks it in red', async ({
   await c.getByTestId('cx-entry-edit').nth(1).click();
   await c.getByTestId('cx-entry-input').fill('e(i@1)');
   await page.keyboard.press('Enter');
-  await expect(c.getByTestId('complex-status')).toContainText(/not a complex|fails|d\s*∘\s*d|d²/i);
+  // the verdict, not the status line: the status line of a valid complex also mentions d², and it
+  // is replaced by the verdict once the check of the edit comes back
+  await expect(c.getByTestId('verdict')).toHaveText('not a complex');
   // Both differentials take part in d ∘ d, so both arrows are marked; both entries are kept.
   await expect(c.locator('.cx-arrow[data-bad="true"]')).toHaveCount(2);
   await expect(c.getByTestId('cx-entry-edit')).toHaveCount(2);
