@@ -306,6 +306,8 @@ that contains spaces. A key that is not listed here and does not contain `_` is 
 | `degcap` | A whole number | Computes up to this degree; the result says so. |
 | `red` | Red strands of `klrw`, for example `red="2i@0, j@5/2"` | Each a dominant weight at a rational position. |
 | `quotient` | `cyclotomic` (`klrw` with red strands) | Computes in the cyclotomic quotient `T^λ`; needs a field. |
+| `truncate` | A scalar and an order, for example `truncate=h^3` (`klrw`) | Complexes, modules, and chain maps get coefficients in `k[h]/(h^4)`: terms with `h^4` or higher are dropped, and the result says so. `h` becomes a scalar if it is not one already. Terms in other cells keep exact polynomials in `h`. See `docs/complexes.md`, Parameters and deformations. |
+| `hdeg` | A whole number (with `truncate`) | The internal degree of the truncated scalar; 0 by default. |
 | any key containing `_` | A parameter of the presentation, for example `Q_ij="u - v"`, or the `klrw` edge weight `theta_ij=1/2` | Replaces the presentation's default, here the KLR polynomial for colours `i` and `j`. |
 
 | Context | You type | Normal form |

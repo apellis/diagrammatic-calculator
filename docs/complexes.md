@@ -213,6 +213,7 @@ If the cell no longer has the map (its terms changed), the pane says so.
 | `resolution.start` | the one-term resolution `Q₀ → M` of a module |
 | `resolution.extend` | the next term of a resolution, covering the kernel at its far end |
 | `resolution.check` | whether a complex with `resolves` is a resolution, and what is left to cover |
+| `complex.deform` | corrections `h^m X_m` of chosen entries making `d² = 0` order by order, with the freedom and the first obstruction (needs `truncate`) |
 
 Every result carries `certified_by` and a provenance with the certificate of the basis used, and
 a note saying which linear system was solved or which construction was applied.
@@ -307,6 +308,51 @@ Continuing with maps and constructions:
 The tests `solving_for_chain_maps_and_homotopies`, `the_cone_of_the_identity_is_contractible`,
 `shifts_totalization_and_euler_characteristic`, and `hom_complex_cohomology` run these steps.
 
+## Parameters and deformations
+
+A context with `truncate=h^N` (and `hdeg=d`, the internal degree of `h`, default 0) computes with
+coefficients in `k[h]/(h^{N+1})`: `h` is a scalar, every product drops the terms with `h^{N+1}`
+or higher, and Hom spaces are counted over `k`. The degree-`e` part of `Hom(P(a), P(b))` has the
+basis `h^j b`, `0 ≤ j ≤ N`, with `b` running over a basis of the `h`-free maps of degree `e − jd`.
+Every operation of this page (checks, homology, kernels, cones, Hom complexes, Gaussian
+elimination, and the rest) works unchanged over this ring, and every result carries a
+`truncation` record in its provenance saying which terms were dropped. A term whose summands
+have different degrees once `h` is counted with degree `d` is an error, never truncated. The
+truncation applies to complex, module, and chain-map cells and to the operations here; ordinary
+term cells keep exact polynomials in `h`.
+
+**Deformations.** A differential over `k[h]/(h^{N+1})` is `d = Σ_a h^a d_a` with each `d_a` free
+of `h`. `complex.deform` takes a one-dimensional complex and a list of `unknowns` (references
+`{"map": "differential", "from": p}`, with `row` and `col` to pick one entry, rows and columns
+numbered from 0) and adds to those entries corrections `h^m X_m`, `1 ≤ m ≤ N`, so that
+`d² = 0`. The coefficient of `h^m` in `d²` is `Σ_{a+b=m} d_b d_a`, and the only terms in it that
+involve `X_m` are `d_0 X_m + X_m d_0`; once the lower orders are fixed, order `m` is the linear
+system
+
+```text
+d_0 X_m + X_m d_0 = − Σ_{a+b=m} d_b d_a        (with d_m its given part)
+```
+
+in the `h`-free category, `X_m` of internal degree `−md` and supported on the unknown entries.
+This is the order-by-order Maurer–Cartan equation behind iterated cones and deformations of
+differentials. The result lists, for each order, the `correction` chosen (as `h^m X_m`) and a
+basis of the `freedom` (the solutions of the homogeneous system: any other choice differs from
+the correction by a combination of them; a choice at one order changes the equations at later
+orders). `complex` is the corrected complex and `solved_to_order` the last order solved.
+
+When an order has no solution, `failures` holds one failure with `condition: "obstruction"`, its
+`order`, the coefficient of `h^m` in `d²` (with the unknowns zero) at the first position where
+the system becomes inconsistent, and `maps` naming the two differentials of that composite, as
+for `complex.check`; `complex` is then corrected through order `m − 1`. When the `h`-free part
+itself does not square to zero, the failure has `condition: "d^2"` and order 0, and
+`solved_to_order` is null. Nothing in the input is discarded: the given parts of the
+differential stay as written and the corrections are added to them.
+
+Corrections start at order 1, so unknowns of order 0, such as the homotopies of an iterated
+cone, are found by a bookkeeping parameter: scale the off-diagonal blocks by `t^k` (block `k`
+steps from the diagonal), take `truncate=t^K hdeg=0`, mark those blocks unknown, and set `t = 1`
+in the answer.
+
 ## Plan
 
 - **M1** (done): the model, the checks, homology, kernels, and Hom bases.
@@ -318,5 +364,7 @@ The tests `solving_for_chain_maps_and_homotopies`, `the_cone_of_the_identity_is_
   (`docs/python.md`), and TikZ output (`complex.render`).
 - **M5** (done): modules by presentations, `P/rad P`, and resolutions of a module built step by
   step, with module and complex cells in workspaces, their web views, and the step tools on them.
+- **P1** (done): coefficients in `k[h]/(h^{N+1})` for every complex operation (`truncate`, `hdeg`).
+- **T1** (done): `complex.deform`, unknown blocks solved order by order with freedom and obstructions.
 - Later: spectral sequences of multicomplexes, and Rickard and
   Chuang–Rouquier complexes (bounded).

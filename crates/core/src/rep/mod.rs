@@ -10,6 +10,7 @@ pub mod klrw;
 pub mod klrw_canvas;
 pub mod klrw_complex;
 pub mod klrw_cyclo;
+pub mod klrw_param;
 pub mod nilcoxeter;
 pub mod skm;
 pub mod smash;

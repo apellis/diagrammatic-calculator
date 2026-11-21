@@ -87,6 +87,11 @@ pub struct ContextSpec {
     /// In a weighted KLR (klrw) context, the red strands: `i@0, 2j@5/2` places a red strand
     /// labelled `Λ_i` at 0 and one labelled `2Λ_j` at 5/2 (weights written like `Λ`).
     pub red: Option<String>,
+    /// Coefficients modulo `h^{N+1}` for one scalar `h` (`truncate=h^N`): complex operations
+    /// then work over `k[h]/(h^{N+1})`, order by order in `h` (`docs/complexes.md`).
+    pub truncate: Option<(String, u32)>,
+    /// The internal degree of the truncated scalar (`hdeg=2`); 0 when not given.
+    pub param_degree: Option<i64>,
 }
 
 fn split_words(line: &str) -> Result<Vec<String>> {
@@ -159,6 +164,25 @@ impl ContextSpec {
                         Error::invalid(format!("dotcap={v} should be a positive integer"))
                     })?)
                 }
+                "truncate" => {
+                    let bad = || {
+                        Error::invalid(format!(
+                            "truncate={v} should be a scalar and an order, like truncate=h^3"
+                        ))
+                    };
+                    let (name, n) = v.split_once('^').ok_or_else(bad)?;
+                    let n: u32 = n.parse().map_err(|_| bad())?;
+                    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric()) {
+                        return Err(bad());
+                    }
+                    spec.truncate = Some((name.to_string(), n));
+                }
+                "hdeg" => {
+                    spec.param_degree =
+                        Some(v.parse().map_err(|_| {
+                            Error::invalid(format!("hdeg={v} should be an integer"))
+                        })?)
+                }
                 "degcap" => {
                     spec.degree_cap =
                         Some(v.parse().map_err(|_| {
@@ -170,6 +194,21 @@ impl ContextSpec {
                 }
                 _ => return Err(Error::invalid(format!("unknown context key '{k}'"))),
             }
+        }
+        if let Some((h, _)) = &spec.truncate {
+            if spec.presentation != "klrw" {
+                return Err(Error::invalid(format!(
+                    "truncate={h}^N is available in weighted KLR contexts (klrw), not in {}",
+                    spec.presentation
+                )));
+            }
+            if !spec.scalars.contains(h) {
+                spec.scalars.push(h.clone());
+            }
+        } else if spec.param_degree.is_some() {
+            return Err(Error::invalid(
+                "hdeg gives the degree of the truncated scalar: it needs truncate=h^N",
+            ));
         }
         Ok(spec)
     }
@@ -214,6 +253,12 @@ impl ContextSpec {
         }
         if let Some(n) = self.degree_cap {
             s.push_str(&format!(" degcap={n}"));
+        }
+        if let Some((h, n)) = &self.truncate {
+            s.push_str(&format!(" truncate={h}^{n}"));
+        }
+        if let Some(d) = self.param_degree {
+            s.push_str(&format!(" hdeg={d}"));
         }
         for (k, v) in &self.params {
             s.push_str(&format!(" {k}={}", q(v)));

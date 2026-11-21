@@ -1,0 +1,5 @@
+{
+  "op": "complex.deform",
+  "request": {"context": "klrw type=A1 ring=QQ red=\"2i@0\" truncate=h^2 hdeg=2", "complex": {"terms": [{"at": -2, "summands": [{"object": "i@1", "shift": 4}]}, {"at": -1, "summands": [{"object": "i@1", "shift": 2}]}, {"at": 0, "summands": [{"object": "i@1", "shift": 0}]}], "differentials": [{"from": -2, "matrix": [["h e(i@1)"]]}, {"from": -1, "matrix": [["x_1 e(i@1)"]]}]}, "unknowns": [{"map": "differential", "from": -2}]},
+  "expect": {"status": "ok", "solved": true, "solved_to_order": 2, "failures": [], "orders": [{"order": 1, "correction": [{"at": -2, "matrix": [["-h e(i@1)"]]}], "freedom_dimension": 0, "freedom": []}, {"order": 2, "correction": [], "freedom_dimension": 0, "freedom": []}]}
+}

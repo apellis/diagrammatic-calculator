@@ -1870,6 +1870,23 @@ impl<R: Ring> Klrw<R> {
     }
 }
 
+/// Runs a complex, module, or chain-map cell in the context, or in the context modulo
+/// `h^{N+1}` when the context line says `truncate=h^N` (`crate::deform`).
+fn truncated_cell<R: Ring>(
+    k: &Klrw<R>,
+    spec: &ContextSpec,
+    in_truncated: impl FnOnce(&crate::deform::Truncated<'_, Klrw<R>>) -> Result<Value>,
+    plain: impl FnOnce(&Klrw<R>) -> Result<Value>,
+) -> Result<Value> {
+    match &spec.truncate {
+        None => plain(k),
+        Some((h, n)) => {
+            let t = crate::deform::Truncated::new(k, h, *n, spec.param_degree.unwrap_or(0))?;
+            in_truncated(&t)
+        }
+    }
+}
+
 /// `workspace.run` in a `klrw` context: definitions, watches and checks, in order.
 /// One set of extra scalars of a workspace: its context and the definitions elaborated in it.
 struct Scoped<R: Ring> {
@@ -2028,19 +2045,37 @@ pub fn run_workspace<R: Ring>(
             }),
             CellBody::Complex { complex, .. } => (
                 "complex",
-                crate::ops_complex::resolve_module_name(ws, i, complex)
-                    .and_then(|c| crate::ops_complex::complex_cell(&sc.k, &c))
-                    .map(|v| with_display(&sc.k, v)),
+                crate::ops_complex::resolve_module_name(ws, i, complex).and_then(|c| {
+                    truncated_cell(
+                        &sc.k,
+                        &ws.context,
+                        |t| crate::ops_complex::complex_cell(t, &c),
+                        |k| crate::ops_complex::complex_cell(k, &c),
+                    )
+                    .map(|v| with_display(&sc.k, v))
+                }),
             ),
             CellBody::Module { module, .. } => (
                 "module",
-                crate::ops_complex::module_cell(&sc.k, module).map(|v| with_display(&sc.k, v)),
+                truncated_cell(
+                    &sc.k,
+                    &ws.context,
+                    |t| crate::ops_complex::module_cell(t, module),
+                    |k| crate::ops_complex::module_cell(k, module),
+                )
+                .map(|v| with_display(&sc.k, v)),
             ),
             CellBody::ChainMap { map, .. } => (
                 "chainmap",
-                crate::ops_complex::resolve_complex_names(ws, i, map)
-                    .and_then(|m| crate::ops_complex::chainmap_cell(&sc.k, &m))
-                    .map(|v| with_display(&sc.k, v)),
+                crate::ops_complex::resolve_complex_names(ws, i, map).and_then(|m| {
+                    truncated_cell(
+                        &sc.k,
+                        &ws.context,
+                        |t| crate::ops_complex::chainmap_cell(t, &m),
+                        |k| crate::ops_complex::chainmap_cell(k, &m),
+                    )
+                    .map(|v| with_display(&sc.k, v))
+                }),
             ),
             CellBody::Note { .. } | CellBody::Comment(_) | CellBody::Blank => unreachable!(),
         };

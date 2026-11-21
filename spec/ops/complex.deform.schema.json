@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/apellis/diagrammatic-calculator/spec/ops/complex.deform.schema.json",
+  "title": "complex.deform: correct a complex order by order in a parameter",
+  "description": "In a context with truncate=h^N (coefficients in k[h]/(h^(N+1)), h of degree hdeg), adds to the unknown entries of the differential corrections h^m X_m, 1 ≤ m ≤ N, so that d ∘ d = 0, one order at a time. Each order reports the correction chosen and a basis of the freedom (the other solutions differ from it by their combinations). When an order has no solution, the failure names the differentials whose composite is obstructed, with the order.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "context",
+        "complex"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "common.schema.json#/$defs/context"
+        },
+        "complex": {
+          "$ref": "common.schema.json#/$defs/complex"
+        },
+        "unknowns": {
+          "description": "The entries that may be corrected: references {\"map\": \"differential\", \"from\": p}, with \"row\" and \"col\" (numbered from 0) for one entry; either alone picks a row or a column, neither the whole matrix.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "map",
+              "from"
+            ],
+            "properties": {
+              "map": {
+                "const": "differential"
+              },
+              "from": {
+                "$ref": "common.schema.json#/$defs/complexPosition"
+              },
+              "axis": {
+                "const": 0
+              },
+              "row": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "col": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "solved",
+            "solved_to_order",
+            "complex",
+            "orders",
+            "failures",
+            "certified_by",
+            "provenance"
+          ],
+          "properties": {
+            "status": {
+              "const": "ok"
+            },
+            "solved": {
+              "description": "True when every order up to N was solved.",
+              "type": "boolean"
+            },
+            "solved_to_order": {
+              "description": "The last order solved (0: only the h-free part); null when the h-free part is not a complex.",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "complex": {
+              "description": "The complex with the corrections of every order solved added (its h-free part unchanged).",
+              "$ref": "common.schema.json#/$defs/complex"
+            },
+            "orders": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "order",
+                  "correction",
+                  "freedom_dimension",
+                  "freedom"
+                ],
+                "properties": {
+                  "order": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "correction": {
+                    "description": "h^m X_m, by source position (zero components left out).",
+                    "$ref": "common.schema.json#/$defs/complexMap"
+                  },
+                  "freedom_dimension": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "freedom": {
+                    "description": "A basis of the solutions of the homogeneous equation at this order (at most 20 listed), as h^m Y.",
+                    "type": "array",
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/complexMap"
+                    }
+                  }
+                }
+              }
+            },
+            "failures": {
+              "description": "At most one: the order at which the system has no solution, or order 0 when the h-free part does not square to zero.",
+              "type": "array",
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "common.schema.json#/$defs/complexFailure"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "order"
+                    ],
+                    "properties": {
+                      "order": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "certified_by": {
+              "enum": [
+                "computation",
+                "certificate"
+              ]
+            },
+            "provenance": {
+              "$ref": "common.schema.json#/$defs/provenance"
+            }
+          }
+        },
+        {
+          "$ref": "common.schema.json#/$defs/error"
+        }
+      ]
+    }
+  }
+}

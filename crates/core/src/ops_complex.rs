@@ -8,8 +8,10 @@ use crate::complex::{
     complex_json, fmt_pos, homology_piece, kernel_generators, parse_complex, parse_map, pos_json,
     range_over_tests, window,
 };
+use crate::complex_deform::{self as cd, Mask};
 use crate::complex_module as cm;
 use crate::context::ContextSpec;
+use crate::deform::{ParamSplit, Truncated};
 use crate::error::{Error, Result};
 use crate::ops::{RingVisitor, with_ring};
 use crate::ring::Ring;
@@ -17,7 +19,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 /// The operations of this module.
-pub const OPS: [&str; 23] = [
+pub const OPS: [&str; 24] = [
     "complex.check",
     "chainmap.check",
     "homotopy.check",
@@ -41,6 +43,7 @@ pub const OPS: [&str; 23] = [
     "resolution.start",
     "resolution.extend",
     "resolution.check",
+    "complex.deform",
 ];
 
 /// How many elimination steps `complex.gauss` takes at most when no `limit` is given.
@@ -79,7 +82,23 @@ impl RingVisitor for Op<'_> {
     type Out = Value;
     fn visit<R: Ring>(self, base: R) -> Result<Value> {
         let k = crate::rep::klrw::Klrw::new(&self.spec, base)?;
-        dispatch(&k, self.op, self.input)
+        if self.op == "complex.deform" {
+            let Some((h, n)) = &self.spec.truncate else {
+                return Err(Error::precondition(
+                    "complex.deform works order by order in a parameter: give the context \
+                     truncate=h^N (and hdeg=d for the degree of h)",
+                ));
+            };
+            let t = Truncated::new(&k, h, *n, self.spec.param_degree.unwrap_or(0))?;
+            return deform_op(&t, self.input);
+        }
+        match &self.spec.truncate {
+            None => dispatch(&k, self.op, self.input),
+            Some((h, n)) => {
+                let t = Truncated::new(&k, h, *n, self.spec.param_degree.unwrap_or(0))?;
+                dispatch(&t, self.op, self.input)
+            }
+        }
     }
 }
 
@@ -1215,4 +1234,111 @@ fn resolution_check<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     v["resolution"] = cm::resolution_json(a, &r)?;
     v["provenance"] = prov_notes(a, notes);
     Ok(v)
+}
+
+/// How many basis vectors of the freedom at one order `complex.deform` lists.
+const SHOWN_FREEDOM: usize = 20;
+
+/// The unknown entries: references `{"map": "differential", "from": p}` to differentials of the
+/// complex, with `row` and `col` to pick one entry (either alone picks a row or a column).
+fn parse_unknowns<O: Clone, M: Clone>(c: &Complex<O, M>, v: Option<&Value>) -> Result<Mask> {
+    let mut mask = Mask::new();
+    let Some(v) = v.filter(|v| !v.is_null()) else {
+        return Ok(mask);
+    };
+    let items = v
+        .as_array()
+        .ok_or_else(|| Error::invalid("'unknowns' is a list of references to differentials"))?;
+    for (k, r) in items.iter().enumerate() {
+        if r.get("map").and_then(Value::as_str) != Some("differential") {
+            return Err(Error::invalid(format!(
+                "unknown {k}: give {{\"map\": \"differential\", \"from\": p}}, with \"row\" \
+                 and \"col\" for one entry"
+            )));
+        }
+        if opt_uint(r, "axis", 0)? != 0 {
+            return Err(Error::invalid(format!(
+                "unknown {k}: deformations are solved for one-dimensional complexes (axis 0)"
+            )));
+        }
+        let p = complex::position(get(r, "from")?, c.dim)?;
+        let (rows, cols) = (c.at(&c.next(&p, 0)).len(), c.at(&p).len());
+        let pick = |key: &str, n: usize| -> Result<Vec<usize>> {
+            match r.get(key) {
+                None | Some(Value::Null) => Ok((0..n).collect()),
+                Some(x) => x.as_u64().map(|i| vec![i as usize]).ok_or_else(|| {
+                    Error::invalid(format!("unknown {k}: '{key}' is a nonnegative integer"))
+                }),
+            }
+        };
+        let ents = mask.entry(p).or_default();
+        for i in pick("row", rows)? {
+            for j in pick("col", cols)? {
+                ents.insert((i, j));
+            }
+        }
+    }
+    Ok(mask)
+}
+
+fn deform_op<A: ParamSplit>(t: &Truncated<'_, A>, input: &Value) -> Result<Value> {
+    t.linear_algebra()?;
+    let c = parse_complex(t, get(input, "complex")?)?;
+    let mask = parse_unknowns(&c, input.get("unknowns"))?;
+    let d = cd::deform(t, &c, &mask)?;
+    let order_zero_fails = matches!(d.obstruction, Some((0, _)));
+    let solved_to = if order_zero_fails {
+        Value::Null
+    } else {
+        json!(d.orders.last().map(|o| o.order).unwrap_or(0))
+    };
+    let mut orders = Vec::new();
+    for o in &d.orders {
+        let freedom = o
+            .freedom
+            .iter()
+            .take(SHOWN_FREEDOM)
+            .map(|f| map_json(t, &cd::lift_map(t, o.order, f)?))
+            .collect::<Result<Vec<_>>>()?;
+        orders.push(json!({
+            "order": o.order,
+            "correction": map_json(t, &cd::lift_map(t, o.order, &o.correction)?)?,
+            "freedom_dimension": o.freedom.len(),
+            "freedom": freedom,
+        }));
+    }
+    let failures: Vec<Value> = d
+        .obstruction
+        .iter()
+        .map(|(m, f)| {
+            let mut v = f.json();
+            v["order"] = json!(m);
+            v
+        })
+        .collect();
+    let complex = cd::assemble(t, &c, &d.parts)?;
+    let mut notes = vec![format!(
+        "the unknown entries were corrected by {h}^m X_m, 1 ≤ m ≤ {n}, solving d ∘ d = 0 one \
+         order of {h} at a time; each order's correction is one choice: any other differs from \
+         it by a combination of that order's freedom (choices at one order change the equations \
+         at later orders)",
+        h = t.param,
+        n = t.order
+    )];
+    if let Some((m, _)) = &d.obstruction {
+        notes.push(format!(
+            "obstructed at order {m}: the complex returned is corrected through order {}",
+            m.saturating_sub(1)
+        ));
+    }
+    Ok(with_prov(
+        json!({
+            "solved": d.obstruction.is_none(),
+            "solved_to_order": solved_to,
+            "complex": complex_json(t, &complex)?,
+            "orders": orders,
+            "failures": failures,
+        }),
+        prov_notes(t, notes),
+    ))
 }

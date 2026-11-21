@@ -49,6 +49,7 @@ these schemas in `crates/core/tests/schemas.rs`.
 | `resolution.start` | M5 | `resolution.start.schema.json` |
 | `resolution.extend` | M5 | `resolution.extend.schema.json` |
 | `resolution.check` | M5 | `resolution.check.schema.json` |
+| `complex.deform` | T1 | `complex.deform.schema.json` |
 
 Locations in the rewriting operations: a term's summands are numbered from 1 in printed order; a
 summand's layers are numbered from 1 at the bottom of its canonical layering, and strands from 1

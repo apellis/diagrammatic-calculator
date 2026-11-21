@@ -1207,7 +1207,7 @@ pub fn describe_context(context: &str, presentation: Option<&str>) -> Value {
 }
 
 /// The operations every surface exposes, by name.
-pub const OPERATIONS: [&str; 41] = [
+pub const OPERATIONS: [&str; 42] = [
     "simplify",
     "check",
     "term.render",
@@ -1249,10 +1249,11 @@ pub const OPERATIONS: [&str; 41] = [
     "resolution.start",
     "resolution.extend",
     "resolution.check",
+    "complex.deform",
 ];
 
 /// The JSON Schema of each operation (`spec/ops/`), and the shared definitions they refer to.
-pub const SCHEMAS: [(&str, &str); 41] = [
+pub const SCHEMAS: [(&str, &str); 42] = [
     (
         "simplify",
         include_str!("../../../spec/ops/simplify.schema.json"),
@@ -1410,6 +1411,10 @@ pub const SCHEMAS: [(&str, &str); 41] = [
     (
         "resolution.check",
         include_str!("../../../spec/ops/resolution.check.schema.json"),
+    ),
+    (
+        "complex.deform",
+        include_str!("../../../spec/ops/complex.deform.schema.json"),
     ),
 ];
 pub const COMMON_SCHEMA: &str = include_str!("../../../spec/ops/common.schema.json");

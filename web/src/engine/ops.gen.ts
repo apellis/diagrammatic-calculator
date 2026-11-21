@@ -160,6 +160,48 @@ export type ComplexConeResponse =
   | OpError;
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexDeformResponse".
+ */
+export type ComplexDeformResponse =
+  | {
+      status: 'ok';
+      /**
+       * True when every order up to N was solved.
+       */
+      solved: boolean;
+      /**
+       * The last order solved (0: only the h-free part); null when the h-free part is not a complex.
+       */
+      solved_to_order: number | null;
+      complex: Complex1;
+      orders: {
+        order: number;
+        correction: ComplexMap1;
+        freedom_dimension: number;
+        /**
+         * A basis of the solutions of the homogeneous equation at this order (at most 20 listed), as h^m Y.
+         */
+        freedom: ComplexMap[];
+      }[];
+      /**
+       * At most one: the order at which the system has no solution, or order 0 when the h-free part does not square to zero.
+       */
+      failures: (ComplexFailure & {
+        order: number;
+      })[];
+      certified_by: 'computation' | 'certificate';
+      provenance: Provenance;
+    }
+  | OpError;
+/**
+ * Components of a map, one matrix per source position.
+ */
+export type ComplexMap1 = {
+  at: ComplexPosition;
+  matrix: ComplexMatrix;
+}[];
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
  * via the `definition` "ComplexEulerResponse".
  */
 export type ComplexEulerResponse =
@@ -955,6 +997,8 @@ export interface Operations {
   ComplexCheckResponse?: ComplexCheckResponse;
   ComplexConeRequest?: ComplexConeRequest;
   ComplexConeResponse?: ComplexConeResponse;
+  ComplexDeformRequest?: ComplexDeformRequest;
+  ComplexDeformResponse?: ComplexDeformResponse;
   ComplexEulerRequest?: ComplexEulerRequest;
   ComplexEulerResponse?: ComplexEulerResponse;
   ComplexGaussRequest?: ComplexGaussRequest;
@@ -1358,6 +1402,52 @@ export interface ComplexConeRequest {
   source: Complex;
   target: Complex;
   map: ComplexMap;
+}
+/**
+ * This interface was referenced by `Operations`'s JSON-Schema
+ * via the `definition` "ComplexDeformRequest".
+ */
+export interface ComplexDeformRequest {
+  context: Context;
+  complex: Complex;
+  /**
+   * The entries that may be corrected: references {"map": "differential", "from": p}, with "row" and "col" (numbered from 0) for one entry; either alone picks a row or a column, neither the whole matrix.
+   */
+  unknowns?: {
+    map: 'differential';
+    from: ComplexPosition;
+    axis?: 0;
+    row?: number;
+    col?: number;
+  }[];
+}
+/**
+ * The complex with the corrections of every order solved added (its h-free part unchanged).
+ */
+export interface Complex1 {
+  dimension?: number;
+  /**
+   * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
+   */
+  indexing?: 'cohomological' | 'homological';
+  squares?: 'commute' | 'anticommute';
+  odd_signs?: 'koszul' | 'ignore';
+  terms: {
+    at: ComplexPosition;
+    summands: ComplexSummands;
+  }[];
+  differentials?: {
+    from: ComplexPosition;
+    axis?: number;
+    matrix: ComplexMatrix;
+  }[];
+  /**
+   * Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).
+   */
+  resolves?: {
+    module: Module;
+    augmentation?: ComplexMatrix;
+  };
 }
 /**
  * This interface was referenced by `Operations`'s JSON-Schema
@@ -2014,13 +2104,13 @@ export interface WorkspaceRunCell {
    * solve, tier 2 finite: the solutions in the ground field.
    */
   points?: string[][];
-  complex?: Complex1;
+  complex?: Complex2;
   /**
    * complex: as in complex.check; chainmap: as in chainmap.check (a module cell carries holds and failures as in module.check).
    */
   check?: {};
-  source?: Complex2;
-  target?: Complex3;
+  source?: Complex3;
+  target?: Complex4;
   /**
    * chainmap: its nonzero components, [{at, matrix}], rows indexing the target's summands and columns the source's.
    */
@@ -2057,7 +2147,7 @@ export interface WorkspaceRunCell {
 /**
  * complex: the complex with every object and shift filled in (a resolution's module filled in when the cell names it).
  */
-export interface Complex1 {
+export interface Complex2 {
   dimension?: number;
   /**
    * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
@@ -2085,7 +2175,7 @@ export interface Complex1 {
 /**
  * chainmap: the source complex with every object and shift filled in.
  */
-export interface Complex2 {
+export interface Complex3 {
   dimension?: number;
   /**
    * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
@@ -2113,7 +2203,7 @@ export interface Complex2 {
 /**
  * chainmap: the target complex with every object and shift filled in.
  */
-export interface Complex3 {
+export interface Complex4 {
   dimension?: number;
   /**
    * cohomological (default): d raises the position by 1; homological: d lowers it by 1.
@@ -2173,6 +2263,7 @@ export interface OpTypes {
   'check': { request: CheckRequest; response: CheckResponse };
   'complex.check': { request: ComplexCheckRequest; response: ComplexCheckResponse };
   'complex.cone': { request: ComplexConeRequest; response: ComplexConeResponse };
+  'complex.deform': { request: ComplexDeformRequest; response: ComplexDeformResponse };
   'complex.euler': { request: ComplexEulerRequest; response: ComplexEulerResponse };
   'complex.gauss': { request: ComplexGaussRequest; response: ComplexGaussResponse };
   'complex.hom': { request: ComplexHomRequest; response: ComplexHomResponse };

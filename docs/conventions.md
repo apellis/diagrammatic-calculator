@@ -352,6 +352,9 @@ Constructions use these signs. Write `step` for `+1` (cohomological) or `−1` (
   summands of `C₀`. The kernel of `C₀ → M` is read off the kernel of `[ε | −φ] : C₀ ⊕ Q₁ → Q₀`,
   projected to `C₀`, so a relation enters with its own sign: for `M = P/xP` the next differential
   is `x`, not `−x`.
+- Truncated coefficients (`truncate=h^N`, `hdeg=d`): coefficients in `k[h]/(h^{N+1})`, `h` of
+  internal degree `d`; a term is homogeneous when every summand `h^j f` has `deg f + j d` equal.
+  Deformations add `h^m X_m` to the given differential, with `X_m` free of `h` (`docs/complexes.md`).
 - Euler characteristic: `Σ_p (−1)^{p_0 + … + p_{m−1}} Σ_i q^{s_i} [P(ℓ_i)]`, objects identified by
   order type.
 

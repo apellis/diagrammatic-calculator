@@ -75,6 +75,30 @@ pub fn hom_space<A: Additive>(
     })
 }
 
+/// The subspace of [`hom_space`] of maps whose only nonzero entries `(i, j)` are those with
+/// `allowed(i, j)`.
+pub fn masked_hom_space<A: Additive>(
+    a: &A,
+    src: &[Summand<A::Obj>],
+    tgt: &[Summand<A::Obj>],
+    e: i64,
+    allowed: &dyn Fn(usize, usize) -> bool,
+) -> Result<HomSpace<A::Obj, A::Mor>> {
+    let mut hs = hom_space(a, src, tgt, e)?;
+    hs.basis.retain(|(i, j, _)| allowed(*i, *j));
+    let mut next = 0;
+    for i in 0..tgt.len() {
+        for j in 0..src.len() {
+            if !allowed(i, j) {
+                hs.dims[i][j] = 0;
+            }
+            hs.start[i][j] = next;
+            next += hs.dims[i][j];
+        }
+    }
+    Ok(hs)
+}
+
 /// The coordinates of a matrix in a [`HomSpace`]; an error if an entry does not lie there.
 pub fn coords_of<A: Additive>(
     a: &A,
