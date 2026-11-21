@@ -42,20 +42,23 @@ test('an unreadable entry is shown with the error and nothing is thrown away', a
   await expect(c.getByTestId('cx-error')).toHaveCount(0);
 });
 
-test('the map pane splits the stage, edits an entry, and closes', async ({ page }) => {
+test('double-clicking a map opens its pane beside the cell, edits an entry, and closes', async ({ page }) => {
   const c = await setup(page);
-  await c.getByTestId('cx-pane-open').first().click();
+  await c.getByTestId('cx-map').first().locator('.cx-shaft').dblclick();
   const pane = page.getByTestId('map-pane');
   await expect(pane).toBeVisible();
-  await expect(page.locator('.stage.split')).toBeVisible();
+  await expect(page.locator('.cell-row.cell-split')).toHaveCount(1);
+  await expect(page.locator('.cell-row.cell-split').getByTestId('map-pane')).toBeVisible();
   await expect(pane.getByTestId('map-pane-canvas')).toBeVisible();
-  await pane.getByRole('button', { name: '⅓' }).click();
-  await expect(page.locator('.stage.split.third')).toBeVisible();
   await pane.getByTestId('map-pane-input').fill('2 x_1 e(i@1)');
   await pane.getByTestId('map-pane-write').click();
   await expect(pane.getByTestId('map-pane-write')).toBeDisabled();
   await expect(pane.getByTestId('map-pane-input')).toHaveValue(/^2/);
   await pane.getByTestId('map-pane-close').click();
   await expect(pane).toHaveCount(0);
-  await expect(page.locator('.stage.split')).toHaveCount(0);
+  await expect(page.locator('.cell-row.cell-split')).toHaveCount(0);
+  // a double-click on an entry opens the pane too
+  await c.getByTestId('cx-map').first().locator('.cx-on-arrow, .cx-entry-btn, .cx-entry-edit').first().dblclick();
+  await expect(page.getByTestId('map-pane')).toBeVisible();
+  await page.keyboard.press('Escape');
 });

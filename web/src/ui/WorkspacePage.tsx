@@ -8,7 +8,7 @@ import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app'
 import { exportDch, exportDcw, parseDcw, fileName } from '../doc/dcw';
 import { Cell, TEMPLATES } from './Cell';
 import { applyEntryEdit, complexCellText, fallbackRead, mapOf, readStructured, type ComplexAction, type ComplexJ, type MapRef, type StructuredRead } from './Complexes';
-import { MapPane, type PaneWidth } from './MapPane';
+import { MapPane } from './MapPane';
 import { NewCell as CellComposer } from './NewCell';
 import { DiagramStart } from './DiagramStart';
 import { Outline } from './Outline';
@@ -743,9 +743,8 @@ function DocView(props: {
   // The tools of complex and module cells: each takes one step and writes it back into the
   // document as an ordinary edit, so it can be undone, branched, and read like any other.
   const [complexBusy, setComplexBusy] = createSignal<{ id: string; what: string } | null>(null);
-  // One map of a complex, chain map or module cell, open in a pane beside the document.
+  // One map of a complex, chain map or module cell, open in a pane in the cell's own row.
   const [mapPane, setMapPane] = createSignal<{ id: string; ref: MapRef } | null>(null);
-  const [paneWidth, setPaneWidth] = createSignal<PaneWidth>('half');
   /** A complex cell by name, as computed or else as written, for drawing a chain map whose cell
    *  cannot be read. */
   const lookupComplex = (name: string): ComplexJ | undefined => {
@@ -1187,7 +1186,7 @@ function DocView(props: {
             onSelect={(id) => { if (narrow()) setOutline(false); focusCell(id); }}
             onVersion={(n) => setModal({ version: n })} onSnapshot={(i) => setModal({ snapshot: i })} />
         </Show>
-        <div class="stage" classList={{ split: !!mapPane() && !canvas(), third: paneWidth() === 'third' }}>
+        <div class="stage">
         <main class="main">
           <div class="cells">
             <Show when={props.branching.current}>
@@ -1228,12 +1227,15 @@ function DocView(props: {
                 const row = () => cells().find((c) => c.key === key);
                 const id = () => row()?.id ?? '';
                 const text = () => row()?.text ?? '';
+                // the map pane of this cell, when one of its maps is open
+                const paneHere = () => (!canvas() && mapPane()?.id === id() ? mapPane() : null);
                 return <>
 
                   <Show when={!readOnly()}><div class="insert"><button tabindex={-1} aria-hidden="true" onClick={() => addAt(i())}>+ cell</button></div></Show>
                   <Show when={props.sync?.presence().some((p) => p.cell === id())}>
                     <div class="cell-presence hint" aria-live="polite">{props.sync?.presence().filter((p) => p.cell === id()).map((p) => p.user?.name ?? 'Viewer').join(', ')} here</div>
                   </Show>
+                  <div class="cell-row" classList={{ 'cell-split': !!paneHere() }}>
                   <Cell id={id()} text={text()} state={stateOf(id())} expanded={expanded().has(key)} active={activeKey() === key}
                     readOnly={readOnly()} onDraft={(t) => { if (row()) rememberDraft(key, t); }} remoteCursors={cursorsFor(id())} onSelection={(s) => textSelection(id(), s)}
                     onToggle={() => toggle(id())} onCommit={(t) => commit(id(), t)} onCancel={() => setActive(null)}
@@ -1243,6 +1245,20 @@ function DocView(props: {
                     onCanvas={(w) => openCanvas(id(), w)} validate={validate} onInsertBelow={() => insertBelow(id())}
                     onStop={() => stop(id())} onRunLonger={() => runLonger(id())} commandLine={() => commandLine(id())} trace={trace(id())}
                     comments={props.comments().filter((x) => x.cell === id())} onComment={readOnly() ? undefined : (t) => props.onComment(id(), text(), t)} />
+              <Show when={paneHere()} keyed>
+                {(p) => {
+                  const name = () => readStructured(cells().find((c) => c.id === p.id)?.text ?? '')?.name ?? 'the cell';
+                  const read = () => structuredOf(p.id);
+                  return <MapPane cellId={p.id} cell={name()} mapRef={p.ref} data={read() ? mapOf(read()!, p.ref) : null} error={read()?.error}
+                    readOnly={readOnly() || previewing()}
+                    onEdit={(e) => void complexAction(p.id, { edit: e })}
+                    onClose={() => { const id = p.id; setMapPane(null); focusCell(id); }}
+                    canvas={(c) => <Canvas doc={doc} readOnly={readOnly() || previewing()} engine={engine} cellId={c.cellId} title={c.title} context={termContext()}
+                      term={c.term} expanded={false} generators={described()?.generators ?? []} colours={described()?.colours ?? []} hintsVersion={hintsVersion()}
+                      embedded onWrite={(t) => c.onWrite(t)} onClose={() => c.onClose()} />} />;
+                }}
+              </Show>
+                  </div>
                 </>;
               }}
             </For>
@@ -1252,19 +1268,6 @@ function DocView(props: {
             </div></Show>
           </div>
         </main>
-        <Show when={!canvas() && mapPane()} keyed>
-          {(p) => {
-            const name = () => readStructured(cells().find((c) => c.id === p.id)?.text ?? '')?.name ?? 'the cell';
-            const read = () => structuredOf(p.id);
-            return <MapPane cellId={p.id} cell={name()} mapRef={p.ref} data={read() ? mapOf(read()!, p.ref) : null} error={read()?.error}
-              readOnly={readOnly() || previewing()} width={paneWidth()} onWidth={setPaneWidth}
-              onEdit={(e) => void complexAction(p.id, { edit: e })}
-              onClose={() => { const id = p.id; setMapPane(null); focusCell(id); }}
-              canvas={(c) => <Canvas doc={doc} readOnly={readOnly() || previewing()} engine={engine} cellId={c.cellId} title={c.title} context={termContext()}
-                term={c.term} expanded={false} generators={described()?.generators ?? []} colours={described()?.colours ?? []} hintsVersion={hintsVersion()}
-                embedded onWrite={(t) => c.onWrite(t)} onClose={() => c.onClose()} />} />;
-          }}
-        </Show>
         <Show when={canvas()?.id && `${canvas()!.id}:${previewing()}`} keyed>
           {(_identity) => {
             const id = canvas()!.id;

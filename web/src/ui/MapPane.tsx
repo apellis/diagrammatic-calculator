@@ -1,13 +1,12 @@
-// The map pane: one map of a complex, chain map or module cell, beside the document. The pane
-// takes a half or a third of the width; the document stays usable on the other side. It shows
+// The map pane: one map of a complex, chain map or module cell, opened by double-clicking the map
+// and shown in the cell's own row, beside the cell, while the rest of the document stays as it is.
+// It shows
 // the map's matrix with every entry that a failed check involves marked in red, the failures
 // themselves, and the chosen entry: its text, and its diagram on an embedded canvas, where the
 // usual gestures edit it. Every change is an ordinary edit of the cell, so it can be undone, and
 // nothing is thrown away while the cell does not check (docs/complexes.md, "Editing maps").
 import { createEffect, createSignal, For, type JSX, Show } from 'solid-js';
 import { EntryShown, type EntryEdit, type MapData, type MapRef, Proj, summandText } from './Complexes';
-
-export type PaneWidth = 'half' | 'third';
 
 /** The canvas the pane embeds, made by the page (it holds the engine, the document and the context). */
 export type PaneCanvas = (p: { cellId: string; term: string; title: string; onWrite: (term: string) => void; onClose: () => void }) => JSX.Element;
@@ -26,8 +25,6 @@ export function MapPane(props: {
   /** The engine could not read the cell: what it said. */
   error?: string;
   readOnly?: boolean;
-  width: PaneWidth;
-  onWidth: (w: PaneWidth) => void;
   onEdit: (e: EntryEdit) => void;
   onClose: () => void;
   canvas: PaneCanvas;
@@ -76,15 +73,11 @@ export function MapPane(props: {
       <div class="map-pane-bar">
         <strong class="map-pane-title">Editing {props.data?.title ?? 'a map'} in {props.cell}</strong>
         <span class="grow" />
-        <div class="map-pane-widths" role="group" aria-label="Width of the pane">
-          <button class="ghost" classList={{ on: props.width === 'half' }} aria-pressed={props.width === 'half'} onClick={() => props.onWidth('half')} title="The pane takes half the width">½</button>
-          <button class="ghost" classList={{ on: props.width === 'third' }} aria-pressed={props.width === 'third'} onClick={() => props.onWidth('third')} title="The pane takes a third of the width">⅓</button>
-        </div>
         <button class="map-pane-close" data-testid="map-pane-close" onClick={() => props.onClose()} title="Close the pane and go back to the document alone (Esc)" aria-label="Close the map pane">✕ Close</button>
       </div>
       <div class="map-pane-body">
         <p class="hint map-pane-intro">
-          This pane edits one map of the cell {props.cell}; the document stays open beside it. Pick an entry in the matrix, then type its new
+          This pane edits one map of the cell {props.cell}, shown beside it. Pick an entry in the matrix, then type its new
           value or change its diagram below. Every change is written into the cell and can be undone. Entries a failed check involves are
           marked in red; they are kept as written until you change them.
         </p>

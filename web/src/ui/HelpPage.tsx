@@ -141,7 +141,7 @@ export function HelpPage(props: { from?: string }) {
           ['complex R := {…, "resolves": {"module": "L"}}', 'a resolution of the module cell L, built a step at a time with Cover the kernel'],
           ['chainmap F := {"source": "C", "target": "D", "map": […]}', <>a map of complexes, checked for <code>d F = F d</code>; Take the cone adds its cone</>],
         ]} />
-        <p>Click an entry of a map to change it, or <strong>⤢ edit</strong> to open the map in a pane beside the document, with the diagram editor for each entry; <strong>½</strong> and <strong>⅓</strong> set its width, and <strong>✕ Close</strong> or Escape closes it. Edits are kept even when the cell stops checking: the failing maps and entries are marked in red and listed, so you can pass through invalid steps on the way to a valid one, and Undo goes back one edit at a time.</p>
+        <p>Click an entry of a map to change it, or double-click the map to open it in a pane beside the cell, with the diagram editor for each entry; <strong>✕ Close</strong> or Escape closes it. Edits are kept even when the cell stops checking: the failing maps and entries are marked in red and listed, so you can pass through invalid steps on the way to a valid one, and Undo goes back one edit at a time.</p>
       </section>
 
       <section id="help-files">

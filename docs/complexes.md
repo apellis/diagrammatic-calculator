@@ -175,10 +175,10 @@ Each edit is one step of the document's history, so Undo restores the entry befo
 
 ### The map pane
 
-**⤢ edit** under a map opens it in a pane beside the document: the stage splits in two, the
-document on the left (still scrollable and editable) and the map on the right. The buttons **½**
-and **⅓** set the share of the width the pane takes; **✕ Close**, or Escape outside a text field
-or the canvas, closes it and returns to the document alone. The pane shows the map's matrix, the
+Double-click a map (its arrow, its name, or one of its entries) to open it in a pane in the
+cell's own row: the cell on the left and the map on the right, with the rest of the document
+above and below as before. **✕ Close**, or Escape outside a text field or the canvas, closes it.
+The pane shows the map's matrix, the
 failures that involve it, and the chosen entry: the summands it goes between, its degree, its text
 in a field, and, when it is not zero, its diagram on an embedded canvas. The canvas has the usual
 gestures and keys (press `?` on it); every change made there, or with **Write** or **Set to 0**,

@@ -347,9 +347,22 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
   const single = () => rows() === 1 && cols() === 1;
   const nonzero = () => (m() ?? []).flat().filter((e) => !isZero(e)).length;
   const sub = () => ({ ...props, m: m() });
+  // a map that can be edited opens in the map pane on a double-click
+  const openable = () => props.edit?.onPane && m() && rows() && cols();
   return (
-    <div class={props.down ? 'cx-arrow cx-down' : 'cx-arrow'} classList={{ 'cx-bad': bad() }} data-bad={bad() ? 'true' : undefined}
-      title={bad() ? `${props.label}: a check fails here (see the problems below)` : undefined}>
+    <div class={props.down ? 'cx-arrow cx-down' : 'cx-arrow'} classList={{ 'cx-bad': bad(), 'cx-openable': !!openable() }} data-bad={bad() ? 'true' : undefined}
+      data-testid={openable() ? 'cx-map' : undefined}
+      title={[bad() ? `${props.label}: a check fails here (see the problems below)` : '', openable() ? `Double-click to edit ${props.label} beside the cell, entry by entry, with the diagram editor` : ''].filter(Boolean).join('. ') || undefined}
+      onMouseDown={(ev) => {
+        // a double-click, counted on the press: on an entry the first click opens it for typing, so
+        // the second one lands in that field rather than on the element first clicked
+        if (ev.detail !== 2 || ev.button !== 0 || !openable()) return;
+        const t = ev.target as HTMLElement;
+        if (t.closest('input, textarea') && t.dataset.testid !== 'cx-entry-input') return;
+        ev.preventDefault();
+        if (t.dataset.testid === 'cx-entry-input') (t as HTMLInputElement).blur();
+        props.edit!.onPane!();
+      }}>
       <Show when={m() && rows() && cols()} fallback={<span class="cx-matrix-none" />}>
         <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={m()![0][0]} d={props.d} place={place(sub(), 0, 0)} bad={props.flags?.entries.has('0,0')} /></div>}>
           <button class="cx-matrix-chip ghost" classList={{ 'cx-bad-chip': bad() }} aria-expanded={open()} data-testid="cx-matrix-toggle" onClick={() => setOpen(!open())}
@@ -358,10 +371,6 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
           </button>
           <Show when={open()}><MatrixView m={m()} label={props.label} d={props.d} src={props.src} tgt={props.tgt} edit={props.edit} flags={props.flags} /></Show>
         </Show>
-      </Show>
-      <Show when={props.edit?.onPane && m() && rows() && cols()}>
-        <button class="ghost cx-pane-btn" data-testid="cx-pane-open" onClick={() => props.edit!.onPane!()}
-          title={`Edit ${props.label} beside the document, entry by entry, with the diagram editor`} aria-label={`Edit ${props.label} beside the document`}>⤢ edit</button>
       </Show>
       <div class="cx-shaft" aria-hidden="true">{props.name ? <span class="cx-name">{props.name}</span> : null}{props.down ? '↓' : '⟶'}</div>
     </div>
