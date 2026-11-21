@@ -483,6 +483,18 @@ fn modules_and_heads() {
 }
 
 #[test]
+fn the_head_of_a_local_projective_has_no_simplicity_warning() {
+    // `End⁰(P(i@1))/J` is one-dimensional, so the head is simple and there is no warning; the
+    // note once reported `dim J` as the dimension of the quotient, which is larger once `h` enters
+    let ctx = "klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic truncate=h^2 hdeg=0";
+    let v = call("module.head", json!({ "context": ctx, "object": "i@1" }));
+    let notes = v["provenance"].to_string() + &v["notes"].to_string();
+    assert!(!notes.contains("may not be simple"), "{v:#}");
+    let v = call("module.head", json!({ "context": CYC, "object": "i@1" }));
+    assert!(!v.to_string().contains("may not be simple"), "{v:#}");
+}
+
+#[test]
 fn resolving_the_simple_module() {
     let v = call(
         "resolution.start",

@@ -405,8 +405,10 @@ pub fn radical_quotient<A: Additive>(
          produce"
             .to_string(),
     ];
-    for (o, (rows, n)) in &conds {
-        let q = n - rows.len();
+    for (o, (rows, _)) in &conds {
+        // the rows are independent conditions cutting `J` out of `End⁰`, so their number is the
+        // codimension of `J`, the dimension of `End⁰/J`
+        let q = rows.len();
         if q > 1 {
             notes.push(format!(
                 "End⁰({o})/J has dimension {q}, so {o}/rad may not be simple (it is simple \
