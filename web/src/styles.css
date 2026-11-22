@@ -634,7 +634,12 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .cx { display: flex; flex-direction: column; gap: 8px; }
 .cx-diagram { display: flex; flex-wrap: wrap; align-items: center; row-gap: 12px; padding: 6px 2px 10px; }
 .cx-step { display: flex; align-items: center; gap: 4px; max-width: 100%; }
-.cx-term { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
+/* Terms and arrows are three-row grids whose middle row (the summands, the shaft) sits at the item's
+   centre, the first and last rows being sized alike: every shaft of a row lies on one line, whatever
+   is drawn above it or below the terms. */
+.cx-term { display: grid; grid-template-rows: 1fr auto 1fr; justify-items: center; flex-shrink: 0; }
+.cx-term > .cx-summands { grid-row: 2; }
+.cx-below { grid-row: 3; display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 2px; }
 .cx-summands { display: flex; flex-direction: column; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; background: var(--sunken); font-size: 15px; white-space: nowrap; }
 .cx-proj { font-family: var(--serif, 'KaTeX_Main', 'Times New Roman', serif); }
 .cx-strand { font-style: italic; }
@@ -647,7 +652,9 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 .cx-h { font-size: 11px; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
 .cx-h.zero { color: var(--good); background: var(--good-soft); }
 .cx-h.nonzero { color: var(--warn); background: var(--warn-soft); }
-.cx-arrow { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; min-width: 44px; }
+.cx-arrow { display: grid; grid-template-rows: 1fr auto 1fr; justify-items: center; flex-shrink: 0; min-width: 44px; }
+.cx-arrow > .cx-above { grid-row: 1; align-self: end; display: flex; flex-direction: column; align-items: center; }
+.cx-arrow > .cx-shaft { grid-row: 2; }
 .cx-shaft { color: var(--muted); font-size: 18px; line-height: 1; }
 .cx-name { font-size: 13px; font-style: italic; color: var(--text); }
 .cx-matrix { border-collapse: collapse; font-size: 12px; margin: 2px 0; }
@@ -671,7 +678,7 @@ pre.diff > .del { background: var(--bad-soft); color: var(--bad); }
 /* Chain map cells: source on top, target below, the components as downward arrows between them. */
 .cm-ladder { display: grid; justify-content: start; align-items: center; justify-items: center; column-gap: 4px; row-gap: 6px; padding: 6px 2px 10px; overflow-x: auto; max-width: 100%; }
 .cm-side { justify-self: end; font-style: italic; padding-right: 6px; }
-.cx-arrow.cx-down { min-width: 0; min-height: 44px; }
+.cx-arrow.cx-down { display: flex; flex-direction: column; align-items: center; min-width: 0; min-height: 44px; }
 .cx-arrow.cx-down .cx-shaft { display: flex; align-items: center; gap: 4px; font-size: 20px; }
 .cx-failures { margin: 0; padding-left: 18px; font-size: 13px; }
 .cx-multi ul { margin: 4px 0; padding-left: 18px; }

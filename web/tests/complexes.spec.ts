@@ -102,3 +102,21 @@ test('a chain map cell: edit a component, see the check, take the cone', async (
   await expect(cone.locator('.head .kind')).toHaveText('complex');
   await expect(cone.getByTestId('cx-term')).toHaveCount(3);
 });
+
+// The arrows of a complex lie on one line, whatever is drawn above them (a diagram, a coefficient,
+// a matrix chip) and however tall the terms are.
+test('the arrows of a complex are at one height', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await newDoc(page);
+  await setContext(page, 'klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic');
+  await page.keyboard.insertText('complex C := {"terms":[{"at":-3,"summands":[{"object":"i@1","shift":6}]},{"at":-2,"summands":[{"object":"i@1","shift":4},{"object":"i@1","shift":4}]},{"at":-1,"summands":[{"object":"i@1","shift":2}]},{"at":0,"summands":[{"object":"i@1"}]}],"differentials":[{"from":-3,"matrix":[["x_1 e(i@1)"],["0"]]},{"from":-2,"matrix":[["0","0"]]},{"from":-1,"matrix":[["(2/3) x_1 e(i@1)"]]}]}');
+  await page.keyboard.press('Enter');
+  const c = cell(page, 0);
+  await expect(c.getByTestId('complex-status')).toBeVisible();
+  // the last arrow carries a drawn diagram with its coefficient, the others a matrix chip
+  await expect(c.getByTestId('cx-entry').first().locator('svg')).toBeVisible();
+  const shafts = c.locator('.cx-diagram .cx-arrow:not(.cx-down) > .cx-shaft');
+  await expect(shafts).toHaveCount(3);
+  const mids = await shafts.evaluateAll((es) => es.map((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; }));
+  for (const y of mids) expect(Math.abs(y - mids[0])).toBeLessThan(1);
+});

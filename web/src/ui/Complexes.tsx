@@ -304,14 +304,16 @@ function Term(props: { t: TermJ; d?: DisplayJ; homology?: NonNullable<HomologyJ[
           <For each={props.t.summands}>{(s, i) => <><Show when={i() > 0}><span class="cx-oplus">⊕</span></Show><span class="cx-summand"><Proj s={s} d={props.d} /></span></>}</For>
         </Show>
       </div>
-      <div class="cx-pos hint">{props.caption ?? posText(props.t.at)}</div>
-      <Show when={props.homology}>
-        {(h) => (
-          <div class={`cx-h ${h().zero ? 'zero' : 'nonzero'}`} title={h().zero ? 'the homology here is zero' : 'the homology here is not zero'}>
-            {h().zero ? 'H = 0' : `H ≠ 0${h().pieces?.length ? `: ${dimsOf(h().pieces!)}` : ''}`}
-          </div>
-        )}
-      </Show>
+      <div class="cx-below">
+        <div class="cx-pos hint">{props.caption ?? posText(props.t.at)}</div>
+        <Show when={props.homology}>
+          {(h) => (
+            <div class={`cx-h ${h().zero ? 'zero' : 'nonzero'}`} title={h().zero ? 'the homology here is zero' : 'the homology here is not zero'}>
+              {h().zero ? 'H = 0' : `H ≠ 0${h().pieces?.length ? `: ${dimsOf(h().pieces!)}` : ''}`}
+            </div>
+          )}
+        </Show>
+      </div>
     </div>
   );
 }
@@ -365,6 +367,7 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
         if (t.dataset.testid === 'cx-entry-input') (t as HTMLInputElement).blur();
         props.edit!.onPane!();
       }}>
+      <div class="cx-above">
       <Show when={m() && rows() && cols()} fallback={<span class="cx-matrix-none" />}>
         <Show when={!single()} fallback={<div class="cx-on-arrow" aria-label={props.label}><Entry e={m()![0][0]} d={props.d} place={place(sub(), 0, 0)} bad={props.flags?.entries.has('0,0')} /></div>}>
           <button class="cx-matrix-chip ghost" classList={{ 'cx-bad-chip': bad() }} aria-expanded={open()} data-testid="cx-matrix-toggle" onClick={() => setOpen(!open())}
@@ -374,6 +377,7 @@ function Arrow(props: { m?: EntryText[][]; label: string; name?: string; d?: Dis
           <Show when={open()}><MatrixView m={m()} label={props.label} d={props.d} src={props.src} tgt={props.tgt} edit={props.edit} flags={props.flags} /></Show>
         </Show>
       </Show>
+      </div>
       <div class="cx-shaft" aria-hidden="true">{props.name ? <span class="cx-name">{props.name}</span> : null}{props.down ? '↓' : '⟶'}</div>
     </div>
   );
@@ -486,7 +490,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
             <span class="cx-step">
               <Arrow m={resolves()!.augmentation} label="the augmentation ε" name="ε " d={d()} src={terms().at(-1)?.summands} tgt={moduleGens()}
                 edit={editable(() => ({ map: 'augmentation' }))} flags={flagsFor(flagFs(), { map: 'augmentation' })} />
-              <div class="cx-term cx-module" data-testid="cx-module"><div class="cx-summands"><span class="cx-summand">{moduleName()}</span></div><div class="cx-pos hint">module</div></div>
+              <div class="cx-term cx-module" data-testid="cx-module"><div class="cx-summands"><span class="cx-summand">{moduleName()}</span></div><div class="cx-below"><div class="cx-pos hint">module</div></div></div>
             </span>
           </Show>
         </div>
@@ -668,7 +672,7 @@ export function ModuleView(props: { r: ModuleResult; name?: string; head?: boole
         </Show>
         <Term t={{ at: 0, summands: gens() }} d={props.r.display} caption="generators" />
         <Arrow label="" />
-        <div class="cx-term cx-module"><div class="cx-summands"><span class="cx-summand">{props.name ?? 'M'}</span></div><div class="cx-pos hint">module</div></div>
+        <div class="cx-term cx-module"><div class="cx-summands"><span class="cx-summand">{props.name ?? 'M'}</span></div><div class="cx-below"><div class="cx-pos hint">module</div></div></div>
       </div>
       <div class="hint cx-legend">{rels().length ? `${props.name ?? 'M'} = coker φ: generators on the right, relations on the left${props.head ? ', as found for P/rad P' : ''}.` : 'No relations: the module is projective.'}</div>
       <Show when={props.r.holds === false}>
