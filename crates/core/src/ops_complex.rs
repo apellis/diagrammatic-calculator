@@ -13,8 +13,7 @@ use crate::complex_module as cm;
 use crate::context::ContextSpec;
 use crate::deform::{ParamSplit, Truncated};
 use crate::error::{Error, Result};
-use crate::ops::{RingVisitor, with_ring};
-use crate::ring::Ring;
+use crate::rep::additive::{AdditiveVisitor, with_additive};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
@@ -80,26 +79,25 @@ pub fn run(op: &str, input: &Value) -> Result<Value> {
         .and_then(Value::as_str)
         .ok_or_else(|| Error::invalid("the request needs a context"))?;
     let spec = ContextSpec::parse(context)?;
-    if spec.presentation != "klrw" {
-        return Err(Error::precondition(format!(
-            "complexes are available in weighted KLR contexts (klrw), not in {}",
-            spec.presentation
-        )));
-    }
-    let ring = spec.ring.clone();
-    with_ring(&ring, Op { op, input, spec })
+    with_additive(
+        &spec,
+        Op {
+            op,
+            input,
+            spec: &spec,
+        },
+    )
 }
 
 struct Op<'a> {
     op: &'a str,
     input: &'a Value,
-    spec: ContextSpec,
+    spec: &'a ContextSpec,
 }
 
-impl RingVisitor for Op<'_> {
+impl AdditiveVisitor for Op<'_> {
     type Out = Value;
-    fn visit<R: Ring>(self, base: R) -> Result<Value> {
-        let k = crate::rep::klrw::Klrw::new(&self.spec, base)?;
+    fn visit<A: ParamSplit>(self, k: &A) -> Result<Value> {
         if self.op == "complex.deform" {
             let Some((h, n)) = &self.spec.truncate else {
                 return Err(Error::precondition(
@@ -107,13 +105,13 @@ impl RingVisitor for Op<'_> {
                      truncate=h^N (and hdeg=d for the degree of h)",
                 ));
             };
-            let t = Truncated::new(&k, h, *n, self.spec.param_degree.unwrap_or(0))?;
+            let t = Truncated::new(k, h, *n, self.spec.param_degree.unwrap_or(0))?;
             return deform_op(&t, self.input);
         }
         match &self.spec.truncate {
-            None => dispatch(&k, self.op, self.input),
+            None => dispatch(k, self.op, self.input),
             Some((h, n)) => {
-                let t = Truncated::new(&k, h, *n, self.spec.param_degree.unwrap_or(0))?;
+                let t = Truncated::new(k, h, *n, self.spec.param_degree.unwrap_or(0))?;
                 dispatch(&t, self.op, self.input)
             }
         }

@@ -35,6 +35,12 @@ diagrammatics, Heisenberg categories) needs a new presentation file and, only if
 kind fits, a new representation module. The term model, the formats, the operation API, and the user
 interface do not change.
 
+Complexes, modules, and resolutions are built in an additive category of finitely generated
+projectives, behind the traits `Additive` and `ParamSplit` (`crates/core/src/complex.rs`,
+`deform.rs`). The operations are generic in these traits; the registry `rep::additive` lists
+the presentations that provide such a category (weighted KLR contexts so far) and builds it for a
+context. A new family adds one entry there; the complex operations do not change.
+
 ## Rings as contexts
 
 Ring arithmetic goes through a context object rather than through operator overloading on element
