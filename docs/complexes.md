@@ -247,7 +247,8 @@ a note saying which linear system was solved or which construction was applied.
 
 **Linear problems.** Every problem of M2 is a finite linear system in degree-zero Hom spaces,
 which are finite-dimensional in the cyclotomic quotient. `exists` is decisive. `freedom` is the
-dimension of the solutions of the homogeneous system: 0 means the answer is unique. With
+dimension of the solutions of the homogeneous system, reported whether or not a solution exists:
+0 means an answer, when there is one, is unique. With
 `basis: n` (a positive integer), `chainmap.solve` also returns up to `n` vectors of a basis of
 those homogeneous solutions as `homogeneous_basis`, with a note when it lists fewer than
 `freedom`.

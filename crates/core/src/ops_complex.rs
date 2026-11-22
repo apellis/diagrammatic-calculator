@@ -592,7 +592,17 @@ fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
         None => {
             v["exists"] = json!(false);
             v["map"] = Value::Null;
-            v["freedom"] = json!(0);
+            // the chain maps vanishing on the fixed components exist whether or not this one
+            // extends: solve with the fixed components zero
+            let zeros: complex::Map<A::Mor> = fixed
+                .iter()
+                .map(|(p, m)| {
+                    let cols = m.first().map_or(0, Vec::len);
+                    (p.clone(), complex::zero_matrix(a, m.len(), cols))
+                })
+                .collect();
+            let (_, hom) = crate::complex_solve::solve_chain_map(a, &c, &d, &zeros)?;
+            v["freedom"] = json!(hom.map_or(0, |s| s.kernel.len()));
         }
         Some(s) => {
             let mut m = fixed.clone();
@@ -649,7 +659,19 @@ fn homotopy_find<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     }
     let (free, sol) = crate::complex_solve::find_homotopy(a, &c, &d, &fg)?;
     let v = match sol {
-        None => json!({ "exists": false, "h": Value::Null, "freedom": 0 }),
+        None => {
+            // the h with d h + h d = 0 exist whether or not f − g is null-homotopic
+            let zeros: complex::Map<A::Mor> = fg
+                .iter()
+                .map(|(p, m)| {
+                    let cols = m.first().map_or(0, Vec::len);
+                    (p.clone(), complex::zero_matrix(a, m.len(), cols))
+                })
+                .collect();
+            let (_, hom) = crate::complex_solve::find_homotopy(a, &c, &d, &zeros)?;
+            let freedom = hom.map_or(0, |s| s.kernel.len());
+            json!({ "exists": false, "h": Value::Null, "freedom": freedom })
+        }
         Some(s) => {
             let h: complex::Map<A::Mor> = free.iter().cloned().zip(s.particular).collect();
             json!({ "exists": true, "h": map_json(a, &h)?, "freedom": s.kernel.len() })

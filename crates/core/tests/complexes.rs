@@ -1031,3 +1031,55 @@ fn generators_are_irredundant_with_a_scalar_of_negative_degree() {
     );
     assert!(dropped_notes(&v).is_empty(), "{v:#}");
 }
+
+#[test]
+fn freedom_is_reported_when_no_solution_exists() {
+    // `freedom` is the dimension of the homogeneous solutions, which exist whether or not the
+    // inhomogeneous system has a solution; it once read 0 whenever there was none
+    let c = json!({
+        "terms": [p(-1, 2), p(0, 0)],
+        "differentials": [{ "from": -1, "matrix": [["x_1 e(i@1)"]] }],
+    });
+    // P⟨2⟩ --0--> P
+    let z = json!({
+        "terms": [p(-1, 2), p(0, 0)],
+        "differentials": [{ "from": -1, "matrix": [[null]] }],
+    });
+    // F(0) = 1 from z to z extends (F(−1) = λ), freedom 1
+    let ok = call(
+        "chainmap.solve",
+        json!({ "context": CYC, "source": z, "target": z,
+            "fixed": [{ "at": 0, "matrix": [["e(i@1)"]] }] }),
+    );
+    assert_eq!(ok["exists"], true, "{ok:#}");
+    assert_eq!(ok["freedom"], 1, "{ok:#}");
+    // F(0) = 1 from c to z would need 0 · F(−1) = 1 · x: no solution, F(−1) still free
+    let none = call(
+        "chainmap.solve",
+        json!({ "context": CYC, "source": c, "target": z,
+            "fixed": [{ "at": 0, "matrix": [["e(i@1)"]] }] }),
+    );
+    assert_eq!(none["exists"], false, "{none:#}");
+    assert_eq!(none["freedom"], 1, "{none:#}");
+    // on P --0--> P, the identity is not null-homotopic, and every h(0) = λ has d h + h d = 0
+    let d = json!({
+        "terms": [p(-1, 0), p(0, 0)],
+        "differentials": [{ "from": -1, "matrix": [[null]] }],
+    });
+    let one = json!([
+        { "at": -1, "matrix": [["e(i@1)"]] },
+        { "at": 0, "matrix": [["e(i@1)"]] },
+    ]);
+    let v = call(
+        "homotopy.find",
+        json!({ "context": CYC, "source": d, "target": d, "f": one }),
+    );
+    assert_eq!(v["exists"], false, "{v:#}");
+    assert_eq!(v["freedom"], 1, "{v:#}");
+    let v = call(
+        "homotopy.find",
+        json!({ "context": CYC, "source": d, "target": d, "f": one, "g": one }),
+    );
+    assert_eq!(v["exists"], true, "{v:#}");
+    assert_eq!(v["freedom"], 1, "{v:#}");
+}
