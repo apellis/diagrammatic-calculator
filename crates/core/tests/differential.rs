@@ -22,6 +22,11 @@
 
 use diagcalc_core::ops;
 use proptest::prelude::*;
+use proptest::test_runner::RngSeed;
+
+/// The random tests draw from a fixed seed, so every run checks the same cases and a failure in
+/// CI can be reproduced exactly. Change the seed deliberately to explore other cases.
+const FIXED_SEED: RngSeed = RngSeed::Fixed(0x6469_6167_6361_6c63);
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1022,7 +1027,7 @@ fn check_returned_complex(case: &DeformCase, v: &Value, solved: bool) {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, rng_seed: FIXED_SEED, ..ProptestConfig::default() })]
 
     /// Order 1 is a linear system, so the oracle decides it exactly.
     #[test]
@@ -1425,22 +1430,60 @@ fn check_head(case: &HeadCase) -> (bool, bool) {
             }
         }
     }
-    let mut creq = json!({ "context": case.ctx, "module": module });
-    if let Some(m) = case.max_degree {
-        creq["max_degree"] = json!(m);
+    // the presented module has the dimensions of the head: at each test object and degree,
+    // Hom(t, ⊕ generators) modulo the images of Hom(t, relation) under the matrix, computed here
+    // from hom.basis and simplify only
+    let mut presented = BTreeMap::new();
+    for t in &tests {
+        for d in from..=to {
+            let blocks: Vec<Vec<Lin>> = gens
+                .iter()
+                .map(|g| {
+                    let (obj, s) = (g["object"].as_str().unwrap(), g["shift"].as_i64().unwrap());
+                    o.hom(t, obj, d - s).iter().map(|b| o.nf(b)).collect()
+                })
+                .collect();
+            let total: usize = blocks.iter().map(Vec::len).sum();
+            let mut image: Vec<Vec<Q>> = Vec::new();
+            for (j, rel) in rels.iter().enumerate() {
+                let (r_obj, r_shift) = (
+                    rel["object"].as_str().unwrap(),
+                    rel["shift"].as_i64().unwrap(),
+                );
+                for b in o.hom(t, r_obj, d - r_shift) {
+                    let mut row = Vec::with_capacity(total);
+                    for (i, basis) in blocks.iter().enumerate() {
+                        let comp = match module["matrix"][i][j].as_str() {
+                            Some(f) => o.sum_of_products(&[(f, &b)]),
+                            None => Lin::new(),
+                        };
+                        row.extend(coords(basis, &comp).unwrap_or_else(|| {
+                            panic!("relation {j} composed into generator {i}: {ctxt}")
+                        }));
+                    }
+                    image.push(row);
+                }
+            }
+            let dim = total as i64 - rank(&image) as i64;
+            if dim > 0 {
+                presented.insert((t.clone(), d), dim);
+            }
+        }
     }
-    let c = call("module.check", creq);
-    assert_eq!(c["holds"], true, "{ctxt}\n{c:#}");
-    let checked: BTreeMap<_, _> = read_dims(&c["dimensions"])
-        .into_iter()
+    let expected_in_window: BTreeMap<_, _> = expected
+        .iter()
         .filter(|((_, d), _)| (from..=to).contains(d))
+        .map(|(k, n)| (k.clone(), *n))
         .collect();
-    assert_eq!(checked, expected, "module.check of the head: {ctxt}\n{c:#}");
+    assert_eq!(
+        presented, expected_in_window,
+        "the presented module is not the head: {ctxt}"
+    );
     (fired, truncated)
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 32, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(ProptestConfig { cases: 32, failure_persistence: None, rng_seed: FIXED_SEED, ..ProptestConfig::default() })]
 
     #[test]
     fn head_agrees_with_brute_force(seed in any::<u64>()) {
