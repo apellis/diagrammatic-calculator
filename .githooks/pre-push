@@ -1,3 +1,25 @@
 #!/bin/sh
-# Refuse a push unless the four checks pass. Enable with: git config core.hooksPath .githooks
-exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
+# Refuse a push unless the four checks pass on exactly what is pushed. Enable with:
+#   git config core.hooksPath .githooks
+# The checks run in the working tree, so the hook first requires that the working tree is the
+# commit being pushed: HEAD is that commit and there are no uncommitted or untracked files.
+set -eu
+top="$(git rev-parse --show-toplevel)"
+cd "$top"
+zero=0000000000000000000000000000000000000000
+head="$(git rev-parse HEAD)"
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue # a deletion pushes no code
+    if [ "$local_sha" != "$head" ]; then
+        echo "pre-push: $local_ref ($local_sha) is not HEAD ($head); check it out and push again," >&2
+        echo "so that the checks run on the commit being pushed" >&2
+        exit 1
+    fi
+done
+if [ -n "$(git status --porcelain)" ]; then
+    echo "pre-push: the working tree differs from HEAD (uncommitted or untracked files):" >&2
+    git status --short >&2
+    echo "commit or stash them, so that the checks run on the commit being pushed" >&2
+    exit 1
+fi
+exec "$top/scripts/check.sh"
