@@ -1625,5 +1625,67 @@
       {"source": "i@-1 j@1/4", "input": [1, 0], "output": [{"target": "j@-1 i@1", "poly": [[[1, 3], 1], [[0, 4], 1]]}]},
       {"source": "i@-1 j@1/4", "input": [1, 1], "output": [{"target": "j@-1 i@1", "poly": [[[2, 3], 1], [[1, 4], 1]]}]}
     ]
+  },
+  {
+    "id": "nh2-unary-minus-after-plus",
+    "context": "nilhecke nu=2",
+    "term": "x_1 psi_1 + -1 psi_1 x_2",
+    "normal_form": "1",
+    "agree": true,
+    "actions": [
+      {"source": "ii", "input": [0, 0], "output": [{"target": "ii", "poly": [[[0, 0], 1]]}]},
+      {"source": "ii", "input": [0, 1], "output": [{"target": "ii", "poly": [[[0, 1], 1]]}]},
+      {"source": "ii", "input": [1, 0], "output": [{"target": "ii", "poly": [[[1, 0], 1]]}]},
+      {"source": "ii", "input": [1, 1], "output": [{"target": "ii", "poly": [[[1, 1], 1]]}]}
+    ]
+  },
+  {
+    "id": "nh2-unary-minus-after-minus",
+    "context": "nilhecke nu=2",
+    "term": "psi_1 x_1 - -x_2 psi_1",
+    "normal_form": "-1 + 2 psi_1 x_1",
+    "agree": true,
+    "actions": [
+      {"source": "ii", "input": [0, 0], "output": [{"target": "ii", "poly": [[[0, 0], 1]]}]},
+      {"source": "ii", "input": [0, 1], "output": [{"target": "ii", "poly": [[[0, 1], -1]]}]},
+      {"source": "ii", "input": [1, 0], "output": [{"target": "ii", "poly": [[[1, 0], 1], [[0, 1], 2]]}]},
+      {"source": "ii", "input": [1, 1], "output": [{"target": "ii", "poly": [[[1, 1], 1]]}]}
+    ]
+  },
+  {
+    "id": "klrw-a2-braid-unary-minus",
+    "context": "klrw type=A2",
+    "term": "psi_2 psi_1 psi_2 e(i@0 j@1 i@2) + - psi_1 psi_2 psi_1 e(i@0 j@1 i@2)",
+    "normal_form": "-e(i@0 j@1 i@2)",
+    "agree": true,
+    "actions": [
+      {"source": "i@0 j@1 i@2", "input": [0, 0, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 0, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 0, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 0, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 0, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 0, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 1, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 1, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 1, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 1, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 1, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 1, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 2, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 2, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 2, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 2, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 2, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 2, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 0, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 0, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 0, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 0, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 0, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 0, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 1, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 1, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 1, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 1, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 1, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 1, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 2, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 2, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 2, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 2, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 2, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 2, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 0, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 0, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 0, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 0, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 0, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 0, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 1, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 1, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 1, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 1, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 1, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 1, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 2, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 2, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 2, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 2], -1]]}]}
+    ]
   }
 ]

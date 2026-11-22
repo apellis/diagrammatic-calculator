@@ -188,3 +188,18 @@ case klrw-a2-red-basis
 context klrw type=A2 red="i@0" theta_ij=1/2
 term b(2 1; j@-1 i@1) x_1 e(i@-1 j@1/4)
 nf b(2 1; j@-1 i@1) x_1 e(i@-1 j@1/4)
+
+case nh2-unary-minus-after-plus
+context nilhecke nu=2
+term x_1 psi_1 + -1 psi_1 x_2
+nf 1
+
+case nh2-unary-minus-after-minus
+context nilhecke nu=2
+term psi_1 x_1 - -x_2 psi_1
+nf -1 + 2 psi_1 x_1
+
+case klrw-a2-braid-unary-minus
+context klrw type=A2
+term psi_2 psi_1 psi_2 e(i@0 j@1 i@2) + - psi_1 psi_2 psi_1 e(i@0 j@1 i@2)
+nf -e(i@0 j@1 i@2)

@@ -238,7 +238,9 @@ a note saying which linear system was solved or which construction was applied.
 **Linear problems.** Every problem of M2 is a finite linear system in degree-zero Hom spaces,
 which are finite-dimensional in the cyclotomic quotient. `exists` is decisive. `freedom` is the
 dimension of the solutions of the homogeneous system: 0 means the answer is unique. With
-`basis: true`, `chainmap.solve` also returns a basis of those homogeneous solutions.
+`basis: n` (a positive integer), `chainmap.solve` also returns up to `n` vectors of a basis of
+those homogeneous solutions as `homogeneous_basis`, with a note when it lists fewer than
+`freedom`.
 `complex.minimal` tests whether the left ideal `{g d}` of `End(C(p))` spanned by the maps `g` back
 is nilpotent; when it is not, a failure names the differential and, when one is found among the
 tried maps, a `witness` `g` with `g d` not nilpotent.

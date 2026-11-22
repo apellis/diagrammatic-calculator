@@ -4032,6 +4032,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           }
         },
         "basis": {
+          "description": "How many vectors of a basis of the homogeneous solutions to return as 'homogeneous_basis' (0, the default, returns none; a note says when fewer than 'freedom' are listed).",
           "type": "integer",
           "minimum": 0
         }

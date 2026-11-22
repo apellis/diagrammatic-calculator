@@ -1375,6 +1375,9 @@ export interface ChainmapSolveRequest {
   source: Complex;
   target: Complex;
   fixed?: ComplexMap;
+  /**
+   * How many vectors of a basis of the homogeneous solutions to return as 'homogeneous_basis' (0, the default, returns none; a note says when fewer than 'freedom' are listed).
+   */
   basis?: number;
 }
 export interface CheckRequest1 {

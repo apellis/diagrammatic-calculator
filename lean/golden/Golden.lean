@@ -199,18 +199,20 @@ def parseTerm (s : String) : List Summand := Id.run do
   let mut gens : List Gen := []
   let mut idem : Option (List Nat) := none
   let mut started := false
-  let mut first := true
   for t0 in toks do
     let mut t := t0
     if t == "+" || t == "-" then
-      if started then out := out ++ [{ coef := sign * coef, gens, idem }]
-      sign := if t == "-" then -1 else 1
+      -- a sign right after another (or at the start) is unary: `a + -1 b`, `a - -b`
+      if started then
+        out := out ++ [{ coef := sign * coef, gens, idem }]
+        sign := if t == "-" then -1 else 1
+      else
+        sign := if t == "-" then -sign else sign
       coef := 1; gens := []; idem := none; started := false
       continue
-    if first && t.startsWith "-" && t.length > 1 then
-      sign := -1
+    if !started && t.startsWith "-" && t.length > 1 then
+      sign := -sign
       t := sdrop t 1
-    first := false
     started := true
     if t.all Char.isDigit then
       coef := coef * (t.toNat! : Int)
@@ -549,18 +551,20 @@ def parseKTerm (s : String) : List KSummand := Id.run do
   let mut gens : List KGen := []
   let mut idem : Loading := []
   let mut started := false
-  let mut first := true
   for t0 in toks do
     let mut t := t0
     if t == "+" || t == "-" then
-      if started then out := out ++ [{ coef := sign * coef, gens, idem }]
-      sign := if t == "-" then -1 else 1
+      -- a sign right after another (or at the start) is unary: `a + -1 b`, `a - -b`
+      if started then
+        out := out ++ [{ coef := sign * coef, gens, idem }]
+        sign := if t == "-" then -1 else 1
+      else
+        sign := if t == "-" then -sign else sign
       coef := 1; gens := []; idem := []; started := false
       continue
-    if first && t.startsWith "-" && t.length > 1 then
-      sign := -1
+    if !started && t.startsWith "-" && t.length > 1 then
+      sign := -sign
       t := sdrop t 1
-    first := false
     started := true
     let inner := fun (k : Nat) => sdropRight (sdrop t k) 1
     if t.all Char.isDigit then

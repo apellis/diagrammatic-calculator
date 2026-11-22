@@ -837,3 +837,96 @@ fn misspelled_keys_are_rejected() {
         assert!(e.contains("has no key 'bogus_key'"), "{op}: {e}");
     }
 }
+
+/// `basis: n` returns up to `n` homogeneous solutions, with a note exactly when that is fewer
+/// than the freedom; written entries that vanish in the context are named in a note.
+#[test]
+fn solution_bases_and_vanishing_entries() {
+    // End(P ⊕ P) in degree 0 is 2 × 2 scalar matrices: freedom 4
+    let c =
+        json!({ "terms": [{ "at": 0, "summands": [{ "object": "i@1" }, { "object": "i@1" }] }] });
+    let solve = |basis: Value| {
+        call(
+            "chainmap.solve",
+            json!({ "context": CYC, "source": c, "target": c, "basis": basis }),
+        )
+    };
+    let notes = |v: &Value| -> Vec<String> {
+        v["provenance"]["notes"]
+            .as_array()
+            .map_or(&[][..], Vec::as_slice)
+            .iter()
+            .map(|n| n.as_str().unwrap().to_string())
+            .collect()
+    };
+    let v = solve(json!(2));
+    assert_eq!(v["freedom"], 4, "{v:#}");
+    assert_eq!(v["homogeneous_basis"].as_array().unwrap().len(), 2, "{v:#}");
+    assert!(
+        notes(&v)
+            .iter()
+            .any(|n| n.contains("'homogeneous_basis' lists 2 of the 4 basis vectors")),
+        "{v:#}"
+    );
+    let v = solve(json!(4));
+    assert_eq!(v["homogeneous_basis"].as_array().unwrap().len(), 4, "{v:#}");
+    assert!(
+        !notes(&v).iter().any(|n| n.contains("homogeneous_basis")),
+        "{v:#}"
+    );
+    let v = solve(Value::Null);
+    assert!(v.get("homogeneous_basis").is_none(), "{v:#}");
+    assert!(
+        !notes(&v).iter().any(|n| n.contains("homogeneous_basis")),
+        "{v:#}"
+    );
+    let e = error(
+        "chainmap.solve",
+        json!({ "context": CYC, "source": c, "target": c, "basis": true }),
+    );
+    assert!(e.contains("'basis' is a nonnegative integer"), "{e}");
+
+    // x_1 e(i@-1) vanishes in the cyclotomic quotient: echoed as null, with a note
+    let mut c = two_term();
+    c["differentials"][0]["matrix"] = json!([["x_1 e(i@-1)"]]);
+    let v = call("complex.check", json!({ "context": CYC, "complex": c }));
+    assert_eq!(
+        v["complex"]["differentials"][0]["matrix"],
+        json!([[null]]),
+        "{v:#}"
+    );
+    assert!(
+        notes(&v).contains(
+            &"the differential from -1, entry (1, 1): 'x_1 e(i@-1)' is zero in this context, \
+              so the entry is zero (shown as null)"
+                .to_string()
+        ),
+        "{v:#}"
+    );
+    // a nonzero entry, and an entry written as zero, get no such note
+    for entry in [json!("x_1 e(i@1)"), json!(null), json!("0")] {
+        let mut c = two_term();
+        c["differentials"][0]["matrix"] = json!([[entry]]);
+        let v = call("complex.check", json!({ "context": CYC, "complex": c }));
+        assert!(
+            !notes(&v)
+                .iter()
+                .any(|n| n.contains("is zero in this context")),
+            "{v:#}"
+        );
+    }
+    // in a module, the entry is located in the presentation matrix
+    let v = call(
+        "module.check",
+        json!({ "context": CYC, "module": {
+            "generators": [{ "object": "i@1" }],
+            "relations": [{ "object": "i@1", "shift": 2 }],
+            "matrix": [["x_1 e(i@-1)"]] } }),
+    );
+    assert!(
+        notes(&v)
+            .iter()
+            .any(|n| n.starts_with("the presentation matrix, entry (1, 1): 'x_1 e(i@-1)' is zero")),
+        "{v:#}"
+    );
+}

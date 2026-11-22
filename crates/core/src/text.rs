@@ -301,6 +301,12 @@ impl Parser {
             } else {
                 break;
             }
+            // one unary sign may follow: `a + -1 b`, `a - -b`
+            if self.eat('-') {
+                neg = !neg;
+            } else {
+                self.eat('+');
+            }
         }
         if items.len() == 1 && !items[0].0 {
             Ok(items.pop().unwrap().1)

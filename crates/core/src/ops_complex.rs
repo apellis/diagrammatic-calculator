@@ -582,6 +582,12 @@ fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     let mut v = json!({
         "free_positions": free.iter().map(|p| pos_json(p)).collect::<Vec<_>>(),
     });
+    let mut notes = vec![
+        "unknown components at every position where both complexes are nonzero and no \
+         component is fixed; d F = F d imposed along every axis; 'freedom' is the \
+         dimension of the chain maps vanishing on the fixed components"
+            .to_string(),
+    ];
     match sol {
         None => {
             v["exists"] = json!(false);
@@ -605,21 +611,17 @@ fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
                     out.push(map_json(a, &km)?);
                 }
                 v["homogeneous_basis"] = Value::Array(out);
+                if basis_n < s.kernel.len() {
+                    notes.push(format!(
+                        "'homogeneous_basis' lists {basis_n} of the {} basis vectors of the \
+                         homogeneous solutions ('basis' asked for at most {basis_n})",
+                        s.kernel.len()
+                    ));
+                }
             }
         }
     }
-    Ok(with_prov(
-        v,
-        prov_notes(
-            a,
-            vec![
-                "unknown components at every position where both complexes are nonzero and no \
-                 component is fixed; d F = F d imposed along every axis; 'freedom' is the \
-                 dimension of the chain maps vanishing on the fixed components"
-                    .into(),
-            ],
-        ),
-    ))
+    Ok(with_prov(v, prov_notes(a, notes)))
 }
 
 fn homotopy_find<A: Additive>(a: &A, input: &Value) -> Result<Value> {

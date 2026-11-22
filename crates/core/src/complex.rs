@@ -473,6 +473,8 @@ pub fn parse_complex_noted<A: Additive>(
     };
     let len = |p: &Pos| written.get(p).map_or(0, Vec::len);
     let mut diffs = BTreeMap::new();
+    // written entries that are zero in this context: (where, row, column, text)
+    let mut vanished: Vec<(String, usize, usize, String)> = Vec::new();
     if let Some(ds) = v.get("differentials") {
         let ds = ds
             .as_array()
@@ -510,6 +512,15 @@ pub fn parse_complex_noted<A: Additive>(
                 len(&p),
                 &where_,
             )?;
+            for (r, row) in m.iter().enumerate() {
+                for (c, f) in row.iter().enumerate() {
+                    if let Some(t) = entry_text(&d["matrix"][r][c])?
+                        && a.is_zero(f)?
+                    {
+                        vanished.push((where_.clone(), r + 1, c + 1, t.trim().to_string()));
+                    }
+                }
+            }
             if diffs.insert((axis, p.clone()), m).is_some() {
                 return Err(Error::invalid(format!("{where_} is given twice")));
             }
@@ -530,7 +541,15 @@ pub fn parse_complex_noted<A: Additive>(
             }
         }
     }
-    let mut notes = Vec::new();
+    let mut notes: Vec<String> = vanished
+        .iter()
+        .map(|(w, r, c, t)| {
+            format!(
+                "{w}, entry ({r}, {c}): '{t}' is zero in this context, so the entry is zero \
+                 (shown as null)"
+            )
+        })
+        .collect();
     let (mut objs_inferred, mut shifts_inferred) = (0usize, 0usize);
     for (from, to, s, t, _) in &edges {
         for (node, o) in [(from, s), (to, t)] {
