@@ -171,9 +171,17 @@ fn col_order(a: &Col, b: &Col) -> std::cmp::Ordering {
 }
 
 impl<R: Ring> Klrw<R> {
-    /// The permutations `π` with `colour(top_{π(k)}) = colour(bottom_k)`.
+    /// The permutations `π` with `colour(top_{π(k)}) = colour(bottom_k)`: none when the two
+    /// loadings have different numbers of strands or different colours, so that `e(top) A
+    /// e(bottom)` is zero.
     pub(crate) fn compatible(&self, bottom: &Loading, top: &Loading) -> Vec<Perm> {
         let (cb, ct) = (bottom.colours(), top.colours());
+        let (mut sb, mut st) = (cb.clone(), ct.clone());
+        sb.sort_unstable();
+        st.sort_unstable();
+        if sb != st {
+            return Vec::new();
+        }
         Perm::all(bottom.n())
             .into_iter()
             .filter(|p| (0..cb.len()).all(|k| ct[p.0[k] as usize] == cb[k]))

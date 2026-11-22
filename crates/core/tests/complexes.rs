@@ -638,3 +638,97 @@ fn head_window_is_never_empty_when_max_degree_is_low() {
     );
     assert_eq!(v["complete"], false, "{v:#}");
 }
+
+/// Summands with different numbers of black strands: every hom between them is zero, and every
+/// operation treats them alike (they used to fail or panic in the strand bookkeeping).
+#[test]
+fn summands_with_different_strand_counts() {
+    let one = json!({ "terms": [{ "at": 0, "summands": [{ "object": "i@1" }] }] });
+    let two = json!({ "terms": [{ "at": 0, "summands": [{ "object": "i@1 i@2" }] }] });
+    let v = call(
+        "hom.basis",
+        json!({ "context": CYC, "source": "i@1", "target": "i@1 i@2" }),
+    );
+    assert_eq!(v["degrees"], json!([]), "{v:#}");
+    let v = call(
+        "complex.hom",
+        json!({ "context": CYC, "source": one, "target": two }),
+    );
+    assert_eq!(v["degrees"], json!([]), "{v:#}");
+    // P(i@1 i@2) ⊕ P(i@1)⟨2⟩ --[0, x]--> P(i@1)
+    let c = json!({
+        "terms": [
+            { "at": -1, "summands": [{ "object": "i@1 i@2" }, { "object": "i@1", "shift": 2 }] },
+            p(0, 0),
+        ],
+        "differentials": [{ "from": -1, "matrix": [[null, "x_1 e(i@1)"]] }],
+    });
+    for op in ["complex.check", "complex.minimal"] {
+        let v = call(op, json!({ "context": CYC, "complex": c }));
+        assert_eq!(v["holds"], true, "{op}: {v:#}");
+    }
+    let v = call(
+        "complex.homology",
+        json!({ "context": CYC, "complex": c, "at": -1 }),
+    );
+    // H^{-1} = P(i@1 i@2) ⊕ x P(i@1)⟨2⟩: tested on i@1 i@2 it is End(P(i@1 i@2)) = q^-2 + 2 + q^2,
+    // on i@1 the line spanned by x in degree 4
+    let pieces: Vec<_> = v["positions"][0]["pieces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            (
+                p["test"].clone(),
+                p["degree"].clone(),
+                p["dimension"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        pieces,
+        vec![
+            (json!("i@1 i@2"), json!(-2), json!(1)),
+            (json!("i@1 i@2"), json!(0), json!(2)),
+            (json!("i@1 i@2"), json!(2), json!(1)),
+            (json!("i@1"), json!(4), json!(1)),
+        ],
+        "{v:#}"
+    );
+    let v = call(
+        "complex.kernel",
+        json!({ "context": CYC, "complex": c, "at": -1 }),
+    );
+    assert_eq!(v["complete"], true, "{v:#}");
+    let v = call(
+        "complex.hom",
+        json!({ "context": CYC, "source": c, "target": c }),
+    );
+    assert!(!v["degrees"].as_array().unwrap().is_empty(), "{v:#}");
+    let v = call("complex.euler", json!({ "context": CYC, "complex": c }));
+    assert_eq!(v["text"], "(-1)[i@1 i@2] + (-q^2 + 1)[i@1]", "{v:#}");
+    // the module P(i@1)/x ⊕ P(i@1 i@2), its head, and its resolution
+    let v = call(
+        "module.head",
+        json!({ "context": CYC, "summands": [{ "object": "i@1" }, { "object": "i@1 i@2" }] }),
+    );
+    assert_eq!(v["dimension"], 5, "{v:#}");
+    let m = v["module"].clone();
+    let v = call("module.check", json!({ "context": CYC, "module": m }));
+    assert_eq!(v["holds"], true, "{v:#}");
+    let mut r =
+        call("resolution.start", json!({ "context": CYC, "module": m }))["resolution"].clone();
+    for _ in 0..2 {
+        r = call(
+            "resolution.extend",
+            json!({ "context": CYC, "resolution": r }),
+        )["resolution"]
+            .clone();
+    }
+    let v = call(
+        "resolution.check",
+        json!({ "context": CYC, "resolution": r }),
+    );
+    assert_eq!(v["holds"], true, "{v:#}");
+    assert_eq!(v["uncovered_dimension"], 1, "{v:#}");
+}
