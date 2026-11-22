@@ -1294,10 +1294,11 @@ pub fn window(
 ) -> Option<Window> {
     let (lo, hi) = range?;
     Some(match (hi, max) {
+        // a cap below the lowest degree would search nothing: the lowest degree is kept
         (Some(h), Some(m)) => Window {
             lo,
-            hi: h.min(m),
-            truncated: m < h,
+            hi: h.min(m).max(lo),
+            truncated: m.max(lo) < h,
         },
         (Some(h), None) => Window {
             lo,
@@ -1306,7 +1307,7 @@ pub fn window(
         },
         (None, Some(m)) => Window {
             lo,
-            hi: m,
+            hi: m.max(lo),
             truncated: true,
         },
         (None, None) => Window {

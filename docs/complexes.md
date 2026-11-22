@@ -262,7 +262,9 @@ with `⊕ T⟨d⟩` put before `p` and `K` as the new differential.
 **Degree windows.** In the cyclotomic quotient every Hom space is finite-dimensional and every
 search is complete. Without the quotient Hom spaces are unbounded above; the search then stops at a
 window (`max_degree`, or six degrees above the lowest), and the result says so in `window`
-(`truncated: true`), in `complete: false`, and in a provenance note. Nothing is cut silently.
+(`truncated: true`), in `complete: false`, and in a provenance note. Nothing is cut silently. A
+`max_degree` below the lowest degree with maps is raised to that degree, so the window is never
+empty.
 
 ## Worked example: resolving a simple module
 
@@ -356,9 +358,13 @@ the correction by a combination of them; a choice at one order changes the equat
 orders). `complex` is the corrected complex and `solved_to_order` the last order solved.
 
 When an order has no solution, `failures` holds one failure with `condition: "obstruction"`, its
-`order`, the coefficient of `h^m` in `d²` (with the unknowns zero) at the first position where
-the system becomes inconsistent, and `maps` naming the two differentials of that composite, as
-for `complex.check`; `complex` is then corrected through order `m − 1`. When the `h`-free part
+`order`, the coefficient of `h^m` in `d²` (with that order's corrections zero) at the first
+position where the system becomes inconsistent, and `maps` naming the two differentials of that
+composite, as for `complex.check`; `complex` is then corrected through order `m − 1`. The detail
+says when that position's equation could be met on its own (the inconsistency then comes from
+the positions before it), and, when a lower order had freedom, that a different choice there may
+remove the obstruction: the orders are solved one at a time, each with one choice. When an
+order's freedom has more than 20 basis vectors, the first 20 are listed and a note says so. When the `h`-free part
 itself does not square to zero, the failure has `condition: "d^2"` and order 0, and
 `solved_to_order` is null. Nothing in the input is discarded: the given parts of the
 differential stay as written and the corrections are added to them.

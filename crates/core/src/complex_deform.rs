@@ -301,6 +301,30 @@ pub fn deform<A: ParamSplit>(
                     .map(|f| t.a.fmt_mor(&a.neg(f)))
                     .transpose()?
                     .unwrap_or_else(|| "0".into());
+                // the equation of this square may be solvable on its own, the inconsistency
+                // coming only from the squares before it that share its unknowns
+                let alone = solve_system(&a0, &unknowns, &eqs[at..=at])?.is_some();
+                let mut why = if alone {
+                    format!(
+                        "the coefficient of {}^{m} in d ∘ d (with this order's corrections zero) \
+                         has the entry {detail} here; that can be met on its own, but not \
+                         together with the squares before it, which involve the same unknown \
+                         entries",
+                        t.param
+                    )
+                } else {
+                    format!(
+                        "the coefficient of {}^{m} in d ∘ d (with this order's corrections zero) \
+                         has the entry {detail}; it is not of the form d_0 X + X d_0",
+                        t.param
+                    )
+                };
+                if out.orders.iter().any(|o| !o.freedom.is_empty()) {
+                    why.push_str(
+                        "; the corrections at lower orders are one choice each, and a different \
+                         choice (adding some of their freedom) may remove this obstruction",
+                    );
+                }
                 out.obstruction = Some((
                     m as u32,
                     Failure {
@@ -310,11 +334,7 @@ pub fn deform<A: ParamSplit>(
                              this order makes it vanish",
                             fmt_pos(p)
                         ),
-                        detail: format!(
-                            "the coefficient of {}^{m} in d ∘ d (with the unknowns zero) has the \
-                             entry {detail}; it is not of the form d_0 X + X d_0",
-                            t.param
-                        ),
+                        detail: why,
                         maps: vec![diff_ref(p, 0), diff_ref(q, 0)],
                     },
                 ));

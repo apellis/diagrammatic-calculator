@@ -615,3 +615,26 @@ fn resolving_a_projective_and_gauss_on_resolutions() {
     assert_eq!(v["holds"], true, "{v:#}");
     assert_eq!(v["next_at"], -2, "{v:#}");
 }
+
+#[test]
+fn head_window_is_never_empty_when_max_degree_is_low() {
+    // the only degree with maps is 10; a max_degree of 2 is raised to it rather than leaving an
+    // empty window and a zero head
+    let v = call(
+        "module.head",
+        json!({
+            "context": "klrw type=A1 ring=QQ red=\"2i@0\"",
+            "object": "i@1",
+            "shift": 10,
+            "max_degree": 2,
+        }),
+    );
+    assert_eq!(v["dimension"], 1, "{v:#}");
+    assert_eq!(v["dimensions"][0]["powers"], json!([[10, 1]]), "{v:#}");
+    assert_eq!(
+        v["window"],
+        json!({ "from": 10, "to": 10, "truncated": true }),
+        "{v:#}"
+    );
+    assert_eq!(v["complete"], false, "{v:#}");
+}

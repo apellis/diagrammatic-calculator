@@ -496,11 +496,15 @@ impl OrderSystem {
     /// Rows: every coordinate that occurs, in squares `< upto`. Returns (rank of the coefficient
     /// matrix, rank with the right side `−[d²]_m` appended).
     fn ranks(&self, upto: usize) -> (usize, usize) {
+        self.ranks_in(0, upto)
+    }
+    /// As `ranks`, for the squares `from ≤ t < upto` only.
+    fn ranks_in(&self, from: usize, upto: usize) -> (usize, usize) {
         let mut keys: BTreeSet<(usize, usize, usize, String)> = BTreeSet::new();
         for col in &self.cols {
-            keys.extend(col.keys().filter(|k| k.0 < upto).cloned());
+            keys.extend(col.keys().filter(|k| from <= k.0 && k.0 < upto).cloned());
         }
-        for (t, sq) in self.dd.iter().enumerate().take(upto) {
+        for (t, sq) in self.dd.iter().enumerate().take(upto).skip(from) {
             for (i, row) in sq.iter().enumerate() {
                 for (j, e) in row.iter().enumerate() {
                     keys.extend(e.keys().map(|k| (t, i, j, k.clone())));
@@ -814,19 +818,42 @@ fn check_deform(case: &DeformCase) -> (bool, bool) {
                 json!([diff_ref(lo, t), diff_ref(lo, t + 1)]),
                 "{ctxt}"
             );
-            // the printed entry is the first nonzero entry of [d²]_m at that square
+            // the printed entry is the first nonzero entry of [d²]_m at that square, or 0
             let detail = f["detail"].as_str().unwrap();
             let entry = detail
                 .split_once("has the entry ")
-                .and_then(|(_, r)| r.split_once("; it is"))
+                .and_then(|(_, r)| r.split_once(" here;").or_else(|| r.split_once("; it is")))
                 .map(|(e, _)| e)
                 .unwrap_or_else(|| panic!("no entry in {detail:?}"));
-            let first = sys.dd[t]
-                .iter()
-                .flatten()
-                .find(|e| !e.is_empty())
-                .expect("nonzero");
-            assert_eq!(&part(&o.nf(entry), 0), first, "{ctxt}");
+            let first = sys.dd[t].iter().flatten().find(|e| !e.is_empty());
+            let printed = o.nf(entry);
+            assert!(printed.keys().all(|(h, _)| *h == 0), "{ctxt}");
+            match first {
+                Some(e) => assert_eq!(&part(&printed, 0), e, "{ctxt}"),
+                None => assert!(printed.is_empty(), "{ctxt}"),
+            }
+            // the square alone is solvable exactly when the detail says so
+            let (a1, b1) = sys.ranks_in(t, t + 1);
+            assert_eq!(
+                detail.contains("can be met on its own"),
+                a1 == b1,
+                "alone: {ctxt}"
+            );
+            assert_eq!(
+                detail.contains("it is not of the form"),
+                a1 != b1,
+                "not alone: {ctxt}"
+            );
+            // the greedy remark appears exactly when a lower order had freedom
+            let lower_free = orders.iter().any(|x| {
+                x["order"].as_u64().unwrap() < u64::from(m)
+                    && x["freedom_dimension"].as_u64().unwrap() > 0
+            });
+            assert_eq!(
+                detail.contains("a different choice"),
+                lower_free,
+                "greedy: {ctxt}"
+            );
             assert!(detail.contains(&format!("h^{m}")), "{ctxt}");
             same_complex(&mut o, &cur, &v["complex"], &ctxt);
             return (true, false);
@@ -867,6 +894,12 @@ fn check_deform(case: &DeformCase) -> (bool, bool) {
         // the freedom: independent solutions of the homogeneous system
         let free = x["freedom"].as_array().unwrap();
         assert_eq!(free.len(), sys.kernel_dim().min(20), "{ctxt}");
+        let cap = format!("order {m}: the freedom has dimension");
+        assert_eq!(
+            v["provenance"]["notes"].to_string().contains(&cap),
+            sys.kernel_dim() > 20,
+            "freedom cap note: {ctxt}"
+        );
         for y in free {
             let mut plus = cur.clone();
             for d in y.as_array().unwrap() {

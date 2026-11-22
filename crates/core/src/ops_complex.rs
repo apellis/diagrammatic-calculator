@@ -1325,6 +1325,16 @@ fn deform_op<A: ParamSplit>(t: &Truncated<'_, A>, input: &Value) -> Result<Value
         h = t.param,
         n = t.order
     )];
+    for o in &d.orders {
+        if o.freedom.len() > SHOWN_FREEDOM {
+            notes.push(format!(
+                "order {}: the freedom has dimension {}; only the first {SHOWN_FREEDOM} vectors \
+                 of its basis are listed",
+                o.order,
+                o.freedom.len()
+            ));
+        }
+    }
     if let Some((m, _)) = &d.obstruction {
         notes.push(format!(
             "obstructed at order {m}: the complex returned is corrected through order {}",
