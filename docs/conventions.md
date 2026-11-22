@@ -31,9 +31,11 @@ References of the form `Library: Declaration` point to the Lean libraries
 - **Scalars.** Numbers, `I` (a square root of −1 in ℤ[√−1]), parameters (`q`, `t_ij`, `pi` or `π`),
   and declared unknowns (`c1`) are scalars; a scalar written alone is that multiple of the
   identity. `^` takes integer exponents, negative only for invertible scalars.
-- **Signs.** A sum is summands joined by `+` and `-`. One more sign may follow a `+` or `-` and
-  is unary: `a + -1 b` and `a - b` are the same term, and so are `a - -b` and `a + b`. Printing
-  never writes such a sign.
+- **Signs.** A sum is summands each preceded by a run of signs `+` and `-` (before the first
+  summand the run may be empty); the summand's sign is the product of its run. So `a + -1 b` and
+  `a - b` are the same term, and so are `a - -b` and `a + b`, `- -a` and `a`, and `a - - - b`
+  and `a - b`. A sign cannot stand inside a product: `2 * -x_1` is an error (write `-2 x_1` or
+  `2 (-x_1)`). Printing never writes a run of more than one sign.
 
 ## Signs
 

@@ -77,6 +77,7 @@ fn golden_corpus_is_reproduced() {
         "actions.json is stale: regenerate it in Lean"
     );
     let mut checked = 0;
+    let mut rejected = 0;
     for (case, l) in cases.iter().zip(&lean) {
         assert_eq!(l["id"], case.id.as_str());
         assert_eq!(
@@ -96,6 +97,16 @@ fn golden_corpus_is_reproduced() {
             "{}: Lean found the normal form wrong",
             case.id
         );
+        if case.nf == "error" {
+            // Lean rejects the term ('agree'), and so must the engine
+            assert!(
+                text::parse(&case.term).is_err(),
+                "{}: the engine reads a term the corpus rejects",
+                case.id
+            );
+            rejected += 1;
+            continue;
+        }
         if case.context.starts_with("klrw ") {
             checked += check_klrw(case, l);
             continue;
@@ -152,6 +163,7 @@ fn golden_corpus_is_reproduced() {
         }
     }
     assert!(checked > 500, "{checked}");
+    assert!(rejected >= 3, "{rejected}");
 }
 
 /// A `klrw` case: loadings are compared up to isotopy (by their order type), since the Lean

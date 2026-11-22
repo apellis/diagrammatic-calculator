@@ -284,28 +284,30 @@ impl Parser {
         }
     }
 
+    /// A run of signs: whether it holds an odd number of `-`, or `None` when it is empty.
+    fn signs(&mut self) -> Option<bool> {
+        let mut neg = None;
+        loop {
+            if self.eat('-') {
+                neg = Some(!neg.unwrap_or(false));
+            } else if self.eat('+') {
+                neg = Some(neg.unwrap_or(false));
+            } else {
+                return neg;
+            }
+        }
+    }
+
+    /// A sum of summands, each preceded by a run of signs whose product is its sign (`a - -b`,
+    /// `- -a`, `a + -1 b`); the run may be empty only before the first summand.
     fn sum(&mut self) -> Result<Ast> {
         let mut items = Vec::new();
-        let mut neg = if self.eat('-') {
-            true
-        } else {
-            self.eat('+');
-            false
-        };
+        let mut neg = self.signs().unwrap_or(false);
         loop {
             items.push((neg, self.tensor()?));
-            if self.eat('+') {
-                neg = false;
-            } else if self.eat('-') {
-                neg = true;
-            } else {
-                break;
-            }
-            // one unary sign may follow: `a + -1 b`, `a - -b`
-            if self.eat('-') {
-                neg = !neg;
-            } else {
-                self.eat('+');
+            match self.signs() {
+                Some(n) => neg = n,
+                None => break,
             }
         }
         if items.len() == 1 && !items[0].0 {
@@ -696,6 +698,18 @@ mod tests {
         );
         assert!(parse("sum_{f=0} x_1").is_err());
         assert!(parse("x_1 +").is_err());
+        // a run of signs before a summand: its sign is their product
+        for (s, t) in [
+            ("x_1 - -x_2", "x_1 + x_2"),
+            ("- -x_1", "x_1"),
+            ("x_1 - - - x_2", "x_1 - x_2"),
+            ("+ - + x_1 + -1 x_2", "-x_1 - 1 x_2"),
+        ] {
+            assert_eq!(parse(s).unwrap(), parse(t).unwrap(), "{s}");
+        }
+        // but not inside a product
+        assert!(parse("2 * -x_1").is_err());
+        assert!(parse("x_1 -").is_err());
         assert!(parse("2_i").is_err());
     }
 

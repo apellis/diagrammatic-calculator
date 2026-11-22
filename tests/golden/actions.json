@@ -1687,5 +1687,110 @@
       {"source": "i@0 j@1 i@2", "input": [2, 2, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 1], -1]]}]},
       {"source": "i@0 j@1 i@2", "input": [2, 2, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 2], -1]]}]}
     ]
+  },
+  {
+    "id": "nh2-leading-sign-run",
+    "context": "nilhecke nu=2",
+    "term": "- -x_1 psi_1",
+    "normal_form": "1 + psi_1 x_2",
+    "agree": true,
+    "actions": [
+      {"source": "ii", "input": [0, 0], "output": []},
+      {"source": "ii", "input": [0, 1], "output": [{"target": "ii", "poly": [[[1, 0], -1]]}]},
+      {"source": "ii", "input": [1, 0], "output": [{"target": "ii", "poly": [[[1, 0], 1]]}]},
+      {"source": "ii", "input": [1, 1], "output": []}
+    ]
+  },
+  {
+    "id": "nh2-three-sign-run",
+    "context": "nilhecke nu=2",
+    "term": "x_1 psi_1 - - - psi_1 x_2",
+    "normal_form": "1",
+    "agree": true,
+    "actions": [
+      {"source": "ii", "input": [0, 0], "output": [{"target": "ii", "poly": [[[0, 0], 1]]}]},
+      {"source": "ii", "input": [0, 1], "output": [{"target": "ii", "poly": [[[0, 1], 1]]}]},
+      {"source": "ii", "input": [1, 0], "output": [{"target": "ii", "poly": [[[1, 0], 1]]}]},
+      {"source": "ii", "input": [1, 1], "output": [{"target": "ii", "poly": [[[1, 1], 1]]}]}
+    ]
+  },
+  {
+    "id": "nh2-sign-glued-after-number",
+    "context": "nilhecke nu=2",
+    "term": "2 -x_1 psi_1",
+    "normal_form": "1 - psi_1 x_2",
+    "agree": true,
+    "actions": [
+      {"source": "ii", "input": [0, 0], "output": [{"target": "ii", "poly": [[[0, 0], 2]]}]},
+      {"source": "ii", "input": [0, 1], "output": [{"target": "ii", "poly": [[[1, 0], 1], [[0, 1], 2]]}]},
+      {"source": "ii", "input": [1, 0], "output": [{"target": "ii", "poly": [[[1, 0], 1]]}]},
+      {"source": "ii", "input": [1, 1], "output": [{"target": "ii", "poly": [[[1, 1], 2]]}]}
+    ]
+  },
+  {
+    "id": "klrw-a2-braid-sign-run",
+    "context": "klrw type=A2",
+    "term": "psi_2 psi_1 psi_2 e(i@0 j@1 i@2) - - - psi_1 psi_2 psi_1 e(i@0 j@1 i@2)",
+    "normal_form": "-e(i@0 j@1 i@2)",
+    "agree": true,
+    "actions": [
+      {"source": "i@0 j@1 i@2", "input": [0, 0, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 0, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 0, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 0, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 0, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 0, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 1, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 1, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 1, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 1, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 1, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 1, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 2, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 2, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 2, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 2, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [0, 2, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[0, 2, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 0, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 0, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 0, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 0, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 0, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 0, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 1, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 1, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 1, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 1, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 1, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 1, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 2, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 2, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 2, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 2, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [1, 2, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[1, 2, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 0, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 0, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 0, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 0, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 0, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 0, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 1, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 1, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 1, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 1, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 1, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 1, 2], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 2, 0], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 0], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 2, 1], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 1], -1]]}]},
+      {"source": "i@0 j@1 i@2", "input": [2, 2, 2], "output": [{"target": "i@0 j@1 i@2", "poly": [[[2, 2, 2], -1]]}]}
+    ]
+  },
+  {
+    "id": "nh2-sign-in-product",
+    "context": "nilhecke nu=2",
+    "term": "2 * -x_1 psi_1",
+    "normal_form": "error",
+    "agree": true,
+    "actions": [
+
+    ]
+  },
+  {
+    "id": "nh2-trailing-sign",
+    "context": "nilhecke nu=2",
+    "term": "x_1 psi_1 -",
+    "normal_form": "error",
+    "agree": true,
+    "actions": [
+
+    ]
+  },
+  {
+    "id": "klrw-a2-sign-in-product",
+    "context": "klrw type=A2",
+    "term": "2 * -psi_1 psi_2 psi_1 e(i@0 j@1 i@2)",
+    "normal_form": "error",
+    "agree": true,
+    "actions": [
+
+    ]
   }
 ]

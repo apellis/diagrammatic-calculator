@@ -28,7 +28,10 @@ The operators are those of the Lean libraries:
   to isotopy, by the order of the strands, ghosts and red strands.
 
 Terms are read in the calculator's text format, restricted to expanded sums: `a b` is `a ∘ b`
-(`b` applied first), subscripts are positions counted from 1, `e(...)` is at the bottom.
+(`b` applied first), subscripts are positions counted from 1, `e(...)` is at the bottom. Each
+summand is preceded by a run of signs whose product is its sign (`docs/conventions.md`, Signs); a
+sign inside a product (`2 * -x_1`) or a run of signs with no summand after it is an error. A case
+whose normal form is `error` states that its term is rejected.
 
 Core Lean only: `lean --run lean/golden/Golden.lean [cases.txt] [actions.json]`.
 -/
@@ -191,44 +194,60 @@ structure Summand where
   gens : List Gen   -- top first
   idem : Option (List Nat)
 
-def parseTerm (s : String) : List Summand := Id.run do
-  let toks := (s.splitOn " ").filter (· ≠ "")
-  let mut out : List Summand := []
+/-- Splits the tokens of a term into its summands, each with its sign: a run of signs before a
+summand multiplies to its sign, a sign glued to a word (`-x_1`) counts as a separate sign, and a
+sign right after `*` or a run of signs at the end is an error. -/
+def summandsOf (toks : List String) : Except String (List (Int × List String)) := Id.run do
+  -- the words and signs, in order: `some w` a word, `none` a sign `-`, `some "+"` a sign `+`
+  let mut items : List (Option String) := []
+  for t in toks do
+    let mut rest := t.toList
+    while rest.head? == some '-' || rest.head? == some '+' do
+      items := items ++ [if rest.head? == some '-' then none else some "+"]
+      rest := rest.drop 1
+    if !rest.isEmpty then items := items ++ [some (String.ofList rest)]
+  let mut out : List (Int × List String) := []
   let mut sign : Int := 1
-  let mut coef : Int := 1
-  let mut gens : List Gen := []
-  let mut idem : Option (List Nat) := none
-  let mut started := false
-  for t0 in toks do
-    let mut t := t0
-    if t == "+" || t == "-" then
-      -- a sign right after another (or at the start) is unary: `a + -1 b`, `a - -b`
-      if started then
-        out := out ++ [{ coef := sign * coef, gens, idem }]
-        sign := if t == "-" then -1 else 1
-      else
-        sign := if t == "-" then -sign else sign
-      coef := 1; gens := []; idem := none; started := false
-      continue
-    if !started && t.startsWith "-" && t.length > 1 then
-      sign := -sign
-      t := sdrop t 1
-    started := true
-    if t.all Char.isDigit then
-      coef := coef * (t.toNat! : Int)
-    else if t.startsWith "e(" then
-      idem := some (((sdropRight (sdrop t 2) 1).toList).map fun ch => colourIndex ch.toString)
+  let mut words : List String := []
+  let mut afterStar := false
+  for it in items do
+    let isSign := it == none || it == some "+"
+    if isSign then
+      if afterStar then return .error "a sign inside a product"
+      if !words.isEmpty then
+        out := out ++ [(sign, words)]
+        sign := 1
+        words := []
+      if it == none then sign := -sign
     else
-      match t.splitOn "_" with
-      | [name, rest] =>
-        let (pos, pow) := match rest.splitOn "^" with
-          | [p, e] => (p.toNat!, e.toNat!)
-          | _ => (rest.toNat!, 1)
-        let g := if name == "x" then Gen.x (pos - 1) else Gen.psi (pos - 1)
-        gens := gens ++ List.replicate pow g
-      | _ => pure ()
-  if started then out := out ++ [{ coef := sign * coef, gens, idem }]
-  return out
+      let w := it.getD ""
+      afterStar := w == "*"
+      if w != "*" then words := words ++ [w]
+  if words.isEmpty then return .error "a sign with no summand after it"
+  out := out ++ [(sign, words)]
+  return .ok out
+
+def parseTerm (s : String) : Except String (List Summand) := do
+  let parts ← summandsOf ((s.splitOn " ").filter (· ≠ ""))
+  return parts.map fun (sign, ws) => Id.run do
+    let mut coef : Int := sign
+    let mut gens : List Gen := []
+    let mut idem : Option (List Nat) := none
+    for t in ws do
+      if t.all Char.isDigit then
+        coef := coef * (t.toNat! : Int)
+      else if t.startsWith "e(" then
+        idem := some (((sdropRight (sdrop t 2) 1).toList).map fun ch => colourIndex ch.toString)
+      else
+        match t.splitOn "_" with
+        | [name, rest] =>
+          let (pos, pow) := match rest.splitOn "^" with
+            | [p, e] => (p.toNat!, e.toNat!)
+            | _ => (rest.toNat!, 1)
+          let g := if name == "x" then Gen.x (pos - 1) else Gen.psi (pos - 1)
+          gens := gens ++ List.replicate pow g
+        | _ => pure ()
+    return { coef, gens, idem }
 
 /-! ## The action -/
 
@@ -543,51 +562,34 @@ structure KSummand where
   gens : List KGen   -- top first
   idem : Loading
 
-def parseKTerm (s : String) : List KSummand := Id.run do
-  let toks := splitTop s
-  let mut out : List KSummand := []
-  let mut sign : Int := 1
-  let mut coef : Int := 1
-  let mut gens : List KGen := []
-  let mut idem : Loading := []
-  let mut started := false
-  for t0 in toks do
-    let mut t := t0
-    if t == "+" || t == "-" then
-      -- a sign right after another (or at the start) is unary: `a + -1 b`, `a - -b`
-      if started then
-        out := out ++ [{ coef := sign * coef, gens, idem }]
-        sign := if t == "-" then -1 else 1
+def parseKTerm (s : String) : Except String (List KSummand) := do
+  let parts ← summandsOf (splitTop s)
+  return parts.map fun (sign, ws) => Id.run do
+    let mut coef : Int := sign
+    let mut gens : List KGen := []
+    let mut idem : Loading := []
+    for t in ws do
+      let inner := fun (k : Nat) => sdropRight (sdrop t k) 1
+      if t.all Char.isDigit then
+        coef := coef * (t.toNat! : Int)
+      else if t.startsWith "e(" then idem := parseLoading (inner 2)
+      else if t.startsWith "to(" then gens := gens ++ [KGen.to (parseLoading (inner 3))]
+      else if t.startsWith "b(" then
+        match (inner 2).splitOn ";" with
+        | [ps, ls] =>
+          let perm := ((ps.splitOn " ").filter (· ≠ "")).map (·.toNat! - 1)
+          gens := gens ++ [KGen.b perm (parseLoading (strim ls))]
+        | _ => pure ()
       else
-        sign := if t == "-" then -sign else sign
-      coef := 1; gens := []; idem := []; started := false
-      continue
-    if !started && t.startsWith "-" && t.length > 1 then
-      sign := -sign
-      t := sdrop t 1
-    started := true
-    let inner := fun (k : Nat) => sdropRight (sdrop t k) 1
-    if t.all Char.isDigit then
-      coef := coef * (t.toNat! : Int)
-    else if t.startsWith "e(" then idem := parseLoading (inner 2)
-    else if t.startsWith "to(" then gens := gens ++ [KGen.to (parseLoading (inner 3))]
-    else if t.startsWith "b(" then
-      match (inner 2).splitOn ";" with
-      | [ps, ls] =>
-        let perm := ((ps.splitOn " ").filter (· ≠ "")).map (·.toNat! - 1)
-        gens := gens ++ [KGen.b perm (parseLoading (strim ls))]
-      | _ => pure ()
-    else
-      match t.splitOn "_" with
-      | [name, rest] =>
-        let (p, pow) := match rest.splitOn "^" with
-          | [p, e] => (p.toNat!, e.toNat!)
-          | _ => (rest.toNat!, 1)
-        let g := if name == "x" then KGen.x (p - 1) else KGen.psi (p - 1)
-        gens := gens ++ List.replicate pow g
-      | _ => pure ()
-  if started then out := out ++ [{ coef := sign * coef, gens, idem }]
-  return out
+        match t.splitOn "_" with
+        | [name, rest] =>
+          let (p, pow) := match rest.splitOn "^" with
+            | [p, e] => (p.toNat!, e.toNat!)
+            | _ => (rest.toNat!, 1)
+          let g := if name == "x" then KGen.x (p - 1) else KGen.psi (p - 1)
+          gens := gens ++ List.replicate pow g
+        | _ => pure ()
+    return { coef, gens, idem }
 
 /-- One summand applied to `f e(src)`: the top loading and the polynomial, or `none`. -/
 def actKSummand (ctx : KCtx) (src : Loading) (f : Poly) (sm : KSummand) :
@@ -655,33 +657,41 @@ def main (args : List String) : IO UInt32 := do
   for c in cases do
     let mut agree := true
     let mut acts : List String := []
-    if c.context.startsWith "klrw " then
+    if c.nf == "error" then
+      -- the term is to be rejected
+      let rejected := if c.context.startsWith "klrw " then
+          (parseKTerm c.term).toOption.isNone
+        else (parseTerm c.term).toOption.isNone
+      if !rejected then agree := false
+    else if c.context.startsWith "klrw " then
       let ctx := parseKContext c.context
-      let term := parseKTerm c.term
-      let nf := parseKTerm c.nf
-      for src in kSources ctx term do
-        for a in inputs src.length do
-          let f : Poly := [(a, 1)]
-          let v := actKTerm ctx src f term
-          let w := actKTerm ctx src f nf
-          if !kvecEq ctx v w then
-            agree := false
-          acts := acts ++ [s!"      \{\"source\": \"{fmtLoading src}\", \"input\": {jsonMono a}, \"output\": {jsonKVec v}}"]
+      match parseKTerm c.term, parseKTerm c.nf with
+      | .ok term, .ok nf =>
+        for src in kSources ctx term do
+          for a in inputs src.length do
+            let f : Poly := [(a, 1)]
+            let v := actKTerm ctx src f term
+            let w := actKTerm ctx src f nf
+            if !kvecEq ctx v w then
+              agree := false
+            acts := acts ++ [s!"      \{\"source\": \"{fmtLoading src}\", \"input\": {jsonMono a}, \"output\": {jsonKVec v}}"]
+      | _, _ => agree := false
     else
       let ctx := parseContext c.context
-      let term := parseTerm c.term
-      let nf := parseTerm c.nf
-      for src in ctx.sources do
-        for a in inputs ctx.n do
-          let f : Poly := [(a, 1)]
-          let v := actTerm ctx src f term
-          let w := actTerm ctx src f nf
-          if v != w then
-            agree := false
-          acts := acts ++ [s!"      \{\"source\": \"{seqName src}\", \"input\": {jsonMono a}, \"output\": {jsonVec v}}"]
+      match parseTerm c.term, parseTerm c.nf with
+      | .ok term, .ok nf =>
+        for src in ctx.sources do
+          for a in inputs ctx.n do
+            let f : Poly := [(a, 1)]
+            let v := actTerm ctx src f term
+            let w := actTerm ctx src f nf
+            if v != w then
+              agree := false
+            acts := acts ++ [s!"      \{\"source\": \"{seqName src}\", \"input\": {jsonMono a}, \"output\": {jsonVec v}}"]
+      | _, _ => agree := false
     if !agree then
       failed := true
-      IO.eprintln s!"case {c.id}: the term and its stated normal form act differently"
+      IO.eprintln s!"case {c.id}: the term and its stated normal form disagree, or the term is read or rejected against the case"
     entries := entries ++ [s!"  \{\n    \"id\": \"{c.id}\",\n    \"context\": \"{jsonEsc c.context}\",\n    \"term\": \"{c.term}\",\n    \"normal_form\": \"{c.nf}\",\n    \"agree\": {agree},\n    \"actions\": [\n" ++ ",\n".intercalate acts ++ "\n    ]\n  }"]
   IO.FS.writeFile (System.FilePath.mk output) ("[\n" ++ ",\n".intercalate entries ++ "\n]\n")
   IO.println s!"{cases.length} cases written to {output}"

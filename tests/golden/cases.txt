@@ -6,6 +6,7 @@
 # actions.json. The engine must reproduce both the normal form text and the action exactly.
 #
 # One case per block: case ID, context, term, nf (normal form). Terms are written expanded.
+# A case with "nf error" states that its term is rejected, by Lean and by the engine.
 
 case nh2-dot-slide
 context nilhecke nu=2
@@ -203,3 +204,38 @@ case klrw-a2-braid-unary-minus
 context klrw type=A2
 term psi_2 psi_1 psi_2 e(i@0 j@1 i@2) + - psi_1 psi_2 psi_1 e(i@0 j@1 i@2)
 nf -e(i@0 j@1 i@2)
+
+case nh2-leading-sign-run
+context nilhecke nu=2
+term - -x_1 psi_1
+nf 1 + psi_1 x_2
+
+case nh2-three-sign-run
+context nilhecke nu=2
+term x_1 psi_1 - - - psi_1 x_2
+nf 1
+
+case nh2-sign-glued-after-number
+context nilhecke nu=2
+term 2 -x_1 psi_1
+nf 1 - psi_1 x_2
+
+case klrw-a2-braid-sign-run
+context klrw type=A2
+term psi_2 psi_1 psi_2 e(i@0 j@1 i@2) - - - psi_1 psi_2 psi_1 e(i@0 j@1 i@2)
+nf -e(i@0 j@1 i@2)
+
+case nh2-sign-in-product
+context nilhecke nu=2
+term 2 * -x_1 psi_1
+nf error
+
+case nh2-trailing-sign
+context nilhecke nu=2
+term x_1 psi_1 -
+nf error
+
+case klrw-a2-sign-in-product
+context klrw type=A2
+term 2 * -psi_1 psi_2 psi_1 e(i@0 j@1 i@2)
+nf error
