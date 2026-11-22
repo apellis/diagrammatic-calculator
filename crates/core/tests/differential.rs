@@ -20,17 +20,35 @@
 //! - complexes (`complex_operations_agree_with_brute_force`): random one-dimensional complexes in
 //!   A1, A2 (with `h` in the relations), B2, and A3 (two red strands), and A2 with weights theta,
 //!   over one and two black strands, with `h` of degree 2, 0, and −2 in the maps. Third terms are
-//!   random cycles, and contractible pairs are added. The oracle checks `complex.check`,
-//!   `complex.homology` (dimensions and representatives), `complex.euler`, `complex.minimal`
-//!   (each entry against the trace form of `End⁰`), `complex.gauss` (homology kept; minimal when
-//!   every `End⁰` is local), `complex.kernel` (in the kernel, generating it, none redundant),
-//!   `chainmap.check` and `homotopy.check` (on `d h + h d`, plus 1 or not, and a perturbation),
-//!   `complex.cone` (entries `[[−d, 0], [f, d]]`; acyclic for a map homotopic to 1),
-//!   `complex.totalize` (the square `C --f--> C`, block by block, acyclic for `f` homotopic to
-//!   1), `complex.shift`, `homotopy.find` and `chainmap.solve` (existence and freedom against the
-//!   linear system in single-entry maps), `complex.hom` (cohomology of `Hom(C, C)` degree by
-//!   degree), `module.check` (graded dimensions of the cokernel), and `resolution.start`, `.extend`, and
-//!   `.check` (each new term covering the kernel at the far end, none redundant).
+//!   random cycles, and contractible pairs are added. The oracle checks:
+//!   - `complex.check`, and the note on each written entry that is zero in the context (each
+//!     entry the oracle straightens to zero, and an `e(X) - e(X)` written into a null entry);
+//!   - `complex.homology` (dimensions and representatives) twice: at the test objects the
+//!     operation lists, over its window; and at the oracle's own test objects (the family's
+//!     objects and the case's), over the degrees where their Hom spaces into the terms are
+//!     nonzero (found by scanning `hom.basis`, not from the operation's window, except where the
+//!     Hom spaces are unbounded), each matched to an isomorphic listed object by a pair of
+//!     inverse maps;
+//!   - `complex.euler`; `complex.minimal` (each entry against the trace form of `End⁰`);
+//!     `complex.gauss` (homology kept; minimal when every `End⁰` is local); `complex.kernel` (in
+//!     the kernel, generating it, none redundant; whether the note on dropped generators fires,
+//!     not how many it counts, which depends on the sweep's choices);
+//!   - `chainmap.check` and `homotopy.check` (on `d h + h d`, plus 1 or not, and a perturbation);
+//!   - `homotopy.find` and `chainmap.solve` (existence and freedom, also when no solution exists,
+//!     against the linear system in single-entry maps), with `chainmap.solve`'s
+//!     `homogeneous_basis` (how many are listed for `basis` 0, 1, the freedom, and more; the
+//!     note when fewer than the freedom are listed; each a chain map vanishing at the fixed
+//!     position; independent), `complex.hom` (cohomology of `Hom(C, D)` degree by degree), and
+//!     `complex.cone` (entries `[[−d_C, 0], [f, d_D]]`; acyclic for a map homotopic to 1), each
+//!     for `D = C` and for `D` another random complex of the family, with a null-homotopic map
+//!     and a perturbation of it;
+//!   - `complex.totalize` (the square `C --f--> C`, block by block, acyclic for `f` homotopic to
+//!     1), `complex.shift`, `module.check` (graded dimensions of the cokernel), and
+//!     `resolution.start`, `.extend`, and `.check` (each new term covering the kernel at the far
+//!     end, none redundant).
+//!
+//!   The sign convention of `complex.hom` is not observable in its output (dimensions only: the
+//!   two conventions give isomorphic complexes), so no test here can see it.
 
 #![allow(clippy::needless_range_loop)] // the exact linear algebra below indexes by row and column
 
@@ -1950,6 +1968,131 @@ impl CxCase {
 fn cx_case(seed: u64) -> CxCase {
     let mut r = Rng(seed | 1);
     let family = r.below(CX_FAMILIES.len());
+    cx_case_in(&mut r, family)
+}
+
+/// Another complex of the same length in the same family as `case`, to map it to.
+fn other_target(case: &CxCase, seed: u64) -> Option<CxCase> {
+    (1..40u64).find_map(|i| {
+        let mut r = Rng((seed ^ i.wrapping_mul(0xA24B_AED4_963E_E407)) | 1);
+        let c = cx_case_in(&mut r, case.family);
+        (c.terms.len() == case.terms.len() && (c.terms != case.terms || c.diffs != case.diffs))
+            .then_some(c)
+    })
+}
+
+/// A random null-homotopic map `C → D`: `d_D h + h d_C` for a random `h : C(t) → D(t − 1)`.
+fn null_homotopic(o: &mut Oracle, r: &mut Rng, c: &CxCase, d: &CxCase) -> Vec<Mat> {
+    let k = c.terms.len();
+    let h: Vec<Mat> = (0..k)
+        .map(|t| {
+            if t == 0 {
+                return vec![];
+            }
+            d.terms[t - 1]
+                .iter()
+                .map(|y| {
+                    c.terms[t]
+                        .iter()
+                        .map(|x| combination(r, &o.hom(&x.0, &y.0, x.1 - y.1), 3))
+                        .collect()
+                })
+                .collect()
+        })
+        .collect();
+    (0..k)
+        .map(|t| {
+            let mut m: Mat = vec![vec![String::new(); c.terms[t].len()]; d.terms[t].len()];
+            if t > 0 {
+                m = mat_add(&m, &mat_mul(&d.diffs[t - 1], &h[t]));
+            }
+            if t + 1 < k {
+                m = mat_add(&m, &mat_mul(&h[t + 1], &c.diffs[t]));
+            }
+            m
+        })
+        .collect()
+}
+
+/// Checks the `homogeneous_basis` of a chainmap.solve result asked for `basis` vectors: how
+/// many are listed, the note saying when that is fewer than the freedom, and that they are
+/// chain maps vanishing at the fixed position 0, independent of each other.
+#[allow(clippy::too_many_arguments)]
+fn check_homogeneous_basis(
+    o: &mut Oracle,
+    c: &CxCase,
+    d: &CxCase,
+    v: &Value,
+    basis: usize,
+    freedom: usize,
+    seen: &mut CxSeen,
+    ctxt: &str,
+) {
+    let notes = v["provenance"]["notes"].to_string();
+    let capped = notes.contains("'homogeneous_basis' lists");
+    if basis == 0 {
+        assert!(v.get("homogeneous_basis").is_none(), "{ctxt}\n{v:#}");
+        assert!(!capped, "{ctxt}\n{v:#}");
+        seen.basis_none = true;
+        return;
+    }
+    let list = v["homogeneous_basis"].as_array().unwrap();
+    assert_eq!(list.len(), basis.min(freedom), "{ctxt}\n{v:#}");
+    assert_eq!(capped, basis < freedom, "{ctxt}\n{v:#}");
+    if capped {
+        assert!(
+            notes.contains(&format!(
+                "'homogeneous_basis' lists {basis} of the {freedom} basis vectors"
+            )),
+            "{ctxt}\n{v:#}"
+        );
+        seen.basis_capped = true;
+    } else if freedom > 0 {
+        seen.basis_all = true;
+    }
+    if v["exists"] == false && freedom > 0 {
+        seen.basis_unsolved = true;
+    }
+    let lo = c.lo();
+    let k = c.terms.len();
+    let mut elts = Vec::new();
+    for m in list {
+        let mut got: Vec<Mat> = (0..k)
+            .map(|t| vec![vec![String::new(); c.terms[t].len()]; d.terms[t].len()])
+            .collect();
+        for comp in m.as_array().unwrap() {
+            got[(comp["at"].as_i64().unwrap() - lo) as usize] = mat_read(&comp["matrix"]);
+        }
+        let mut at_zero = MapElt::new();
+        map_add(&mut at_zero, 0, &got[k - 1], Q::int(1), o);
+        assert!(
+            at_zero.is_empty(),
+            "nonzero at the fixed position: {ctxt}\n{v:#}"
+        );
+        for t in 0..k - 1 {
+            let mut e = MapElt::new();
+            map_add(&mut e, 0, &mat_mul(&d.diffs[t], &got[t]), Q::int(1), o);
+            map_add(&mut e, 0, &mat_mul(&got[t + 1], &c.diffs[t]), Q::int(-1), o);
+            assert!(
+                e.is_empty(),
+                "a basis vector is not a chain map: {ctxt}\n{v:#}"
+            );
+        }
+        let mut all = MapElt::new();
+        for (t, g) in got.iter().enumerate() {
+            map_add(&mut all, t, g, Q::int(1), o);
+        }
+        elts.push(all);
+    }
+    assert_eq!(
+        map_rank(&elts),
+        elts.len(),
+        "dependent basis: {ctxt}\n{v:#}"
+    );
+}
+
+/// A random complex in the family `family`.
+fn cx_case_in(r: &mut Rng, family: usize) -> CxCase {
     let f = &CX_FAMILIES[family];
     let mut o = Oracle::new(f.ctx, order_of(f.ctx));
     // C(0), then C(−1) with shifts placed so that maps of degree zero exist
@@ -1967,7 +2110,7 @@ fn cx_case(seed: u64) -> CxCase {
             })
             .collect()
     };
-    let c1 = place(&mut o, &mut r, &c0);
+    let c1 = place(&mut o, r, &c0);
     let random = |o: &mut Oracle, r: &mut Rng, src: &Sums, tgt: &Sums| -> Mat {
         tgt.iter()
             .map(|y| {
@@ -1977,7 +2120,7 @@ fn cx_case(seed: u64) -> CxCase {
             })
             .collect()
     };
-    let d1 = random(&mut o, &mut r, &c1, &c0);
+    let d1 = random(&mut o, r, &c1, &c0);
     let mut case = CxCase {
         family,
         ctx: f.ctx.to_string(),
@@ -2136,6 +2279,17 @@ struct CxSeen {
     homotopy_not_found: bool,
     chainmap_solved: bool,
     chainmap_unsolved: bool,
+    homotopy_same_target: bool,
+    homotopy_other_target: bool,
+    chainmap_same_target: bool,
+    chainmap_other_target: bool,
+    cone_other_target: bool,
+    hom_other_target: bool,
+    basis_none: bool,
+    basis_capped: bool,
+    basis_all: bool,
+    basis_unsolved: bool,
+    zero_entry_noted: bool,
 }
 
 /// Checks that `gens` (columns into `src`, from `T⟨d⟩`) lie in `sub` and generate it at every
@@ -2233,16 +2387,22 @@ fn map_rank(vs: &[MapElt]) -> usize {
     rank(&rows)
 }
 
-/// The basis of the maps `C(t) → C(t + step)` of internal degree `e` with one nonzero entry:
+/// The basis of the maps `C(t) → D(t + step)` of internal degree `e` with one nonzero entry:
 /// (t, the map as a matrix).
-fn single_entry_maps(o: &mut Oracle, terms: &[Sums], step: i64, e: i64) -> Vec<(usize, Mat)> {
+fn single_entry_maps(
+    o: &mut Oracle,
+    cterms: &[Sums],
+    dterms: &[Sums],
+    step: i64,
+    e: i64,
+) -> Vec<(usize, Mat)> {
     let mut out = Vec::new();
-    for t in 0..terms.len() {
+    for t in 0..cterms.len() {
         let u = t as i64 + step;
-        if !(0..terms.len() as i64).contains(&u) {
+        if !(0..dterms.len() as i64).contains(&u) {
             continue;
         }
-        let (src, tgt) = (&terms[t], &terms[u as usize]);
+        let (src, tgt) = (&cterms[t], &dterms[u as usize]);
         for (i, y) in tgt.iter().enumerate() {
             for (j, x) in src.iter().enumerate() {
                 for b in o.hom(&x.0, &y.0, x.1 - y.1 + e) {
@@ -2272,36 +2432,51 @@ fn neg_texts(m: &Mat) -> Mat {
         .collect()
 }
 
-/// `d h + h d` for a single-entry `h : C(t) → C(t − 1)`, as coordinates.
-fn dh_plus_hd(o: &mut Oracle, diffs: &[Mat], t: usize, h: &Mat) -> MapElt {
+/// `d h + h d` for a single-entry `h : C(t) → D(t − 1)`, as coordinates.
+fn dh_plus_hd(o: &mut Oracle, cdiffs: &[Mat], ddiffs: &[Mat], t: usize, h: &Mat) -> MapElt {
     let mut out = MapElt::new();
-    // (d h)(t) = d(t − 1) h(t), and (h d)(t − 1) = h(t) d(t − 1)
-    map_add(&mut out, t, &mat_mul(&diffs[t - 1], h), Q::int(1), o);
-    map_add(&mut out, t - 1, &mat_mul(h, &diffs[t - 1]), Q::int(1), o);
+    // (d h)(t) = d_D(t − 1) h(t), and (h d)(t − 1) = h(t) d_C(t − 1)
+    map_add(&mut out, t, &mat_mul(&ddiffs[t - 1], h), Q::int(1), o);
+    map_add(&mut out, t - 1, &mat_mul(h, &cdiffs[t - 1]), Q::int(1), o);
     out
 }
 
-/// `d F − F d` square by square for a single-entry `F : C(t) → C(t)`, as coordinates indexed by
+/// `d F − F d` square by square for a single-entry `F : C(t) → D(t)`, as coordinates indexed by
 /// the source of the square.
-fn chain_defect(o: &mut Oracle, diffs: &[Mat], t: usize, f: &Mat) -> MapElt {
+fn chain_defect(o: &mut Oracle, cdiffs: &[Mat], ddiffs: &[Mat], t: usize, f: &Mat) -> MapElt {
     let mut out = MapElt::new();
-    if t < diffs.len() {
-        map_add(&mut out, t, &mat_mul(&diffs[t], f), Q::int(1), o);
+    if t < ddiffs.len() {
+        map_add(&mut out, t, &mat_mul(&ddiffs[t], f), Q::int(1), o);
     }
     if t > 0 {
-        map_add(&mut out, t - 1, &mat_mul(f, &diffs[t - 1]), Q::int(-1), o);
+        map_add(&mut out, t - 1, &mat_mul(f, &cdiffs[t - 1]), Q::int(-1), o);
     }
     out
 }
 
-/// Checks `homotopy.find`, `chainmap.solve`, and `complex.hom` on a case against the linear
-/// algebra of single-entry maps, recording the branches reached in `seen`.
-fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen: &mut CxSeen) {
+/// Checks `homotopy.find`, `chainmap.solve` (with its homogeneous basis), and `complex.hom` for
+/// maps from `case` to `target` (complexes of the same length in one family, equal or not)
+/// against the linear algebra of single-entry maps, recording the branches reached in `seen`.
+/// `maps` are maps `case → target` of degree zero.
+fn check_solvers(
+    o: &mut Oracle,
+    case: &CxCase,
+    dcase: &CxCase,
+    maps: &[(Vec<Mat>, bool)],
+    seen: &mut CxSeen,
+    rng: &mut Rng,
+) {
     let ctx = case.ctx.as_str();
+    assert_eq!(case.ctx, dcase.ctx);
+    assert_eq!(case.terms.len(), dcase.terms.len());
+    let source_is_target = std::ptr::eq(case, dcase);
     let cx = case.json();
+    let dx = dcase.json();
     let lo = case.lo();
     let k = case.terms.len();
-    let ctxt = format!("{case:?}");
+    let ctxt = format!("{case:?}\n→ {dcase:?}");
+    let (cterms, cdiffs) = (&case.terms, &case.diffs);
+    let (dterms, ddiffs) = (&dcase.terms, &dcase.diffs);
     let map_json = |m: &[Mat]| -> Value {
         json!(
             m.iter()
@@ -2311,10 +2486,10 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
         )
     };
     // homotopy.find: h with d h + h d = f
-    let hs = single_entry_maps(o, &case.terms, -1, 0);
+    let hs = single_entry_maps(o, cterms, dterms, -1, 0);
     let cols: Vec<MapElt> = hs
         .iter()
-        .map(|(t, h)| dh_plus_hd(o, &case.diffs, *t, h))
+        .map(|(t, h)| dh_plus_hd(o, cdiffs, ddiffs, *t, h))
         .collect();
     let r = map_rank(&cols);
     for (f, _) in maps {
@@ -2327,12 +2502,18 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
         let exists = map_rank(&with) == r;
         let v = call(
             "homotopy.find",
-            json!({ "context": ctx, "source": cx, "target": cx, "f": map_json(f) }),
+            json!({ "context": ctx, "source": cx, "target": dx, "f": map_json(f) }),
         );
         assert_eq!(v["exists"], exists, "homotopy.find: {ctxt}\n{v:#}");
+        // the h with d h + h d = 0, whether or not f is null-homotopic
+        assert_eq!(v["freedom"], hs.len() - r, "{ctxt}\n{v:#}");
+        if source_is_target {
+            seen.homotopy_same_target = true;
+        } else {
+            seen.homotopy_other_target = true;
+        }
         if exists {
             seen.homotopy_found = true;
-            assert_eq!(v["freedom"], hs.len() - r, "{ctxt}\n{v:#}");
             // the h returned satisfies d h + h d = f
             let mut got = MapElt::new();
             for c in v["h"].as_array().unwrap() {
@@ -2341,7 +2522,7 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
                 if t == 0 || h.is_empty() {
                     continue;
                 }
-                let e = dh_plus_hd(o, &case.diffs, t, &h);
+                let e = dh_plus_hd(o, cdiffs, ddiffs, t, &h);
                 for (key, q) in e {
                     let x = got.entry(key).or_insert(Q::int(0));
                     *x = x.add(q);
@@ -2354,13 +2535,13 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
         }
     }
     // chainmap.solve: F with F(0) given, the rest solved for
-    let fs: Vec<(usize, Mat)> = single_entry_maps(o, &case.terms, 0, 0)
+    let fs: Vec<(usize, Mat)> = single_entry_maps(o, cterms, dterms, 0, 0)
         .into_iter()
         .filter(|(t, _)| *t != k - 1)
         .collect();
     let cols: Vec<MapElt> = fs
         .iter()
-        .map(|(t, f)| chain_defect(o, &case.diffs, *t, f))
+        .map(|(t, f)| chain_defect(o, cdiffs, ddiffs, *t, f))
         .collect();
     let r = map_rank(&cols);
     for (f, _) in maps {
@@ -2370,24 +2551,33 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
         map_add(
             &mut target,
             k - 2,
-            &mat_mul(fixed, &case.diffs[k - 2]),
+            &mat_mul(fixed, &cdiffs[k - 2]),
             Q::int(1),
             o,
         );
         let mut with = cols.clone();
         with.push(target);
         let exists = map_rank(&with) == r;
+        let freedom = fs.len() - r;
+        // ask for a basis of the homogeneous solutions: none, fewer than all, all, or more
+        let basis = *rng.pick(&[0usize, 1, freedom, freedom + 2]);
         let v = call(
             "chainmap.solve",
-            json!({ "context": ctx, "source": cx, "target": cx,
-                "fixed": [{ "at": 0, "matrix": mat_json(fixed) }] }),
+            json!({ "context": ctx, "source": cx, "target": dx,
+                "fixed": [{ "at": 0, "matrix": mat_json(fixed) }], "basis": basis }),
         );
         assert_eq!(v["exists"], exists, "chainmap.solve: {ctxt}\n{v:#}");
-        assert_eq!(v["freedom"], fs.len() - r, "{ctxt}\n{v:#}");
+        assert_eq!(v["freedom"], freedom, "{ctxt}\n{v:#}");
+        check_homogeneous_basis(o, case, dcase, &v, basis, freedom, seen, &ctxt);
+        if source_is_target {
+            seen.chainmap_same_target = true;
+        } else {
+            seen.chainmap_other_target = true;
+        }
         if exists {
             seen.chainmap_solved = true;
             let mut got: Vec<Mat> = (0..k)
-                .map(|t| vec![vec![String::new(); case.terms[t].len()]; case.terms[t].len()])
+                .map(|t| vec![vec![String::new(); cterms[t].len()]; dterms[t].len()])
                 .collect();
             for c in v["map"].as_array().unwrap() {
                 got[(c["at"].as_i64().unwrap() - lo) as usize] = mat_read(&c["matrix"]);
@@ -2398,8 +2588,8 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
             map_add(&mut fixed_want, 0, fixed, Q::int(1), o);
             assert_eq!(fixed_back, fixed_want, "{ctxt}\n{v:#}");
             for t in 0..k - 1 {
-                let a = mat_mul(&case.diffs[t], &got[t]);
-                let b = mat_mul(&got[t + 1], &case.diffs[t]);
+                let a = mat_mul(&ddiffs[t], &got[t]);
+                let b = mat_mul(&got[t + 1], &cdiffs[t]);
                 let mut e = MapElt::new();
                 map_add(&mut e, 0, &a, Q::int(1), o);
                 map_add(&mut e, 0, &b, Q::int(-1), o);
@@ -2409,10 +2599,10 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
             seen.chainmap_unsolved = true;
         }
     }
-    // complex.hom: H^n of Hom(C, C) in each internal degree of the window
+    // complex.hom: H^n of Hom(C, D) in each internal degree of the window
     let v = call(
         "complex.hom",
-        json!({ "context": ctx, "source": cx, "target": cx }),
+        json!({ "context": ctx, "source": cx, "target": dx }),
     );
     let (from, to, truncated) = window_of(&v);
     let mut got = BTreeMap::new();
@@ -2434,21 +2624,21 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
     for e in from - 2..=if truncated { to } else { to + 2 } {
         // δ^n f = d f − (−1)^n f d, from Hom^n to Hom^(n+1), as coordinates by position
         let delta_rank = |o: &mut Oracle, n: i64| -> (usize, usize) {
-            let us = single_entry_maps(o, &case.terms, n, e);
+            let us = single_entry_maps(o, cterms, dterms, n, e);
             let imgs: Vec<MapElt> = us
                 .iter()
                 .map(|(t, f)| {
                     let mut out = MapElt::new();
                     let u = (*t as i64 + n) as usize;
                     if u < k - 1 {
-                        map_add(&mut out, *t, &mat_mul(&case.diffs[u], f), Q::int(1), o);
+                        map_add(&mut out, *t, &mat_mul(&ddiffs[u], f), Q::int(1), o);
                     }
                     if *t > 0 {
                         let sign = if n.rem_euclid(2) == 0 { -1 } else { 1 };
                         map_add(
                             &mut out,
                             *t - 1,
-                            &mat_mul(f, &case.diffs[*t - 1]),
+                            &mat_mul(f, &cdiffs[*t - 1]),
                             Q::int(sign),
                             o,
                         );
@@ -2479,6 +2669,169 @@ fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen:
     assert_eq!(got, expected, "complex.hom: {ctxt}\n{v:#}");
 }
 
+/// Checks `complex.cone` of `f : case → target`: terms `C(p + 1) ⊕ D(p)` and differential
+/// `[[−d_C, 0], [f, d_D]]`. Returns the cone.
+fn check_cone(
+    o: &mut Oracle,
+    case: &CxCase,
+    target: &CxCase,
+    f: &[Mat],
+    ctxt: &str,
+) -> (Vec<Sums>, Vec<Mat>) {
+    let lo = case.lo();
+    let map_json = |m: &[Mat]| -> Value {
+        json!(
+            m.iter()
+                .enumerate()
+                .map(|(t, m)| json!({ "at": lo + t as i64, "matrix": mat_json(m) }))
+                .collect::<Vec<_>>()
+        )
+    };
+    let v = call(
+        "complex.cone",
+        json!({ "context": case.ctx, "source": case.json(), "target": target.json(),
+            "map": map_json(f) }),
+    );
+    let (clo, cterms, cdiffs) = cx_read(&v["complex"]);
+    assert_eq!(clo, lo - 1, "{ctxt}\n{v:#}");
+    for (t, ss) in cterms.iter().enumerate() {
+        let p = clo + t as i64;
+        let mut want = Sums::new();
+        if p < 0 && p + 1 >= lo {
+            want.extend(case.terms[(p + 1 - lo) as usize].clone());
+        }
+        if p >= lo {
+            want.extend(target.terms[(p - lo) as usize].clone());
+        }
+        assert_eq!(ss, &want, "cone term at {p}: {ctxt}\n{v:#}");
+    }
+    for (t, m) in cdiffs.iter().enumerate() {
+        let p = clo + t as i64;
+        // blocks: source C(p+1) ⊕ C(p), target C(p+2) ⊕ C(p+1)
+        let a = if p < 0 {
+            case.terms[(p + 1 - lo) as usize].len()
+        } else {
+            0
+        };
+        let a2 = if p + 2 <= 0 {
+            case.terms[(p + 2 - lo) as usize].len()
+        } else {
+            0
+        };
+        for (i, row) in m.iter().enumerate() {
+            for (j, e) in row.iter().enumerate() {
+                let want = match (i < a2, j < a) {
+                    (true, true) => format!("-({})", case.diffs[(p + 1 - lo) as usize][i][j]),
+                    (true, false) => String::new(),
+                    (false, true) => f[(p + 1 - lo) as usize][i - a2][j].clone(),
+                    (false, false) => target.diffs[(p - lo) as usize][i - a2][j - a].clone(),
+                };
+                let want = if want == "-()" { String::new() } else { want };
+                assert_eq!(
+                    o.nf(e),
+                    o.nf(&want),
+                    "cone entry ({i}, {j}) at {p}: {ctxt}\n{v:#}"
+                );
+            }
+        }
+    }
+    (cterms, cdiffs)
+}
+
+/// How far the oracle scans internal degrees of Hom spaces between the objects of a family.
+const HOM_SCAN: i64 = 12;
+
+/// Whether `a ≅ b`, by a pair of degree-zero basis maps inverse to each other.
+fn isomorphic(o: &mut Oracle, a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let (fs, gs) = (o.hom(a, b, 0), o.hom(b, a, 0));
+    let (ea, eb) = (o.nf(&format!("e({a})")), o.nf(&format!("e({b})")));
+    for f in &fs {
+        for g in &gs {
+            if o.nf(&format!("({g})({f})")) == ea && o.nf(&format!("({f})({g})")) == eb {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Checks the homology at index `t` that an operation reported (`got`, at its own listed test
+/// objects, in its window) against the oracle's homology at the oracle's test objects (the
+/// family's objects and the case's), each over the degrees where its Hom spaces into the terms
+/// are nonzero, found by scanning. Each oracle test object with homology must be isomorphic to
+/// a listed one, with the same dimensions there. Only where the Hom spaces are not bounded (a
+/// truncated window) is the operation's window used.
+fn check_homology_at_own_tests(
+    o: &mut Oracle,
+    case: &CxCase,
+    t: usize,
+    got: &BTreeMap<(String, i64), i64>,
+    window: (i64, i64, bool),
+    listed: &BTreeSet<String>,
+    ctxt: &str,
+) {
+    let (from, to, truncated) = window;
+    let summands: Vec<(String, i64)> = (t.saturating_sub(1)..=(t + 1).min(case.terms.len() - 1))
+        .flat_map(|u| case.terms[u].clone())
+        .collect();
+    for test in case.objects() {
+        // the degrees to compute in; none when no Hom space into the terms is nonzero
+        let degrees = if truncated {
+            Some(from..=to)
+        } else {
+            let mut ds = BTreeSet::new();
+            for (x, s) in &summands {
+                for e in -HOM_SCAN..=HOM_SCAN {
+                    if !o.hom(&test, x, e).is_empty() {
+                        assert!(
+                            e.abs() < HOM_SCAN,
+                            "scan too narrow for {test} → {x}: {ctxt}"
+                        );
+                        ds.insert(e + s);
+                    }
+                }
+            }
+            ds.first().zip(ds.last()).map(|(&a, &b)| a - 1..=b + 1)
+        };
+        let mine = match degrees {
+            None => BTreeMap::new(),
+            Some(degrees) => homology_dims(
+                o,
+                &case.terms,
+                &case.diffs,
+                t,
+                &[test.clone()].into_iter().collect(),
+                degrees,
+            ),
+        };
+        let matched: Vec<String> = listed
+            .iter()
+            .filter(|l| isomorphic(o, &test, l))
+            .cloned()
+            .collect();
+        let mine: BTreeMap<i64, i64> = mine.into_iter().map(|((_, d), n)| (d, n)).collect();
+        if matched.is_empty() {
+            // no listed object is isomorphic to it: it must have no homology
+            assert!(mine.is_empty(), "no listed test object ≅ {test}: {ctxt}");
+        }
+        // isomorphic loadings of different order types may both be listed: each must agree
+        for l in &matched {
+            let theirs: BTreeMap<i64, i64> = got
+                .iter()
+                .filter(|((x, _), _)| x == l)
+                .map(|((_, d), n)| (*d, *n))
+                .collect();
+            assert_eq!(
+                theirs, mine,
+                "homology at the test object {test} (listed as {l}): {ctxt}"
+            );
+        }
+    }
+}
+
 /// Runs the complex operations on a case and checks them against the oracle.
 fn check_cx(case: &CxCase, seed: u64, o: &mut Oracle) -> CxSeen {
     let mut seen = CxSeen {
@@ -2499,6 +2852,75 @@ fn check_cx(case: &CxCase, seed: u64, o: &mut Oracle) -> CxSeen {
     // complex.check: the case squares to zero by construction
     let v = call("complex.check", json!({ "context": ctx, "complex": cx }));
     assert_eq!(v["holds"], true, "{ctxt}\n{v:#}");
+    let zero_note = |v: &Value| -> Vec<String> {
+        v["provenance"]["notes"]
+            .as_array()
+            .map_or(&[][..], Vec::as_slice)
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|n| n.contains("is zero in this context"))
+            .map(String::from)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    };
+    let note_for = |t: usize, i: usize, j: usize, text: &str| {
+        format!(
+            "the differential from {}, entry ({}, {}): '{text}' is zero in this context, so the \
+             entry is zero (shown as null)",
+            lo + t as i64,
+            i + 1,
+            j + 1
+        )
+    };
+    // a note for each written entry that straightens to zero (a contractible pair on a
+    // violating loading, say), and for no other
+    let mut vanishing = BTreeSet::new();
+    for (t, m) in case.diffs.iter().enumerate() {
+        for (i, row) in m.iter().enumerate() {
+            for (j, e) in row.iter().enumerate() {
+                if !e.is_empty() && o.nf(e).is_empty() {
+                    vanishing.insert(note_for(t, i, j, e.trim()));
+                }
+            }
+        }
+    }
+    assert_eq!(
+        zero_note(&v),
+        vanishing.iter().cloned().collect::<Vec<_>>(),
+        "{ctxt}\n{v:#}"
+    );
+    if !vanishing.is_empty() {
+        seen.zero_entry_noted = true;
+    }
+    // write `f − f` into a null entry: the complex is the same, and a note names that entry
+    'zero: for (t, m) in case.diffs.iter().enumerate() {
+        for (i, row) in m.iter().enumerate() {
+            for (j, e) in row.iter().enumerate() {
+                if !e.is_empty() {
+                    continue;
+                }
+                let x = &case.terms[t][j].0;
+                let text = format!("e({x}) - e({x})");
+                let mut bad = cx.clone();
+                bad["differentials"][t]["matrix"][i][j] = json!(text);
+                let mut want = vanishing.clone();
+                want.insert(note_for(t, i, j, &text));
+                for op in ["complex.check", "complex.homology", "complex.euler"] {
+                    let w = call(op, json!({ "context": ctx, "complex": bad }));
+                    assert_eq!(
+                        zero_note(&w),
+                        want.iter().cloned().collect::<Vec<_>>(),
+                        "{op}: {ctxt}\n{w:#}"
+                    );
+                }
+                let w = call("complex.check", json!({ "context": ctx, "complex": bad }));
+                assert_eq!(w["complex"], v["complex"], "{ctxt}\n{w:#}");
+                seen.zero_entry_noted = true;
+                break 'zero;
+            }
+        }
+    }
     for t in 0..case.diffs.len().saturating_sub(1) {
         assert!(
             composes_to_zero(o, &case.diffs[t + 1], &case.diffs[t]),
@@ -2535,6 +2957,16 @@ fn check_cx(case: &CxCase, seed: u64, o: &mut Oracle) -> CxSeen {
             from - 2..=if truncated { to } else { to + 2 },
         );
         assert_eq!(got, expected, "homology at {at}: {ctxt}\n{v:#}");
+        // and at the oracle's own test objects, over its own degree range
+        check_homology_at_own_tests(
+            o,
+            case,
+            t,
+            &got,
+            (from, to, truncated),
+            &listed,
+            &format!("homology at {at}: {ctxt}\n{v:#}"),
+        );
         // `zero`: nothing in the window; `exact`: nothing anywhere
         assert_eq!(p["zero"], got.is_empty(), "{ctxt}\n{v:#}");
         assert_eq!(v["exact"], got.is_empty() && !truncated, "{ctxt}\n{v:#}");
@@ -2855,56 +3287,30 @@ fn check_cx(case: &CxCase, seed: u64, o: &mut Oracle) -> CxSeen {
 
     // homotopy.find, chainmap.solve, and complex.hom; with 1 added, f is homotopic to 1, not 0
     let maps = vec![(f.clone(), true), (perturbed.clone(), false)];
-    check_solvers(o, case, &maps, &mut seen);
+    check_solvers(o, case, case, &maps, &mut seen, &mut r);
+    // the same, and the cone, for maps to another complex of the family: a null-homotopic map
+    // and a perturbation of it
+    if let Some(target) = other_target(case, seed) {
+        let g = null_homotopic(o, &mut r, case, &target);
+        let mut bent = g.clone();
+        let p = r.below(k);
+        if !case.terms[p].is_empty() && !target.terms[p].is_empty() {
+            let i = r.below(target.terms[p].len());
+            let j = r.below(case.terms[p].len());
+            let (x, y) = (&case.terms[p][j], &target.terms[p][i]);
+            let extra = combination(&mut r, &o.hom(&x.0, &y.0, x.1 - y.1), 4);
+            bent[p][i][j] = text_sum([bent[p][i][j].clone(), extra]);
+        }
+        let maps = vec![(g.clone(), true), (bent, false)];
+        check_solvers(o, case, &target, &maps, &mut seen, &mut r);
+        let tctxt = format!("{ctxt}\n→ {target:?}");
+        check_cone(o, case, &target, &g, &tctxt);
+        seen.cone_other_target = true;
+        seen.hom_other_target = true;
+    }
 
     // complex.cone of f: [[−d, 0], [f, d]]; a cone of a map homotopic to 1 is acyclic
-    let v = call(
-        "complex.cone",
-        json!({ "context": ctx, "source": cx, "target": cx, "map": map_json(&f) }),
-    );
-    let (clo, cterms, cdiffs) = cx_read(&v["complex"]);
-    assert_eq!(clo, lo - 1, "{ctxt}\n{v:#}");
-    for (t, ss) in cterms.iter().enumerate() {
-        let p = clo + t as i64;
-        let mut want = Sums::new();
-        if p < 0 && p + 1 >= lo {
-            want.extend(case.terms[(p + 1 - lo) as usize].clone());
-        }
-        if p >= lo {
-            want.extend(case.terms[(p - lo) as usize].clone());
-        }
-        assert_eq!(ss, &want, "cone term at {p}: {ctxt}\n{v:#}");
-    }
-    for (t, m) in cdiffs.iter().enumerate() {
-        let p = clo + t as i64;
-        // blocks: source C(p+1) ⊕ C(p), target C(p+2) ⊕ C(p+1)
-        let a = if p < 0 {
-            case.terms[(p + 1 - lo) as usize].len()
-        } else {
-            0
-        };
-        let a2 = if p + 2 <= 0 {
-            case.terms[(p + 2 - lo) as usize].len()
-        } else {
-            0
-        };
-        for (i, row) in m.iter().enumerate() {
-            for (j, e) in row.iter().enumerate() {
-                let want = match (i < a2, j < a) {
-                    (true, true) => format!("-({})", case.diffs[(p + 1 - lo) as usize][i][j]),
-                    (true, false) => String::new(),
-                    (false, true) => f[(p + 1 - lo) as usize][i - a2][j].clone(),
-                    (false, false) => case.diffs[(p - lo) as usize][i - a2][j - a].clone(),
-                };
-                let want = if want == "-()" { String::new() } else { want };
-                assert_eq!(
-                    o.nf(e),
-                    o.nf(&want),
-                    "cone entry ({i}, {j}) at {p}: {ctxt}\n{v:#}"
-                );
-            }
-        }
-    }
+    let (cterms, cdiffs) = check_cone(o, case, case, &f, &ctxt);
     if plus_one {
         for t in 0..cterms.len() {
             let dims = homology_dims(o, &cterms, &cdiffs, t, &tests, -6..=10);
@@ -3220,6 +3626,29 @@ fn complex_sweep_covers_every_branch() {
         |s| s.chainmap_unsolved,
         "no chain map extending the fixed component",
     );
+    any(|s| s.homotopy_same_target, "homotopy.find into the source");
+    any(
+        |s| s.homotopy_other_target,
+        "homotopy.find into another complex",
+    );
+    any(|s| s.chainmap_same_target, "chainmap.solve into the source");
+    any(
+        |s| s.chainmap_other_target,
+        "chainmap.solve into another complex",
+    );
+    any(
+        |s| s.cone_other_target,
+        "a cone of a map to another complex",
+    );
+    any(|s| s.hom_other_target, "complex.hom into another complex");
+    any(|s| s.basis_none, "chainmap.solve without 'basis'");
+    any(|s| s.basis_capped, "a homogeneous basis capped by 'basis'");
+    any(|s| s.basis_all, "a whole homogeneous basis");
+    any(
+        |s| s.basis_unsolved,
+        "a homogeneous basis when no solution exists",
+    );
+    any(|s| s.zero_entry_noted, "a written entry that is zero");
     // the families with two red strands reach non-minimal and nonzero cases too
     for fam in [4usize, 5, 6] {
         assert!(

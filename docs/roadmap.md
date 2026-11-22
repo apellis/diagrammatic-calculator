@@ -45,10 +45,15 @@ project (About is `/#/about`, privacy `/privacy`; see `docs/deploy.md`).
   then they are checked by the randomized differential tests in
   `crates/core/tests/differential.rs`, whose oracle shares `simplify` and `hom.basis` with the
   code under test.
-- **Independent review** of the fixes of the 22 November critique (generators dropped by the
-  degree sweep, the additive-category registry, `freedom` without a solution, the export
-  message, and the differential tests): not yet done by a fresh reviewer; until it is, these
-  stay open.
+- **Independent review.** A fresh reviewer went over the fixes of the 22 November critique. Its
+  findings are fixed except these, which stay open:
+  - the differential tests check that the note on generators dropped as redundant fires, but
+    not the number it gives: that number depends on which complement the degree sweep picks, so
+    an oracle would have to repeat the sweep's choices;
+  - the sign convention of `complex.hom` cannot be tested, since its output (cohomology
+    dimensions) is the same under either convention; returning the Hom complex or cocycle
+    representatives would make it testable;
+  - the fixes of the review's findings have not themselves been reviewed by a fresh reviewer.
 
 ### Performance
 
