@@ -9,7 +9,8 @@ the printed form gives the same term (tested in `crates/core/tests/engine.rs`).
 Loosest binding first.
 
 ```text
-sum     := [+|-] tensor ((+|-) [+|-] tensor)*      a sign after + or - is unary: a + -1 b = a - b
+sum     := signs? tensor (signs tensor)*           a summand's sign is the product of its run:
+signs   := (+|-)+                                  a + -1 b = a - b, - -a = a, a - - - b = a - b
 tensor  := comp (("(x)" | "⊗") comp)*
 comp    := factor (["*" | "·" | "∘" | "/"] factor)*
                                                   juxtaposition is composition; "/ f" is f^-1
