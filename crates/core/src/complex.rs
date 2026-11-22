@@ -318,6 +318,20 @@ pub fn parse_matrix<A: Additive>(
     Ok(out)
 }
 
+/// The keys of a complex (`spec/ops/common.schema.json#/$defs/complex`).
+pub const COMPLEX_KEYS: [&str; 7] = [
+    "dimension",
+    "indexing",
+    "squares",
+    "odd_signs",
+    "terms",
+    "differentials",
+    "resolves",
+];
+
+/// The keys of a summand.
+const SUMMAND_KEYS: [&str; 3] = ["object", "loading", "shift"];
+
 /// Parses summands `[{"object": X, "shift": s}]` (`loading` is accepted for `object`).
 pub fn parse_summands<A: Additive>(a: &A, v: &Value, where_: &str) -> Result<Vec<Summand<A::Obj>>> {
     let xs = v
@@ -326,6 +340,7 @@ pub fn parse_summands<A: Additive>(a: &A, v: &Value, where_: &str) -> Result<Vec
     xs.iter()
         .enumerate()
         .map(|(k, x)| {
+            crate::keys::check(x, &SUMMAND_KEYS, &format!("{where_}, summand {}", k + 1))?;
             let o = x
                 .get("object")
                 .or_else(|| x.get("loading"))
@@ -411,6 +426,7 @@ pub fn parse_complex_noted<A: Additive>(
     a: &A,
     v: &Value,
 ) -> Result<Noted<Complex<A::Obj, A::Mor>>> {
+    crate::keys::check(v, &COMPLEX_KEYS, "a complex")?;
     let conv = Conventions::parse(v)?;
     let terms_v = v
         .get("terms")
@@ -427,6 +443,7 @@ pub fn parse_complex_noted<A: Additive>(
     };
     let mut written: BTreeMap<Pos, Vec<Written<A::Obj>>> = BTreeMap::new();
     for t in terms_v {
+        crate::keys::check(t, &["at", "summands"], "a term")?;
         let p = parse_pos(
             t.get("at")
                 .ok_or_else(|| Error::invalid("a term needs 'at', its position"))?,
@@ -461,6 +478,7 @@ pub fn parse_complex_noted<A: Additive>(
             .as_array()
             .ok_or_else(|| Error::invalid("'differentials' is a list"))?;
         for d in ds {
+            crate::keys::check(d, &["from", "axis", "matrix"], "a differential")?;
             let axis = match d.get("axis") {
                 None | Some(Value::Null) => 0,
                 Some(x) => x.as_u64().ok_or_else(|| {
@@ -630,6 +648,7 @@ fn parse_written<A: Additive>(a: &A, v: &Value, where_: &str) -> Result<Vec<Writ
     xs.iter()
         .enumerate()
         .map(|(k, x)| {
+            crate::keys::check(x, &SUMMAND_KEYS, &format!("{where_}, summand {}", k + 1))?;
             let o = match x.get("object").or_else(|| x.get("loading")) {
                 None | Some(Value::Null) => None,
                 Some(Value::String(o)) => Some(a.parse_obj(o).map_err(|e| {
@@ -972,6 +991,7 @@ pub fn parse_map<A: Additive>(
         .ok_or_else(|| Error::invalid(format!("'{name}' is a list of {{at, matrix}}")))?;
     let mut out = Map::new();
     for x in xs {
+        crate::keys::check(x, &["at", "matrix"], &format!("a component of '{name}'"))?;
         let p = parse_pos(
             x.get("at")
                 .ok_or_else(|| Error::invalid(format!("each component of '{name}' needs 'at'")))?,

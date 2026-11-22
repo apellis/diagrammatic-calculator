@@ -56,7 +56,25 @@ pub const DEFAULT_SPAN: i64 = 6;
 /// How many failures a check lists (it reports how many there are in all).
 const SHOWN_FAILURES: usize = 20;
 
+/// The keys a request for `op` may have: the properties of its schema's request
+/// (`spec/ops/<op>.schema.json`).
+pub fn request_keys(op: &str) -> Vec<String> {
+    let schema = crate::ops::SCHEMAS
+        .iter()
+        .find(|(name, _)| *name == op)
+        .map(|(_, s)| s)
+        .unwrap_or_else(|| panic!("no schema for {op}"));
+    let v: Value = serde_json::from_str(schema).expect("the shipped schemas are JSON");
+    v["$defs"]["request"]["properties"]
+        .as_object()
+        .map(|o| o.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
 pub fn run(op: &str, input: &Value) -> Result<Value> {
+    let keys = request_keys(op);
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    crate::keys::check(input, &keys, &format!("a {op} request"))?;
     let context = input
         .get("context")
         .and_then(Value::as_str)
@@ -1057,6 +1075,7 @@ pub(crate) fn resolve_complex_names(
 /// The value of a workspace cell `chainmap name := {…}`: its source and target filled in, its
 /// nonzero components, and whether it commutes with the differentials.
 pub(crate) fn chainmap_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    crate::keys::check(v, &["source", "target", "map"], "a chain map")?;
     let c = parse_complex(a, get(v, "source")?)?;
     let d = parse_complex(a, get(v, "target")?)?;
     if c.dim != d.dim {
@@ -1250,6 +1269,11 @@ fn parse_unknowns<O: Clone, M: Clone>(c: &Complex<O, M>, v: Option<&Value>) -> R
         .as_array()
         .ok_or_else(|| Error::invalid("'unknowns' is a list of references to differentials"))?;
     for (k, r) in items.iter().enumerate() {
+        crate::keys::check(
+            r,
+            &["map", "from", "axis", "row", "col"],
+            &format!("unknown {k}"),
+        )?;
         if r.get("map").and_then(Value::as_str) != Some("differential") {
             return Err(Error::invalid(format!(
                 "unknown {k}: give {{\"map\": \"differential\", \"from\": p}}, with \"row\" \

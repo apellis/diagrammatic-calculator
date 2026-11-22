@@ -6,6 +6,7 @@
   "$defs": {
     "request": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "context",
         "complex"
@@ -22,6 +23,7 @@
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "map",
               "from"

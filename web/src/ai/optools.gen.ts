@@ -630,6 +630,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "a basis of a graded Hom space",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "target"
@@ -660,6 +661,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "is this a complex?",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -670,6 +672,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -701,6 +704,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -725,6 +729,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -750,6 +755,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -794,6 +800,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -801,11 +808,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -828,6 +837,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -868,6 +878,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -889,6 +900,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -974,6 +986,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "is this a chain map?",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "target",
@@ -986,6 +999,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "source": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -1017,6 +1031,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -1041,6 +1056,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -1066,6 +1082,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -1110,6 +1127,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -1117,11 +1135,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -1144,6 +1164,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -1184,6 +1205,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -1205,6 +1227,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -1283,6 +1306,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "target": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -1314,6 +1338,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -1338,6 +1363,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -1363,6 +1389,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -1407,6 +1434,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -1414,11 +1442,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -1441,6 +1471,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -1481,6 +1512,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -1502,6 +1534,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -1583,6 +1616,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -1629,6 +1663,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "is h a homotopy from f to g?",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "target",
@@ -1642,6 +1677,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "source": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -1673,6 +1709,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -1697,6 +1734,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -1722,6 +1760,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -1766,6 +1805,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -1773,11 +1813,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -1800,6 +1842,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -1840,6 +1883,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -1861,6 +1905,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -1939,6 +1984,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "target": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -1970,6 +2016,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -1994,6 +2041,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -2019,6 +2067,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -2063,6 +2112,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -2070,11 +2120,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -2097,6 +2149,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -2137,6 +2190,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -2158,6 +2212,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -2239,6 +2294,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -2281,6 +2337,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -2323,6 +2380,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -2369,6 +2427,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "homology at test objects",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -2379,6 +2438,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -2410,6 +2470,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -2434,6 +2495,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -2459,6 +2521,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -2503,6 +2566,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -2510,11 +2574,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -2537,6 +2603,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -2577,6 +2644,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -2598,6 +2666,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -2709,6 +2778,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "generators of the kernel of a differential",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex",
         "at"
@@ -2720,6 +2790,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -2751,6 +2822,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -2775,6 +2847,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -2800,6 +2873,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -2844,6 +2918,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -2851,11 +2926,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -2878,6 +2955,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -2918,6 +2996,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -2939,6 +3018,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -3046,6 +3126,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "factor a map through another",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "middle",
@@ -3062,6 +3143,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "object"
             ],
@@ -3084,6 +3166,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "object"
             ],
@@ -3106,6 +3189,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "object"
             ],
@@ -3161,6 +3245,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "extend a map along another",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "middle",
@@ -3177,6 +3262,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "object"
             ],
@@ -3199,6 +3285,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "object"
             ],
@@ -3221,6 +3308,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "object"
             ],
@@ -3276,6 +3364,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "find a chain map with given components",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "target"
@@ -3287,6 +3376,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "source": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -3318,6 +3408,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -3342,6 +3433,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -3367,6 +3459,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -3411,6 +3504,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -3418,11 +3512,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -3445,6 +3541,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -3485,6 +3582,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -3506,6 +3604,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -3584,6 +3683,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "target": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -3615,6 +3715,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -3639,6 +3740,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -3664,6 +3766,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -3708,6 +3811,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -3715,11 +3819,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -3742,6 +3848,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -3782,6 +3889,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -3803,6 +3911,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -3884,6 +3993,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -3934,6 +4044,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "find a homotopy between chain maps",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "target",
@@ -3946,6 +4057,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "source": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -3977,6 +4089,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -4001,6 +4114,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -4026,6 +4140,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -4070,6 +4185,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -4077,11 +4193,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -4104,6 +4222,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -4144,6 +4263,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -4165,6 +4285,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -4243,6 +4364,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "target": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -4274,6 +4396,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -4298,6 +4421,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -4323,6 +4447,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -4367,6 +4492,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -4374,11 +4500,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -4401,6 +4529,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -4441,6 +4570,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -4462,6 +4592,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -4543,6 +4674,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -4585,6 +4717,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -4631,6 +4764,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "is every differential in the radical?",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -4641,6 +4775,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -4672,6 +4807,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -4696,6 +4832,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -4721,6 +4858,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -4765,6 +4903,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -4772,11 +4911,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -4799,6 +4940,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -4839,6 +4981,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -4860,6 +5003,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -4945,6 +5089,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "shift a complex",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -4955,6 +5100,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -4986,6 +5132,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -5010,6 +5157,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -5035,6 +5183,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -5079,6 +5228,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -5086,11 +5236,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -5113,6 +5265,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -5153,6 +5306,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -5174,6 +5328,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -5277,6 +5432,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "the cone of a chain map",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "target",
@@ -5289,6 +5445,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "source": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -5320,6 +5477,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -5344,6 +5502,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -5369,6 +5528,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -5413,6 +5573,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -5420,11 +5581,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -5447,6 +5610,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -5487,6 +5651,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -5508,6 +5673,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -5586,6 +5752,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "target": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -5617,6 +5784,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -5641,6 +5809,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -5666,6 +5835,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -5710,6 +5880,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -5717,11 +5888,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -5744,6 +5917,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -5784,6 +5958,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -5805,6 +5980,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -5886,6 +6062,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "matrix"
@@ -5932,6 +6109,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "the total complex of a multicomplex",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -5942,6 +6120,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -5973,6 +6152,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -5997,6 +6177,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -6022,6 +6203,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -6066,6 +6248,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -6073,11 +6256,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -6100,6 +6285,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -6140,6 +6326,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -6161,6 +6348,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -6246,6 +6434,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "cohomology of the Hom complex",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "source",
         "target"
@@ -6257,6 +6446,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "source": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -6288,6 +6478,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -6312,6 +6503,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -6337,6 +6529,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -6381,6 +6574,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -6388,11 +6582,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -6415,6 +6611,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -6455,6 +6652,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -6476,6 +6674,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -6554,6 +6753,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "target": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -6585,6 +6785,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -6609,6 +6810,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -6634,6 +6836,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -6678,6 +6881,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -6685,11 +6889,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -6712,6 +6918,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -6752,6 +6959,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -6773,6 +6981,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -6864,6 +7073,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "Gaussian elimination",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -6874,6 +7084,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -6905,6 +7116,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -6929,6 +7141,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -6954,6 +7167,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -6998,6 +7212,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -7005,11 +7220,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -7032,6 +7249,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -7072,6 +7290,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -7093,6 +7312,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -7182,6 +7402,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "the Euler characteristic",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -7192,6 +7413,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -7223,6 +7445,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -7247,6 +7470,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -7272,6 +7496,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -7316,6 +7541,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -7323,11 +7549,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -7350,6 +7578,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -7390,6 +7619,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -7411,6 +7641,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -7496,6 +7727,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "TikZ source for a complex",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -7506,6 +7738,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -7537,6 +7770,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -7561,6 +7795,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -7586,6 +7821,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -7630,6 +7866,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -7637,11 +7874,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -7664,6 +7903,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -7704,6 +7944,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -7725,6 +7966,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -7810,6 +8052,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "a module given by a projective presentation",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "module"
       ],
@@ -7821,11 +8064,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         "module": {
           "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
           "type": "object",
+          "additionalProperties": false,
           "properties": {
             "generators": {
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "object"
                 ],
@@ -7848,6 +8093,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "object"
                 ],
@@ -7888,6 +8134,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 },
                 {
                   "type": "object",
+                  "additionalProperties": false,
                   "required": [
                     "object"
                   ],
@@ -7909,6 +8156,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   "type": "array",
                   "items": {
                     "type": "object",
+                    "additionalProperties": false,
                     "required": [
                       "object"
                     ],
@@ -7979,6 +8227,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "the head P/rad P of a projective",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [],
       "properties": {
         "context": {
@@ -7995,6 +8244,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "object"
             ],
@@ -8025,6 +8275,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "begin a projective resolution of a module",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "module"
       ],
@@ -8036,11 +8287,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         "module": {
           "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
           "type": "object",
+          "additionalProperties": false,
           "properties": {
             "generators": {
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "object"
                 ],
@@ -8063,6 +8316,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "object"
                 ],
@@ -8103,6 +8357,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 },
                 {
                   "type": "object",
+                  "additionalProperties": false,
                   "required": [
                     "object"
                   ],
@@ -8124,6 +8379,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                   "type": "array",
                   "items": {
                     "type": "object",
+                    "additionalProperties": false,
                     "required": [
                       "object"
                     ],
@@ -8212,6 +8468,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "cover the kernel at the far end",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "resolution"
       ],
@@ -8222,6 +8479,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "resolution": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -8253,6 +8511,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -8277,6 +8536,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -8302,6 +8562,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -8346,6 +8607,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -8353,11 +8615,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -8380,6 +8644,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -8420,6 +8685,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -8441,6 +8707,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -8529,6 +8796,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "is this a projective resolution of the module?",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "resolution"
       ],
@@ -8539,6 +8807,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "resolution": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -8570,6 +8839,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -8594,6 +8864,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -8619,6 +8890,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -8663,6 +8935,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -8670,11 +8943,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -8697,6 +8972,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -8737,6 +9013,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -8758,6 +9035,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -8846,6 +9124,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
     "description": "correct a complex order by order in a parameter",
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "complex"
       ],
@@ -8856,6 +9135,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
         },
         "complex": {
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "terms"
           ],
@@ -8887,6 +9167,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "at",
                   "summands"
@@ -8911,6 +9192,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": false,
                       "required": [
                         "object"
                       ],
@@ -8936,6 +9218,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
               "type": "array",
               "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "required": [
                   "from",
                   "matrix"
@@ -8980,6 +9263,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
             "resolves": {
               "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
               "type": "object",
+              "additionalProperties": false,
               "required": [
                 "module"
               ],
@@ -8987,11 +9271,13 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                 "module": {
                   "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "generators": {
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -9014,6 +9300,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "required": [
                           "object"
                         ],
@@ -9054,6 +9341,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                         },
                         {
                           "type": "object",
+                          "additionalProperties": false,
                           "required": [
                             "object"
                           ],
@@ -9075,6 +9363,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
                           "type": "array",
                           "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "required": [
                               "object"
                             ],
@@ -9156,6 +9445,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "map",
               "from"

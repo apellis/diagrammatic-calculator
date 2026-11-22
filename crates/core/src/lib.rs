@@ -23,6 +23,7 @@ pub mod error;
 pub mod expr;
 pub mod fxhash;
 pub mod groebner;
+pub mod keys;
 pub mod lean;
 pub mod linalg;
 pub mod num;

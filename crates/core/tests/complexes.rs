@@ -732,3 +732,108 @@ fn summands_with_different_strand_counts() {
     assert_eq!(v["holds"], true, "{v:#}");
     assert_eq!(v["uncovered_dimension"], 1, "{v:#}");
 }
+
+fn error(op: &str, req: Value) -> String {
+    let v = ops::call(op, &req);
+    assert_eq!(v["status"], "error", "{op}: {v:#}");
+    v["message"].as_str().unwrap().to_string()
+}
+
+/// Every object of the complex formats, and every request, rejects a key it does not know, and
+/// names the key and the nearest known one.
+#[test]
+fn misspelled_keys_are_rejected() {
+    let mut c = two_term();
+    c["diferentials"] = c["differentials"].take();
+    c.as_object_mut().unwrap().remove("differentials");
+    let e = error("complex.check", json!({ "context": CYC, "complex": c }));
+    assert!(
+        e.starts_with("a complex has no key 'diferentials' (did you mean 'differentials'?)"),
+        "{e}"
+    );
+    let mut c = two_term();
+    c["terms"][0]["summand"] = json!([]);
+    let e = error("complex.check", json!({ "context": CYC, "complex": c }));
+    assert!(
+        e.contains("a term has no key 'summand' (did you mean 'summands'?)"),
+        "{e}"
+    );
+    let mut c = two_term();
+    c["differentials"][0]["form"] = json!(-1);
+    let e = error("complex.check", json!({ "context": CYC, "complex": c }));
+    assert!(
+        e.contains("a differential has no key 'form' (did you mean 'from'?)"),
+        "{e}"
+    );
+    let mut c = two_term();
+    c["terms"][0]["summands"][0]["shfit"] = json!(2);
+    let e = error("complex.check", json!({ "context": CYC, "complex": c }));
+    assert!(
+        e.contains("summand 1 has no key 'shfit' (did you mean 'shift'?)"),
+        "{e}"
+    );
+    // a key with nothing close is named without a suggestion
+    let mut c = two_term();
+    c["colour"] = json!("red");
+    let e = error("complex.check", json!({ "context": CYC, "complex": c }));
+    assert!(e.contains("no key 'colour';"), "{e}");
+    assert!(!e.contains("did you mean"), "{e}");
+    // maps, modules, resolutions, and unknowns
+    let e = error(
+        "chainmap.check",
+        json!({ "context": CYC, "source": two_term(), "target": two_term(),
+                "map": [{ "at": 0, "matrix": [["e(i@1)"]], "matrx": [] }] }),
+    );
+    assert!(
+        e.contains("a component of 'map' has no key 'matrx' (did you mean 'matrix'?)"),
+        "{e}"
+    );
+    let e = error(
+        "module.check",
+        json!({ "context": CYC, "module": { "generators": [{ "object": "i@1" }], "relation": [] } }),
+    );
+    assert!(
+        e.contains("a module has no key 'relation' (did you mean 'relations'?)"),
+        "{e}"
+    );
+    let mut r = call(
+        "resolution.start",
+        json!({ "context": CYC, "module": { "head": "i@1" } }),
+    )["resolution"]
+        .clone();
+    r["resolves"]["augmentaton"] = json!([["e(i@1)"]]);
+    let e = error(
+        "resolution.check",
+        json!({ "context": CYC, "resolution": r }),
+    );
+    assert!(
+        e.contains("'resolves' has no key 'augmentaton' (did you mean 'augmentation'?)"),
+        "{e}"
+    );
+    let e = error(
+        "complex.deform",
+        json!({ "context": format!("{FREE} truncate=h^2"), "complex": two_term(),
+                "unknowns": [{ "map": "differential", "from": -1, "rows": 0 }] }),
+    );
+    assert!(
+        e.contains("unknown 0 has no key 'rows' (did you mean 'row'?)"),
+        "{e}"
+    );
+    // requests: the keys are those of the operation's schema
+    let e = error(
+        "complex.homology",
+        json!({ "context": CYC, "complex": two_term(), "at": 0, "max_degre": 4 }),
+    );
+    assert!(
+        e.starts_with(
+            "a complex.homology request has no key 'max_degre' (did you mean 'max_degree'?)"
+        ),
+        "{e}"
+    );
+    for op in diagcalc_core::ops_complex::OPS {
+        let keys = diagcalc_core::ops_complex::request_keys(op);
+        assert!(keys.iter().any(|k| k == "context"), "{op}: {keys:?}");
+        let e = error(op, json!({ "context": CYC, "bogus_key": 1 }));
+        assert!(e.contains("has no key 'bogus_key'"), "{op}: {e}");
+    }
+}

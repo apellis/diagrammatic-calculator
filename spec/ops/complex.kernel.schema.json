@@ -6,6 +6,7 @@
   "$defs": {
     "request": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "context",
         "complex",

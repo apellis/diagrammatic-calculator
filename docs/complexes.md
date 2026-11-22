@@ -201,6 +201,10 @@ If the cell no longer has the map (its terms changed), the pane says so.
 
 ## Operations
 
+The requests and the complexes, modules, maps, and resolutions in them take only the keys their
+schemas in `spec/ops/` list: a misspelled key such as `diferentials` is an error that names it and
+the nearest known key ("did you mean 'differentials'?"), not a key silently ignored.
+
 | Operation | Does |
 |---|---|
 | `hom.basis` | the basis of `Hom(P(a), P(b))` degree by degree (or in one `degree`) |

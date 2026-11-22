@@ -470,6 +470,7 @@
     },
     "complexSummand": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "object"
       ],
@@ -495,6 +496,7 @@
     },
     "complex": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "terms"
       ],
@@ -526,6 +528,7 @@
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "at",
               "summands"
@@ -544,6 +547,7 @@
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "from",
               "matrix"
@@ -565,6 +569,7 @@
         "resolves": {
           "description": "Makes the complex a resolution of a module: C₀ (at position 0, the last term) maps onto the module by the augmentation, a matrix from C₀ to the generators (a row for each generator, a column for each summand of C₀; it may be left out when C₀ is the sum of the generators, in order, and is then the identity).",
           "type": "object",
+          "additionalProperties": false,
           "required": [
             "module"
           ],
@@ -584,6 +589,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "at",
           "matrix"
@@ -698,6 +704,7 @@
     "module": {
       "description": "A module over the algebra. Either a presentation M = coker(φ: Q₁ → Q₀), by generators (the summands of Q₀), relations (the summands of Q₁), and the matrix of φ: a row for each generator, a column for each relation, entry (i, j) the component of relation j at generator i (without relations, M = Q₀ is projective); or {\"head\": P}, the module P/rad P, for P an object, a summand {object, shift}, or a list of summands, which is read as the presentation module.head finds.",
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "generators": {
           "$ref": "common.schema.json#/$defs/complexSummands"

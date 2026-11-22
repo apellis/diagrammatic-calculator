@@ -48,6 +48,9 @@ fn relabel(s: &str) -> String {
         .replace("⟩ at 0", "⟩ among the generators")
 }
 
+/// The keys of a module (`spec/ops/common.schema.json#/$defs/module`).
+pub const MODULE_KEYS: [&str; 4] = ["generators", "relations", "matrix", "head"];
+
 /// Parses a module `{generators, relations, matrix}` (`spec/ops/module.check.schema.json`).
 /// Objects and shifts may be left out where the matrix entries determine them, as for complexes.
 pub fn parse_module_noted<A: Additive>(a: &A, v: &Value) -> Result<Noted<Module<A::Obj, A::Mor>>> {
@@ -58,6 +61,7 @@ pub fn parse_module_noted<A: Additive>(a: &A, v: &Value) -> Result<Noted<Module<
              only inside a workspace)"
         )));
     }
+    crate::keys::check(v, &MODULE_KEYS, "a module")?;
     if let Some(h) = v.get("head").filter(|h| !h.is_null()) {
         return head_module(a, v, h);
     }
@@ -461,6 +465,7 @@ pub fn parse_resolution<A: Additive>(
              start one with resolution.start",
         )
     })?;
+    crate::keys::check(r, &["module", "augmentation"], "'resolves'")?;
     let (c, mut notes) = parse_complex_noted(a, v)?;
     if c.dim != 1 {
         return Err(Error::invalid("a resolution is a one-dimensional complex"));
