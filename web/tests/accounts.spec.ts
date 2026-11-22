@@ -170,6 +170,34 @@ test('on a shared computer, signing out can remove the account\'s documents from
   await b.context.close();
 });
 
+test('Export says whether the copy kept with the document was saved', async ({ browser }) => {
+  const mock = new MockAccounts();
+  const ada = mock.user('ada@example.org', 'Ada');
+  const a = await device(browser, mock, ada);
+  await newDoc(a.page);
+  await typeCell(a.page, 'def a := x_1 e(iji)');
+  await saved(a.page);
+  const status = a.page.locator('.topbar-msg');
+
+  // the copy is saved: the message says so
+  let exported = a.page.waitForEvent('download');
+  await a.page.keyboard.press('ControlOrMeta+Shift+S');
+  await exported;
+  await expect(status).toHaveText('Exported; a copy is kept with the document in your account.');
+  expect(mock.only().files.size).toBe(1);
+
+  // the copy fails: the download still happens, and the message names the failure
+  await a.page.route((url) => /\/api\/docs\/[\w-]+\/files\//.test(url.pathname), (route) =>
+    route.request().method() === 'PUT'
+      ? route.fulfill({ status: 507, contentType: 'application/json', body: JSON.stringify({ error: 'storage is full' }) })
+      : route.fallback());
+  exported = a.page.waitForEvent('download');
+  await a.page.keyboard.press('ControlOrMeta+Shift+S');
+  await exported;
+  await expect(status).toHaveText('Exported, but the copy kept with the document in your account was not saved (storage is full). The downloaded file is complete.');
+  expect(mock.only().files.size).toBe(1);
+});
+
 test('the files kept with a document are listed, and can be downloaded, opened, and removed', async ({ browser }) => {
   const mock = new MockAccounts();
   const ada = mock.user('ada@example.org', 'Ada');

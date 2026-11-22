@@ -2,6 +2,7 @@
 // evaluator.
 import { createEffect, createResource, createSignal, For, on, onCleanup, onMount, Show, type Signal } from 'solid-js';
 import { createCleanCopy, loadLink, openDoc, markExported, saveLink, type OpenDoc } from '../doc/store';
+import { exportMessage } from './export-message';
 import { kindOf, type CellData, type Comparison, type Doc, type Inputs, type Snapshot } from '../doc/model';
 import { Evaluator, type CellState } from '../eval/evaluator';
 import { cache, download, engine, engineId, isMac, mod, pickFile } from '../app';
@@ -980,16 +981,17 @@ function DocView(props: {
     const { text, canonical } = await exportDcw(doc);
     download(fileName(name(), 'dcw'), text);
     void markExported(props.o.info.id);
-    setMessage(canonical ? 'Exported.' : 'Exported as entered: some cells do not parse.');
+    setMessage(exportMessage(canonical, { kind: 'none' }));
     // a copy of the file is kept with the document in the account
     const s = props.sync;
     // in view mode nothing is written, not even a copy kept with the document
     if (s?.canEdit && s.cloudId && !onBranch() && !viewing()) {
       try {
         await api.putFile(s.cloudId, fileName(name(), 'dcw'), text);
-        setMessage(`${canonical ? 'Exported' : 'Exported as entered'}; a copy is kept with the document in your account.`);
-      } catch {
-        // the download itself succeeded
+        setMessage(exportMessage(canonical, { kind: 'saved' }));
+      } catch (e) {
+        // the download itself succeeded; the failed copy is said, not hidden
+        setMessage(exportMessage(canonical, { kind: 'failed', error: (e as Error).message || String(e) }));
       }
     }
   };

@@ -139,6 +139,29 @@ Signing in locally needs `http://localhost:8788/api/auth/callback` among the OAu
 redirect URIs. The unit tests (`npm run test:server`) need none of this: they run the API against
 Miniflare's D1 and R2 with a fake Google and a fake Resend.
 
+## Content Security Policy: what `connect-src https:` gives up
+
+`web/public/_headers` (served the same way by `vite preview`) sets the policy. Scripts, workers,
+styles, and fonts come from the site only, with no inline scripts and no `eval` beyond
+WebAssembly compilation. Network requests, however, may go to the site, to Anthropic and
+OpenAI, to **any `https:` address**, and to `localhost` or `127.0.0.1` over plain HTTP. The
+wide `connect-src` is there because the AI sidebar talks to an OpenAI-compatible server the
+person names, which can be any HTTPS address or a server on their own computer; a static
+header cannot list an address each person chooses.
+
+The trade-off: the policy does not limit where data can be sent. If a script ever ran in the
+page through some other bug (a script injection the `script-src 'self'` rule failed to stop,
+or a compromised dependency in the bundle), it could send open documents, and the AI key kept
+in this browser, to any HTTPS host. The policy still blocks loading or running code from
+elsewhere, which is the usual first step of such an attack; it is not a second line of
+defence against sending data out. The Anthropic and OpenAI entries are covered by `https:` and
+are kept to say which hosts the app itself calls.
+
+Narrowing it would mean dropping arbitrary named servers (allowing only the listed providers and
+`localhost`), or proxying named servers through the site's own API, which would then see the
+person's key and prompts. Neither is done; a change of either kind is a decision for the owner,
+and `PRIVACY.md` would change with it.
+
 ## Hardening that needs a person
 
 These settings live in the Cloudflare and GitHub dashboards, not in the repository.

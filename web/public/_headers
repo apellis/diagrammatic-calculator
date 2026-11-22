@@ -7,6 +7,8 @@
 # use); network requests to this site and to the AI providers: Anthropic, OpenAI, and an
 # OpenAI-compatible server the person names, which can be any https address or a server on this
 # computer. Nothing may frame the app, and no page it links to learns where the visitor came from.
+# The wide connect-src (any https: address) is a trade-off, explained in docs/deploy.md,
+# "Content Security Policy": it does not limit where an injected script could send data.
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
