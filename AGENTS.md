@@ -65,6 +65,10 @@ cargo test --workspace
 cargo build -p diagcalc-wasm --target wasm32-unknown-unknown
 ```
 
+`scripts/check.sh` runs these four checks. To run it before every push, enable the hook once per
+clone with `git config core.hooksPath .githooks`; `.githooks/pre-push` then refuses a push whose
+checks fail.
+
 The golden corpus is computed by an independent Lean 4 program in `lean/golden/`, run in CI
 (`.github/workflows/golden.yml`); its output is checked in under `tests/golden/` and the Rust tests
 must reproduce it.
