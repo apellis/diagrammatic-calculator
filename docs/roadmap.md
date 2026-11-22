@@ -36,6 +36,20 @@ project (About is `/#/about`, privacy `/privacy`; see `docs/deploy.md`).
 - **Odd BE2 nondegeneracy.** Adopt a valid proof when available; until then retain the conditional
   conclusions. Resolving the conjecture is a research dependency, not a calculator release task.
 
+### Complexes, modules, and resolutions
+
+- **Golden corpus.** The Lean golden program (`lean/golden/`) computes normal forms and actions of
+  terms only. Complex, module, and resolution results (homology, kernels, heads, resolution
+  steps, cones, minimality) have no golden cases: computing them independently in Lean needs
+  graded Hom bases of weighted KLR contexts and exact linear algebra over ℚ in that program. Until
+  then they are checked by the randomized differential tests in
+  `crates/core/tests/differential.rs`, whose oracle shares `simplify` and `hom.basis` with the
+  code under test.
+- **Independent review** of the fixes of the 22 November critique (generators dropped by the
+  degree sweep, the additive-category registry, `freedom` without a solution, the export
+  message, and the differential tests): not yet done by a fresh reviewer; until it is, these
+  stay open.
+
 ### Performance
 
 Re-profile the released system before selecting work; keep exactness and determinism, and
