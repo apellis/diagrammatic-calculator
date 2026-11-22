@@ -17,6 +17,20 @@
 //!   `J` is the radical of the trace form, `dim End⁰/J` its rank. The head's graded dimensions
 //!   are the ranks of `f ↦ (f ∘ g mod J)_g`, and the simplicity note must appear exactly when
 //!   `dim End⁰/J > 1`.
+//! - complexes (`complex_operations_agree_with_brute_force`): random one-dimensional complexes in
+//!   A1, A2 (with `h` in the relations), B2, and A3 (two red strands), and A2 with weights theta,
+//!   over one and two black strands, with `h` of degree 2, 0, and −2 in the maps. Third terms are
+//!   random cycles, and contractible pairs are added. The oracle checks `complex.check`,
+//!   `complex.homology` (dimensions and representatives), `complex.euler`, `complex.minimal`
+//!   (each entry against the trace form of `End⁰`), `complex.gauss` (homology kept; minimal when
+//!   every `End⁰` is local), `complex.kernel` (in the kernel, generating it, none redundant),
+//!   `chainmap.check` and `homotopy.check` (on `d h + h d`, plus 1 or not, and a perturbation),
+//!   `complex.cone` (entries `[[−d, 0], [f, d]]`; acyclic for a map homotopic to 1),
+//!   `complex.totalize` (the square `C --f--> C`, block by block, acyclic for `f` homotopic to
+//!   1), `complex.shift`, `homotopy.find` and `chainmap.solve` (existence and freedom against the
+//!   linear system in single-entry maps), `complex.hom` (cohomology of `Hom(C, C)` degree by
+//!   degree), `module.check` (graded dimensions of the cokernel), and `resolution.start`, `.extend`, and
+//!   `.check` (each new term covering the kernel at the far end, none redundant).
 
 #![allow(clippy::needless_range_loop)] // the exact linear algebra below indexes by row and column
 
@@ -1513,4 +1527,1704 @@ fn head_sweep_covers_every_diagnostic() {
         seen.iter().any(|s| s.2) && seen.iter().any(|s| !s.2),
         "{seen:?}"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// complexes, chain maps, homotopies, modules, and resolutions
+//
+// The oracle writes every element of `Hom(T⟨d⟩, ⊕ X_j⟨s_j⟩)` as a column of terms from
+// `hom.basis`, composes by writing `(a)(b)` and straightening with `simplify`, and does the linear
+// algebra here: homology as kernel modulo image, kernels and their generation, the radical through
+// the trace form of `End⁰`, the module `coker φ`. Test objects are the objects of the family
+// together with those an operation reports.
+
+/// A list of summands `X⟨s⟩`.
+type Sums = Vec<(String, i64)>;
+/// A matrix of terms (rows: target summands, columns: source summands; "" is zero).
+type Mat = Vec<Vec<String>>;
+/// An element of a sum as coordinates: (summand, power of `h`, monomial).
+type Elt = BTreeMap<(usize, u32, String), Q>;
+
+/// The rank of a list of elements.
+fn rank_of(vs: &[Elt]) -> usize {
+    let keys: Vec<_> = vs
+        .iter()
+        .flat_map(|v| v.keys().cloned())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let rows: Vec<Vec<Q>> = vs
+        .iter()
+        .map(|v| {
+            keys.iter()
+                .map(|k| *v.get(k).unwrap_or(&Q::int(0)))
+                .collect()
+        })
+        .collect();
+    rank(&rows)
+}
+
+/// A basis of the combinations `c` with `Σ c_k vs[k] = 0`, scaled to integers.
+fn relations_among(vs: &[Elt]) -> Vec<Vec<Q>> {
+    let keys: Vec<_> = vs
+        .iter()
+        .flat_map(|v| v.keys().cloned())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let n = vs.len();
+    let mut m: Vec<Vec<Q>> = keys
+        .iter()
+        .map(|k| vs.iter().map(|v| *v.get(k).unwrap_or(&Q::int(0))).collect())
+        .collect();
+    let mut pivots = Vec::new();
+    let mut r = 0;
+    for c in 0..n {
+        let Some(p) = (r..m.len()).find(|&i| !m[i][c].zero()) else {
+            continue;
+        };
+        m.swap(r, p);
+        let inv = Q::int(1).div(m[r][c]);
+        for k in 0..n {
+            m[r][k] = m[r][k].mul(inv);
+        }
+        for i in 0..m.len() {
+            if i != r && !m[i][c].zero() {
+                let f = m[i][c];
+                for k in 0..n {
+                    let s = m[r][k].mul(f);
+                    m[i][k] = m[i][k].sub(s);
+                }
+            }
+        }
+        pivots.push(c);
+        r += 1;
+    }
+    let mut out = Vec::new();
+    for free in (0..n).filter(|c| !pivots.contains(c)) {
+        let mut x = vec![Q::int(0); n];
+        x[free] = Q::int(1);
+        for (i, &c) in pivots.iter().enumerate() {
+            x[c] = m[i][free].neg();
+        }
+        let l = x.iter().fold(1i128, |l, q| l / gcd(l, q.1) * q.1);
+        out.push(x.iter().map(|q| Q::int(q.0 * (l / q.1))).collect());
+    }
+    out
+}
+
+fn elt_add(a: &mut Elt, b: &Elt, c: Q) {
+    for (k, v) in b {
+        let e = a.entry(k.clone()).or_insert(Q::int(0));
+        *e = e.add(v.mul(c));
+    }
+    a.retain(|_, v| !v.zero());
+}
+
+/// `c · t` as text.
+fn scaled(c: Q, t: &str) -> String {
+    if c.zero() || t.is_empty() {
+        return String::new();
+    }
+    let s = if c.1 == 1 {
+        format!("{}", c.0)
+    } else {
+        format!("{}/{}", c.0, c.1)
+    };
+    format!("({s})({t})")
+}
+
+/// `Σ` of texts, skipping zeros.
+fn text_sum(ts: impl IntoIterator<Item = String>) -> String {
+    let ts: Vec<String> = ts.into_iter().filter(|t| !t.is_empty()).collect();
+    ts.join(" + ")
+}
+
+/// The product `a ∘ b` of matrices of terms, as text.
+fn mat_mul(a: &Mat, b: &Mat) -> Mat {
+    let inner = b.len();
+    let cols = b.first().map_or(0, Vec::len);
+    a.iter()
+        .map(|row| {
+            (0..cols)
+                .map(|k| {
+                    text_sum((0..inner).filter_map(|j| {
+                        let (x, y) = (&row[j], &b[j][k]);
+                        (!x.is_empty() && !y.is_empty()).then(|| format!("({x})({y})"))
+                    }))
+                })
+                .collect()
+        })
+        .collect()
+}
+
+fn mat_add(a: &Mat, b: &Mat) -> Mat {
+    a.iter()
+        .zip(b)
+        .map(|(r, s)| {
+            r.iter()
+                .zip(s)
+                .map(|(x, y)| text_sum([x.clone(), y.clone()]))
+                .collect()
+        })
+        .collect()
+}
+
+fn mat_json(m: &Mat) -> Value {
+    json!(
+        m.iter()
+            .map(|r| r
+                .iter()
+                .map(|f| if f.is_empty() { Value::Null } else { json!(f) })
+                .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    )
+}
+
+fn mat_read(v: &Value) -> Mat {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            r.as_array()
+                .unwrap()
+                .iter()
+                .map(|f| f.as_str().unwrap_or("").to_string())
+                .collect()
+        })
+        .collect()
+}
+
+fn sums_json(s: &Sums) -> Value {
+    json!(
+        s.iter()
+            .map(|(o, k)| json!({ "object": o, "shift": k }))
+            .collect::<Vec<_>>()
+    )
+}
+
+fn sums_read(v: &Value) -> Sums {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|s| {
+            (
+                s["object"].as_str().unwrap().to_string(),
+                s["shift"].as_i64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+/// A complex as returned by an operation, positions from its lowest to 0 or its highest.
+fn cx_read(v: &Value) -> (i64, Vec<Sums>, Vec<Mat>) {
+    let terms = v["terms"].as_array().unwrap();
+    let (Some(lo), Some(hi)) = (
+        terms.iter().map(|t| t["at"].as_i64().unwrap()).min(),
+        terms.iter().map(|t| t["at"].as_i64().unwrap()).max(),
+    ) else {
+        return (0, vec![], vec![]);
+    };
+    let mut ts = vec![Sums::new(); (hi - lo + 1) as usize];
+    for t in terms {
+        ts[(t["at"].as_i64().unwrap() - lo) as usize] = sums_read(&t["summands"]);
+    }
+    let mut ds: Vec<Mat> = (0..ts.len().saturating_sub(1))
+        .map(|t| vec![vec![String::new(); ts[t].len()]; ts[t + 1].len()])
+        .collect();
+    for d in v["differentials"].as_array().unwrap() {
+        ds[(d["from"].as_i64().unwrap() - lo) as usize] = mat_read(&d["matrix"]);
+    }
+    (lo, ts, ds)
+}
+
+impl Oracle {
+    /// The basis of `Hom(T⟨d⟩, ⊕ X_j⟨s_j⟩)` as columns.
+    fn space(&mut self, t: &str, d: i64, xs: &Sums) -> Vec<Vec<String>> {
+        let mut out = Vec::new();
+        for (j, (x, s)) in xs.iter().enumerate() {
+            for b in self.hom(t, x, d - s) {
+                let mut c = vec![String::new(); xs.len()];
+                c[j] = b;
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    /// `m ∘ col` as coordinates (`m` empty for the identity).
+    fn apply(&mut self, m: Option<&Mat>, col: &[String]) -> Elt {
+        let mut out = Elt::new();
+        let rows: Vec<Vec<(String, String)>> = match m {
+            None => col
+                .iter()
+                .map(|f| vec![(String::new(), f.clone())])
+                .collect(),
+            Some(m) => m
+                .iter()
+                .map(|row| row.iter().cloned().zip(col.iter().cloned()).collect())
+                .collect(),
+        };
+        for (i, row) in rows.iter().enumerate() {
+            let l = if m.is_none() {
+                self.nf(&row[0].1)
+            } else {
+                let pairs: Vec<(&str, &str)> =
+                    row.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+                self.sum_of_products(&pairs)
+            };
+            for ((h, mon), q) in l {
+                out.insert((i, h, mon), q);
+            }
+        }
+        out
+    }
+
+    /// The degrees in `lo..=hi` with a nonzero Hom space from `a` to `b`.
+    fn hom_degrees(&mut self, a: &str, b: &str, lo: i64, hi: i64) -> Vec<i64> {
+        (lo..=hi)
+            .filter(|&d| !self.hom(a, b, d).is_empty())
+            .collect()
+    }
+
+    /// The homology at the middle of `X --f--> Y --g--> Z` in `Hom(T⟨d⟩, −)` (`f`, `g` may be
+    /// absent): its dimension, with a basis of the cycles and the boundaries as coordinates.
+    fn homology_dim(
+        &mut self,
+        t: &str,
+        d: i64,
+        prev: Option<(&Sums, &Mat)>,
+        here: &Sums,
+        next: Option<&Mat>,
+    ) -> usize {
+        let sp = self.space(t, d, here);
+        let cycles = match next {
+            None => sp.len(),
+            Some(g) => {
+                let imgs: Vec<Elt> = sp.iter().map(|c| self.apply(Some(g), c)).collect();
+                sp.len() - rank_of(&imgs)
+            }
+        };
+        let bounds = match prev {
+            None => 0,
+            Some((x, f)) => {
+                let spx = self.space(t, d, x);
+                let imgs: Vec<Elt> = spx.iter().map(|c| self.apply(Some(f), c)).collect();
+                rank_of(&imgs)
+            }
+        };
+        cycles - bounds
+    }
+
+    /// Whether `d_ij : X⟨s⟩ → Y⟨t⟩` lies in the radical: `g ∘ d_ij ∈ J(End⁰ X)` for every map
+    /// back `g : Y⟨t⟩ → X⟨s⟩`, with `J` the radical of the trace form.
+    fn in_radical(
+        &mut self,
+        ends: &mut BTreeMap<String, EndZero>,
+        x: &(String, i64),
+        y: &(String, i64),
+        f: &str,
+    ) -> bool {
+        if f.is_empty() || self.nf(f).is_empty() {
+            return true;
+        }
+        if !ends.contains_key(&x.0) {
+            let e = EndZero::new(self, &x.0);
+            ends.insert(x.0.clone(), e);
+        }
+        let gs = self.hom(&y.0, &x.0, y.1 - x.1);
+        let bs = self.hom(&x.0, &x.0, 0);
+        for g in &gs {
+            for b in &bs {
+                let p = self.nf(&format!("({b})({g})({f})"));
+                if !ends[&x.0].trace(&p).zero() {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+}
+
+/// A family of contexts for complexes: the objects (of several strand counts) to draw summands
+/// from, which also serve as test objects.
+struct CxFamily {
+    ctx: &'static str,
+    objects: &'static [&'static str],
+}
+
+const CX_FAMILIES: &[CxFamily] = &[
+    // A1 cyclotomic, one red strand; one and two black strands
+    CxFamily {
+        ctx: "klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic",
+        objects: &["i@1", "i@1 i@2", "i@-1/2 i@1/2"],
+    },
+    // h of degree 0 in the maps
+    CxFamily {
+        ctx: "klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic truncate=h^2 hdeg=0",
+        objects: &["i@1", "i@1 i@2"],
+    },
+    // h of negative degree: the degree sweep finds redundant generators
+    CxFamily {
+        ctx: "klrw type=A1 ring=QQ red=\"2i@0\" quotient=cyclotomic truncate=h^1 hdeg=-2",
+        objects: &["i@1"],
+    },
+    // A2 with h in the relations (ψψ e(ij) = h e(ij)); infinite-dimensional, so windows cut
+    CxFamily {
+        ctx: "klrw type=A2 ring=QQ Q_ij=h truncate=h^1 hdeg=2",
+        objects: &["i@0 j@1", "j@0 i@1"],
+    },
+    // B2 with two red strands, one and two black strands
+    CxFamily {
+        ctx: "klrw type=B2 ring=QQ red=\"i@0, j@1\" quotient=cyclotomic",
+        objects: &["i@1/2", "i@2", "i@1/2 j@3/2", "j@3/2 i@2", "i@2 j@3"],
+    },
+    // A3 with two red strands: isomorphic loadings, so non-minimal differentials
+    CxFamily {
+        ctx: "klrw type=A3 ring=QQ red=\"i@0, k@2\" quotient=cyclotomic",
+        objects: &["i@1", "i@1 k@3", "k@3 i@4"],
+    },
+    // A2 with weights theta and two red strands
+    CxFamily {
+        ctx: "klrw type=A2 theta_ij=1/2 ring=QQ red=\"i@0, j@5/2\" quotient=cyclotomic",
+        objects: &["i@1 j@3", "j@3 i@4", "i@3 j@4"],
+    },
+];
+
+/// A one-dimensional complex at positions `lo..=0` in a family.
+#[derive(Clone, Debug)]
+struct CxCase {
+    family: usize,
+    ctx: String,
+    terms: Vec<Sums>,
+    diffs: Vec<Mat>,
+}
+
+impl CxCase {
+    fn lo(&self) -> i64 {
+        -(self.terms.len() as i64 - 1)
+    }
+    fn json(&self) -> Value {
+        let lo = self.lo();
+        json!({
+            "terms": self.terms.iter().enumerate().map(|(t, s)| json!({
+                "at": lo + t as i64, "summands": sums_json(s),
+            })).collect::<Vec<_>>(),
+            "differentials": self.diffs.iter().enumerate().map(|(t, m)| json!({
+                "from": lo + t as i64, "matrix": mat_json(m),
+            })).collect::<Vec<_>>(),
+        })
+    }
+    fn objects(&self) -> BTreeSet<String> {
+        let mut s: BTreeSet<String> = CX_FAMILIES[self.family]
+            .objects
+            .iter()
+            .map(|o| o.to_string())
+            .collect();
+        s.extend(self.terms.iter().flatten().map(|(o, _)| o.clone()));
+        s
+    }
+    /// A random map `C(p) → C(p + step)` of degree zero, one matrix per position.
+    fn random_maps(&self, o: &mut Oracle, r: &mut Rng, step: i64, density: usize) -> Vec<Mat> {
+        (0..self.terms.len())
+            .map(|t| {
+                let u = t as i64 + step;
+                let tgt = if (0..self.terms.len() as i64).contains(&u) {
+                    self.terms[u as usize].clone()
+                } else {
+                    vec![]
+                };
+                tgt.iter()
+                    .map(|y| {
+                        self.terms[t]
+                            .iter()
+                            .map(|x| combination(r, &o.hom(&x.0, &y.0, x.1 - y.1), density))
+                            .collect()
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+}
+
+fn cx_case(seed: u64) -> CxCase {
+    let mut r = Rng(seed | 1);
+    let family = r.below(CX_FAMILIES.len());
+    let f = &CX_FAMILIES[family];
+    let mut o = Oracle::new(f.ctx, order_of(f.ctx));
+    // C(0), then C(−1) with shifts placed so that maps of degree zero exist
+    let c0: Sums = (0..1 + r.below(2))
+        .map(|_| (r.pick(f.objects).to_string(), *r.pick(&[0i64, 1, 2])))
+        .collect();
+    let place = |o: &mut Oracle, r: &mut Rng, tgt: &Sums| -> Sums {
+        (0..1 + r.below(2))
+            .map(|_| {
+                let x = r.pick(f.objects).to_string();
+                let y = r.pick(tgt).clone();
+                let ds = o.hom_degrees(&x, &y.0, -2, 4);
+                let d = if ds.is_empty() { 0 } else { *r.pick(&ds) };
+                (x, y.1 + d)
+            })
+            .collect()
+    };
+    let c1 = place(&mut o, &mut r, &c0);
+    let random = |o: &mut Oracle, r: &mut Rng, src: &Sums, tgt: &Sums| -> Mat {
+        tgt.iter()
+            .map(|y| {
+                src.iter()
+                    .map(|x| combination(r, &o.hom(&x.0, &y.0, x.1 - y.1), 3))
+                    .collect()
+            })
+            .collect()
+    };
+    let d1 = random(&mut o, &mut r, &c1, &c0);
+    let mut case = CxCase {
+        family,
+        ctx: f.ctx.to_string(),
+        terms: vec![c1, c0],
+        diffs: vec![d1],
+    };
+    // a third term: summands T⟨d⟩ whose maps into C(−1) are random cycles of d
+    if r.chance(1, 2) {
+        let c1 = case.terms[0].clone();
+        let mut c2 = Sums::new();
+        let mut cols: Vec<Vec<String>> = Vec::new();
+        for _ in 0..4 {
+            if c2.len() == 2 {
+                break;
+            }
+            let t = r.pick(f.objects).to_string();
+            let y = r.pick(&c1).clone();
+            let ds = o.hom_degrees(&t, &y.0, -2, 4);
+            if ds.is_empty() {
+                continue;
+            }
+            let d = y.1 + *r.pick(&ds);
+            let sp = o.space(&t, d, &c1);
+            let imgs: Vec<Elt> = sp
+                .iter()
+                .map(|c| o.apply(Some(&case.diffs[0]), c))
+                .collect();
+            let rels = relations_among(&imgs);
+            if rels.is_empty() {
+                continue;
+            }
+            // a random combination of the cycles
+            let mut coef = vec![Q::int(0); sp.len()];
+            for z in &rels {
+                let c = Q::int(*r.pick(&[1i128, -1, 2]));
+                for k in 0..sp.len() {
+                    coef[k] = coef[k].add(z[k].mul(c));
+                }
+            }
+            let col: Vec<String> = (0..c1.len())
+                .map(|j| text_sum((0..sp.len()).map(|k| scaled(coef[k], &sp[k][j]))))
+                .collect();
+            c2.push((t, d));
+            cols.push(col);
+        }
+        if !c2.is_empty() {
+            let d2: Mat = (0..c1.len())
+                .map(|j| cols.iter().map(|c| c[j].clone()).collect())
+                .collect();
+            case.terms.insert(0, c2);
+            case.diffs.insert(0, d2);
+        }
+    }
+    // a contractible pair Y⟨s⟩ --1--> Y⟨s⟩ at the last differential
+    if r.chance(1, 3) {
+        let y = (r.pick(f.objects).to_string(), *r.pick(&[0i64, 1, 3]));
+        let k = case.terms.len();
+        let e = format!("e({})", y.0);
+        case.terms[k - 2].push(y.clone());
+        case.terms[k - 1].push(y);
+        let last = case.diffs.last_mut().unwrap();
+        for row in last.iter_mut() {
+            row.push(String::new());
+        }
+        let mut row = vec![String::new(); case.terms[k - 2].len()];
+        *row.last_mut().unwrap() = e;
+        last.push(row);
+        if k == 3 {
+            // nothing of C(−2) maps to the new summand
+            let n = case.terms[0].len();
+            case.diffs[0].push(vec![String::new(); n]);
+        }
+    }
+    case
+}
+
+/// `{(test, degree) ↦ dim}` of the homology pieces at one position, as reported.
+fn read_pieces(p: &Value) -> BTreeMap<(String, i64), i64> {
+    p["pieces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| {
+            (
+                (
+                    x["test"].as_str().unwrap().to_string(),
+                    x["degree"].as_i64().unwrap(),
+                ),
+                x["dimension"].as_i64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn window_of(v: &Value) -> (i64, i64, bool) {
+    let w = &v["window"];
+    if w.is_null() {
+        (-4, 4, false)
+    } else {
+        (
+            w["from"].as_i64().unwrap(),
+            w["to"].as_i64().unwrap(),
+            w["truncated"] == true,
+        )
+    }
+}
+
+/// The oracle's homology dimensions of a complex at index `t`, for the tests and degrees.
+fn homology_dims(
+    o: &mut Oracle,
+    terms: &[Sums],
+    diffs: &[Mat],
+    t: usize,
+    tests: &BTreeSet<String>,
+    degrees: std::ops::RangeInclusive<i64>,
+) -> BTreeMap<(String, i64), i64> {
+    let mut out = BTreeMap::new();
+    for test in tests {
+        for d in degrees.clone() {
+            let prev = (t > 0).then(|| (&terms[t - 1], &diffs[t - 1]));
+            let next = diffs.get(t);
+            let n = o.homology_dim(test, d, prev, &terms[t], next);
+            if n > 0 {
+                out.insert((test.clone(), d), n as i64);
+            }
+        }
+    }
+    out
+}
+
+/// Whether `m ∘ n = 0`, entry by entry.
+fn composes_to_zero(o: &mut Oracle, m: &Mat, n: &Mat) -> bool {
+    mat_mul(m, n).iter().flatten().all(|e| o.nf(e).is_empty())
+}
+
+/// What the checks of one case saw, for the sweep's coverage assertions.
+#[derive(Default, Debug)]
+struct CxSeen {
+    family: usize,
+    homology_zero: bool,
+    homology_nonzero: bool,
+    minimal: bool,
+    not_minimal: bool,
+    eliminated: bool,
+    kernel_truncated: bool,
+    kernel_complete: bool,
+    dropped: bool,
+    chainmap_holds: bool,
+    chainmap_fails: bool,
+    homotopy_holds: bool,
+    homotopy_fails: bool,
+    complex_fails: bool,
+    module_nonzero: bool,
+    resolution_extended: bool,
+    homotopy_found: bool,
+    homotopy_not_found: bool,
+    chainmap_solved: bool,
+    chainmap_unsolved: bool,
+}
+
+/// Checks that `gens` (columns into `src`, from `T⟨d⟩`) lie in `sub` and generate it at every
+/// test object and degree, and that none lies in the submodule generated by the others. `sub`
+/// gives the subspace at `(T, d)` as a spanning set of coordinates.
+#[allow(clippy::type_complexity)]
+fn check_generators(
+    o: &mut Oracle,
+    src: &Sums,
+    gens: &[((String, i64), Vec<String>)],
+    tests: &BTreeSet<String>,
+    degrees: std::ops::RangeInclusive<i64>,
+    sub: &mut dyn FnMut(&mut Oracle, &str, i64) -> Vec<Elt>,
+    ctxt: &str,
+) {
+    let produced = |o: &mut Oracle, t: &str, d: i64, skip: Option<usize>| -> Vec<Elt> {
+        let mut out = Vec::new();
+        for (k, ((g, s), col)) in gens.iter().enumerate() {
+            if Some(k) == skip {
+                continue;
+            }
+            for b in o.hom(t, g, d - s) {
+                let c: Vec<String> = col
+                    .iter()
+                    .map(|f| {
+                        if f.is_empty() {
+                            String::new()
+                        } else {
+                            format!("({f})({b})")
+                        }
+                    })
+                    .collect();
+                out.push(o.apply(None, &c));
+            }
+        }
+        out
+    };
+    let _ = src;
+    for t in tests {
+        for d in degrees.clone() {
+            let s = sub(o, t, d);
+            let p = produced(o, t, d, None);
+            let rs = rank_of(&s);
+            let both: Vec<Elt> = s.iter().chain(&p).cloned().collect();
+            assert_eq!(
+                rank_of(&both),
+                rs,
+                "a generator outside at ({t}, {d}): {ctxt}"
+            );
+            assert_eq!(rank_of(&p), rs, "not generated at ({t}, {d}): {ctxt}");
+        }
+    }
+    for (k, ((g, s), col)) in gens.iter().enumerate() {
+        let own = o.apply(None, col);
+        let others = produced(o, g, *s, Some(k));
+        let mut with: Vec<Elt> = others.clone();
+        with.push(own);
+        assert!(
+            rank_of(&with) > rank_of(&others),
+            "generator {k} is produced by the others: {ctxt}"
+        );
+    }
+}
+
+/// A map of complexes as coordinates: (position index, row, column, power of `h`, monomial).
+type MapElt = BTreeMap<(usize, usize, usize, u32, String), Q>;
+
+fn map_add(a: &mut MapElt, t: usize, m: &Mat, c: Q, o: &mut Oracle) {
+    for (i, row) in m.iter().enumerate() {
+        for (j, e) in row.iter().enumerate() {
+            for ((h, mon), q) in o.nf(e) {
+                let k = a.entry((t, i, j, h, mon)).or_insert(Q::int(0));
+                *k = k.add(q.mul(c));
+            }
+        }
+    }
+    a.retain(|_, q| !q.zero());
+}
+
+fn map_rank(vs: &[MapElt]) -> usize {
+    let keys: Vec<_> = vs
+        .iter()
+        .flat_map(|v| v.keys().cloned())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let rows: Vec<Vec<Q>> = vs
+        .iter()
+        .map(|v| {
+            keys.iter()
+                .map(|k| *v.get(k).unwrap_or(&Q::int(0)))
+                .collect()
+        })
+        .collect();
+    rank(&rows)
+}
+
+/// The basis of the maps `C(t) → C(t + step)` of internal degree `e` with one nonzero entry:
+/// (t, the map as a matrix).
+fn single_entry_maps(o: &mut Oracle, terms: &[Sums], step: i64, e: i64) -> Vec<(usize, Mat)> {
+    let mut out = Vec::new();
+    for t in 0..terms.len() {
+        let u = t as i64 + step;
+        if !(0..terms.len() as i64).contains(&u) {
+            continue;
+        }
+        let (src, tgt) = (&terms[t], &terms[u as usize]);
+        for (i, y) in tgt.iter().enumerate() {
+            for (j, x) in src.iter().enumerate() {
+                for b in o.hom(&x.0, &y.0, x.1 - y.1 + e) {
+                    let mut m: Mat = vec![vec![String::new(); src.len()]; tgt.len()];
+                    m[i][j] = b;
+                    out.push((t, m));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn neg_texts(m: &Mat) -> Mat {
+    m.iter()
+        .map(|r| {
+            r.iter()
+                .map(|e| {
+                    if e.is_empty() {
+                        String::new()
+                    } else {
+                        format!("-({e})")
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// `d h + h d` for a single-entry `h : C(t) → C(t − 1)`, as coordinates.
+fn dh_plus_hd(o: &mut Oracle, diffs: &[Mat], t: usize, h: &Mat) -> MapElt {
+    let mut out = MapElt::new();
+    // (d h)(t) = d(t − 1) h(t), and (h d)(t − 1) = h(t) d(t − 1)
+    map_add(&mut out, t, &mat_mul(&diffs[t - 1], h), Q::int(1), o);
+    map_add(&mut out, t - 1, &mat_mul(h, &diffs[t - 1]), Q::int(1), o);
+    out
+}
+
+/// `d F − F d` square by square for a single-entry `F : C(t) → C(t)`, as coordinates indexed by
+/// the source of the square.
+fn chain_defect(o: &mut Oracle, diffs: &[Mat], t: usize, f: &Mat) -> MapElt {
+    let mut out = MapElt::new();
+    if t < diffs.len() {
+        map_add(&mut out, t, &mat_mul(&diffs[t], f), Q::int(1), o);
+    }
+    if t > 0 {
+        map_add(&mut out, t - 1, &mat_mul(f, &diffs[t - 1]), Q::int(-1), o);
+    }
+    out
+}
+
+/// Checks `homotopy.find`, `chainmap.solve`, and `complex.hom` on a case against the linear
+/// algebra of single-entry maps, recording the branches reached in `seen`.
+fn check_solvers(o: &mut Oracle, case: &CxCase, maps: &[(Vec<Mat>, bool)], seen: &mut CxSeen) {
+    let ctx = case.ctx.as_str();
+    let cx = case.json();
+    let lo = case.lo();
+    let k = case.terms.len();
+    let ctxt = format!("{case:?}");
+    let map_json = |m: &[Mat]| -> Value {
+        json!(
+            m.iter()
+                .enumerate()
+                .map(|(t, m)| json!({ "at": lo + t as i64, "matrix": mat_json(m) }))
+                .collect::<Vec<_>>()
+        )
+    };
+    // homotopy.find: h with d h + h d = f
+    let hs = single_entry_maps(o, &case.terms, -1, 0);
+    let cols: Vec<MapElt> = hs
+        .iter()
+        .map(|(t, h)| dh_plus_hd(o, &case.diffs, *t, h))
+        .collect();
+    let r = map_rank(&cols);
+    for (f, _) in maps {
+        let mut target = MapElt::new();
+        for (t, m) in f.iter().enumerate() {
+            map_add(&mut target, t, m, Q::int(1), o);
+        }
+        let mut with = cols.clone();
+        with.push(target.clone());
+        let exists = map_rank(&with) == r;
+        let v = call(
+            "homotopy.find",
+            json!({ "context": ctx, "source": cx, "target": cx, "f": map_json(f) }),
+        );
+        assert_eq!(v["exists"], exists, "homotopy.find: {ctxt}\n{v:#}");
+        if exists {
+            seen.homotopy_found = true;
+            assert_eq!(v["freedom"], hs.len() - r, "{ctxt}\n{v:#}");
+            // the h returned satisfies d h + h d = f
+            let mut got = MapElt::new();
+            for c in v["h"].as_array().unwrap() {
+                let t = (c["at"].as_i64().unwrap() - lo) as usize;
+                let h = mat_read(&c["matrix"]);
+                if t == 0 || h.is_empty() {
+                    continue;
+                }
+                let e = dh_plus_hd(o, &case.diffs, t, &h);
+                for (key, q) in e {
+                    let x = got.entry(key).or_insert(Q::int(0));
+                    *x = x.add(q);
+                }
+            }
+            got.retain(|_, q| !q.zero());
+            assert_eq!(got, target, "d h + h d ≠ f: {ctxt}\n{v:#}");
+        } else {
+            seen.homotopy_not_found = true;
+        }
+    }
+    // chainmap.solve: F with F(0) given, the rest solved for
+    let fs: Vec<(usize, Mat)> = single_entry_maps(o, &case.terms, 0, 0)
+        .into_iter()
+        .filter(|(t, _)| *t != k - 1)
+        .collect();
+    let cols: Vec<MapElt> = fs
+        .iter()
+        .map(|(t, f)| chain_defect(o, &case.diffs, *t, f))
+        .collect();
+    let r = map_rank(&cols);
+    for (f, _) in maps {
+        let fixed = &f[k - 1];
+        // the fixed component's part of d F − F d, which the unknowns must cancel
+        let mut target = MapElt::new();
+        map_add(
+            &mut target,
+            k - 2,
+            &mat_mul(fixed, &case.diffs[k - 2]),
+            Q::int(1),
+            o,
+        );
+        let mut with = cols.clone();
+        with.push(target);
+        let exists = map_rank(&with) == r;
+        let v = call(
+            "chainmap.solve",
+            json!({ "context": ctx, "source": cx, "target": cx,
+                "fixed": [{ "at": 0, "matrix": mat_json(fixed) }] }),
+        );
+        assert_eq!(v["exists"], exists, "chainmap.solve: {ctxt}\n{v:#}");
+        assert_eq!(v["freedom"], fs.len() - r, "{ctxt}\n{v:#}");
+        if exists {
+            seen.chainmap_solved = true;
+            let mut got: Vec<Mat> = (0..k)
+                .map(|t| vec![vec![String::new(); case.terms[t].len()]; case.terms[t].len()])
+                .collect();
+            for c in v["map"].as_array().unwrap() {
+                got[(c["at"].as_i64().unwrap() - lo) as usize] = mat_read(&c["matrix"]);
+            }
+            let mut fixed_back = MapElt::new();
+            map_add(&mut fixed_back, 0, &got[k - 1], Q::int(1), o);
+            let mut fixed_want = MapElt::new();
+            map_add(&mut fixed_want, 0, fixed, Q::int(1), o);
+            assert_eq!(fixed_back, fixed_want, "{ctxt}\n{v:#}");
+            for t in 0..k - 1 {
+                let a = mat_mul(&case.diffs[t], &got[t]);
+                let b = mat_mul(&got[t + 1], &case.diffs[t]);
+                let mut e = MapElt::new();
+                map_add(&mut e, 0, &a, Q::int(1), o);
+                map_add(&mut e, 0, &b, Q::int(-1), o);
+                assert!(e.is_empty(), "not a chain map: {ctxt}\n{v:#}");
+            }
+        } else {
+            seen.chainmap_unsolved = true;
+        }
+    }
+    // complex.hom: H^n of Hom(C, C) in each internal degree of the window
+    let v = call(
+        "complex.hom",
+        json!({ "context": ctx, "source": cx, "target": cx }),
+    );
+    let (from, to, truncated) = window_of(&v);
+    let mut got = BTreeMap::new();
+    for d in v["degrees"].as_array().unwrap() {
+        for c in d["cohomology"].as_array().unwrap() {
+            if c["dimension"].as_i64().unwrap() > 0 {
+                got.insert(
+                    (d["degree"].as_i64().unwrap(), c["n"].as_i64().unwrap()),
+                    (
+                        c["cochains"].as_i64().unwrap(),
+                        c["dimension"].as_i64().unwrap(),
+                    ),
+                );
+            }
+        }
+    }
+    let mut expected = BTreeMap::new();
+    let kk = k as i64;
+    for e in from - 2..=if truncated { to } else { to + 2 } {
+        // δ^n f = d f − (−1)^n f d, from Hom^n to Hom^(n+1), as coordinates by position
+        let delta_rank = |o: &mut Oracle, n: i64| -> (usize, usize) {
+            let us = single_entry_maps(o, &case.terms, n, e);
+            let imgs: Vec<MapElt> = us
+                .iter()
+                .map(|(t, f)| {
+                    let mut out = MapElt::new();
+                    let u = (*t as i64 + n) as usize;
+                    if u < k - 1 {
+                        map_add(&mut out, *t, &mat_mul(&case.diffs[u], f), Q::int(1), o);
+                    }
+                    if *t > 0 {
+                        let sign = if n.rem_euclid(2) == 0 { -1 } else { 1 };
+                        map_add(
+                            &mut out,
+                            *t - 1,
+                            &mat_mul(f, &case.diffs[*t - 1]),
+                            Q::int(sign),
+                            o,
+                        );
+                    }
+                    out
+                })
+                .collect();
+            (us.len(), map_rank(&imgs))
+        };
+        for n in -(kk - 1)..=kk - 1 {
+            let (dim, r_out) = delta_rank(o, n);
+            let (_, r_in) = delta_rank(o, n - 1);
+            let h = dim - r_out - r_in;
+            if h > 0 {
+                expected.insert((e, n), (dim as i64, h as i64));
+            }
+        }
+    }
+    let in_window: BTreeMap<_, _> = expected
+        .iter()
+        .filter(|((e, _), _)| (from..=to).contains(e))
+        .map(|(a, b)| (*a, *b))
+        .collect();
+    assert_eq!(
+        in_window, expected,
+        "Hom cohomology outside the window: {ctxt}\n{v:#}"
+    );
+    assert_eq!(got, expected, "complex.hom: {ctxt}\n{v:#}");
+}
+
+/// Runs the complex operations on a case and checks them against the oracle.
+fn check_cx(case: &CxCase, seed: u64, o: &mut Oracle) -> CxSeen {
+    let mut seen = CxSeen {
+        family: case.family,
+        ..CxSeen::default()
+    };
+    let ctx = case.ctx.as_str();
+    assert_eq!(o.ctx, ctx);
+    let o = &mut *o;
+    let cx = case.json();
+    let ctxt = format!("{case:?}");
+    let lo = case.lo();
+    // every object, for checks that hold at any test object
+    let mut tests = case.objects();
+    // one test object per order type, as the operations list them, for comparing dimensions
+    let mut listed = BTreeSet::new();
+
+    // complex.check: the case squares to zero by construction
+    let v = call("complex.check", json!({ "context": ctx, "complex": cx }));
+    assert_eq!(v["holds"], true, "{ctxt}\n{v:#}");
+    for t in 0..case.diffs.len().saturating_sub(1) {
+        assert!(
+            composes_to_zero(o, &case.diffs[t + 1], &case.diffs[t]),
+            "{ctxt}"
+        );
+    }
+
+    // complex.homology at every position
+    let mut hom_dims = Vec::new();
+    for t in 0..case.terms.len() {
+        let at = lo + t as i64;
+        let v = call(
+            "complex.homology",
+            json!({ "context": ctx, "complex": cx, "at": at, "representatives": 2 }),
+        );
+        let p = &v["positions"][0];
+        let (from, to, truncated) = window_of(p);
+        let got = read_pieces(p);
+        tests.extend(got.keys().map(|(t, _)| t.clone()));
+        // the test objects the operation used, from its note
+        let notes = v["provenance"]["notes"].as_array().unwrap();
+        let listed_here = notes[0].as_str().unwrap();
+        let listed_here = listed_here
+            .strip_prefix("homology of Hom(T⟨d⟩, C) at the test objects T: ")
+            .unwrap_or_else(|| panic!("{v:#}"));
+        listed.extend(listed_here.split(", ").map(String::from));
+        tests.extend(listed.iter().cloned());
+        let expected = homology_dims(
+            o,
+            &case.terms,
+            &case.diffs,
+            t,
+            &listed,
+            from - 2..=if truncated { to } else { to + 2 },
+        );
+        assert_eq!(got, expected, "homology at {at}: {ctxt}\n{v:#}");
+        // `zero`: nothing in the window; `exact`: nothing anywhere
+        assert_eq!(p["zero"], got.is_empty(), "{ctxt}\n{v:#}");
+        assert_eq!(v["exact"], got.is_empty() && !truncated, "{ctxt}\n{v:#}");
+        if got.is_empty() {
+            seen.homology_zero = true;
+        } else {
+            seen.homology_nonzero = true;
+        }
+        // representatives are cycles, independent modulo boundaries
+        for piece in p["pieces"].as_array().unwrap() {
+            let test = piece["test"].as_str().unwrap();
+            let d = piece["degree"].as_i64().unwrap();
+            let reps: Vec<Vec<String>> = piece["representatives"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|c| {
+                    c.as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|f| f.as_str().unwrap_or("").to_string())
+                        .collect()
+                })
+                .collect();
+            let n = piece["dimension"].as_i64().unwrap() as usize;
+            assert_eq!(reps.len(), n.min(2), "{ctxt}\n{v:#}");
+            let mut bounds = Vec::new();
+            if t > 0 {
+                for c in o.space(test, d, &case.terms[t - 1]) {
+                    bounds.push(o.apply(Some(&case.diffs[t - 1]), &c));
+                }
+            }
+            let rb = rank_of(&bounds);
+            let mut all = bounds.clone();
+            for c in &reps {
+                if let Some(g) = case.diffs.get(t) {
+                    assert!(o.apply(Some(g), c).is_empty(), "not a cycle: {ctxt}\n{v:#}");
+                }
+                all.push(o.apply(None, c));
+            }
+            assert_eq!(rank_of(&all), rb + reps.len(), "{ctxt}\n{v:#}");
+        }
+        hom_dims.push((got, from - 2..=if truncated { to } else { to + 2 }));
+    }
+
+    // complex.euler: Σ (−1)^p q^s [X]
+    let v = call("complex.euler", json!({ "context": ctx, "complex": cx }));
+    let mut expected: BTreeMap<String, BTreeMap<i64, i64>> = BTreeMap::new();
+    for (t, ss) in case.terms.iter().enumerate() {
+        let sign = if (lo + t as i64).rem_euclid(2) == 0 {
+            1
+        } else {
+            -1
+        };
+        for (x, s) in ss {
+            *expected
+                .entry(x.clone())
+                .or_default()
+                .entry(*s)
+                .or_default() += sign;
+        }
+    }
+    for m in expected.values_mut() {
+        m.retain(|_, c| *c != 0);
+    }
+    expected.retain(|_, m| !m.is_empty());
+    let got: BTreeMap<String, BTreeMap<i64, i64>> = v["terms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            (
+                t["object"].as_str().unwrap().to_string(),
+                t["powers"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|p| (p[0].as_i64().unwrap(), p[1].as_i64().unwrap()))
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(got, expected, "euler: {ctxt}\n{v:#}");
+
+    // complex.minimal: every entry in the radical
+    let mut ends = BTreeMap::new();
+    let mut failures = 0;
+    for (t, m) in case.diffs.iter().enumerate() {
+        for (i, row) in m.iter().enumerate() {
+            for (j, f) in row.iter().enumerate() {
+                let (x, y) = (&case.terms[t][j], &case.terms[t + 1][i]);
+                if !o.in_radical(&mut ends, x, y, f) {
+                    failures += 1;
+                }
+            }
+        }
+    }
+    let v = call("complex.minimal", json!({ "context": ctx, "complex": cx }));
+    assert_eq!(v["holds"], failures == 0, "minimal: {ctxt}\n{v:#}");
+    if failures == 0 {
+        seen.minimal = true;
+    } else {
+        seen.not_minimal = true;
+        assert!(v["failure_count"].as_i64().unwrap() > 0, "{ctxt}\n{v:#}");
+    }
+
+    // complex.gauss: a complex with the same homology, minimal when finished
+    let v = call("complex.gauss", json!({ "context": ctx, "complex": cx }));
+    let (glo, gterms, gdiffs) = cx_read(&v["complex"]);
+    let n_in: usize = case.terms.iter().map(Vec::len).sum();
+    let n_out: usize = gterms.iter().map(Vec::len).sum();
+    let elim = v["eliminations"].as_array().unwrap().len();
+    assert_eq!(n_in - n_out, 2 * elim, "{ctxt}\n{v:#}");
+    if elim > 0 {
+        seen.eliminated = true;
+    }
+    for t in 0..gdiffs.len().saturating_sub(1) {
+        assert!(
+            composes_to_zero(o, &gdiffs[t + 1], &gdiffs[t]),
+            "{ctxt}\n{v:#}"
+        );
+    }
+    for (t, (got, degrees)) in hom_dims.iter().enumerate() {
+        let at = lo + t as i64;
+        let g = at - glo;
+        let mine = if (0..gterms.len() as i64).contains(&g) {
+            homology_dims(o, &gterms, &gdiffs, g as usize, &listed, degrees.clone())
+        } else {
+            BTreeMap::new()
+        };
+        let mine_in = homology_dims(o, &case.terms, &case.diffs, t, &listed, degrees.clone());
+        assert_eq!(&mine_in, got, "{ctxt}");
+        assert_eq!(
+            mine, mine_in,
+            "gauss changed the homology at {at}: {ctxt}\n{v:#}"
+        );
+    }
+    let local = gterms.iter().flatten().all(|(x, _)| {
+        if !ends.contains_key(x) {
+            let e = EndZero::new(o, x);
+            ends.insert(x.clone(), e);
+        }
+        ends[x].simple_dim == 1
+    });
+    if v["finished"] == true && local {
+        // with End⁰ of every summand local, an entry outside the radical is invertible, and
+        // gauss removes it
+        let mut ends2 = BTreeMap::new();
+        for (t, m) in gdiffs.iter().enumerate() {
+            for (i, row) in m.iter().enumerate() {
+                for (j, f) in row.iter().enumerate() {
+                    let (x, y) = (&gterms[t][j], &gterms[t + 1][i]);
+                    assert!(
+                        o.in_radical(&mut ends2, x, y, f),
+                        "gauss finished with a non-radical entry: {ctxt}\n{v:#}"
+                    );
+                }
+            }
+        }
+    }
+
+    // complex.kernel at the far end: generators of ker d(lo)
+    let v = call(
+        "complex.kernel",
+        json!({ "context": ctx, "complex": cx, "at": lo }),
+    );
+    let (from, to, truncated) = window_of(&v);
+    assert_eq!(v["complete"], !truncated, "{ctxt}\n{v:#}");
+    if truncated {
+        seen.kernel_truncated = true;
+    } else {
+        seen.kernel_complete = true;
+    }
+    let notes = v["provenance"]["notes"].to_string();
+    if notes.contains("found earlier in the degree sweep") {
+        seen.dropped = true;
+    }
+    let ks = sums_read(&v["summands"]);
+    let km = mat_read(&v["matrix"]);
+    let gens: Vec<((String, i64), Vec<String>)> = ks
+        .iter()
+        .enumerate()
+        .map(|(k, s)| (s.clone(), km.iter().map(|row| row[k].clone()).collect()))
+        .collect();
+    tests.extend(ks.iter().map(|s| s.0.clone()));
+    let src = case.terms[0].clone();
+    let d0 = case.diffs[0].clone();
+    check_generators(
+        o,
+        &src,
+        &gens,
+        &tests,
+        from - 2..=if truncated { to } else { to + 2 },
+        &mut |o, t, d| {
+            let sp = o.space(t, d, &src);
+            let imgs: Vec<Elt> = sp.iter().map(|c| o.apply(Some(&d0), c)).collect();
+            let basis: Vec<Elt> = sp.iter().map(|c| o.apply(None, c)).collect();
+            relations_among(&imgs)
+                .iter()
+                .map(|z| {
+                    let mut e = Elt::new();
+                    for (k, b) in basis.iter().enumerate() {
+                        elt_add(&mut e, b, z[k]);
+                    }
+                    e
+                })
+                .collect()
+        },
+        &format!("kernel: {ctxt}\n{v:#}"),
+    );
+
+    // chain maps and homotopies C → C: f = d h + h d (+ 1) is a chain map, homotopic to 0 (or 1)
+    let mut r = Rng(seed.rotate_left(17) | 1);
+    let h = case.random_maps(o, &mut r, -1, 2);
+    let k = case.terms.len();
+    let mut f: Vec<Mat> = (0..k)
+        .map(|t| {
+            let mut m: Mat = vec![vec![String::new(); case.terms[t].len()]; case.terms[t].len()];
+            if t + 1 < k {
+                // h(p+1) d(p)
+                m = mat_add(&m, &mat_mul(&h[t + 1], &case.diffs[t]));
+            }
+            if t > 0 {
+                // d(p−1) h(p)
+                m = mat_add(&m, &mat_mul(&case.diffs[t - 1], &h[t]));
+            }
+            m
+        })
+        .collect();
+    let plus_one = r.chance(1, 2);
+    if plus_one {
+        for (t, m) in f.iter_mut().enumerate() {
+            for (i, row) in m.iter_mut().enumerate() {
+                let e = format!("e({})", case.terms[t][i].0);
+                row[i] = text_sum([row[i].clone(), e]);
+            }
+        }
+    }
+    // perturb one entry sometimes
+    let mut perturbed = f.clone();
+    let p = r.below(k);
+    let i = r.below(case.terms[p].len());
+    let j = r.below(case.terms[p].len());
+    let x = &case.terms[p][j];
+    let y = &case.terms[p][i];
+    let extra = combination(&mut r, &o.hom(&x.0, &y.0, x.1 - y.1), 4);
+    perturbed[p][i][j] = text_sum([perturbed[p][i][j].clone(), extra]);
+    let map_json = |m: &[Mat]| -> Value {
+        json!(
+            m.iter()
+                .enumerate()
+                .map(|(t, m)| json!({ "at": lo + t as i64, "matrix": mat_json(m) }))
+                .collect::<Vec<_>>()
+        )
+    };
+    let commutes = |o: &mut Oracle, m: &[Mat]| -> bool {
+        (0..k - 1).all(|t| {
+            let a = mat_mul(&case.diffs[t], &m[t]);
+            let b = mat_mul(&m[t + 1], &case.diffs[t]);
+            a.iter().flatten().zip(b.iter().flatten()).all(|(x, y)| {
+                let (lx, ly) = (o.nf(x), o.nf(y));
+                lx == ly
+            })
+        })
+    };
+    for m in [&f, &perturbed] {
+        let v = call(
+            "chainmap.check",
+            json!({ "context": ctx, "source": cx, "target": cx, "map": map_json(m) }),
+        );
+        let holds = commutes(o, m);
+        assert_eq!(v["holds"], holds, "chainmap.check: {ctxt}\n{v:#}");
+        if holds {
+            seen.chainmap_holds = true;
+        } else {
+            seen.chainmap_fails = true;
+        }
+        // homotopy.check f − g = d h + h d, with g = 1 or 0
+        let mut req = json!({ "context": ctx, "source": cx, "target": cx,
+            "f": map_json(m), "h": map_json(&h) });
+        if plus_one {
+            let one: Vec<Mat> = case
+                .terms
+                .iter()
+                .map(|ss| {
+                    (0..ss.len())
+                        .map(|i| {
+                            (0..ss.len())
+                                .map(|j| {
+                                    if i == j {
+                                        format!("e({})", ss[i].0)
+                                    } else {
+                                        String::new()
+                                    }
+                                })
+                                .collect()
+                        })
+                        .collect()
+                })
+                .collect();
+            req["g"] = map_json(&one);
+        }
+        let v = call("homotopy.check", req);
+        let same = std::ptr::eq(m, &f)
+            || (0..k).all(|t| {
+                m[t].iter()
+                    .flatten()
+                    .zip(f[t].iter().flatten())
+                    .all(|(a, b)| o.nf(a) == o.nf(b))
+            });
+        assert_eq!(v["holds"], same, "homotopy.check: {ctxt}\n{v:#}");
+        if same {
+            seen.homotopy_holds = true;
+        } else {
+            seen.homotopy_fails = true;
+        }
+    }
+
+    // homotopy.find, chainmap.solve, and complex.hom; with 1 added, f is homotopic to 1, not 0
+    let maps = vec![(f.clone(), true), (perturbed.clone(), false)];
+    check_solvers(o, case, &maps, &mut seen);
+
+    // complex.cone of f: [[−d, 0], [f, d]]; a cone of a map homotopic to 1 is acyclic
+    let v = call(
+        "complex.cone",
+        json!({ "context": ctx, "source": cx, "target": cx, "map": map_json(&f) }),
+    );
+    let (clo, cterms, cdiffs) = cx_read(&v["complex"]);
+    assert_eq!(clo, lo - 1, "{ctxt}\n{v:#}");
+    for (t, ss) in cterms.iter().enumerate() {
+        let p = clo + t as i64;
+        let mut want = Sums::new();
+        if p < 0 && p + 1 >= lo {
+            want.extend(case.terms[(p + 1 - lo) as usize].clone());
+        }
+        if p >= lo {
+            want.extend(case.terms[(p - lo) as usize].clone());
+        }
+        assert_eq!(ss, &want, "cone term at {p}: {ctxt}\n{v:#}");
+    }
+    for (t, m) in cdiffs.iter().enumerate() {
+        let p = clo + t as i64;
+        // blocks: source C(p+1) ⊕ C(p), target C(p+2) ⊕ C(p+1)
+        let a = if p < 0 {
+            case.terms[(p + 1 - lo) as usize].len()
+        } else {
+            0
+        };
+        let a2 = if p + 2 <= 0 {
+            case.terms[(p + 2 - lo) as usize].len()
+        } else {
+            0
+        };
+        for (i, row) in m.iter().enumerate() {
+            for (j, e) in row.iter().enumerate() {
+                let want = match (i < a2, j < a) {
+                    (true, true) => format!("-({})", case.diffs[(p + 1 - lo) as usize][i][j]),
+                    (true, false) => String::new(),
+                    (false, true) => f[(p + 1 - lo) as usize][i - a2][j].clone(),
+                    (false, false) => case.diffs[(p - lo) as usize][i - a2][j - a].clone(),
+                };
+                let want = if want == "-()" { String::new() } else { want };
+                assert_eq!(
+                    o.nf(e),
+                    o.nf(&want),
+                    "cone entry ({i}, {j}) at {p}: {ctxt}\n{v:#}"
+                );
+            }
+        }
+    }
+    if plus_one {
+        for t in 0..cterms.len() {
+            let dims = homology_dims(o, &cterms, &cdiffs, t, &tests, -6..=10);
+            assert!(
+                dims.is_empty(),
+                "the cone of a map homotopic to 1 has homology: {ctxt}"
+            );
+        }
+    }
+
+    // complex.totalize of the square X(p, −1) = C(p) --f--> X(p, 0) = C(p): Tot(n) is the sum
+    // over p + q = n, with d along axis 0 and (−1)^p f along axis 1
+    let mut xterms = Vec::new();
+    let mut xdiffs = Vec::new();
+    for (t, ss) in case.terms.iter().enumerate() {
+        let p = lo + t as i64;
+        for q in [-1i64, 0] {
+            xterms.push(json!({ "at": [p, q], "summands": sums_json(ss) }));
+            if t + 1 < k {
+                xdiffs
+                    .push(json!({ "from": [p, q], "axis": 0, "matrix": mat_json(&case.diffs[t]) }));
+            }
+        }
+        xdiffs.push(json!({ "from": [p, -1], "axis": 1, "matrix": mat_json(&f[t]) }));
+    }
+    let x = json!({ "dimension": 2, "terms": xterms, "differentials": xdiffs });
+    let v = call("complex.totalize", json!({ "context": ctx, "complex": x }));
+    let (tlo, tterms, tdiffs) = cx_read(&v["complex"]);
+    // where each position's summands start in each total term
+    let mut start: BTreeMap<(i64, i64), (usize, usize)> = BTreeMap::new();
+    for b in v["blocks"].as_array().unwrap() {
+        let n = b["at"].as_i64().unwrap();
+        for e in b["blocks"].as_array().unwrap() {
+            let pq = (
+                e["from"][0].as_i64().unwrap(),
+                e["from"][1].as_i64().unwrap(),
+            );
+            assert_eq!(pq.0 + pq.1, n, "{ctxt}\n{v:#}");
+            start.insert(
+                pq,
+                ((n - tlo) as usize, e["first"].as_u64().unwrap() as usize),
+            );
+        }
+    }
+    for t in 0..k {
+        for q in [-1i64, 0] {
+            let (n, first) = start[&(lo + t as i64, q)];
+            let got = &tterms[n][first..first + case.terms[t].len()];
+            assert_eq!(got, &case.terms[t][..], "totalize term: {ctxt}\n{v:#}");
+        }
+    }
+    let total: usize = tterms.iter().map(Vec::len).sum();
+    assert_eq!(
+        total,
+        2 * case.terms.iter().map(Vec::len).sum::<usize>(),
+        "{ctxt}\n{v:#}"
+    );
+    // every block of the total differential
+    for ((p, q), (n, first)) in &start {
+        let t = (p - lo) as usize;
+        if *n >= tdiffs.len() {
+            continue;
+        }
+        for ((p2, q2), (n2, first2)) in &start {
+            if *n2 != n + 1 {
+                continue;
+            }
+            let t2 = (p2 - lo) as usize;
+            let want: Mat = if (*p2, *q2) == (p + 1, *q) {
+                case.diffs[t].clone()
+            } else if (*p2, *q2) == (*p, q + 1) {
+                if p.rem_euclid(2) == 0 {
+                    f[t].clone()
+                } else {
+                    neg_texts(&f[t])
+                }
+            } else {
+                vec![vec![String::new(); case.terms[t].len()]; case.terms[t2].len()]
+            };
+            for (i, row) in want.iter().enumerate() {
+                for (j, w) in row.iter().enumerate() {
+                    let e = &tdiffs[*n][first2 + i][first + j];
+                    assert_eq!(
+                        o.nf(e),
+                        o.nf(w),
+                        "totalize block {p},{q} → {p2},{q2}: {ctxt}\n{v:#}"
+                    );
+                }
+            }
+        }
+    }
+    for t in 0..tdiffs.len().saturating_sub(1) {
+        assert!(
+            composes_to_zero(o, &tdiffs[t + 1], &tdiffs[t]),
+            "{ctxt}\n{v:#}"
+        );
+    }
+    if plus_one {
+        for t in 0..tterms.len() {
+            let dims = homology_dims(o, &tterms, &tdiffs, t, &tests, -6..=10);
+            assert!(
+                dims.is_empty(),
+                "Tot of a map homotopic to 1 has homology: {ctxt}"
+            );
+        }
+    }
+
+    // complex.shift by k positions and s degrees: C[k]⟨s⟩(p) = C(p + k)⟨s⟩, d · (−1)^k
+    let (by, grading) = (*r.pick(&[-1i64, 0, 1, 2]), *r.pick(&[0i64, 1, -2]));
+    let v = call(
+        "complex.shift",
+        json!({ "context": ctx, "complex": cx, "by": by, "grading": grading }),
+    );
+    let (slo, sterms, sdiffs) = cx_read(&v["complex"]);
+    assert_eq!(slo, lo - by, "{ctxt}\n{v:#}");
+    for (t, ss) in sterms.iter().enumerate() {
+        let want: Sums = case.terms[t]
+            .iter()
+            .map(|(x, s)| (x.clone(), s + grading))
+            .collect();
+        assert_eq!(ss, &want, "{ctxt}\n{v:#}");
+    }
+    for (t, m) in sdiffs.iter().enumerate() {
+        let want = if by.rem_euclid(2) == 0 {
+            case.diffs[t].clone()
+        } else {
+            neg_texts(&case.diffs[t])
+        };
+        for (e, w) in m.iter().flatten().zip(want.iter().flatten()) {
+            assert_eq!(o.nf(e), o.nf(w), "shift: {ctxt}\n{v:#}");
+        }
+    }
+
+    // module.check and resolutions of M = coker(d : C(−1) → C(0))
+    let (q1, q0) = (&case.terms[k - 2], &case.terms[k - 1]);
+    let phi = &case.diffs[k - 2];
+    let module =
+        json!({ "generators": sums_json(q0), "relations": sums_json(q1), "matrix": mat_json(phi) });
+    let v = call("module.check", json!({ "context": ctx, "module": module }));
+    assert_eq!(v["holds"], true, "{ctxt}\n{v:#}");
+    let (from, to, truncated) = window_of(&v);
+    let got = read_dims(&v["dimensions"]);
+    let mut expected = BTreeMap::new();
+    for t in &listed {
+        for d in from - 2..=if truncated { to } else { to + 2 } {
+            let n = o.homology_dim(t, d, Some((q1, phi)), q0, None);
+            if n > 0 {
+                expected.insert((t.clone(), d), n as i64);
+            }
+        }
+    }
+    assert_eq!(got, expected, "module dimensions: {ctxt}\n{v:#}");
+    if !got.is_empty() {
+        seen.module_nonzero = true;
+    }
+    let v = call(
+        "resolution.start",
+        json!({ "context": ctx, "module": module }),
+    );
+    let mut res = v["resolution"].clone();
+    for step in 0..2 {
+        let v = call(
+            "resolution.extend",
+            json!({ "context": ctx, "resolution": res }),
+        );
+        let added = sums_read(&v["added"]["summands"]);
+        if added.is_empty() {
+            break;
+        }
+        seen.resolution_extended = true;
+        if v["provenance"]["notes"]
+            .to_string()
+            .contains("found earlier in the degree sweep")
+        {
+            seen.dropped = true;
+        }
+        let (rlo, rterms, rdiffs) = cx_read(&v["resolution"]);
+        let src = rterms[1].clone();
+        let m = rdiffs[0].clone();
+        let gens: Vec<((String, i64), Vec<String>)> = added
+            .iter()
+            .enumerate()
+            .map(|(k, s)| (s.clone(), m.iter().map(|row| row[k].clone()).collect()))
+            .collect();
+        tests.extend(added.iter().map(|s| s.0.clone()));
+        let (from, to, truncated) = window_of(&v["added"]);
+        let degrees = from - 2..=if truncated { to } else { to + 2 };
+        let ctxt2 = format!("resolution step {step}: {ctxt}\n{v:#}");
+        if rlo == -1 {
+            // the kernel of C₀ → M: maps into Q₀ landing in the image of φ (ε = 1)
+            let (q1, phi) = (q1.clone(), phi.clone());
+            check_generators(
+                o,
+                &src,
+                &gens,
+                &tests,
+                degrees,
+                &mut |o, t, d| {
+                    o.space(t, d, &q1)
+                        .iter()
+                        .map(|c| o.apply(Some(&phi), c))
+                        .collect()
+                },
+                &ctxt2,
+            );
+        } else {
+            let next = rdiffs[1].clone();
+            check_generators(
+                o,
+                &src,
+                &gens,
+                &tests,
+                degrees,
+                &mut |o, t, d| {
+                    let sp = o.space(t, d, &src);
+                    let imgs: Vec<Elt> = sp.iter().map(|c| o.apply(Some(&next), c)).collect();
+                    let basis: Vec<Elt> = sp.iter().map(|c| o.apply(None, c)).collect();
+                    relations_among(&imgs)
+                        .iter()
+                        .map(|z| {
+                            let mut e = Elt::new();
+                            for (k, b) in basis.iter().enumerate() {
+                                elt_add(&mut e, b, z[k]);
+                            }
+                            e
+                        })
+                        .collect()
+                },
+                &ctxt2,
+            );
+        }
+        assert_eq!(v["check"]["holds"], true, "{ctxt2}");
+        res = v["resolution"].clone();
+    }
+    let v = call(
+        "resolution.check",
+        json!({ "context": ctx, "resolution": res }),
+    );
+    assert_eq!(v["holds"], true, "{ctxt}\n{v:#}");
+
+    // a corrupted complex: d(lo + 1) ∘ d(lo) ≠ 0 is reported
+    if k == 3 {
+        let mut bad = case.clone();
+        let x = &bad.terms[0][0];
+        let y = &bad.terms[1][0];
+        let extra = combination(&mut r, &o.hom(&x.0, &y.0, x.1 - y.1), 4);
+        bad.diffs[0][0][0] = text_sum([bad.diffs[0][0][0].clone(), extra]);
+        let ok = composes_to_zero(o, &bad.diffs[1], &bad.diffs[0]);
+        let v = call(
+            "complex.check",
+            json!({ "context": ctx, "complex": bad.json() }),
+        );
+        assert_eq!(v["holds"], ok, "{ctxt}\n{v:#}");
+        if !ok {
+            seen.complex_fails = true;
+        }
+    }
+    seen
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 12, failure_persistence: None, rng_seed: FIXED_SEED, ..ProptestConfig::default() })]
+
+    #[test]
+    fn complex_operations_agree_with_brute_force(seed in any::<u64>()) {
+        let case = cx_case(seed);
+        let mut o = Oracle::new(&case.ctx, order_of(&case.ctx));
+        check_cx(&case, seed, &mut o);
+    }
+}
+
+/// A fixed sweep, which also asserts that every branch of every checked operation is reached,
+/// in every family.
+#[test]
+fn complex_sweep_covers_every_branch() {
+    let mut all: Vec<CxSeen> = Vec::new();
+    // one oracle per context, so straightened terms are reused across cases
+    let mut oracles: BTreeMap<String, Oracle> = BTreeMap::new();
+    for seed in 1..80u64 {
+        let s = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        let case = cx_case(s);
+        let o = oracles
+            .entry(case.ctx.clone())
+            .or_insert_with(|| Oracle::new(&case.ctx, order_of(&case.ctx)));
+        all.push(check_cx(&case, s, o));
+    }
+    for (fam, f) in CX_FAMILIES.iter().enumerate() {
+        assert!(all.iter().any(|s| s.family == fam), "no case in {}", f.ctx);
+    }
+    let any = |p: fn(&CxSeen) -> bool, what: &str| {
+        assert!(all.iter().any(p), "no case with {what}");
+    };
+    any(|s| s.homology_zero, "zero homology");
+    any(|s| s.homology_nonzero, "nonzero homology");
+    any(|s| s.minimal, "a minimal complex");
+    any(|s| s.not_minimal, "a non-minimal complex");
+    any(|s| s.eliminated, "a gauss elimination");
+    any(|s| s.kernel_truncated, "a truncated kernel window");
+    any(|s| s.kernel_complete, "a complete kernel");
+    any(|s| s.dropped, "a dropped generator");
+    any(|s| !s.dropped, "no dropped generator");
+    any(|s| s.chainmap_holds, "a chain map");
+    any(|s| s.chainmap_fails, "a map that is not a chain map");
+    any(|s| s.homotopy_holds, "a homotopy that holds");
+    any(|s| s.homotopy_fails, "a homotopy that fails");
+    any(|s| s.complex_fails, "a corrupted complex");
+    any(|s| s.module_nonzero, "a nonzero module");
+    any(|s| s.resolution_extended, "a resolution step");
+    any(|s| s.homotopy_found, "a homotopy found");
+    any(|s| s.homotopy_not_found, "no homotopy");
+    any(|s| s.chainmap_solved, "a chain map solved for");
+    any(
+        |s| s.chainmap_unsolved,
+        "no chain map extending the fixed component",
+    );
+    // the families with two red strands reach non-minimal and nonzero cases too
+    for fam in [4usize, 5, 6] {
+        assert!(
+            all.iter().any(|s| s.family == fam && s.homology_nonzero),
+            "family {fam}"
+        );
+    }
 }
