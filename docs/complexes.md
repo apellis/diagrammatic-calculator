@@ -20,7 +20,15 @@ web app all send the same JSON messages. An agent building a resolution step by 
   bottom is `a` and whose top is `b`. Composition is stacking: `g ∘ f` puts `g` on top of `f`.
 - A map `P(a)⟨s⟩ → P(b)⟨t⟩` of degree zero is an element of `e(b) A e(a)` of degree `s − t`.
 - A matrix between two terms has one row per summand of the target and one column per summand of
-  the source; `null` or an omitted entry is zero.
+  the source; `null`, `"0"`, or an omitted entry is zero. Any other written entry that is zero in
+  the context (`x_1 e(i@-1)` in a cyclotomic quotient, `e(i@1) - e(i@1)`) is read as zero, and
+  every operation says so in a provenance note naming the entry: in a differential, a map, a
+  presentation matrix, or an augmentation.
+- The empty loading (no black strand) is written `e()`.
+- Positions, shifts, and degrees in a request lie between −2^40 and 2^40. A search over internal
+  degrees covers at most 1000 degrees at once; a request that needs more (a huge `max_degree`
+  where Hom spaces are unbounded, or summands whose shifts lie far apart) is an error, not a
+  long computation.
 
 ## Complexes
 
@@ -65,8 +73,9 @@ A module is given by a presentation `Q₁ --φ--> Q₀ → M → 0`, with `Q₀`
 
 `M` is the cokernel of `φ`, whose matrix has one row per generator and one column per relation
 (the convention of every matrix here). A projective is a module with no relations, and
-`module.head` writes down the presentation of `P/rad P` for a projective `P`, so simple modules
-and their sums need not be presented by hand. In a module cell the same is written
+`module.head` writes down the presentation of `P/rad P` for a projective `P` (`object` with an
+optional `shift`, or `summands`, each with its own shift; `shift` with `summands` is an error),
+so simple modules and their sums need not be presented by hand. In a module cell the same is written
 `{"head": "i@1"}` (the objects of `P`, as in a context line). The module stays fixed while a resolution of it is
 built, so `C₀` may change during the search without changing what is resolved.
 
@@ -79,7 +88,9 @@ either indexing) with
 
 where the augmentation `ε : C₀ → Q₀` (rows the generators, columns the summands of `C₀`) induces
 `C₀ → M`. It may be left out when `C₀` is the sum of the generators in order; it is then the
-identity. `resolution.check` checks that `ε d` lands in the relations, that `C₀ → M` is onto,
+identity. Every operation that reads a complex reads its `resolves` too, and rejects one that
+is not a module with a matching augmentation, even when the operation does not use it;
+`complex.check` echoes it. `resolution.check` checks that `ε d` lands in the relations, that `C₀ → M` is onto,
 and that the complex is exact everywhere except at its far end, where it reports the part of the
 kernel still to be covered (`uncovered`, `next_at`). `resolved: true` means there is nothing
 left to cover, and then `minimal` says whether the resolution is minimal. Exactness and
@@ -250,7 +261,8 @@ which are finite-dimensional in the cyclotomic quotient. `exists` is decisive. `
 dimension of the solutions of the homogeneous system, reported whether or not a solution exists:
 0 means an answer, when there is one, is unique. With
 `basis: n` (a positive integer), `chainmap.solve` also returns up to `n` vectors of a basis of
-those homogeneous solutions as `homogeneous_basis`, with a note when it lists fewer than
+those homogeneous solutions (the chain maps vanishing on the `fixed` components) as
+`homogeneous_basis`, whether or not a solution exists, with a note when it lists fewer than
 `freedom`.
 `complex.minimal` tests whether the left ideal `{g d}` of `End(C(p))` spanned by the maps `g` back
 is nilpotent; when it is not, a failure names the differential and, when one is found among the
@@ -372,7 +384,9 @@ This is the order-by-order Maurer–Cartan equation behind iterated cones and de
 differentials. The result lists, for each order, the `correction` chosen (as `h^m X_m`) and a
 basis of the `freedom` (the solutions of the homogeneous system: any other choice differs from
 the correction by a combination of them; a choice at one order changes the equations at later
-orders). `complex` is the corrected complex and `solved_to_order` the last order solved.
+orders). `complex` is the corrected complex and `solved_to_order` the last order solved. Every
+entry of the given complex must already be a homogeneous map of the right degree, as
+`complex.check` requires; only `d² = 0` may fail. An entry that is not is an error.
 
 When an order has no solution, `failures` holds one failure with `condition: "obstruction"`, its
 `order`, the coefficient of `h^m` in `d²` (with that order's corrections zero) at the first

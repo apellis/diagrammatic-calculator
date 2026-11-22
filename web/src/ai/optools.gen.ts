@@ -4032,7 +4032,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           }
         },
         "basis": {
-          "description": "How many vectors of a basis of the homogeneous solutions to return as 'homogeneous_basis' (0, the default, returns none; a note says when fewer than 'freedom' are listed).",
+          "description": "How many vectors of a basis of the homogeneous solutions to return as 'homogeneous_basis', whether or not a solution exists (0, the default, returns none; a note says when fewer than 'freedom' are listed).",
           "type": "integer",
           "minimum": 0
         }
@@ -8239,6 +8239,7 @@ export const OP_TOOLS: { op: OpName; name: string; description: string; input_sc
           "type": "string"
         },
         "shift": {
+          "description": "The shift of 'object'; not allowed with 'summands', whose summands carry their own shifts.",
           "type": "integer"
         },
         "summands": {

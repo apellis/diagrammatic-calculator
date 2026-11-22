@@ -376,10 +376,12 @@ fn deform_says_when_the_freedom_list_is_cut() {
         "complex.deform",
         json!({
             "context": ctx,
-            "complex": three_term("h e(i@1)", "h e(i@1)"),
+            // h has degree 0 here, so the entries carry x_1 for degree 2
+            "complex": three_term("h x_1 e(i@1)", "h x_1 e(i@1)"),
             "unknowns": [{ "map": "differential", "from": -2 }],
         }),
     );
+    assert_eq!(v["status"], "ok", "{v:#}");
     assert!(
         !v["provenance"]["notes"]
             .to_string()

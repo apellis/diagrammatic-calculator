@@ -18,6 +18,7 @@
           "type": "string"
         },
         "shift": {
+          "description": "The shift of 'object'; not allowed with 'summands', whose summands carry their own shifts.",
           "type": "integer"
         },
         "summands": {

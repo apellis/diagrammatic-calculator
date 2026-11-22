@@ -1083,3 +1083,293 @@ fn freedom_is_reported_when_no_solution_exists() {
     assert_eq!(v["exists"], true, "{v:#}");
     assert_eq!(v["freedom"], 1, "{v:#}");
 }
+
+/// The provenance notes of a result.
+fn all_notes(v: &Value) -> Vec<String> {
+    v["provenance"]["notes"]
+        .as_array()
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect()
+}
+
+fn zero_notes(v: &Value) -> Vec<String> {
+    all_notes(v)
+        .into_iter()
+        .filter(|n| n.contains("is zero in this context"))
+        .collect()
+}
+
+/// `basis: n` lists homogeneous solutions also when no solution exists.
+#[test]
+fn homogeneous_basis_without_a_solution() {
+    // X = Z as modules, P⟨2⟩ → P with differential x on X and 0 on Z; F₀ = 1 does not extend
+    // (d_Z F₋₁ = 0 ≠ x = F₀ d_X), but F₋₁ alone, a scalar, is a chain map vanishing at 0
+    let x = two_term();
+    let mut z = two_term();
+    z["differentials"][0]["matrix"] = json!([[null]]);
+    let v = call(
+        "chainmap.solve",
+        json!({ "context": CYC, "source": x, "target": z,
+                "fixed": [{ "at": 0, "matrix": [["e(i@1)"]] }], "basis": 3 }),
+    );
+    assert_eq!(v["exists"], false, "{v:#}");
+    assert_eq!(v["freedom"], 1, "{v:#}");
+    assert_eq!(
+        v["homogeneous_basis"],
+        json!([[{ "at": -1, "matrix": [["e(i@1)"]] }]]),
+        "{v:#}"
+    );
+    // the basis lists every vector, so there is no note saying it does not
+    assert!(
+        !all_notes(&v)
+            .iter()
+            .any(|n| n.contains("homogeneous_basis")),
+        "{v:#}"
+    );
+}
+
+/// `resolves` is checked by every operation that reads a complex, and complex.check echoes it.
+#[test]
+fn resolves_is_checked_everywhere() {
+    let mut garbage = two_term();
+    garbage["resolves"] = json!("junk");
+    let mut misspelled = two_term();
+    misspelled["resolves"] = json!({ "modul": simple() });
+    let reqs = |c: &Value| {
+        vec![
+            ("complex.check", json!({ "complex": c })),
+            ("complex.homology", json!({ "complex": c })),
+            ("complex.kernel", json!({ "complex": c, "at": -1 })),
+            ("complex.minimal", json!({ "complex": c })),
+            ("complex.euler", json!({ "complex": c })),
+            ("complex.render", json!({ "complex": c })),
+            ("complex.shift", json!({ "complex": c, "by": 1 })),
+            ("complex.totalize", json!({ "complex": c })),
+            ("complex.hom", json!({ "source": c, "target": two_term() })),
+            (
+                "chainmap.check",
+                json!({ "source": c, "target": c, "map": [] }),
+            ),
+            ("chainmap.solve", json!({ "source": c, "target": c })),
+            (
+                "homotopy.find",
+                json!({ "source": c, "target": c, "f": [] }),
+            ),
+            (
+                "complex.cone",
+                json!({ "source": c, "target": c, "map": [] }),
+            ),
+        ]
+    };
+    for c in [&garbage, &misspelled] {
+        for (op, mut req) in reqs(c) {
+            req["context"] = json!(CYC);
+            let e = error(op, req);
+            assert!(
+                e.contains("'resolves' is {") || e.contains("did you mean 'module'"),
+                "{op}: {e}"
+            );
+        }
+    }
+    let r = call(
+        "resolution.start",
+        json!({ "context": CYC, "module": simple() }),
+    )["resolution"]
+        .clone();
+    let v = call("complex.check", json!({ "context": CYC, "complex": r }));
+    assert_eq!(v["complex"]["resolves"], r["resolves"], "{v:#}");
+    let v = call(
+        "complex.check",
+        json!({ "context": CYC, "complex": two_term() }),
+    );
+    assert!(v["complex"].get("resolves").is_none(), "{v:#}");
+}
+
+/// module.head takes 'shift' only with 'object'.
+#[test]
+fn module_head_rejects_shift_with_summands() {
+    let e = error(
+        "module.head",
+        json!({ "context": CYC, "summands": [{ "object": "i@1" }], "shift": 2 }),
+    );
+    assert!(e.contains("'shift' goes with 'object'"), "{e}");
+    let v = call(
+        "module.head",
+        json!({ "context": CYC, "summands": [{ "object": "i@1", "shift": 2 }] }),
+    );
+    assert_eq!(v["module"]["generators"][0]["shift"], 2, "{v:#}");
+}
+
+/// Every operation names a written entry that is zero in the context: in differentials, in
+/// maps, and in augmentations; and none when every entry is null, "0", or nonzero.
+#[test]
+fn zero_entries_are_noted_in_every_operation() {
+    let mut c = two_term();
+    c["differentials"][0]["matrix"] = json!([["x_1 e(i@1) - x_1 e(i@1)"]]);
+    let want = "the differential from -1, entry (1, 1): 'x_1 e(i@1) - x_1 e(i@1)' is zero in this \
+                context, so the entry is zero (shown as null)";
+    for (op, mut req) in [
+        ("complex.check", json!({ "complex": c })),
+        ("complex.homology", json!({ "complex": c })),
+        ("complex.kernel", json!({ "complex": c, "at": 0 })),
+        ("complex.minimal", json!({ "complex": c })),
+        ("complex.gauss", json!({ "complex": c })),
+        ("complex.euler", json!({ "complex": c })),
+        ("complex.render", json!({ "complex": c })),
+        ("complex.hom", json!({ "source": c, "target": c })),
+        (
+            "complex.cone",
+            json!({ "source": c, "target": c, "map": [] }),
+        ),
+        ("chainmap.solve", json!({ "source": c, "target": c })),
+        (
+            "homotopy.find",
+            json!({ "source": c, "target": c, "f": [] }),
+        ),
+    ] {
+        req["context"] = json!(CYC);
+        let v = call(op, req);
+        assert_eq!(zero_notes(&v), vec![want.to_string()], "{op}: {v:#}");
+    }
+    for (op, req) in [
+        ("complex.homology", json!({ "complex": two_term() })),
+        ("complex.gauss", json!({ "complex": two_term() })),
+        (
+            "chainmap.solve",
+            json!({ "source": two_term(), "target": two_term() }),
+        ),
+    ] {
+        let mut req = req;
+        req["context"] = json!(CYC);
+        let v = call(op, req);
+        assert!(zero_notes(&v).is_empty(), "{op}: {v:#}");
+    }
+    // a component of a chain map
+    let v = call(
+        "chainmap.check",
+        json!({ "context": CYC, "source": two_term(), "target": two_term(),
+                "map": [{ "at": 0, "matrix": [["e(i@1) - e(i@1)"]] }] }),
+    );
+    assert_eq!(
+        zero_notes(&v),
+        vec![
+            "the component of 'map' at 0, entry (1, 1): 'e(i@1) - e(i@1)' is zero in this \
+             context, so the entry is zero (shown as null)"
+                .to_string()
+        ],
+        "{v:#}"
+    );
+    let v = call(
+        "chainmap.check",
+        json!({ "context": CYC, "source": two_term(), "target": two_term(),
+                "map": [{ "at": 0, "matrix": [["e(i@1)"]] }] }),
+    );
+    assert!(zero_notes(&v).is_empty(), "{v:#}");
+    // an augmentation
+    let mut r = call(
+        "resolution.start",
+        json!({ "context": CYC, "module": simple() }),
+    )["resolution"]
+        .clone();
+    r["resolves"]["augmentation"] = json!([["x_1 e(i@-1)"]]);
+    let v = call(
+        "resolution.check",
+        json!({ "context": CYC, "resolution": r }),
+    );
+    assert_eq!(
+        zero_notes(&v),
+        vec![
+            "the augmentation, entry (1, 1): 'x_1 e(i@-1)' is zero in this context, so the \
+             entry is zero (shown as null)"
+                .to_string()
+        ],
+        "{v:#}"
+    );
+}
+
+/// The empty loading prints as its idempotent `e()`, never as an empty string.
+#[test]
+fn the_empty_loading_is_printed() {
+    // the unit object (no black strand) beside P(i@1)
+    let c =
+        json!({ "terms": [{ "at": 0, "summands": [{ "object": "e()" }, { "object": "i@1" }] }] });
+    let v = call("complex.check", json!({ "context": CYC, "complex": c }));
+    assert_eq!(
+        v["complex"]["terms"][0]["summands"][0]["object"], "e()",
+        "{v:#}"
+    );
+    let v = call("complex.homology", json!({ "context": CYC, "complex": c }));
+    let first = all_notes(&v)[0].clone();
+    assert!(first.contains("e()"), "{first}");
+    assert!(!first.contains(": ,") && !first.contains(", ,"), "{first}");
+    for pos in v["positions"].as_array().unwrap() {
+        for piece in pos["pieces"].as_array().unwrap() {
+            assert_ne!(piece["test"], "", "{v:#}");
+        }
+    }
+}
+
+/// Integers out of range are errors, not overflows, and a search wider than the cap is refused
+/// rather than run.
+#[test]
+fn out_of_range_integers_and_wide_searches() {
+    let mut c = two_term();
+    c["terms"][0]["summands"][0]["shift"] = json!(i64::MAX);
+    for op in ["complex.check", "complex.euler", "complex.homology"] {
+        let e = error(op, json!({ "context": CYC, "complex": c }));
+        assert!(e.contains("outside the supported range"), "{op}: {e}");
+    }
+    let e = error(
+        "module.head",
+        json!({ "context": CYC, "object": "i@1", "shift": i64::MIN }),
+    );
+    assert!(e.contains("outside the supported range"), "{e}");
+    let mut c = two_term();
+    c["terms"][0]["at"] = json!(i64::MAX);
+    let e = error("complex.check", json!({ "context": CYC, "complex": c }));
+    assert!(e.contains("outside the supported range"), "{e}");
+    // without the quotient the Hom spaces are unbounded: the cap is reported, not searched
+    for (op, req) in [
+        ("complex.homology", json!({ "complex": two_term() })),
+        ("complex.kernel", json!({ "complex": two_term(), "at": -1 })),
+        ("hom.basis", json!({ "source": "i@1", "target": "i@1" })),
+    ] {
+        let mut req = req;
+        req["context"] = json!(FREE);
+        req["max_degree"] = json!(i64::MAX);
+        let e = error(op, req.clone());
+        assert!(e.contains("outside the supported range"), "{op}: {e}");
+        req["max_degree"] = json!(1 << 30);
+        let e = error(op, req.clone());
+        assert!(e.contains("at most 1000 are searched at once"), "{op}: {e}");
+        req["max_degree"] = json!(8);
+        call(op, req);
+    }
+    // summands whose shifts lie far apart, even with bounded Hom spaces
+    let far = json!({ "terms": [{ "at": 0, "summands": [
+        { "object": "i@1", "shift": 0 }, { "object": "i@1", "shift": 100000 }] }] });
+    let e = error(
+        "complex.homology",
+        json!({ "context": CYC, "complex": far }),
+    );
+    assert!(e.contains("at most 1000 are searched at once"), "{e}");
+}
+
+/// complex.deform refuses an entry that complex.check refuses: here not homogeneous.
+#[test]
+fn deform_refuses_inhomogeneous_entries() {
+    let ctx = format!("{CYC} truncate=h^2 hdeg=0");
+    let mut c = two_term();
+    c["differentials"][0]["matrix"] = json!([["x_1 e(i@1) + h e(i@1)"]]);
+    let v = call("complex.check", json!({ "context": ctx, "complex": c }));
+    assert_eq!(v["holds"], false, "{v:#}");
+    let e = error("complex.deform", json!({ "context": ctx, "complex": c }));
+    assert!(e.contains("not a map of the right degree"), "{e}");
+    call(
+        "complex.deform",
+        json!({ "context": ctx, "complex": two_term() }),
+    );
+}

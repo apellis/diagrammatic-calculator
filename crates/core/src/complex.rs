@@ -19,12 +19,82 @@ use crate::error::{Error, Result};
 use crate::linalg::{Mat, Reducer};
 use crate::ring::Ring;
 use serde_json::{Value, json};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+
+thread_local! {
+    /// The notes on written matrix entries that are zero in the context, collected by
+    /// [`parse_matrix`] for the operation being run ([`with_zero_entry_notes`]).
+    static ZERO_ENTRIES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// How many zero-entry notes have been collected so far (see [`relabel_zero_entries`]).
+pub fn zero_entry_mark() -> usize {
+    ZERO_ENTRIES.with(|z| z.borrow().len())
+}
+
+/// Rewrites the zero-entry notes collected since `mark` (to locate them in a module, say).
+pub fn relabel_zero_entries(mark: usize, f: impl Fn(&str) -> String) {
+    ZERO_ENTRIES.with(|z| {
+        for n in z.borrow_mut().iter_mut().skip(mark) {
+            *n = f(n);
+        }
+    });
+}
+
+/// Runs an operation and appends to its `provenance.notes` a note for each written matrix
+/// entry (of a differential, a map, a presentation, an augmentation, …) that is not `null` or
+/// `"0"` but is zero in the context, such as `x_1 e(i@-1)` in a cyclotomic quotient.
+pub fn with_zero_entry_notes(f: impl FnOnce() -> Result<Value>) -> Result<Value> {
+    let outer = ZERO_ENTRIES.with(|z| std::mem::take(&mut *z.borrow_mut()));
+    let r = f();
+    let found = ZERO_ENTRIES.with(|z| std::mem::replace(&mut *z.borrow_mut(), outer));
+    let mut v = r?;
+    let mut seen = BTreeSet::new();
+    let found: Vec<String> = found
+        .into_iter()
+        .filter(|n| seen.insert(n.clone()))
+        .collect();
+    if !found.is_empty() {
+        if !v["provenance"].is_object() {
+            v["provenance"] = json!({});
+        }
+        let notes = &mut v["provenance"]["notes"];
+        if !notes.is_array() {
+            *notes = json!([]);
+        }
+        let list = notes.as_array_mut().expect("an array");
+        for n in found {
+            if !list.iter().any(|x| x == &json!(n)) {
+                list.push(json!(n));
+            }
+        }
+    }
+    Ok(v)
+}
 
 /// The source, target, and degree of a homogeneous morphism.
 pub type MorEnds<O> = (O, O, i64);
 /// A value with the notes saying how it was obtained.
 pub type Noted<T> = (T, Vec<String>);
+
+/// The largest absolute value of a position coordinate, a shift, or a degree given in a request
+/// (2^40): sums of a few of them cannot overflow.
+pub const INPUT_BOUND: i64 = 1 << 40;
+
+/// The most degrees one search covers (`max_degree` minus the lowest degree, or the spread of
+/// the shifts of the summands searched).
+pub const MAX_WINDOW: i64 = 1000;
+
+/// Checks that an integer given in a request lies within [`INPUT_BOUND`].
+pub fn bounded(x: i64, what: &str) -> Result<i64> {
+    if !(-INPUT_BOUND..=INPUT_BOUND).contains(&x) {
+        return Err(Error::invalid(format!(
+            "{what} is {x}, outside the supported range −2^40 to 2^40"
+        )));
+    }
+    Ok(x)
+}
 
 /// An additive category with graded, finite-dimensional Hom spaces over a field, in which
 /// complexes are built.
@@ -224,15 +294,19 @@ pub fn fmt_pos(p: &[i64]) -> String {
 
 fn parse_pos(v: &Value, dim: Option<usize>) -> Result<Pos> {
     let p: Pos = match v {
-        Value::Number(n) => vec![
+        Value::Number(n) => vec![bounded(
             n.as_i64()
                 .ok_or_else(|| Error::invalid("a position is an integer"))?,
-        ],
+            "a position coordinate",
+        )?],
         Value::Array(xs) => xs
             .iter()
             .map(|x| {
-                x.as_i64()
-                    .ok_or_else(|| Error::invalid("a position is a list of integers"))
+                bounded(
+                    x.as_i64()
+                        .ok_or_else(|| Error::invalid("a position is a list of integers"))?,
+                    "a position coordinate",
+                )
             })
             .collect::<Result<_>>()?,
         _ => {
@@ -303,14 +377,27 @@ pub fn parse_matrix<A: Additive>(
         for (j, c) in cs.iter().enumerate() {
             row.push(match entry_text(c)? {
                 None => a.zero(),
-                Some(t) => a.parse_mor(&t).map_err(|e| {
-                    Error::invalid(format!(
-                        "{where_}, entry ({}, {}): {}",
-                        i + 1,
-                        j + 1,
-                        e.message
-                    ))
-                })?,
+                Some(t) => {
+                    let f = a.parse_mor(&t).map_err(|e| {
+                        Error::invalid(format!(
+                            "{where_}, entry ({}, {}): {}",
+                            i + 1,
+                            j + 1,
+                            e.message
+                        ))
+                    })?;
+                    if a.is_zero(&f)? {
+                        let n = format!(
+                            "{where_}, entry ({}, {}): '{}' is zero in this context, so the \
+                             entry is zero (shown as null)",
+                            i + 1,
+                            j + 1,
+                            t.trim()
+                        );
+                        ZERO_ENTRIES.with(|z| z.borrow_mut().push(n));
+                    }
+                    f
+                }
             });
         }
         out.push(row);
@@ -350,12 +437,15 @@ pub fn parse_summands<A: Additive>(a: &A, v: &Value, where_: &str) -> Result<Vec
                 })?;
             let shift = match x.get("shift") {
                 None | Some(Value::Null) => 0,
-                Some(s) => s.as_i64().ok_or_else(|| {
-                    Error::invalid(format!(
-                        "{where_}, summand {}: 'shift' is an integer",
-                        k + 1
-                    ))
-                })?,
+                Some(s) => bounded(
+                    s.as_i64().ok_or_else(|| {
+                        Error::invalid(format!(
+                            "{where_}, summand {}: 'shift' is an integer",
+                            k + 1
+                        ))
+                    })?,
+                    &format!("{where_}, summand {}: the shift", k + 1),
+                )?,
             };
             Ok(Summand {
                 obj: a.parse_obj(o).map_err(|e| {
@@ -422,7 +512,23 @@ type Written<O> = (Option<O>, Option<i64>);
 /// summand, taking the positions from the end of the differentials (the last position for
 /// cohomological indexing, the first for homological) and the summands in order. Inferred
 /// values that contradict each other are left for [`check_complex`] to report.
+///
+/// A complex with `resolves` is read as a resolution ([`crate::complex_module::parse_resolution`]),
+/// so its module and augmentation are checked by every operation, also by those that do not
+/// use them.
 pub fn parse_complex_noted<A: Additive>(
+    a: &A,
+    v: &Value,
+) -> Result<Noted<Complex<A::Obj, A::Mor>>> {
+    if v.get("resolves").is_some_and(|r| !r.is_null()) {
+        let (r, notes) = crate::complex_module::parse_resolution(a, v)?;
+        return Ok((r.complex, notes));
+    }
+    parse_complex_terms(a, v)
+}
+
+/// [`parse_complex_noted`] without reading `resolves`.
+pub fn parse_complex_terms<A: Additive>(
     a: &A,
     v: &Value,
 ) -> Result<Noted<Complex<A::Obj, A::Mor>>> {
@@ -473,8 +579,6 @@ pub fn parse_complex_noted<A: Additive>(
     };
     let len = |p: &Pos| written.get(p).map_or(0, Vec::len);
     let mut diffs = BTreeMap::new();
-    // written entries that are zero in this context: (where, row, column, text)
-    let mut vanished: Vec<(String, usize, usize, String)> = Vec::new();
     if let Some(ds) = v.get("differentials") {
         let ds = ds
             .as_array()
@@ -512,15 +616,6 @@ pub fn parse_complex_noted<A: Additive>(
                 len(&p),
                 &where_,
             )?;
-            for (r, row) in m.iter().enumerate() {
-                for (c, f) in row.iter().enumerate() {
-                    if let Some(t) = entry_text(&d["matrix"][r][c])?
-                        && a.is_zero(f)?
-                    {
-                        vanished.push((where_.clone(), r + 1, c + 1, t.trim().to_string()));
-                    }
-                }
-            }
             if diffs.insert((axis, p.clone()), m).is_some() {
                 return Err(Error::invalid(format!("{where_} is given twice")));
             }
@@ -541,15 +636,7 @@ pub fn parse_complex_noted<A: Additive>(
             }
         }
     }
-    let mut notes: Vec<String> = vanished
-        .iter()
-        .map(|(w, r, c, t)| {
-            format!(
-                "{w}, entry ({r}, {c}): '{t}' is zero in this context, so the entry is zero \
-                 (shown as null)"
-            )
-        })
-        .collect();
+    let mut notes: Vec<String> = Vec::new();
     let (mut objs_inferred, mut shifts_inferred) = (0usize, 0usize);
     for (from, to, s, t, _) in &edges {
         for (node, o) in [(from, s), (to, t)] {
@@ -682,12 +769,15 @@ fn parse_written<A: Additive>(a: &A, v: &Value, where_: &str) -> Result<Vec<Writ
             };
             let shift = match x.get("shift") {
                 None | Some(Value::Null) => None,
-                Some(s) => Some(s.as_i64().ok_or_else(|| {
-                    Error::invalid(format!(
-                        "{where_}, summand {}: 'shift' is an integer",
-                        k + 1
-                    ))
-                })?),
+                Some(s) => Some(bounded(
+                    s.as_i64().ok_or_else(|| {
+                        Error::invalid(format!(
+                            "{where_}, summand {}: 'shift' is an integer",
+                            k + 1
+                        ))
+                    })?,
+                    &format!("{where_}, summand {}: the shift", k + 1),
+                )?),
             };
             Ok((o, shift))
         })
@@ -931,6 +1021,16 @@ fn axis_name<O, M>(c: &Complex<O, M>, axis: usize) -> String {
 /// Checks a complex: entries in the right Hom spaces and of the right degrees, `d ∘ d = 0` along
 /// each axis, and the square condition of the conventions.
 pub fn check_complex<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<Vec<Failure>> {
+    let out = check_differential_entries(a, c);
+    if !out.is_empty() {
+        return Ok(out);
+    }
+    check_squares(a, c)
+}
+
+/// The first part of [`check_complex`]: every entry of a differential is a homogeneous map of
+/// the degree that makes it a degree-zero map between the shifted summands.
+pub fn check_differential_entries<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Vec<Failure> {
     let mut out = Vec::new();
     for ((axis, p), m) in &c.diffs {
         let loc = format!(
@@ -950,9 +1050,12 @@ pub fn check_complex<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<
             &mut out,
         );
     }
-    if !out.is_empty() {
-        return Ok(out);
-    }
+    out
+}
+
+/// The second part of [`check_complex`]: `d ∘ d = 0` and the squares.
+fn check_squares<A: Additive>(a: &A, c: &Complex<A::Obj, A::Mor>) -> Result<Vec<Failure>> {
+    let mut out = Vec::new();
     for p in c.positions() {
         for axis in 0..c.dim {
             let q = c.next(&p, axis);
@@ -1334,13 +1437,17 @@ pub struct Window {
     pub truncated: bool,
 }
 
+///
+/// Errors when the window would cover more than [`MAX_WINDOW`] degrees.
 pub fn window(
     range: Option<(i64, Option<i64>)>,
     max: Option<i64>,
     default_span: i64,
-) -> Option<Window> {
-    let (lo, hi) = range?;
-    Some(match (hi, max) {
+) -> Result<Option<Window>> {
+    let Some((lo, hi)) = range else {
+        return Ok(None);
+    };
+    let w = match (hi, max) {
         // a cap below the lowest degree would search nothing: the lowest degree is kept
         (Some(h), Some(m)) => Window {
             lo,
@@ -1362,7 +1469,18 @@ pub fn window(
             hi: lo + default_span,
             truncated: true,
         },
-    })
+    };
+    if w.hi - w.lo > MAX_WINDOW {
+        return Err(Error::invalid(format!(
+            "the search would cover the {} degrees from {} to {}; at most {MAX_WINDOW} are \
+             searched at once (lower max_degree, or bring the shifts of the summands closer \
+             together)",
+            w.hi - w.lo + 1,
+            w.lo,
+            w.hi
+        )));
+    }
+    Ok(Some(w))
 }
 
 fn rank<K: Ring>(k: &K, m: &Mat<K::Elem>) -> Result<usize> {
@@ -1645,7 +1763,7 @@ pub fn relative_kernel_generators<A: Additive>(
     max: Option<i64>,
     default_span: i64,
 ) -> Result<KernelGenerators<A>> {
-    let Some(w) = window(range_over_tests(a, tests, src)?, max, default_span) else {
+    let Some(w) = window(range_over_tests(a, tests, src)?, max, default_span)? else {
         return Ok((vec![], None, 0));
     };
     let (gens, dropped) = subspace_generators(a, src, tests, w, |t, d, sp| {

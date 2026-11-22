@@ -1376,7 +1376,7 @@ export interface ChainmapSolveRequest {
   target: Complex;
   fixed?: ComplexMap;
   /**
-   * How many vectors of a basis of the homogeneous solutions to return as 'homogeneous_basis' (0, the default, returns none; a note says when fewer than 'freedom' are listed).
+   * How many vectors of a basis of the homogeneous solutions to return as 'homogeneous_basis', whether or not a solution exists (0, the default, returns none; a note says when fewer than 'freedom' are listed).
    */
   basis?: number;
 }
@@ -1666,6 +1666,9 @@ export interface ModuleCheckRequest {
 export interface ModuleHeadRequest {
   context: Context;
   object?: string;
+  /**
+   * The shift of 'object'; not allowed with 'summands', whose summands carry their own shifts.
+   */
   shift?: number;
   summands?: ComplexSummands;
   max_degree?: number;

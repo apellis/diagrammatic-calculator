@@ -106,15 +106,15 @@ impl AdditiveVisitor for Op<'_> {
                 ));
             };
             let t = Truncated::new(k, h, *n, self.spec.param_degree.unwrap_or(0))?;
-            return deform_op(&t, self.input);
+            return complex::with_zero_entry_notes(|| deform_op(&t, self.input));
         }
-        match &self.spec.truncate {
+        complex::with_zero_entry_notes(|| match &self.spec.truncate {
             None => dispatch(k, self.op, self.input),
             Some((h, n)) => {
                 let t = Truncated::new(k, h, *n, self.spec.param_degree.unwrap_or(0))?;
                 dispatch(&t, self.op, self.input)
             }
-        }
+        })
     }
 }
 
@@ -130,8 +130,9 @@ fn opt_int(input: &Value, key: &str) -> Result<Option<i64>> {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
             .as_i64()
-            .map(Some)
-            .ok_or_else(|| Error::invalid(format!("'{key}' is an integer"))),
+            .ok_or_else(|| Error::invalid(format!("'{key}' is an integer")))
+            .and_then(|x| complex::bounded(x, &format!("'{key}'")))
+            .map(Some),
     }
 }
 
@@ -222,12 +223,21 @@ fn valid_complex<A: Additive>(a: &A, v: &Value, name: &str) -> Result<Complex<A:
 fn dispatch<A: Additive>(a: &A, op: &str, input: &Value) -> Result<Value> {
     match op {
         "complex.check" => {
-            let (c, notes) = complex::parse_complex_noted(a, get(input, "complex")?)?;
+            let cv = get(input, "complex")?;
+            // with the inferred objects and shifts filled in, and what it resolves kept
+            let (c, notes, echo) = if cv.get("resolves").is_some_and(|r| !r.is_null()) {
+                let (r, notes) = cm::parse_resolution(a, cv)?;
+                let echo = cm::resolution_json(a, &r)?;
+                (r.complex, notes, echo)
+            } else {
+                let (c, notes) = complex::parse_complex_noted(a, cv)?;
+                let echo = complex_json(a, &c)?;
+                (c, notes, echo)
+            };
             let fs = check_complex(a, &c)?;
             let mut v = verdict(a, &fs, notes);
             v["conventions"] = c.conv.to_json();
-            // with the inferred objects and shifts filled in
-            v["complex"] = complex_json(a, &c)?;
+            v["complex"] = echo;
             Ok(v)
         }
         "chainmap.check" => {
@@ -294,7 +304,7 @@ fn homology<A: Additive>(a: &A, input: &Value) -> Result<Value> {
     let mut exact = true;
     for p in &positions {
         let here = c.at(p);
-        let w = window(range_over_tests(a, &tests, here)?, max, DEFAULT_SPAN);
+        let w = window(range_over_tests(a, &tests, here)?, max, DEFAULT_SPAN)?;
         let mut pieces = Vec::new();
         if let Some(w) = w {
             for d in w.lo..=w.hi {
@@ -434,7 +444,7 @@ fn hom_basis<A: Additive>(a: &A, input: &Value) -> Result<Value> {
             a.hom_degrees(&src, &tgt)?,
             opt_int(input, "max_degree")?,
             DEFAULT_SPAN,
-        );
+        )?;
         degrees = w.map(|w| (w.lo..=w.hi).collect()).unwrap_or_default();
     }
     let mut out = Vec::new();
@@ -588,7 +598,9 @@ fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
          dimension of the chain maps vanishing on the fixed components"
             .to_string(),
     ];
-    match sol {
+    // the homogeneous solutions: the chain maps vanishing on the fixed components, with the
+    // unknown components at `hfree`
+    let (hfree, kernel) = match sol {
         None => {
             v["exists"] = json!(false);
             v["map"] = Value::Null;
@@ -601,8 +613,8 @@ fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
                     (p.clone(), complex::zero_matrix(a, m.len(), cols))
                 })
                 .collect();
-            let (_, hom) = crate::complex_solve::solve_chain_map(a, &c, &d, &zeros)?;
-            v["freedom"] = json!(hom.map_or(0, |s| s.kernel.len()));
+            let (hfree, hom) = crate::complex_solve::solve_chain_map(a, &c, &d, &zeros)?;
+            (hfree, hom.map_or_else(Vec::new, |s| s.kernel))
         }
         Some(s) => {
             let mut m = fixed.clone();
@@ -611,24 +623,24 @@ fn chainmap_solve<A: Additive>(a: &A, input: &Value) -> Result<Value> {
             }
             v["exists"] = json!(true);
             v["map"] = map_json(a, &m)?;
-            v["freedom"] = json!(s.kernel.len());
-            let basis_n = opt_uint(input, "basis", 0)?;
-            if basis_n > 0 {
-                let mut out = Vec::new();
-                for k in s.kernel.iter().take(basis_n) {
-                    let km: complex::Map<A::Mor> =
-                        free.iter().cloned().zip(k.iter().cloned()).collect();
-                    out.push(map_json(a, &km)?);
-                }
-                v["homogeneous_basis"] = Value::Array(out);
-                if basis_n < s.kernel.len() {
-                    notes.push(format!(
-                        "'homogeneous_basis' lists {basis_n} of the {} basis vectors of the \
-                         homogeneous solutions ('basis' asked for at most {basis_n})",
-                        s.kernel.len()
-                    ));
-                }
-            }
+            (free, s.kernel)
+        }
+    };
+    v["freedom"] = json!(kernel.len());
+    let basis_n = opt_uint(input, "basis", 0)?;
+    if basis_n > 0 {
+        let mut out = Vec::new();
+        for k in kernel.iter().take(basis_n) {
+            let km: complex::Map<A::Mor> = hfree.iter().cloned().zip(k.iter().cloned()).collect();
+            out.push(map_json(a, &km)?);
+        }
+        v["homogeneous_basis"] = Value::Array(out);
+        if basis_n < kernel.len() {
+            notes.push(format!(
+                "'homogeneous_basis' lists {basis_n} of the {} basis vectors of the \
+                 homogeneous solutions ('basis' asked for at most {basis_n})",
+                kernel.len()
+            ));
         }
     }
     Ok(with_prov(v, prov_notes(a, notes)))
@@ -931,6 +943,10 @@ fn render<A: Additive>(a: &A, input: &Value) -> Result<Value> {
 /// filled in, whether it is a complex, its Euler characteristic, and, when it is a complex and
 /// linear algebra is available, its homology with a summary for building a resolution.
 pub(crate) fn complex_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    complex::with_zero_entry_notes(|| complex_cell_value(a, v))
+}
+
+fn complex_cell_value<A: Additive>(a: &A, v: &Value) -> Result<Value> {
     if v.get("resolves").is_some_and(|r| !r.is_null()) {
         return resolution_cell(a, v);
     }
@@ -1099,6 +1115,10 @@ pub(crate) fn resolve_complex_names(
 /// The value of a workspace cell `chainmap name := {…}`: its source and target filled in, its
 /// nonzero components, and whether it commutes with the differentials.
 pub(crate) fn chainmap_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    complex::with_zero_entry_notes(|| chainmap_cell_value(a, v))
+}
+
+fn chainmap_cell_value<A: Additive>(a: &A, v: &Value) -> Result<Value> {
     crate::keys::check(v, &["source", "target", "map"], "a chain map")?;
     let c = parse_complex(a, get(v, "source")?)?;
     let d = parse_complex(a, get(v, "target")?)?;
@@ -1126,6 +1146,10 @@ pub(crate) fn chainmap_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
 /// The value of a workspace cell `module name := {…}`: the module filled in, its check, and its
 /// graded dimensions at the test objects when linear algebra is available.
 pub(crate) fn module_cell<A: Additive>(a: &A, v: &Value) -> Result<Value> {
+    complex::with_zero_entry_notes(|| module_cell_value(a, v))
+}
+
+fn module_cell_value<A: Additive>(a: &A, v: &Value) -> Result<Value> {
     module_check(a, &json!({ "module": v }))
 }
 
@@ -1170,7 +1194,15 @@ fn head_summands<A: Additive>(a: &A, input: &Value) -> Result<Vec<complex::Summa
                 shift: opt_int(input, "shift")?.unwrap_or(0),
             }])
         }
-        (None, Some(_)) => summands_of(a, input, "summands"),
+        (None, Some(_)) => {
+            if input.get("shift").is_some_and(|s| !s.is_null()) {
+                return Err(Error::invalid(
+                    "'shift' goes with 'object'; with 'summands', give each summand its own \
+                     'shift'",
+                ));
+            }
+            summands_of(a, input, "summands")
+        }
         _ => Err(Error::invalid(
             "give either 'object' (with an optional 'shift') or 'summands', the projective to \
              take the head of",
@@ -1334,6 +1366,20 @@ fn parse_unknowns<O: Clone, M: Clone>(c: &Complex<O, M>, v: Option<&Value>) -> R
 fn deform_op<A: ParamSplit>(t: &Truncated<'_, A>, input: &Value) -> Result<Value> {
     t.linear_algebra()?;
     let c = parse_complex(t, get(input, "complex")?)?;
+    // d ∘ d need not vanish yet, but every entry must already be a map of the right degree
+    let fs = complex::check_differential_entries(t, &c);
+    if let Some(f) = fs.first() {
+        return Err(Error::invalid(format!(
+            "'complex' has {} entr{} that {} not a map of the right degree: {}: {} ({}); run \
+             complex.check for all of them",
+            fs.len(),
+            if fs.len() == 1 { "y" } else { "ies" },
+            if fs.len() == 1 { "is" } else { "are" },
+            f.location,
+            f.detail,
+            f.condition
+        )));
+    }
     let mask = parse_unknowns(&c, input.get("unknowns"))?;
     let d = cd::deform(t, &c, &mask)?;
     let order_zero_fails = matches!(d.obstruction, Some((0, _)));

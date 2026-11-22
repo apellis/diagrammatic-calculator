@@ -85,7 +85,12 @@ impl<R: Ring> Additive for Klrw<R> {
     }
 
     fn fmt_obj(&self, o: &Loading) -> String {
-        self.fmt_loading(o)
+        // the empty loading as its idempotent, so that it is not printed as ""
+        if o.0.is_empty() {
+            "e()".to_string()
+        } else {
+            self.fmt_loading(o)
+        }
     }
 
     fn key(&self, o: &Loading) -> OrderType {

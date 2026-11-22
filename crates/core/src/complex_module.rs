@@ -96,7 +96,10 @@ pub fn parse_module_noted<A: Additive>(a: &A, v: &Value) -> Result<Noted<Module<
         return Err(Error::invalid("'relations' is a list of summands"));
     }
     let cv = json!({ "terms": terms, "differentials": diffs });
-    let (c, notes) = parse_complex_noted(a, &cv).map_err(|e| Error {
+    let mark = crate::complex::zero_entry_mark();
+    let parsed = parse_complex_noted(a, &cv);
+    crate::complex::relabel_zero_entries(mark, relabel);
+    let (c, notes) = parsed.map_err(|e| Error {
         message: relabel(&e.message),
         ..e
     })?;
@@ -224,7 +227,7 @@ pub fn module_dims<A: Additive>(
     span: i64,
 ) -> Result<(Dims, Option<Window>)> {
     let k = a.field().clone();
-    let w = window(range_over_tests(a, tests, &m.gens)?, max, span);
+    let w = window(range_over_tests(a, tests, &m.gens)?, max, span)?;
     let mut out = Dims::new();
     if let Some(w) = w {
         for d in w.lo..=w.hi {
@@ -381,7 +384,7 @@ pub fn radical_quotient<A: Additive>(
     a.linear_algebra()?;
     let objs: Vec<A::Obj> = ss.iter().map(|s| s.obj.clone()).collect();
     let tests = a.test_objects(&objs)?;
-    let w = window(range_over_tests(a, &tests, ss)?, max, span);
+    let w = window(range_over_tests(a, &tests, ss)?, max, span)?;
     let mut conds = BTreeMap::new();
     let mut gens: Vec<Generator<A::Obj, A::Mor>> = Vec::new();
     let mut dropped = 0;
@@ -468,8 +471,14 @@ pub fn parse_resolution<A: Additive>(
              start one with resolution.start",
         )
     })?;
+    if !r.is_object() {
+        return Err(Error::invalid(
+            "'resolves' is {\"module\": …, \"augmentation\": …}, the module the complex \
+             resolves and the matrix of C₀ → Q₀",
+        ));
+    }
     crate::keys::check(r, &["module", "augmentation"], "'resolves'")?;
-    let (c, mut notes) = parse_complex_noted(a, v)?;
+    let (c, mut notes) = crate::complex::parse_complex_terms(a, v)?;
     if c.dim != 1 {
         return Err(Error::invalid("a resolution is a one-dimensional complex"));
     }
@@ -719,7 +728,7 @@ pub fn check_resolution<A: Additive>(
     let mut open = Dims::new();
     // onto and exactness at C₀
     let both: Vec<Summand<A::Obj>> = c0.iter().chain(&m.gens).cloned().collect();
-    let w0 = window(range_over_tests(a, &tests, &both)?, max, span);
+    let w0 = window(range_over_tests(a, &tests, &both)?, max, span)?;
     if let Some(w) = w0 {
         complete &= !w.truncated;
         for d in w.lo..=w.hi {
@@ -784,7 +793,7 @@ pub fn check_resolution<A: Additive>(
             continue;
         }
         let here = c.at(&p);
-        let w = window(range_over_tests(a, &tests, here)?, max, span);
+        let w = window(range_over_tests(a, &tests, here)?, max, span)?;
         let Some(w) = w else { continue };
         complete &= !w.truncated;
         for d in w.lo..=w.hi {

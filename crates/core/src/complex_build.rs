@@ -526,7 +526,7 @@ pub fn hom_window<A: Additive>(
         }
     }
     // range_over_tests gives deg + t − s; the internal degree of the map is the same number
-    Ok(window(range, max, span))
+    window(range, max, span)
 }
 
 /// TikZ (tikz-cd) source for a one-dimensional complex: terms joined by arrows labelled by their
