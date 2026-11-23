@@ -68,6 +68,51 @@ test('the status line of a complex, before and after editing an entry', async ({
   await expect(c.getByTestId('status-before')).toContainText('Before the last change: not exact: the homology is not zero at −1 (q^4 at i@1)');
 });
 
+// A contractible complex P(i@1) --e--> P(i@1) without a quotient: its Hom spaces are unbounded
+// above, so the search stops at a degree cap, finds nothing, and the engine keeps exact = false.
+// The cell says no homology was found in the degrees checked, never "not exact"; a witnessed
+// nonzero group, after an edit, does say "not exact".
+test('a search cut off by the degree cap is not reported as "not exact"', async ({ page }) => {
+  await newDoc(page);
+  await setContext(page, 'klrw type=A1 ring=QQ red="2i@0"');
+  await page.keyboard.insertText('complex C := {"terms":[{"at":-1,"summands":[{"object":"i@1","shift":0}]},{"at":0,"summands":[{"object":"i@1","shift":0}]}],"differentials":[{"from":-1,"matrix":[["e(i@1)"]]}]}');
+  await page.keyboard.press('Enter');
+  const c = cell(page, 0);
+  const status = c.getByTestId('complex-status');
+  const verdict = status.getByTestId('verdict');
+  await expect(verdict).toHaveText('no homology found up to the degree cap');
+  await expect(verdict).toHaveAttribute('data-kind', 'unsearched');
+  await expect(verdict).not.toHaveClass(/warn|good/);
+  await expect(status).toContainText('no homology was found in the degrees checked (degrees 0 to 6); higher degrees were not searched, so exactness is not certified');
+  await expect(status).not.toContainText('not exact');
+  await expect(c.getByTestId('cx-h')).toHaveText(['H = 0 in degrees 0 to 6', 'H = 0 in degrees 0 to 6']);
+  await expect(c.locator('.cx-h.partial')).toHaveCount(2);
+  // the differential 0: homology at both positions, witnessed, so "not exact"
+  await c.getByTestId('cx-entry-edit').first().click();
+  await c.getByTestId('cx-entry-input').fill('0');
+  await page.keyboard.press('Enter');
+  await expect(verdict).toHaveText('not exact');
+  await expect(verdict).toHaveAttribute('data-kind', 'nonzero');
+  await expect(status).toContainText('the homology is not zero at −1');
+  await expect(status).toContainText('every position was searched only in degrees 0 to 6');
+  await expect(c.getByTestId('status-before')).toContainText('Before the last change: no homology found in degrees 0 to 6');
+  await expect(c.locator('.cx-h.nonzero')).toHaveCount(2);
+  await expect(c.getByTestId('cx-h').first()).toContainText('+ …');
+});
+
+// The same complex over the cyclotomic quotient: every Hom space is finite, so the search is
+// complete and the verdict is "exact everywhere".
+test('a contractible complex over the cyclotomic quotient is exact everywhere', async ({ page }) => {
+  await newDoc(page);
+  await setContext(page, 'klrw type=A1 ring=QQ red=2i@0 quotient=cyclotomic');
+  await page.keyboard.insertText('complex C := {"terms":[{"at":-1,"summands":[{"object":"i@1"}]},{"at":0,"summands":[{"object":"i@1"}]}],"differentials":[{"from":-1,"matrix":[["e(i@1)"]]}]}');
+  await page.keyboard.press('Enter');
+  const c = cell(page, 0);
+  await expect(c.getByTestId('complex-status').getByTestId('verdict')).toHaveText('exact everywhere');
+  await expect(c.getByTestId('complex-status').getByTestId('verdict')).toHaveClass(/good/);
+  await expect(c.getByTestId('cx-h')).toHaveText(['H = 0', 'H = 0']);
+});
+
 // A chain map is a cell naming its source and target: drawn as a ladder, its components edited in
 // place, its status checked after every edit, and its cone one click away.
 test('a chain map cell: edit a component, see the check, take the cone', async ({ page }) => {

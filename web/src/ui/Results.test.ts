@@ -49,3 +49,16 @@ describe('result certainty', () => {
     expect(certainty({ ...result(), kind: 'solve', certified_by: 'computation' })?.level).toBe('conditional');
   });
 });
+
+it('sums up a complex whose homology search stopped at a degree cap without calling it not exact', async () => {
+  const { complexSummary } = await import('./Results');
+  const w = { from: 0, to: 6, truncated: true };
+  expect(complexSummary({ kind: 'complex', homology: { exact: false, positions: [{ at: -1, zero: true, pieces: [], window: w }, { at: 0, zero: true, pieces: [], window: w }] } }))
+    .toBe('no homology found in the degrees checked');
+  expect(complexSummary({ kind: 'complex', homology: { exact: false, positions: [{ at: 0, zero: false, pieces: [{ test: 'i@1', degree: 0, dimension: 1 }], window: null }] } })).toBe('not exact');
+  expect(complexSummary({ kind: 'complex', homology: { exact: true, positions: [] } })).toBe('exact');
+  // a resolution checked only in a degree window says so
+  const res = { kind: 'complex' as const, complex: { resolves: { module: 'L' } } as never };
+  expect(complexSummary({ ...res, resolution: { holds: true, resolved: true, length: 1, complete: false } })).toBe('resolves in the degrees checked, length 1');
+  expect(complexSummary({ ...res, resolution: { holds: true, resolved: true, length: 1, complete: true } })).toBe('resolves, length 1');
+});

@@ -4,7 +4,7 @@ vi.mock('solid-js/web', async (original) => ({
   ...await original<typeof import('solid-js/web')>(),
   delegateEvents: () => {},
 }));
-import { applyEntryEdit, complexCellText, fallbackRead, flagsFor, mapOf, readStructured, sameRef, structuredHead, type FailureJ } from './Complexes';
+import { applyEntryEdit, complexCellText, fallbackRead, flagsFor, homologyChip, homologyVerdict, mapOf, readStructured, sameRef, structuredHead, type FailureJ } from './Complexes';
 
 it('reads a complex or module cell: name, JSON, and the options after it', () => {
   const r = readStructured('complex R := {"terms": [{"at": 0, "summands": [{"object": "i@1"}]}], "differentials": []} cap=4');
@@ -89,4 +89,61 @@ it('reads a cell the engine rejected from its text, keeping every entry', () => 
   const cm = fallbackRead('chainmap F := {"source": "C", "target": "C", "map": [{"at": 0, "matrix": [["e(i@1)"]]}]}', 'error',
     () => ({ terms: [{ at: 0, summands: [{ object: 'i@1' }] }] }));
   expect(cm && mapOf(cm, { map: 'component', at: 0 })?.m).toEqual([['e(i@1)']]);
+});
+
+// The homology verdict: exact, a witnessed nonzero group, or nothing found below a degree cap.
+// The last is the contractible P(i@1) --e--> P(i@1) in a non-cyclotomic context, whose Hom spaces
+// are unbounded above, so the engine searches degrees 0 to 6 and keeps exact = false.
+const cut = (at: number) => ({ at, zero: true, pieces: [], window: { from: 0, to: 6, truncated: true } });
+const done = (at: number) => ({ at, zero: true, pieces: [], window: { from: 0, to: 4, truncated: false } });
+const found = (at: number) => ({ at, zero: false, pieces: [{ test: 'i@1', degree: 4, dimension: 1 }], window: { from: 0, to: 4, truncated: false } });
+
+it('tells a search cut off by the degree cap from a nonzero homology group', () => {
+  const v = homologyVerdict({ exact: false, positions: [cut(-1), cut(0)] });
+  expect(v.kind).toBe('unsearched');
+  expect(v.badge).toBe('no homology found up to the degree cap');
+  expect(v.badge).not.toContain('not exact');
+  expect(v.where).toBe('no homology was found in the degrees checked (degrees 0 to 6); higher degrees were not searched, so exactness is not certified');
+  expect(v.summary).toBe('no homology found in degrees 0 to 6');
+  // a cap at one position only says where
+  expect(homologyVerdict({ exact: false, positions: [done(-1), cut(0)] }).where).toContain('(degrees 0 to 6 at 0, all degrees elsewhere)');
+  // different windows and an uncut position: each position named once
+  expect(homologyVerdict({ exact: false, positions: [cut(-2), { ...cut(0), window: { from: 4, to: 10, truncated: true } }, { at: 1, zero: true, pieces: [], window: null }] }).where)
+    .toContain('(degrees 0 to 6 at −2, degrees 4 to 10 at 0, all degrees elsewhere)');
+  // a missing flag with a cut-off search is not exact
+  expect(homologyVerdict({ positions: [cut(0)] }).kind).toBe('unsearched');
+  // different windows are listed per position
+  expect(homologyVerdict({ exact: false, positions: [cut(-1), { ...cut(0), window: { from: -2, to: 4, truncated: true } }] }).summary)
+    .toBe('no homology found in degrees 0 to 6 at −1, degrees −2 to 4 at 0');
+});
+
+it('says not exact only for a witnessed group, and says when other degrees were not searched', () => {
+  const v = homologyVerdict({ exact: false, positions: [found(-1), done(0)] });
+  expect(v).toMatchObject({ kind: 'nonzero', badge: 'not exact', where: 'the homology is not zero at −1 (q^4 at i@1)' });
+  expect(v.summary).toBe('not exact: the homology is not zero at −1 (q^4 at i@1)');
+  expect(v.where).not.toContain('searched');
+  const w = homologyVerdict({ exact: false, positions: [found(-1), cut(0)] });
+  expect(w.kind).toBe('nonzero');
+  expect(w.where).toBe('the homology is not zero at −1 (q^4 at i@1); 0 was searched only in degrees 0 to 6');
+  expect(homologyVerdict({ exact: false, positions: [{ ...found(-1), window: cut(-1).window }, cut(0)] }).where)
+    .toBe('the homology is not zero at −1 (q^4 at i@1 + …); every position was searched only in degrees 0 to 6');
+  expect(homologyVerdict({ exact: false, positions: [found(-1), cut(0), cut(1)] }).where).toContain('; 0, 1 were searched only in degrees 0 to 6');
+});
+
+it('calls a complex exact only on the engine\'s flag', () => {
+  expect(homologyVerdict({ exact: true, positions: [done(-1), done(0)] })).toMatchObject({ kind: 'exact', badge: 'exact everywhere', summary: 'exact everywhere' });
+  expect(homologyVerdict({ exact: true, positions: [] }).kind).toBe('exact');
+  // no window at all (every Hom space zero) counts as searched
+  expect(homologyVerdict({ exact: true, positions: [{ at: 0, zero: true, pieces: [], window: null }] }).kind).toBe('exact');
+});
+
+it('marks each term: zero, zero in the degrees searched, or the pieces found', () => {
+  expect(homologyChip(done(0))).toEqual({ cls: 'zero', text: 'H = 0', title: 'the homology here is zero' });
+  expect(homologyChip(cut(0))).toEqual({ cls: 'partial', text: 'H = 0 in degrees 0 to 6', title: 'no homology here in degrees 0 to 6; higher degrees were not searched' });
+  expect(homologyChip(found(0))).toEqual({ cls: 'nonzero', text: 'H ≠ 0: q^4 at i@1', title: 'the homology here is not zero' });
+  // pieces found below a degree cap are marked as a beginning
+  expect(homologyChip({ ...found(0), window: cut(0).window })).toEqual({
+    cls: 'nonzero', text: 'H ≠ 0: q^4 at i@1 + …', title: 'the homology here is not zero; shown in degrees 0 to 6 only, higher degrees were not searched',
+  });
+  expect(homologyChip({ ...cut(0), window: { truncated: true } }).text).toBe('H = 0 in a bounded range of degrees');
 });

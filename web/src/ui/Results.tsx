@@ -8,7 +8,7 @@ import { KATEX_SAFE } from './tex';
 import { Typeset, Value } from './Typeset';
 import { proseHtml } from './prose';
 import { certainty } from '../eval/certainty';
-import { ChainMapView, ComplexView, fallbackRead, ModuleView, readStructured, type ChainMapResult, type ComplexAction, type ComplexJ, type ComplexResult, type ModuleResult } from './Complexes';
+import { ChainMapView, ComplexView, fallbackRead, homologyVerdict, ModuleView, readStructured, type ChainMapResult, type ComplexAction, type ComplexJ, type ComplexResult, type ModuleResult } from './Complexes';
 
 export { certainty, conjecture, type Certainty } from '../eval/certainty';
 
@@ -61,10 +61,13 @@ export function complexSummary(r: ComplexResult): string {
   if (r.complex?.resolves) {
     if (!res || res.holds === false) return 'not a resolution';
     const n = res.length ?? 0;
-    return res.resolved ? `resolves, length ${n}${res.minimal === true ? ', minimal' : ''}` : `length ${n} so far, next term at ${String(res.next_at).replace('-', '−')}`;
+    return res.resolved ? `resolves${res.complete === false ? ' in the degrees checked' : ''}, length ${n}${res.minimal === true ? ', minimal' : ''}` : `length ${n} so far, next term at ${String(res.next_at).replace('-', '−')}`;
   }
   if (r.check && r.check.holds === false) return 'not a complex';
-  if (r.homology?.exact !== undefined) return r.homology.exact ? 'exact' : 'not exact';
+  if (r.homology?.exact !== undefined) {
+    const v = homologyVerdict(r.homology);
+    return v.kind === 'exact' ? 'exact' : v.kind === 'nonzero' ? 'not exact' : 'no homology found in the degrees checked';
+  }
   return 'complex';
 }
 

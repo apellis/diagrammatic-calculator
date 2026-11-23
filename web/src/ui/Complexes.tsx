@@ -23,7 +23,54 @@ export interface ComplexJ {
 interface Dims { test: string; dimensions: string; powers?: [number, number][] }
 /** A failed check: where, what, and the maps it involves (with `row` and `col` for one entry). */
 export interface FailureJ { location: string; detail: string; maps?: (MapRef & { row?: number; col?: number })[] }
-interface HomologyJ { positions?: { at: number | number[]; zero: boolean; pieces?: { test: string; degree: number; dimension: number }[]; window?: { truncated: boolean } }[]; exact?: boolean }
+/** One position of `complex.homology`: its pieces, and the degrees searched (`window`, null when no Hom space is nonzero). */
+interface HomologyPosJ { at: number | number[]; zero: boolean; pieces?: { test: string; degree: number; dimension: number }[]; window?: { from?: number; to?: number; truncated: boolean } | null }
+export interface HomologyJ { positions?: HomologyPosJ[]; exact?: boolean }
+
+/** What the homology computation showed, in three cases. `exact` is the engine's conservative flag
+ * (true only when every position was searched in all degrees); when it is false, a witnessed nonzero
+ * group (`nonzero`) is told apart from a search that found nothing but stopped at a degree cap
+ * (`unsearched`). `badge` is the verdict, `where` the clause after "d² = 0, so this is a complex; ". */
+export function homologyVerdict(h: HomologyJ): { kind: 'exact' | 'nonzero' | 'unsearched'; badge: string; where: string; summary: string } {
+  const ps = h.positions ?? [];
+  const bad = ps.filter((x) => !x.zero);
+  const cut = ps.filter((x) => x.window?.truncated);
+  if (bad.length) {
+    const where = `the homology is not zero at ${bad.map((x) => `${posText(x.at)}${x.pieces?.length ? ` (${dimsOf(x.pieces)}${x.window?.truncated ? ' + …' : ''})` : ''}`).join(', ')}`
+      + (cut.length ? `; ${cut.length === ps.length ? 'every position was' : `${cut.map((x) => posText(x.at)).join(', ')} ${cut.length === 1 ? 'was' : 'were'}`} searched only in ${degreesText(cut)}` : '');
+    return { kind: 'nonzero', badge: 'not exact', where, summary: `not exact: ${where}` };
+  }
+  if (h.exact !== false && !cut.length) return { kind: 'exact', badge: 'exact everywhere', where: 'the homology is zero at every position', summary: 'exact everywhere' };
+  // not exact by the engine's flag, yet nothing found: the search stopped at a degree cap somewhere
+  const degrees = degreesText(cut, cut.length < ps.length);
+  const where = `no homology was found in the degrees checked (${degrees}${cut.length < ps.length ? ', all degrees elsewhere' : ''}); higher degrees were not searched, so exactness is not certified`;
+  return { kind: 'unsearched', badge: 'no homology found up to the degree cap', where, summary: `no homology found in ${degrees}` };
+}
+
+/** The degrees searched at some truncated positions: `degrees 0 to 6`, or per position when they differ. */
+function degreesText(ps: HomologyPosJ[], where = false): string {
+  const range = (x: HomologyPosJ) => (x.window?.from != null && x.window?.to != null ? `degrees ${x.window.from} to ${x.window.to}`.replace(/-/g, '−') : 'a bounded range of degrees');
+  const all = [...new Set(ps.map(range))];
+  if (all.length <= 1) return `${all[0] ?? 'a bounded range of degrees'}${where && ps.length ? ` at ${ps.map((x) => posText(x.at)).join(', ')}` : ''}`;
+  return ps.map((x) => `${range(x)} at ${posText(x.at)}`).join(', ');
+}
+
+/** The chip under a term: zero, zero in the degrees searched, or the pieces found. */
+export function homologyChip(h: HomologyPosJ): { cls: 'zero' | 'partial' | 'nonzero'; text: string; title: string } {
+  if (!h.zero) {
+    const cut = h.window?.truncated ? degreesText([h]) : '';
+    return {
+      cls: 'nonzero',
+      text: `H ≠ 0${h.pieces?.length ? `: ${dimsOf(h.pieces)}${cut ? ' + …' : ''}` : ''}`,
+      title: cut ? `the homology here is not zero; shown in ${cut} only, higher degrees were not searched` : 'the homology here is not zero',
+    };
+  }
+  if (h.window?.truncated) {
+    const d = degreesText([h]);
+    return { cls: 'partial', text: `H = 0 in ${d}`, title: `no homology here in ${d}; higher degrees were not searched` };
+  }
+  return { cls: 'zero', text: 'H = 0', title: 'the homology here is zero' };
+}
 interface ResolutionJ {
   holds?: boolean;
   failures?: FailureJ[];
@@ -308,9 +355,7 @@ function Term(props: { t: TermJ; d?: DisplayJ; homology?: NonNullable<HomologyJ[
         <div class="cx-pos hint">{props.caption ?? posText(props.t.at)}</div>
         <Show when={props.homology}>
           {(h) => (
-            <div class={`cx-h ${h().zero ? 'zero' : 'nonzero'}`} title={h().zero ? 'the homology here is zero' : 'the homology here is not zero'}>
-              {h().zero ? 'H = 0' : `H ≠ 0${h().pieces?.length ? `: ${dimsOf(h().pieces!)}` : ''}`}
-            </div>
+            <div class={`cx-h ${homologyChip(h()).cls}`} title={homologyChip(h()).title} data-testid="cx-h">{homologyChip(h()).text}</div>
           )}
         </Show>
       </div>
@@ -439,20 +484,13 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
   const act = (a: ComplexAction) => props.onAction?.(a);
   const busy = () => !!props.busy;
   // one line saying what the complex is, kept across edits so a change of verdict is visible
-  const unexact = () => (props.r.homology?.positions ?? []).filter((x) => !x.zero);
-  const truncated = () => (props.r.homology?.positions ?? []).some((x) => x.window?.truncated);
-  const plainStatus = () => {
-    const bad = unexact();
-    const where = bad.length
-      ? `the homology is not zero at ${bad.map((x) => `${posText(x.at)}${x.pieces?.length ? ` (${dimsOf(x.pieces)})` : ''}`).join(', ')}`
-      : 'the homology is zero at every position';
-    return `d² = 0, so this is a complex; ${where}${truncated() ? ', in the degrees computed' : ''}.`;
-  };
+  const verdict = () => (props.r.homology ? homologyVerdict(props.r.homology) : undefined);
+  const plainStatus = () => `d² = 0, so this is a complex; ${verdict()?.where ?? ''}.`;
   const summary = (): string => {
     if (!checkOk()) return `${resolves() ? 'not a resolution' : 'not a complex'} (${failureCount() ?? '?'} ${failureCount() === 1 ? 'problem' : 'problems'})`;
     const r = res();
-    if (resolves() && r) return r.resolved ? `resolves ${moduleName()}, length ${r.length}` : `resolution in progress, length ${r.length}`;
-    if (props.r.homology) return props.r.homology.exact ? 'exact everywhere' : `not exact: ${plainStatus().replace(/^.*?; /, '').replace(/\.$/, '')}`;
+    if (resolves() && r) return r.resolved ? `resolves ${moduleName()}${r.complete === false ? ' in the degrees checked' : ''}, length ${r.length}` : `resolution in progress, length ${r.length}`;
+    if (props.r.homology) return homologyVerdict(props.r.homology).summary;
     return '';
   };
   // the view is rebuilt when the cell changes, so the last verdict is kept by the cell's name
@@ -508,7 +546,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
                 <span>exact so far, length {r().length}. The kernel of the leftmost map is not yet covered{r().uncovered?.length ? `: ${dimsLine(r().uncovered)}` : ''}{r().complete === false ? ' (in the degrees computed)' : ''}.</span>
               </div>
             }>
-              <div class="row"><span class="badge good" data-testid="verdict">resolves {moduleName()}</span>
+              <div class="row"><span class={`badge ${r().complete === false ? '' : 'good'}`} data-testid="verdict">resolves {moduleName()}{r().complete === false ? ' in the degrees checked' : ''}</span>
                 <span>length {r().length}{r().minimal === true ? ', minimal' : r().minimal === false ? ', not minimal' : ''}{r().complete === false ? ' (in the degrees computed)' : ''}</span></div>
             </Show>
             <div class="hint">{moduleName()}: {dimsLine(r().module) || 'zero'}{r().module_dimension !== undefined ? ` (dimension ${r().module_dimension})` : ''}</div>
@@ -519,7 +557,7 @@ export function ComplexView(props: { r: ComplexResult; name?: string; module?: s
         {(h) => (
           <div class="cx-status" data-testid="complex-status">
             <div class="row" style={{ 'flex-wrap': 'wrap' }}>
-              <span class={`badge ${h().exact ? 'good' : 'warn'}`} data-testid="verdict">{h().exact ? 'exact everywhere' : 'not exact'}</span>
+              <span class={`badge ${{ exact: 'good', nonzero: 'warn', unsearched: '' }[homologyVerdict(h()).kind]}`} data-testid="verdict" data-kind={homologyVerdict(h()).kind}>{homologyVerdict(h()).badge}</span>
               <span>{plainStatus()}</span>
             </div>
             <Show when={props.r.euler?.terms?.length}><div class="hint">Euler characteristic: {props.r.euler!.terms!.map((t) => `(${t.coefficient})[${t.object}]`).join(' + ')}</div></Show>
